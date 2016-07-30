@@ -1,10 +1,11 @@
 """Main"""
 
-from game import geo
+import game.run
 
 
 def main():
-    geo.yo()
+    game.run.run()
+
 
 if __name__ == "__main__":
     main()
