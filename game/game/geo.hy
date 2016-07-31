@@ -4,7 +4,7 @@
         [numpy [floor dstack apply-over-axes vectorize multiply subtract bincount add]]
         [game.constants :as gc])
 
-(def SIZE 256)
+(def SIZE 1024)
 (def LAYERS 3)
 
 (def biome-table
@@ -19,7 +19,16 @@
     gc.water
     (get biome-table (tuple* a b))))
 
-(def snoise3* (vectorize snoise3))
+(def snoise3* (vectorize (fn [x y z]
+                           (snoise3
+                            (* (/ x SIZE) 5)
+                            (* (/ y SIZE) 5)
+                            z 4))))
+(defn radial []
+  (let [xc (np.linspace (- np.pi) (* np.pi 3) SIZE)
+        yc (np.linspace 0 (* np.pi 1) SIZE)
+        [x y] (np.meshgrid xc yc)]
+    (* (np.cos x) (np.sin y))))
 
 (defn tuple* [&rest a]
   (tuple a))
@@ -27,7 +36,8 @@
 (defn generate-layers []
   (let [mtx (np.fromfunction snoise3* [SIZE SIZE LAYERS])
         layers (np.dsplit mtx LAYERS)
-        height (first layers)
+        rad (.reshape (radial) [SIZE SIZE 1])
+        height (/ (+ rad (first layers)) 2)
         moisture (second layers)
         moistureM (-> moisture
                       (add 1)
@@ -38,5 +48,5 @@
                    (multiply 4)
                    floor
                    (.astype int))
-        combined (dstack [moistureM heightM])]
+        combined (dstack [heightM moistureM])]
     (np.apply-along-axis get-in-biome-table 2 combined)))
