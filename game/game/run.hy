@@ -2,7 +2,8 @@
         [game.geo :as geo]
         [numpy :as np]
         [scipy.misc :as smp]
-        [matplotlib.pyplot :as plt])
+        [matplotlib.pyplot :as plt]
+        [game [engine]])
 
 (defn freqs [x]
   (let [y (.flatten x)] (print y.shape))
@@ -10,7 +11,4 @@
     bc))
 
 (defn run []
-  (let [w (geo.generate-layers)
-        pixs (color.world->pixels w)
-        img (smp.toimage pixs)]
-    (.show img)))
+  (engine.start))
