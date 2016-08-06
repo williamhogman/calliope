@@ -2,6 +2,7 @@
 ;; Resources
 ;;
 (import itertools)
+(import [game [utils]])
 
 (defn ensure-col [x]
   (if-not
@@ -13,7 +14,6 @@
   (let [combined (itertools.product (ensure-col as) (ensure-col bs))]
     (reduce
      (fn [cur [a b]]
-       (print a r b)
        (assoc cur
               (, r :right a) b
               (, r :left b) a)
@@ -58,7 +58,19 @@
 
    metal FOUNDIN montain))
 
-(print resources)
+
+(defn kleene* [x]
+  [:* x])
+
+
+(defn apply-kleene* [universe relation origin]
+  (utils.bf-traverse
+   (fn [cur] (.get universe (, relation :right cur) nil))
+   origin))
+
+(print (list (apply-kleene* resources "ISA" "coal")))
+
+
 
 (assert (= (get resources (, "ABUNDANCE" :right "coal") "common")))
 (assert (= (get resources (, "ABUNDANCE" :right "copper") "common")))
