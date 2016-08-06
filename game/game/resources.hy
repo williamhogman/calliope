@@ -31,37 +31,24 @@
   (triples
    bananas ISA fruit
 
-   blueberries ISA berry
-   strawberries ISA berry
-   blackberries ISA berry
-
+   [blueberries strawberries blackberries] ISA berry
    berry ISA fruit
 
    berry REQUIRES gathering
 
    fruit ISA food
 
-   cattle ISA livestock
-   sheep ISA livestock
-   horse ISA livestock
-   pig ISA livestock
-
-   deer ISA game
-   elk ISA game
+   [cattle sheep horse pig] ISA livestock
+   [deer elk] ISA game
 
    [livestock game] ISA animal
 
    animal ISA food
 
    coal ISA fuel
-   copper ISA metal
-   silver ISA metal
-   gold ISA metal
-   iron ISA metal
-   mithril ISA metal
+   [copper silver gold iron mithril] ISA metal
 
-   coal ABUNDANCE common
-   copper ABUNDANCE common
+   [coal copper iron] common
    iron ABUNDANCE common
    silver ADBUNDANCE uncommon
    gold ABUNDANCE rare
@@ -72,3 +59,6 @@
    metal FOUNDIN montain))
 
 (print resources)
+
+(assert (= (get resources (, "ABUNDANCE" :right "coal") "common")))
+(assert (= (get resources (, "ABUNDANCE" :right "copper") "common")))
