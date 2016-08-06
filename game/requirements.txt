@@ -1,2 +1,6 @@
+git+git://github.com/hylang/hy
 noise==1.2.2
 numpy==1.11.1
+scipy==0.18.0
+matplotlib==1.5.1
+cocos2d==0.6.4
