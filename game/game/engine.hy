@@ -2,7 +2,9 @@
         [numpy :as np]
         [game.geo :as geo]
         [game.color :as color]
-        pyglet)
+        pyglet
+        [scipy.misc [toimage]]
+        PIL)
 
 (defclass DiagLayer [c.layer.Layer]
   (defn --init-- [self]
@@ -17,20 +19,17 @@
   (c.director.director.init)
   (let [diag-layer (DiagLayer)
         map-layer (create-map-layer )
-        layers [map-layer diag-layer]
-        main-scene (c.scene.Scene layers)]
+        main-scene (c.scene.Scene map-layer diag-layer)]
     (c.director.director.run main-scene)))
 
 (defn np->texture [npa]
   (let [[_ x y] npa.shape]
-    (pyglet.image.ImageData x y "RGB" npa.data)))
+    (pyglet.image.ImageData x y "RGB" (.tobytes (toimage npa)))))
 
 (defn generate-world-sprite []
   (let [w (geo.generate-layers)
-        pixs (np->texture (np.array (color.world->pixels w)))
-        ]
+        pixs (np->texture (np.array (color.world->pixels w)))]
     (c.sprite.Sprite pixs)))
-
 
 
 (defn create-map-layer []

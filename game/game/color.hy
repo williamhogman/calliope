@@ -24,4 +24,4 @@
 (defn biome->color [biome]
   (get biome-color-map biome))
 
-(def world->pixels (np.vectorize biome->color))
+(def world->pixels (np.vectorize biome->color [np.uint8 np.uint8 np.uint8]))
