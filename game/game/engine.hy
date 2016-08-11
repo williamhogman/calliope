@@ -9,8 +9,8 @@
 (defclass DiagLayer [c.layer.Layer]
   (defn --init-- [self]
     (.--init-- (super DiagLayer self))
-    (let [label (c.text.Label "Hello World")]
-      (setv label.position (, 320 240))
+    (let [label (c.text.Label "Welcome to Calliope")]
+      (setv label.position (, 10 10))
       (.add self label))))
 
 (defclass MapLayer [c.layer.Layer])
