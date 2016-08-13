@@ -71,7 +71,7 @@
 ;; 0.25 height units = -0.2 temperature units
 ;; 1 height units = -0.8 temperature units
 (defn height-adjusted-temperatures [temperatures heights]
-  (let [height+ (np.minimum 0 heights)]
+  (let [height+ (np.minimum 0 (.reshape heights temperatures.shape))]
     (+ temperatures (* -0.8 height+))))
 
 ;; Heights, we consider 1.0 == 4000 metres, likewise -1.0 is -4000 metres
@@ -83,12 +83,12 @@
         height (/ (+ rad (first layers)) 2)
         moisture (second layers)
         moistureM (-> moisture
-                      (+ 1)
-                      (* 3)
+                      (np.add 1)
+                      (np.multiply 3)
                       floor
                       (.astype int))
         heightM (-> height
-                    (* 6)
+                    (np.multiply 6)
                     floor
                     (.astype int))
         base-temperature (temperature-mtx SIZE)
