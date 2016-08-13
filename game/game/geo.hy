@@ -4,7 +4,7 @@
         [numpy [floor dstack apply-over-axes vectorize multiply subtract bincount add]]
         [game.constants :as gc])
 
-(def SIZE 1024)
+(def SIZE 512)
 (def LAYERS 3)
 
 (defn dupe-elements [l rep]

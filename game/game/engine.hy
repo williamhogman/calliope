@@ -26,23 +26,21 @@
 
 (defn get-diag-text [context [x y]]
   (when context
-   (let [coords (, x (- 1024 y))
-         height (:height context)
-         biomes (:biomes context)
-         temperature (:temperature context)]
-     (->str (coords->str coords)
-          (biome->str (get biomes coords))
-          (height->str (get height coords))
-          (temperature->str (get temperature coords))
-          ))))
+    (let [coords (, (- 512 y) x)
+          height (:height context)
+          biomes (:biomes context)
+          temperature (:temperature context)]
+      (->str (coords->str coords)
+             (biome->str (get biomes coords))
+             (height->str (get height coords))
+             (temperature->str (get temperature coords))))))
 
 (defclass DiagLayer [c.layer.Layer]
   (setv is_event_handler true)
   (defn --init-- [self context]
     (.--init-- (super DiagLayer self))
     (setv self.context context)
-    (let [label (c.text.Label "Welcome to Calliope")]
-      (setv label.position (, 10 10))
+    (let [label (c.text.Label "Welcome to Calliope" :position (, 10 10) :color (, 10 10 10 255))]
       (.add self label)
       (setv self.label label)))
   (defn update-label [self new-text]
@@ -60,7 +58,7 @@
 (defclass MapLayer [c.layer.Layer])
 
 (defn start []
-  (c.director.director.init :width 800 :height 600)
+  (c.director.director.init :width 512 :height 512)
   (let [diag-layer (DiagLayer nil)
         l (geo.generate-layers)
         map-layer (create-map-layer l)
@@ -74,7 +72,7 @@
 
 (defn generate-world-sprite [l]
   (let [pixs (np->texture (np.array (color.world->pixels (:biomes l))))]
-    (c.sprite.Sprite pixs)))
+    (c.sprite.Sprite pixs :anchor (, 0 0))))
 
 (defn create-map-layer [l]
   (let [s (generate-world-sprite l)
