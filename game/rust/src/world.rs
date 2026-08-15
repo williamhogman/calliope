@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 
 use crate::agriculture;
 use crate::biomes as biomes_mod;
+use crate::chronicle::{self, ChronicleState};
 use crate::climate;
 use crate::constants;
 use crate::culture::{self, Culture};
@@ -25,6 +26,7 @@ use crate::util::{now_ms, round3};
 pub struct Event {
     pub m: i64,
     pub s: String,
+    pub k: String,
     pub text: String,
 }
 
@@ -54,6 +56,7 @@ pub struct World {
 
     rng: Pcg64Mcg,
     taken: HashSet<String>,
+    chron: ChronicleState,
     site_score: Array2<f64>,
     food_grid: Array2<f64>,
     near_fresh: Array2<bool>,
@@ -139,7 +142,12 @@ impl World {
         let routes = trade::build_routes(&trade_cost, trade_f, &mut setts);
         timings.push(("settlements", now_ms() - t7));
 
-        let mut events: Vec<Event> = Vec::new();
+        let mut rng = crate::util::rng(seed + 777);
+        let mut chron = ChronicleState::default();
+        chron.rulers = chronicle::init_rulers(&mut rng, &cultures, &mut taken);
+
+        let mut events: Vec<Event> =
+            chronicle::founding_myths(&mut rng, &cultures, &features, &world_name);
         for s in &setts {
             let people = if !cultures.is_empty() {
                 cultures[s.culture].people.clone()
@@ -156,6 +164,7 @@ impl World {
             events.push(Event {
                 m: 0,
                 s: s.name.clone(),
+                k: "found".to_string(),
                 text: format!("{} founded by the {}{}", s.name, people, suffix),
             });
         }
@@ -182,8 +191,9 @@ impl World {
             routes,
             events,
             world_name,
-            rng: crate::util::rng(seed + 777),
+            rng,
             taken,
+            chron,
             site_score: founded.site_score,
             food_grid: founded.food_grid,
             near_fresh: founded.near_fresh,
