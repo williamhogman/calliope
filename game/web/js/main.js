@@ -280,7 +280,7 @@ function nearestFeature(cx, cy, isWater) {
   for (const f of feats) {
     const waterKind = f.t === "ocean" || f.t === "sea" || f.t === "lake" || f.t === "river";
     if (waterKind !== isWater) continue;
-    const reach = f.t === "ocean" ? 1e9 : Math.sqrt(f.size) * 1.6 + 12;
+    const reach = f.t === "ocean" ? 1e9 : Math.sqrt(f.size) * 1.1 + 8;
     const d = Math.hypot(f.x - cx, f.y - cy);
     if (d < reach && d < bd) { bd = d; best = f; }
   }
