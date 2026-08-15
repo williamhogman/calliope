@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calliope — World Simulation</title>
+<meta name="description" content="Calliope: a generated world — climate, winds, rivers, biomes, resources and settlements, simulated live.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23172136' stroke='%23d4a94a' stroke-width='2'/%3E%3Cpath d='M9 20c3-8 11-8 14-1' fill='none' stroke='%236fae6f' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<canvas id="map" aria-label="World map"></canvas>
+
+<aside class="panel panel-left">
+  <header class="brand">
+    <h1>Calliope</h1>
+    <p class="tagline">Welcome to Calliope</p>
+  </header>
+
+  <section class="group">
+    <div class="group-title">World</div>
+    <div class="row seed-row">
+      <input id="seed" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" aria-label="World seed" placeholder="seed">
+      <button id="dice" class="icon-btn" title="Random seed" aria-label="Random seed">
+        <svg viewBox="0 0 24 24" width="15" height="15"><rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.6" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.6" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.6" fill="currentColor"/></svg>
+      </button>
+    </div>
+    <div class="row">
+      <div class="seg" id="size-seg" role="group" aria-label="World size">
+        <button data-size="256">256</button>
+        <button data-size="384">384</button>
+        <button data-size="512" class="active">512</button>
+      </div>
+    </div>
+    <button id="generate" class="primary">Generate world</button>
+  </section>
+
+  <section class="group">
+    <div class="group-title">Layer</div>
+    <div class="option-list" id="layers"></div>
+  </section>
+
+  <section class="group">
+    <div class="group-title">Overlays</div>
+    <div class="option-list" id="overlays"></div>
+  </section>
+
+  <section class="group">
+    <div class="group-title">Time</div>
+    <div class="date" id="date">—</div>
+    <div class="row time-controls">
+      <button id="play" class="icon-btn" title="Play / pause" aria-label="Play or pause">
+        <svg id="icon-play" viewBox="0 0 24 24" width="14" height="14"><path d="M7 4.5v15l13-7.5z" fill="currentColor"/></svg>
+        <svg id="icon-pause" viewBox="0 0 24 24" width="14" height="14" class="hidden"><path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="currentColor"/></svg>
+      </button>
+      <button id="step" class="icon-btn" title="Advance one month" aria-label="Advance one month">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M5 4.5v15l10-7.5z" fill="currentColor"/><rect x="17" y="4.5" width="2.6" height="15" fill="currentColor"/></svg>
+      </button>
+      <div class="seg" id="speed-seg" role="group" aria-label="Simulation speed">
+        <button data-speed="1" class="active">1×</button>
+        <button data-speed="4">4×</button>
+        <button data-speed="12">12×</button>
+      </div>
+    </div>
+  </section>
+</aside>
+
+<aside class="panel panel-right">
+  <section class="group">
+    <div class="group-title">Legend</div>
+    <div id="legend" class="legend"></div>
+  </section>
+  <section class="group hidden" id="res-legend-group">
+    <div class="group-title">Resources</div>
+    <div id="res-legend" class="legend legend-res"></div>
+  </section>
+  <section class="group">
+    <div class="group-title">Settlements <span id="pop-total" class="dim"></span></div>
+    <div id="settlements" class="settlement-list"></div>
+  </section>
+  <section class="group">
+    <div class="group-title">Chronicle</div>
+    <div id="events" class="events"><div class="dim event-empty">Nothing yet — let time pass.</div></div>
+  </section>
+</aside>
+
+<div id="inspector" class="inspector hidden"></div>
+
+<div id="loading" class="loading">
+  <div class="loading-card">
+    <div class="muse">✶</div>
+    <div class="loading-title">Weaving the world…</div>
+    <div class="loading-sub">terrain · winds · rivers · biomes · peoples</div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
