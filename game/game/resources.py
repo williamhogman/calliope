@@ -186,23 +186,26 @@ ALL_PLACEABLE = ["bananas", "blueberries", "strawberries", "blackberries",
 def place_resources(world, seed):
     """Returns a list of deposits: {r, x, y, rich} thinned to local maxima."""
     size = world["height"].shape[0]
-    yy, xx = np.mgrid[0:size, 0:size].astype(np.float64)
+    half = size // 2
+    yy, xx = np.mgrid[0:half, 0:half].astype(np.float64)
     deposits = []
     from scipy import ndimage
 
+    noise = Perlin3(seed + 5000)
     for i, name in enumerate(ALL_PLACEABLE):
         mask = _suitability(name, world)
         if not mask.any():
             continue
-        noise = Perlin3(seed + 5000 + i * 37)
-        field = noise.fbm(xx / size * 11.0, yy / size * 11.0,
-                          np.full_like(xx, i * 0.61), octaves=3)
+        # noise evaluated at half resolution, upsampled — 4x faster
+        small = noise.fbm(xx / half * 11.0, yy / half * 11.0,
+                          np.full_like(xx, 1.7 + i * 0.61), octaves=3)
+        field = np.repeat(np.repeat(small, 2, axis=0), 2, axis=1)[:size, :size]
         vals = field[mask]
         q = _ABUNDANCE_QUANTILE[abundance(name)]
         thresh = np.quantile(vals, q)
         hot = mask & (field >= thresh)
         # thin to local maxima so deposits are point-like
-        maxima = field == ndimage.maximum_filter(field, size=7)
+        maxima = field == ndimage.maximum_filter(field, size=5)
         spots = hot & maxima
         ys, xs = np.where(spots)
         lo, hi = float(field.min()), float(field.max())

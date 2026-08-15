@@ -36,14 +36,14 @@ def heightmap(seed: int, size: int = SIZE) -> np.ndarray:
     fy = yy / size * 5.0
 
     # Domain warp for organic coastlines
-    wx = warp.fbm(fx + 13.7, fy + 7.1, np.full_like(fx, 0.5), octaves=3)
-    wy = warp.fbm(fx + 3.3, fy + 11.9, np.full_like(fx, 1.5), octaves=3)
+    wx = warp.fbm(fx + 13.7, fy + 7.1, np.full_like(fx, 0.5), octaves=2)
+    wy = warp.fbm(fx + 3.3, fy + 11.9, np.full_like(fx, 1.5), octaves=2)
     n = base.fbm(fx + 0.35 * wx, fy + 0.35 * wy, np.full_like(fx, 0.0), octaves=6)
 
     height = (radial(size) + n * 1.15) / 2.0
 
     # Mountain ranges: ridged noise, applied inland only so coasts stay clean
-    r = ridge.ridged(fx * 1.6 + 31.0, fy * 1.6 + 17.0, np.full_like(fx, 3.3), octaves=5)
+    r = ridge.ridged(fx * 1.6 + 31.0, fy * 1.6 + 17.0, np.full_like(fx, 3.3), octaves=4)
     inland = _smoothstep(height, 0.05, 0.32)
     height = height + 0.55 * np.maximum(0.0, r - 0.62) * inland
 

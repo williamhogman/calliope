@@ -25,7 +25,7 @@ def latitude_deg(size: int) -> np.ndarray:
 def temperature_mean(height: np.ndarray, lat_deg: np.ndarray) -> np.ndarray:
     """Annual-mean sea-level temperature by latitude, minus altitude lapse."""
     lat = lat_deg / 90.0
-    t_sea = 28.0 - 56.0 * lat ** 1.6
+    t_sea = 28.0 - 53.0 * lat ** 1.7
     lapse = 26.0 * np.maximum(height, 0.0)  # 6.5 C/km * 4 km per unit
     return t_sea - lapse
 
