@@ -25,8 +25,19 @@ fn main() {
         w.features.len(),
         w.routes.len()
     );
+    let mut census: std::collections::BTreeMap<&str, usize> = Default::default();
+    for f in &w.features {
+        *census.entry(f.t.as_str()).or_default() += 1;
+    }
+    let parts: Vec<String> = census.iter().map(|(k, v)| format!("{k}:{v}")).collect();
+    println!("feature census: {}", parts.join(" "));
     for f in w.features.iter().take(6) {
         println!("  feature[{}] {} @({},{})", f.t, f.name, f.x, f.y);
+    }
+    for f in &w.features {
+        if matches!(f.t.as_str(), "bay" | "strait" | "cape" | "peak" | "highland" | "marsh" | "delta") {
+            println!("  geo[{}] {} @({},{})", f.t, f.name, f.x, f.y);
+        }
     }
     for s in w.settlements.iter().take(5) {
         println!(
