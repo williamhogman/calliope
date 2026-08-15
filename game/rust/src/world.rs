@@ -428,13 +428,19 @@ impl World {
             s.pop = pop;
             s.tier = settlements::tier(pop);
             if s.tier != old_tier {
-                events.push(Event {
-                    m: month_abs,
-                    s: s.name.clone(),
-                    k: "growth".to_string(),
-                    text: format!("{} has grown into a {}.", s.name, s.tier.to_lowercase()),
-                });
-                if pop > s.pop - 1 {
+                let rank = |t: &str| {
+                    settlements::TIERS
+                        .iter()
+                        .position(|(_, n)| *n == t)
+                        .unwrap_or(0)
+                };
+                if rank(&s.tier) > rank(&old_tier) {
+                    events.push(Event {
+                        m: month_abs,
+                        s: s.name.clone(),
+                        k: "growth".to_string(),
+                        text: format!("{} has grown into a {}.", s.name, s.tier.to_lowercase()),
+                    });
                     // rising tier: something worth singing about may be raised
                     let wonders = chronicle::wonder_for(
                         &mut self.chron,
@@ -444,6 +450,13 @@ impl World {
                         month_abs,
                     );
                     events.extend(wonders);
+                } else {
+                    events.push(Event {
+                        m: month_abs,
+                        s: s.name.clone(),
+                        k: "disaster".to_string(),
+                        text: format!("{} dwindles to a {}.", s.name, s.tier.to_lowercase()),
+                    });
                 }
             }
         }
