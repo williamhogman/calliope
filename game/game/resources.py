@@ -204,8 +204,12 @@ def place_resources(world, seed):
         q = _ABUNDANCE_QUANTILE[abundance(name)]
         thresh = np.quantile(vals, q)
         hot = mask & (field >= thresh)
-        # thin to local maxima so deposits are point-like
-        maxima = field == ndimage.maximum_filter(field, size=5)
+        # thin to local maxima so deposits are point-like; deterministic jitter
+        # breaks ties on the 2x2 plateaus the upsampling creates, so each
+        # 5x5 window yields exactly one deposit instead of a duplicate cluster
+        rng = np.random.default_rng(seed * 31 + i)
+        fj = field + rng.random(field.shape) * 1e-6
+        maxima = fj == ndimage.maximum_filter(fj, size=5)
         spots = hot & maxima
         ys, xs = np.where(spots)
         lo, hi = float(field.min()), float(field.max())
