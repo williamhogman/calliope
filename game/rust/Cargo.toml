@@ -17,6 +17,7 @@ wasm-bindgen = "0.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3"
+getrandom = { version = "0.2", features = ["js"] }
 
 [profile.release]
 opt-level = 3
