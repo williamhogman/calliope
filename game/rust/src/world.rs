@@ -336,6 +336,7 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
+                    k: "disaster".to_string(),
                     text: format!("A brutal winter grips {} — {} lost.", s.name, loss),
                 });
             }
@@ -346,7 +347,56 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
+                    k: "disaster".to_string(),
                     text: format!("Plague stalks the streets of {} — {} souls perish.", s.name, loss),
+                });
+            }
+            // the earth shakes in the high country
+            if self.height[[y, x]] > 0.42 && pop > 120 && self.rng.gen::<f64>() < 0.0012 {
+                let loss = ((pop as f64 * self.rng.gen_range(0.03..0.09)) as i64).max(3);
+                pop -= loss;
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: "disaster".to_string(),
+                    text: format!("The earth shakes beneath {} — walls fall, {} are lost.", s.name, loss),
+                });
+            }
+            // fire leaps the rooftops in the dry season
+            if (5..=7).contains(&month)
+                && self.precip[[y, x]] < 700.0
+                && pop > 350
+                && self.rng.gen::<f64>() < 0.0025
+            {
+                let loss = ((pop as f64 * self.rng.gen_range(0.02..0.06)) as i64).max(3);
+                pop -= loss;
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: "disaster".to_string(),
+                    text: format!("Fire leaps the rooftops of {}; {} perish in the smoke.", s.name, loss),
+                });
+            }
+            // the spring melt bursts the banks
+            if s.river && (2..=4).contains(&month) && pop > 150 && self.rng.gen::<f64>() < 0.002 {
+                let loss = ((pop as f64 * self.rng.gen_range(0.01..0.04)) as i64).max(2);
+                pop -= loss;
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: "disaster".to_string(),
+                    text: format!("The river bursts its banks at {} — {} swept away in the brown water.", s.name, loss),
+                });
+            }
+            // black autumn storms off the open sea
+            if s.coastal && (8..=10).contains(&month) && pop > 150 && self.rng.gen::<f64>() < 0.002 {
+                let loss = ((pop as f64 * self.rng.gen_range(0.01..0.05)) as i64).max(2);
+                pop -= loss;
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: "disaster".to_string(),
+                    text: format!("A black storm off the open sea lashes {} — {} lost to the waves.", s.name, loss),
                 });
             }
             // a golden harvest, in high summer, on good soil
@@ -354,9 +404,24 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
+                    k: "growth".to_string(),
                     text: format!("The harvest overflows in {}; granaries groan.", s.name),
                 });
                 growth *= 2.0;
+            }
+            // markets overflow where many roads meet
+            if s.connections >= 3 && pop > 400 && self.rng.gen::<f64>() < 0.0015 {
+                let good = s
+                    .exports
+                    .clone()
+                    .unwrap_or_else(|| "grain".to_string());
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: "trade".to_string(),
+                    text: format!("Caravans crowd the gates of {}; {} flows out to every shore.", s.name, good),
+                });
+                growth += pop as f64 * 0.004;
             }
             pop = ((pop as f64 + growth).round() as i64).max(20);
             let old_tier = s.tier.clone();
@@ -366,8 +431,20 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
+                    k: "growth".to_string(),
                     text: format!("{} has grown into a {}.", s.name, s.tier.to_lowercase()),
                 });
+                if pop > s.pop - 1 {
+                    // rising tier: something worth singing about may be raised
+                    let wonders = chronicle::wonder_for(
+                        &mut self.chron,
+                        &mut self.rng,
+                        s,
+                        &self.cultures,
+                        month_abs,
+                    );
+                    events.extend(wonders);
+                }
             }
         }
         events
