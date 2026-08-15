@@ -175,15 +175,29 @@ function closeDetail() {
   markDirty();
 }
 
-// click (not drag) selects a settlement
-let downAt = null;
-canvas.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+// tap/click (not drag, not pinch) selects a settlement; on touch a tap on
+// open ground inspects the cell instead — there is no hover on a phone.
+let downAt = null, pointersDown = 0, multiTouch = false;
+canvas.addEventListener("pointerdown", (e) => {
+  pointersDown++;
+  if (pointersDown > 1) multiTouch = true;
+  downAt = [e.clientX, e.clientY];
+});
+canvas.addEventListener("pointercancel", () => {
+  pointersDown = Math.max(0, pointersDown - 1);
+  if (pointersDown === 0) { multiTouch = false; downAt = null; }
+});
 canvas.addEventListener("pointerup", (e) => {
+  pointersDown = Math.max(0, pointersDown - 1);
+  if (pointersDown > 0) return; // other fingers still down
+  const wasPinch = multiTouch;
+  multiTouch = false;
   const w = world();
-  if (!downAt || !w) return;
+  if (!downAt || !w || wasPinch) { downAt = null; return; }
   const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]);
   downAt = null;
   if (moved > 5) return;
+  const touch = e.pointerType === "touch";
   let best = null, bestD = Infinity;
   for (const s of w.header.settlements) {
     const sx = view.tx + (s.x + 0.5) * view.scale;
@@ -191,8 +205,21 @@ canvas.addEventListener("pointerup", (e) => {
     const d = Math.hypot(e.clientX - sx, e.clientY - sy);
     if (d < bestD) { bestD = d; best = s; }
   }
-  if (best && bestD <= 14) pickSettlement(best);
-  else if (selected()) closeDetail();
+  if (best && bestD <= (touch ? 22 : 14)) {
+    if (touch) { hover = null; setHoverInfo(null); }
+    pickSettlement(best);
+    return;
+  }
+  if (selected()) closeDetail();
+  if (touch) {
+    const [wx, wy] = view.screenToWorld(e.clientX, e.clientY);
+    const cx = Math.floor(wx), cy = Math.floor(wy);
+    const W = w.header.width || w.header.size;
+    const H = w.header.size;
+    hover = (cx >= 0 && cy >= 0 && cx < W && cy < H) ? { x: cx, y: cy } : null;
+    setHoverInfo(hover ? inspect(cx, cy) : null);
+    markDirty();
+  }
 });
 
 // ---------- inspector ----------
@@ -329,6 +356,7 @@ function inspect(cx, cy) {
 }
 
 canvas.addEventListener("pointermove", (e) => {
+  if (e.pointerType === "touch") return; // touch pans; taps inspect
   const w = world();
   if (!w) return;
   const [wx, wy] = view.screenToWorld(e.clientX, e.clientY);
@@ -340,7 +368,8 @@ canvas.addEventListener("pointermove", (e) => {
   setHoverInfo(hover ? inspect(cx, cy) : null);
   markDirty();
 });
-canvas.addEventListener("pointerleave", () => {
+canvas.addEventListener("pointerleave", (e) => {
+  if (e.pointerType === "touch") return; // keep tapped info up after the finger lifts
   hover = null;
   setHoverInfo(null);
   markDirty();
@@ -357,6 +386,7 @@ mountUI({
   setSpeed,
   pickSettlement,
   closeDetail,
+  clearHover: () => { hover = null; setHoverInfo(null); markDirty(); },
 });
 
 window.addEventListener("keydown", (e) => {
