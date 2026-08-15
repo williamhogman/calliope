@@ -17,9 +17,56 @@ export const OVERLAYS = [
   ["rivers", "Rivers"],
   ["snow", "Snow & sea ice"],
   ["settlements", "Settlements"],
+  ["routes", "Trade routes"],
   ["resources", "Resources"],
   ["hillshade", "Relief shading"],
 ];
+
+export function renderStats(el, world, popHistory) {
+  const { header, arrays } = world;
+  const size = header.size;
+  const total = size * size;
+  const counts = new Map();
+  for (let i = 0; i < arrays.biomes.length; i++) {
+    counts.set(arrays.biomes[i], (counts.get(arrays.biomes[i]) || 0) + 1);
+  }
+  const land = total - (counts.get(0) || 0);
+  const byName = header.biomes
+    .filter((b) => b.id !== 0 && counts.get(b.id))
+    .sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0))
+    .slice(0, 3);
+  const pop = popHistory.length ? popHistory[popHistory.length - 1].pop : 0;
+
+  el.innerHTML = `
+    <div class="stat-row"><span class="dim">Seed</span><span class="stat-mono">${header.seed}</span></div>
+    <div class="stat-row"><span class="dim">Land</span><span>${((land / total) * 100).toFixed(1)}%</span></div>
+    <div class="stat-row"><span class="dim">Dominant</span><span>${byName.map((b) => b.name).join(", ") || "—"}</span></div>
+    <div class="stat-row"><span class="dim">Souls</span><span class="stat-mono">${pop.toLocaleString("en-US")}</span></div>
+    <canvas id="spark" width="220" height="44"></canvas>`;
+
+  const c = el.querySelector("#spark");
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
+  if (popHistory.length > 1) {
+    const min = Math.min(...popHistory.map((p) => p.pop));
+    const max = Math.max(...popHistory.map((p) => p.pop));
+    const span = Math.max(max - min, 1);
+    ctx.beginPath();
+    popHistory.forEach((p, i) => {
+      const x = (i / (popHistory.length - 1)) * (c.width - 4) + 2;
+      const y = c.height - 5 - ((p.pop - min) / span) * (c.height - 12);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = "#d4a94a";
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = "rgba(138,146,163,0.7)";
+    ctx.font = "10.5px Inter, sans-serif";
+    ctx.fillText("population over time — let the years pass", 4, 26);
+  }
+}
 
 export function buildLayerList(el, current, onPick) {
   el.innerHTML = "";
