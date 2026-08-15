@@ -5,7 +5,7 @@ import { Renderer } from "./render.js";
 import { View } from "./view.js";
 import {
   buildLayerList, buildOverlayList, buildLegend, buildResourceLegend,
-  renderSettlements, renderEvents, renderInspector, toast,
+  renderSettlements, renderEvents, renderInspector, renderStats, toast,
 } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -15,7 +15,10 @@ const renderer = new Renderer(canvas);
 const state = {
   world: null,        // {header, arrays}
   layer: "biomes",
-  overlays: { rivers: true, snow: true, settlements: true, resources: false, hillshade: true },
+  overlays: {
+    rivers: true, snow: true, settlements: true, routes: true,
+    resources: false, hillshade: true,
+  },
   month: 0,
   version: 0,
   playing: false,
@@ -23,15 +26,20 @@ const state = {
   size: 512,
   hover: null,
   events: [],
+  popHistory: [],
 };
 
 let dirty = true;
 const markDirty = () => { dirty = true; };
 const view = new View(canvas, markDirty);
 
+window.__calliope = { state, view, renderer };
+
 // ---------- render loop ----------
 
 function frame() {
+  // caravans animate continuously while time flows
+  if (state.playing && state.overlays.routes) dirty = true;
   if (dirty) {
     dirty = false;
     renderer.draw(state, view, state.hover);
