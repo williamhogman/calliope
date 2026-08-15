@@ -14,13 +14,15 @@ use crate::chronicle::{self, ChronicleState};
 use crate::climate;
 use crate::constants;
 use crate::culture::{self, Culture};
+use crate::economy::{self, Market};
 use crate::geo;
 use crate::hydrology;
 use crate::naming::{self, Feature};
 use crate::resources::{self, Deposit};
 use crate::settlements::{self, Settlement};
+use crate::society::{self, Society};
 use crate::trade::{self, Route};
-use crate::util::{now_ms, round3};
+use crate::util::{now_ms, round2, round3};
 
 #[derive(Serialize, Clone)]
 pub struct Event {
@@ -53,6 +55,8 @@ pub struct World {
     pub routes: Vec<Route>,
     pub events: Vec<Event>,
     pub world_name: String,
+    pub societies: Vec<Society>,
+    pub market: Market,
 
     rng: Pcg64Mcg,
     taken: HashSet<String>,
@@ -142,6 +146,9 @@ impl World {
         let cost_full = trade::cost_grid(&height, &hydro.rivers, &hydro.lakes, &biome_map);
         let trade_cost = trade::downsample(&cost_full, trade_f);
         let routes = trade::build_routes(&trade_cost, trade_f, &mut setts);
+        let societies = society::init(&cultures);
+        let mut market = Market::default();
+        economy::update_prices(&mut market, &setts);
         timings.push(("settlements", now_ms() - t7));
 
         let mut rng = crate::util::rng(seed + 777);
@@ -193,6 +200,8 @@ impl World {
             routes,
             events,
             world_name,
+            societies,
+            market,
             rng,
             taken,
             chron,
@@ -317,7 +326,10 @@ impl World {
     fn tick_month(&mut self, month_abs: i64) -> Vec<Event> {
         let mut events = Vec::new();
         let month = month_abs.rem_euclid(12);
+        let mods: Vec<society::Mods> =
+            self.societies.iter().map(society::mods_for).collect();
         for s in self.settlements.iter_mut() {
+            let md = mods.get(s.culture).cloned().unwrap_or_default();
             let (y, x) = (s.y as usize, s.x as usize);
             let t_now =
                 climate::month_temperature(self.tmean[[y, x]], self.tamp[[y, x]], month);
@@ -328,12 +340,14 @@ impl World {
                 r *= 0.6;
             }
             r *= 1.0 + 0.04 * (s.connections.min(4) as f64); // trade bonus
-            let k = 900.0 * s.food.max(0.3);
+            r *= md.growth; // the plough, law, and the arts of peace
+            r *= 1.0 + 0.04 * (s.wealth / (s.pop as f64 + 1.0)).min(1.0); // coin draws folk
+            let k = 900.0 * s.food.max(0.3) * md.capacity;
             let mut pop = s.pop;
             let mut growth = pop as f64 * r * (1.0 - pop as f64 / k);
-            // harsh winter shock
+            // harsh winter shock — softened by herb-lore and medicine
             if t_now < -14.0 && self.rng.gen::<f64>() < 0.10 && pop > 60 {
-                let loss = (pop as f64 * self.rng.gen_range(0.02..0.06)) as i64;
+                let loss = (pop as f64 * self.rng.gen_range(0.02..0.06) * md.health) as i64;
                 pop -= loss;
                 events.push(Event {
                     m: month_abs,
@@ -342,9 +356,9 @@ impl World {
                     text: format!("A brutal winter grips {} — {} lost.", s.name, loss),
                 });
             }
-            // plague finds the crowded streets
+            // plague finds the crowded streets — aqueducts and physicians push back
             if pop > 2200 && self.rng.gen::<f64>() < 0.004 {
-                let loss = (pop as f64 * self.rng.gen_range(0.06..0.16)) as i64;
+                let loss = (pop as f64 * self.rng.gen_range(0.06..0.16) * md.health) as i64;
                 pop -= loss;
                 events.push(Event {
                     m: month_abs,
@@ -353,9 +367,10 @@ impl World {
                     text: format!("Plague stalks the streets of {} — {} souls perish.", s.name, loss),
                 });
             }
-            // the earth shakes in the high country
+            // the earth shakes in the high country — dressed stone stands longer
             if self.height[[y, x]] > 0.42 && pop > 120 && self.rng.gen::<f64>() < 0.0012 {
-                let loss = ((pop as f64 * self.rng.gen_range(0.03..0.09)) as i64).max(3);
+                let loss =
+                    ((pop as f64 * self.rng.gen_range(0.03..0.09) * md.defense) as i64).max(3);
                 pop -= loss;
                 events.push(Event {
                     m: month_abs,
@@ -364,13 +379,14 @@ impl World {
                     text: format!("The earth shakes beneath {} — walls fall, {} are lost.", s.name, loss),
                 });
             }
-            // fire leaps the rooftops in the dry season
+            // fire leaps the rooftops in the dry season — stone burns slower
             if (5..=7).contains(&month)
                 && self.precip[[y, x]] < 700.0
                 && pop > 350
                 && self.rng.gen::<f64>() < 0.0025
             {
-                let loss = ((pop as f64 * self.rng.gen_range(0.02..0.06)) as i64).max(3);
+                let loss =
+                    ((pop as f64 * self.rng.gen_range(0.02..0.06) * md.defense) as i64).max(3);
                 pop -= loss;
                 events.push(Event {
                     m: month_abs,
@@ -486,7 +502,17 @@ impl World {
             }
             let site = {
                 let parent = self.settlements[pi].clone();
-                settlements::colony_site(&self.site_score, &self.settlements, &parent)
+                let range = self
+                    .societies
+                    .get(parent.culture)
+                    .map(|so| society::mods_for(so).colony_range)
+                    .unwrap_or(1.0);
+                settlements::colony_site(
+                    &self.site_score,
+                    &self.settlements,
+                    &parent,
+                    3600.0 * range * range,
+                )
             };
             let Some((y, x)) = site else { continue };
             let migrants = ((ppop as f64 * self.rng.gen_range(0.08..0.14)) as i64).max(40);
@@ -520,6 +546,7 @@ impl World {
                 connections: 0,
                 goods: Vec::new(),
                 exports: None,
+                wealth: round2(migrants as f64 * 0.2),
             };
             trade::goods_for(&mut s, &self.deposits, &self.fertility);
             self.settlements.push(s);
@@ -564,12 +591,31 @@ impl World {
                 founded = true;
                 new_events.extend(col_evs);
             }
+            let soc_evs = society::monthly(
+                &mut self.societies,
+                &self.settlements,
+                &self.deposits,
+                &self.cultures,
+                self.month,
+                &mut self.rng,
+            );
+            new_events.extend(soc_evs);
+            let eco_evs = economy::monthly(
+                &mut self.settlements,
+                &self.routes,
+                &mut self.market,
+                &mut self.societies,
+                self.month,
+                &mut self.rng,
+            );
+            new_events.extend(eco_evs);
             let chron_evs = chronicle::monthly(
                 &mut self.chron,
                 &mut self.rng,
                 &mut self.taken,
                 self.month,
                 &mut self.settlements,
+                &mut self.societies,
                 &self.cultures,
                 &self.features,
                 &self.world_name,
@@ -582,15 +628,32 @@ impl World {
         (new_events, founded)
     }
 
-    /// Cultures with their current ruler attached, for the client.
+    /// Cultures with ruler, era, polity, arts and treasury attached.
     fn cultures_json(&self) -> Value {
         let arr: Vec<Value> = self
             .cultures
             .iter()
             .map(|c| {
                 let mut v = serde_json::to_value(c).unwrap();
+                let polity = self.societies.get(c.id).map(|s| s.polity).unwrap_or(0);
                 if let Some(r) = self.chron.rulers.iter().find(|r| r.culture == c.id) {
-                    v["ruler"] = json!(r.title());
+                    let title = society::RULER_TITLES[polity];
+                    v["ruler"] = if title.is_empty() {
+                        json!(r.title())
+                    } else {
+                        json!(format!("{} {}", title, r.title()))
+                    };
+                }
+                if let Some(soc) = self.societies.get(c.id) {
+                    v["era"] = json!(society::ERAS[soc.era]);
+                    v["polity"] = json!(society::POLITIES[soc.polity]);
+                    v["treasury"] = json!(round2(soc.treasury));
+                    let names: Vec<&'static str> = soc
+                        .techs
+                        .iter()
+                        .filter_map(|id| society::tech_by_id(id).map(|t| t.name))
+                        .collect();
+                    v["techs"] = json!(names);
                 }
                 v
             })
@@ -606,6 +669,7 @@ impl World {
             "events": events,
             "cultures": self.cultures_json(),
             "wars": self.chron.wars,
+            "market": self.market.snapshot(),
         });
         if founded {
             out["routes"] = json!(self.routes);
@@ -638,6 +702,7 @@ impl World {
             "features": self.features,
             "routes": self.routes,
             "wars": self.chron.wars,
+            "market": self.market.snapshot(),
             "events": self.events[ev_start..],
             "timings": timings,
         })

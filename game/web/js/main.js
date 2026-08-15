@@ -10,6 +10,7 @@ import {
   month, setMonth, playing, setPlaying, speed, setSpeed,
   worldSize, setWorldSize, setBusy, layer, setLayer, overlays, setOverlays,
   selected, setSelected, setHoverInfo, popHistory, setPopHistory, setSeenEvents,
+  setMarket,
 } from "./ui/state.js";
 
 const $ = (id) => document.getElementById(id);
@@ -22,7 +23,7 @@ const markDirty = () => { dirty = true; };
 const view = new View(canvas, markDirty);
 let hover = null;
 
-window.__calliope = { view, renderer, world, month };
+window.__calliope = { view, renderer, world, month, advance: (m) => advance(m) };
 
 // ---------- render loop ----------
 
@@ -83,6 +84,7 @@ async function generate(rawSeed) {
     setSettlements(w.header.settlements);
     setCultures(w.header.cultures || []);
     setWars(w.header.wars || []);
+    setMarket(w.header.market || []);
     renderer.setWorld(w);
     view.fit(w.header.width || w.header.size, w.header.size);
     buildDepositIndex(w);
@@ -134,6 +136,7 @@ async function advance(months) {
       setCultures(res.cultures);
     }
     if (res.wars) setWars(res.wars);
+    if (res.market) setMarket(res.market);
     if (res.events?.length) {
       setEvents([...events(), ...res.events].slice(-200));
     }
