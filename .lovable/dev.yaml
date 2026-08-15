@@ -1,0 +1,7 @@
+apiVersion: exec.lovable.dev/v1
+kind: LifecycleScript
+metadata:
+  name: 99-dev
+spec:
+  purpose: dev
+  command: ".venv/bin/uvicorn game.server:app --host 0.0.0.0 --port 8080 --app-dir game --reload --reload-dir game/game"

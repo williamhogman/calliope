@@ -1,0 +1,7 @@
+apiVersion: exec.lovable.dev/v1
+kind: LifecycleScript
+metadata:
+  name: 99-install
+spec:
+  purpose: install
+  command: "test -d .venv || python3 -m venv .venv; .venv/bin/pip install -q -r requirements.txt"
