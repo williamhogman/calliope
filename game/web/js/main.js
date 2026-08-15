@@ -279,15 +279,19 @@ function explain(w, cx, cy, i, h, isWater) {
   return notes.slice(0, 2);
 }
 
+const WATER_FEATURES = new Set(["ocean", "sea", "lake", "river", "bay", "strait", "delta"]);
+
 function nearestFeature(w, cx, cy, isWater) {
   const feats = w.header.features || [];
-  let best = null, bd = Infinity;
+  let best = null, bd = Infinity, bestPri = Infinity;
   for (const f of feats) {
-    const waterKind = f.t === "ocean" || f.t === "sea" || f.t === "lake" || f.t === "river";
+    const waterKind = WATER_FEATURES.has(f.t);
     if (waterKind !== isWater) continue;
     const reach = f.t === "ocean" ? 1e9 : Math.sqrt(f.size) * 1.1 + 8;
     const d = Math.hypot(f.x - cx, f.y - cy);
-    if (d < reach && d < bd) { bd = d; best = f; }
+    // prefer the tightest fitting name: a bay over the ocean, a cape over a continent
+    const pri = d / Math.max(reach, 1);
+    if (d < reach && pri < bestPri) { bestPri = pri; bd = d; best = f; }
   }
   return best ? best.name : null;
 }

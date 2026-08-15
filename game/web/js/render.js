@@ -7,17 +7,28 @@ import {
 
 const TIER_RADIUS = { Camp: 3, Village: 4.5, Town: 6, City: 8 };
 
+// pri decides who wins when labels collide (lower = mightier)
 const LABEL_STYLE = {
-  ocean:     { color: "#a9c9e6", up: true },
-  sea:       { color: "#9dbfde", up: true },
-  continent: { color: "#e8e2d2", up: true },
-  island:    { color: "#d5cfc0", up: false },
-  range:     { color: "#dcd8d0", up: false },
-  desert:    { color: "#e0c98f", up: false },
-  forest:    { color: "#a3c893", up: false },
-  river:     { color: "#93bfe6", up: false },
-  lake:      { color: "#93bfe6", up: false },
+  ocean:     { color: "#a9c9e6", pri: 0 },
+  continent: { color: "#e8e2d2", pri: 1 },
+  sea:       { color: "#9dbfde", pri: 2 },
+  range:     { color: "#dcd8d0", pri: 3 },
+  desert:    { color: "#e0c98f", pri: 4 },
+  forest:    { color: "#a3c893", pri: 5 },
+  island:    { color: "#d5cfc0", pri: 6 },
+  river:     { color: "#93bfe6", pri: 7 },
+  lake:      { color: "#93bfe6", pri: 8 },
+  highland:  { color: "#d8cfb9", pri: 9 },
+  bay:       { color: "#9dbfde", pri: 10 },
+  strait:    { color: "#9dbfde", pri: 11 },
+  cape:      { color: "#d5cfc0", pri: 12 },
+  peak:      { color: "#e6dfd2", pri: 13 },
+  marsh:     { color: "#a8c8a4", pri: 14 },
+  delta:     { color: "#93bfe6", pri: 15 },
 };
+
+// fine-grain coastal detail only earns a label once you lean in
+const DETAIL_KINDS = new Set(["bay", "strait", "cape", "peak", "marsh", "delta"]);
 
 export class Renderer {
   constructor(canvas) {
@@ -447,9 +458,12 @@ export class Renderer {
     if (kind === "ocean" || kind === "sea" || kind === "continent") {
       return Math.max(0, Math.min(0.95, 1.5 - s * 0.17));
     }
-    if (kind === "range" || kind === "desert" || kind === "forest") {
+    if (kind === "range" || kind === "desert" || kind === "forest" || kind === "highland") {
       return Math.max(0, Math.min(0.88, (s - 0.95) * 0.9)) *
              Math.max(0, Math.min(1, 2.6 - s * 0.11));
+    }
+    if (DETAIL_KINDS.has(kind)) {
+      return Math.max(0, Math.min(0.85, (s - 3.4) * 0.7));
     }
     return Math.max(0, Math.min(0.85, (s - 2.1) * 0.75));
   }
@@ -464,6 +478,9 @@ export class Renderer {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
+
+    // gather visible candidates, then place mighty-to-minor so nothing collides
+    const cands = [];
     for (const f of feats) {
       const st = LABEL_STYLE[f.t];
       if (!st) continue;
@@ -473,30 +490,49 @@ export class Renderer {
       const py = view.ty + f.y * s;
       if (px < -240 || py < -60 || px > w + 240 || py > hgt + 60) continue;
 
-      let font, text = f.name;
+      let font, size, spacing, text = f.name;
       const lg = Math.log2(Math.max(f.size, 2));
       if (f.t === "ocean" || f.t === "sea") {
-        font = `700 ${Math.min(24, 9 + lg * 0.95).toFixed(1)}px Cinzel, serif`;
+        size = Math.min(24, 9 + lg * 0.95);
+        font = `700 ${size.toFixed(1)}px Cinzel, serif`;
         text = f.name.toUpperCase();
-        ctx.letterSpacing = "3px";
+        spacing = 3;
       } else if (f.t === "continent") {
-        font = `700 ${Math.min(22, 8 + lg * 0.9).toFixed(1)}px Cinzel, serif`;
+        size = Math.min(22, 8 + lg * 0.9);
+        font = `700 ${size.toFixed(1)}px Cinzel, serif`;
         text = f.name.toUpperCase();
-        ctx.letterSpacing = "4px";
-      } else if (f.t === "range" || f.t === "desert" || f.t === "forest") {
+        spacing = 4;
+      } else if (f.t === "range" || f.t === "desert" || f.t === "forest" || f.t === "highland") {
+        size = 12.5;
         font = `italic 600 12.5px Georgia, serif`;
-        ctx.letterSpacing = "1px";
+        spacing = 1;
       } else {
+        size = 11;
         font = `italic 500 11px Georgia, serif`;
-        ctx.letterSpacing = "0.5px";
+        spacing = 0.5;
       }
-      ctx.font = font;
-      ctx.globalAlpha = alpha;
+      cands.push({ f, st, alpha, px, py, font, size, spacing, text });
+    }
+    cands.sort((a, b) => (a.st.pri - b.st.pri) || (b.f.size - a.f.size));
+
+    const placed = [];
+    for (const c of cands) {
+      ctx.font = c.font;
+      ctx.letterSpacing = `${c.spacing}px`;
+      const tw = ctx.measureText(c.text).width + 10;
+      const th = c.size + 9;
+      const box = { x0: c.px - tw / 2, x1: c.px + tw / 2, y0: c.py - th / 2, y1: c.py + th / 2 };
+      if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) {
+        ctx.letterSpacing = "0px";
+        continue; // a mightier name already holds this ground
+      }
+      placed.push(box);
+      ctx.globalAlpha = c.alpha;
       ctx.strokeStyle = "rgba(6, 10, 18, 0.8)";
       ctx.lineWidth = 3;
-      ctx.strokeText(text, px, py);
-      ctx.fillStyle = st.color;
-      ctx.fillText(text, px, py);
+      ctx.strokeText(c.text, c.px, c.py);
+      ctx.fillStyle = c.st.color;
+      ctx.fillText(c.text, c.px, c.py);
       ctx.letterSpacing = "0px";
     }
     ctx.globalAlpha = 1;
