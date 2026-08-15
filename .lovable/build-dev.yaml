@@ -4,4 +4,4 @@ metadata:
   name: 99-build-dev
 spec:
   purpose: build:dev
-  command: "bash -c 'rm -rf dist && mkdir -p dist && cp -r game/web/. dist/'"
+  command: "bash scripts/build.sh"

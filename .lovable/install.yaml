@@ -4,4 +4,4 @@ metadata:
   name: 99-install
 spec:
   purpose: install
-  command: "bash -c 'test -d .venv || python3 -m venv .venv; .venv/bin/pip install -q -r requirements.txt'"
+  command: "true"
