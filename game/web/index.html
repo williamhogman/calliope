@@ -17,7 +17,7 @@
 <aside class="panel panel-left">
   <header class="brand">
     <h1>Calliope</h1>
-    <p class="tagline">Welcome to Calliope</p>
+    <p class="tagline" id="tagline">Welcome to Calliope</p>
   </header>
 
   <section class="group">
@@ -81,6 +81,10 @@
     <div class="group-title">Resources</div>
     <div id="res-legend" class="legend legend-res"></div>
   </section>
+  <section class="group hidden" id="cultures-group">
+    <div class="group-title">Peoples</div>
+    <div id="cultures" class="cultures"></div>
+  </section>
   <section class="group">
     <div class="group-title">Settlements <span id="pop-total" class="dim"></span></div>
     <div id="settlements" class="settlement-list"></div>
@@ -91,6 +95,7 @@
   </section>
 </aside>
 
+<div id="detail" class="detail hidden"></div>
 <div id="inspector" class="inspector hidden"></div>
 
 <div id="loading" class="loading">

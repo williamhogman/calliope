@@ -1,4 +1,4 @@
-// DOM: option lists, legend, settlement list, chronicle, inspector.
+// DOM: option lists, legend, settlement list, chronicle, inspector, detail.
 
 import { settlementCss } from "./palette.js";
 
@@ -10,6 +10,7 @@ export const LAYERS = [
   ["temperature", "Temperature"],
   ["precip", "Precipitation"],
   ["hydro", "Hydrology"],
+  ["fertility", "Fertility"],
   ["political", "Political"],
 ];
 
@@ -19,6 +20,8 @@ export const OVERLAYS = [
   ["settlements", "Settlements"],
   ["routes", "Trade routes"],
   ["resources", "Resources"],
+  ["labels", "Place names"],
+  ["winds", "Winds"],
   ["hillshade", "Relief shading"],
 ];
 
@@ -111,8 +114,9 @@ export function buildLegend(el, biomes) {
 
 export function buildResourceLegend(el, resources) {
   el.innerHTML = "";
-  const names = Object.keys(resources).sort(
-    (a, b) => (resources[a].category + a).localeCompare(resources[b].category + b));
+  const names = Object.keys(resources)
+    .filter((n) => !resources[n].virtual)
+    .sort((a, b) => (resources[a].category + a).localeCompare(resources[b].category + b));
   for (const name of names) {
     const m = resources[name];
     const item = document.createElement("div");
@@ -123,16 +127,40 @@ export function buildResourceLegend(el, resources) {
   }
 }
 
-export function renderSettlements(el, popEl, settlements, onPick) {
+const STYLE_LABEL = {
+  hellenic: "coastal south", nordic: "far north", arid: "desert marches",
+  sylvan: "deep woods", steppe: "open plains", old: "old tongue",
+};
+
+export function buildCultureLegend(el, cultures, settlements) {
+  el.innerHTML = "";
+  for (const c of cultures || []) {
+    const members = settlements.filter((s) => s.culture === c.id);
+    const pop = members.reduce((a, s) => a + s.pop, 0);
+    const row = document.createElement("div");
+    row.className = "culture";
+    row.innerHTML = `
+      <span class="s-dot" style="background:${c.color}"></span>
+      <span class="c-body">
+        <span class="c-name">${c.people}</span>
+        <span class="c-sub dim">${STYLE_LABEL[c.style] || c.style} · ${members.length} settlement${members.length === 1 ? "" : "s"} · ${pop.toLocaleString("en-US")}</span>
+      </span>`;
+    el.appendChild(row);
+  }
+}
+
+export function renderSettlements(el, popEl, settlements, cultures, onPick) {
   const sorted = [...settlements].sort((a, b) => b.pop - a.pop);
   const total = settlements.reduce((acc, s) => acc + s.pop, 0);
   popEl.textContent = ` · ${total.toLocaleString("en-US")} souls`;
   el.innerHTML = "";
+  const colorOf = (s) =>
+    (cultures && cultures[s.culture] && cultures[s.culture].color) || settlementCss(s.id);
   for (const s of sorted) {
     const row = document.createElement("div");
     row.className = "settlement";
     row.innerHTML = `
-      <span class="s-dot" style="background:${settlementCss(s.id)}"></span>
+      <span class="s-dot" style="background:${colorOf(s)}"></span>
       <span class="s-name">${s.name}</span>
       <span class="s-tier">${s.tier}</span>
       <span class="s-pop">${s.pop.toLocaleString("en-US")}</span>`;
@@ -158,6 +186,41 @@ export function renderEvents(el, events, months) {
   }
 }
 
+export function renderDetail(el, s, culture, resources, onClose) {
+  if (!s) {
+    el.classList.add("hidden");
+    return;
+  }
+  el.classList.remove("hidden");
+  const goods = (s.goods || []).map((g) => {
+    const m = resources[g];
+    const star = g === s.exports ? `<span class="d-star" title="chief export">★</span>` : "";
+    return `<span class="d-good" style="--gc:${m?.color || "#ccc"}">${g}${star}</span>`;
+  }).join("");
+  const tags = [
+    s.coastal ? "coastal" : null,
+    s.river ? "fresh water" : null,
+  ].filter(Boolean).map((t) => `<span class="d-tag">${t}</span>`).join("");
+  el.innerHTML = `
+    <div class="d-head">
+      <span class="d-name">${s.name}</span>
+      <button class="d-close" aria-label="Close">×</button>
+    </div>
+    <div class="d-row">
+      <span class="s-dot" style="background:${culture?.color || "#999"}"></span>
+      <span>${s.tier} of the ${culture?.people || "first peoples"}</span>
+    </div>
+    <div class="d-stats">
+      <div><span class="dim">Souls</span><b>${s.pop.toLocaleString("en-US")}</b></div>
+      <div><span class="dim">Food</span><b>${s.food}</b></div>
+      <div><span class="dim">Routes</span><b>${s.connections ?? 0}</b></div>
+    </div>
+    ${tags ? `<div class="d-tags">${tags}</div>` : ""}
+    ${goods ? `<div class="d-goods-title dim">Produce</div><div class="d-goods">${goods}</div>` : ""}
+  `;
+  el.querySelector(".d-close").addEventListener("click", onClose);
+}
+
 export function renderInspector(el, info) {
   if (!info) {
     el.classList.add("hidden");
@@ -170,14 +233,22 @@ export function renderInspector(el, info) {
   bits.push(`<span class="i-val"><b>${info.elevation}</b> m</span>`);
   bits.push(`<span class="i-val"><b>${info.tempNow}</b> °C <span class="dim">(mean ${info.tempMean})</span></span>`);
   if (!info.isWater) bits.push(`<span class="i-val"><b>${info.precip}</b> mm/yr</span>`);
+  if (!info.isWater && info.fertility != null && info.fertility >= 0.05) {
+    bits.push(`<span class="i-val">Fertility <b>${Math.round(info.fertility * 100)}%</b></span>`);
+  }
+  if (info.wind) bits.push(`<span class="i-val dim">${info.wind}</span>`);
   if (info.river) bits.push(`<span class="i-val">River · flow <b>${info.flow}</b></span>`);
   if (info.lake) bits.push(`<span class="i-val">Lake</span>`);
   if (info.frozen) bits.push(`<span class="i-val">${info.frozen}</span>`);
   for (const r of info.resources) {
     bits.push(`<span class="i-res">◆ ${r.name} <span class="dim">(${r.abundance}${r.requires ? `, requires ${r.requires}` : ""})</span></span>`);
   }
+  if (info.place) bits.push(`<span class="i-place">${info.place}</span>`);
   if (info.territory) {
-    bits.push(`<span class="i-terr">Territory of ${info.territory}</span>`);
+    bits.push(`<span class="i-terr">${info.territory}</span>`);
+  }
+  for (const n of info.notes || []) {
+    bits.push(`<span class="i-note">☼ ${n}</span>`);
   }
   el.innerHTML = bits.join("");
 }
