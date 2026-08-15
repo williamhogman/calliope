@@ -1,4 +1,5 @@
-// Pan/zoom controller (CSS-pixel space).
+// Pan/zoom controller (CSS-pixel space). One pointer pans, two pinch-zoom,
+// wheel zooms around the cursor.
 
 export class View {
   constructor(canvas, onChange) {
@@ -17,7 +18,7 @@ export class View {
     this.worldSize = Math.max(worldW, worldH);
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
-    const pad = 40;
+    const pad = Math.min(40, w * 0.04);
     this.scale = Math.min((w - pad * 2) / worldW, (h - pad * 2) / worldH);
     this.minScale = this.scale * 0.5;
     this.tx = (w - worldW * this.scale) / 2;
@@ -50,31 +51,62 @@ export class View {
 
   _bind() {
     const c = this.canvas;
-    let dragging = false;
-    let lastX = 0, lastY = 0, moved = 0;
+    const pts = new Map(); // pointerId -> {x, y}
+    let lastX = 0, lastY = 0; // single-pointer pan anchor
+    let pinch = null; // {mx, my, dist} of the previous two-finger frame
+
+    const midOf = () => {
+      const [a, b] = [...pts.values()];
+      return {
+        mx: (a.x + b.x) / 2,
+        my: (a.y + b.y) / 2,
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+      };
+    };
 
     c.addEventListener("pointerdown", (e) => {
-      dragging = true;
-      moved = 0;
-      lastX = e.clientX;
-      lastY = e.clientY;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       c.setPointerCapture(e.pointerId);
-      c.classList.add("dragging");
+      if (pts.size === 1) {
+        lastX = e.clientX;
+        lastY = e.clientY;
+        c.classList.add("dragging");
+      } else if (pts.size === 2) {
+        pinch = midOf();
+      }
     });
+
     c.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      const dx = e.clientX - lastX;
-      const dy = e.clientY - lastY;
-      moved += Math.abs(dx) + Math.abs(dy);
-      lastX = e.clientX;
-      lastY = e.clientY;
-      this.tx += dx;
-      this.ty += dy;
-      this.onChange?.();
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size >= 2 && pinch) {
+        const m = midOf();
+        if (pinch.dist > 0 && m.dist > 0) this._zoomAt(pinch.mx, pinch.my, m.dist / pinch.dist);
+        this.tx += m.mx - pinch.mx;
+        this.ty += m.my - pinch.my;
+        pinch = m;
+        this.onChange?.();
+      } else if (pts.size === 1) {
+        this.tx += e.clientX - lastX;
+        this.ty += e.clientY - lastY;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        this.onChange?.();
+      }
     });
+
     const up = (e) => {
-      dragging = false;
-      c.classList.remove("dragging");
+      pts.delete(e.pointerId);
+      if (pts.size === 1) {
+        // one finger lifted mid-pinch: hand off to a smooth single-finger pan
+        const p = [...pts.values()][0];
+        lastX = p.x;
+        lastY = p.y;
+        pinch = null;
+      } else if (pts.size === 0) {
+        pinch = null;
+        c.classList.remove("dragging");
+      }
     };
     c.addEventListener("pointerup", up);
     c.addEventListener("pointercancel", up);

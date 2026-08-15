@@ -29,6 +29,15 @@ export const [selected, setSelected] = createSignal(null); // settlement | null
 export const [hoverInfo, setHoverInfo] = createSignal(null);
 export const [seenEvents, setSeenEvents] = createSignal(0);
 
+// ---------- mobile chrome ----------
+// On narrow screens the side panels become bottom sheets driven by a tab bar.
+
+const mq = window.matchMedia("(max-width: 760px)");
+export const [isMobile, setIsMobile] = createSignal(mq.matches);
+mq.addEventListener("change", (e) => setIsMobile(e.matches));
+
+export const [sheet, setSheet] = createSignal(null); // null | "world" | "almanac"
+
 // ---------- progressive disclosure ----------
 // Sections remember whether the reader left them open; everything else is
 // summarised in the collapsed header so nothing goes silent.
