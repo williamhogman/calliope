@@ -1,11 +1,23 @@
 // Renderer: composites the world into an offscreen canvas, draws to screen.
 
 import {
-  TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, SEA_GRAD, HYDRO_GRAD,
+  TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, SEA_GRAD, HYDRO_GRAD, FERT_GRAD,
   hash2, hexRgb, settlementColor,
 } from "./palette.js";
 
 const TIER_RADIUS = { Camp: 3, Village: 4.5, Town: 6, City: 8 };
+
+const LABEL_STYLE = {
+  ocean:     { color: "#a9c9e6", up: true },
+  sea:       { color: "#9dbfde", up: true },
+  continent: { color: "#e8e2d2", up: true },
+  island:    { color: "#d5cfc0", up: false },
+  range:     { color: "#dcd8d0", up: false },
+  desert:    { color: "#e0c98f", up: false },
+  forest:    { color: "#a3c893", up: false },
+  river:     { color: "#93bfe6", up: false },
+  lake:      { color: "#93bfe6", up: false },
+};
 
 export class Renderer {
   constructor(canvas) {
@@ -32,6 +44,9 @@ export class Renderer {
     this.biomePal = [];
     for (const b of world.header.biomes) this.biomePal[b.id] = b.color;
 
+    // culture colors
+    this.cultureRgb = (world.header.cultures || []).map((c) => hexRgb(c.color));
+
     // hillshade (light from NW)
     const h = world.arrays.height;
     const sh = new Float32Array(size * size);
@@ -57,8 +72,13 @@ export class Renderer {
     for (let i = 0; i < d.length; i++) if (d[i] > max) max = d[i];
     this.dischargeLogMax = Math.log1p(max);
 
+    this.setRoutes(world.header.routes || []);
+  }
+
+  setRoutes(routes) {
+    if (this.world) this.world.header.routes = routes;
     // trade route geometry (cumulative lengths for caravan animation)
-    this.routes = (world.header.routes || []).map((r, idx) => {
+    this.routes = (routes || []).map((r, idx) => {
       const pts = r.path;
       const cum = [0];
       for (let i = 1; i < pts.length; i++) {
@@ -130,6 +150,17 @@ export class Renderer {
     return owner;
   }
 
+  _cultureOf() {
+    // settlement id -> culture id (settlements can be added by colonisation)
+    const map = [];
+    for (const s of this.world.header.settlements) map[s.id] = s.culture ?? 0;
+    return map;
+  }
+
+  cultureColor(s) {
+    return this.cultureRgb[s.culture ?? 0] || settlementColor(s.id);
+  }
+
   composite(state) {
     const { layer, overlays, month, version } = state;
     const monthDependent = layer === "temperature" || overlays.snow;
@@ -142,7 +173,7 @@ export class Renderer {
     this.cacheKey = key;
 
     const size = this.size;
-    const { height, tmean, precip, discharge, biomes, flags } = this.world.arrays;
+    const { height, tmean, precip, discharge, fertility, biomes, flags } = this.world.arrays;
     const img = this.octx.createImageData(size, size);
     const px = img.data;
     const shade = this.shade;
@@ -151,10 +182,9 @@ export class Renderer {
     const owner = layer === "political" ? this.territory(version) : null;
     const dLogMax = this.dischargeLogMax || 1;
 
-    const sColors = {};
-    if (owner) {
-      for (const s of this.world.header.settlements) sColors[s.id] = settlementColor(s.id);
-    }
+    let cultOf = null;
+    if (owner) cultOf = this._cultureOf();
+    const cRgb = this.cultureRgb;
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
@@ -185,14 +215,18 @@ export class Renderer {
             b = b * 0.35 + lum * 0.65;
             const ow = owner[i];
             if (ow >= 0) {
-              const c = sColors[ow];
-              // border detection (4-neighbourhood)
+              const cid = cultOf[ow] ?? 0;
+              const c = cRgb[cid] || [220, 200, 140];
               const left = x > 0 ? owner[i - 1] : ow;
               const up = y > 0 ? owner[i - size] : ow;
               const right = x < size - 1 ? owner[i + 1] : ow;
               const down = y < size - 1 ? owner[i + size] : ow;
-              const isBorder = left !== ow || up !== ow || right !== ow || down !== ow;
-              const a = isBorder ? 0.85 : 0.42;
+              const settBorder = left !== ow || up !== ow || right !== ow || down !== ow;
+              const cidOf = (oo) => (oo >= 0 ? (cultOf[oo] ?? 0) : -1);
+              const cultBorder = settBorder && (
+                cidOf(left) !== cid || cidOf(up) !== cid ||
+                cidOf(right) !== cid || cidOf(down) !== cid);
+              const a = cultBorder ? 0.92 : settBorder ? 0.58 : 0.42;
               r = r * (1 - a) + c[0] * a;
               g = g * (1 - a) + c[1] * a;
               b = b * (1 - a) + c[2] * a;
@@ -214,6 +248,10 @@ export class Renderer {
         } else if (layer === "precip") {
           if (sea) { r = 22; g = 39; b = 63; }
           else [r, g, b] = PRECIP_GRAD(precip[i]);
+        } else if (layer === "fertility") {
+          if (sea) { r = 20; g = 33; b = 52; }
+          else if (lake) { r = 46; g = 95; b = 143; }
+          else [r, g, b] = FERT_GRAD(fertility ? fertility[i] : 0);
         } else { // hydro
           if (sea) { r = 14; g = 28; b = 48; }
           else if (lake) { r = 46; g = 95; b = 143; }
@@ -229,7 +267,7 @@ export class Renderer {
 
         // hillshade on land
         if (useShade && !isWater && layer !== "hydro") {
-          const s = layer === "temperature" || layer === "precip"
+          const s = layer === "temperature" || layer === "precip" || layer === "fertility"
             ? 1 + (shade[i] - 1) * 0.45
             : shade[i];
           r *= s; g *= s; b *= s;
@@ -290,10 +328,52 @@ export class Renderer {
     ctx.restore();
 
     // vector overlays in screen space
+    if (state.overlays.winds) this._drawWinds(ctx, view, state);
     if (state.overlays.routes) this._drawRoutes(ctx, view, state);
     if (state.overlays.resources) this._drawDeposits(ctx, view);
+    if (state.overlays.labels) this._drawLabels(ctx, view);
     if (state.overlays.settlements) this._drawSettlements(ctx, view, state);
     if (hover && view.scale > 4) this._drawHover(ctx, view, hover);
+  }
+
+  _drawWinds(ctx, view, state) {
+    const size = this.size;
+    const s = view.scale;
+    const w = this.canvas.clientWidth;
+    const drift = state.playing ? (performance.now() / 1000 * 26) : 0;
+    ctx.save();
+    ctx.lineWidth = 1.3;
+    ctx.lineCap = "round";
+    const rowStep = Math.max(18, 30 / Math.max(s / 2, 1));
+    for (let wy = rowStep / 2; wy < size; wy += rowStep) {
+      const lat = Math.abs((wy / size) * 180 - 90);
+      const dir = lat < 30 ? -1 : lat < 60 ? 1 : -1; // grid x direction of travel
+      const py = view.ty + wy * s;
+      if (py < -20 || py > this.canvas.clientHeight + 20) continue;
+      const spacing = 96;
+      const shift = ((drift * dir) % spacing + spacing) % spacing;
+      const x0 = Math.max(0, view.tx) - spacing;
+      const x1 = Math.min(w, view.tx + size * s) + spacing;
+      const alpha = 0.34;
+      ctx.strokeStyle = `rgba(205, 226, 250, ${alpha})`;
+      for (let px = x0 + shift; px < x1; px += spacing) {
+        const wob = Math.sin((px + wy * 13) * 0.05) * 3;
+        const yy = py + wob;
+        const len = 30;
+        const tail = px - dir * len;
+        ctx.beginPath();
+        ctx.moveTo(tail, yy + Math.sin(tail * 0.05) * 1.5);
+        ctx.quadraticCurveTo((tail + px) / 2, yy - 2, px, yy);
+        ctx.stroke();
+        // arrowhead
+        ctx.beginPath();
+        ctx.moveTo(px - dir * 5.5, yy - 3.4);
+        ctx.lineTo(px, yy);
+        ctx.lineTo(px - dir * 5.5, yy + 3.4);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   _drawRoutes(ctx, view, state) {
@@ -302,9 +382,10 @@ export class Renderer {
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
     ctx.setLineDash([6, 5]);
-    ctx.strokeStyle = "rgba(224, 196, 140, 0.55)";
-    ctx.lineWidth = Math.min(2.2, Math.max(1.1, s * 0.16));
     for (const r of this.routes) {
+      const wgt = r.w || 1;
+      ctx.strokeStyle = `rgba(224, 196, 140, ${Math.min(0.75, 0.4 + wgt * 0.18)})`;
+      ctx.lineWidth = Math.min(3.2, Math.max(0.9, s * 0.13 * wgt + 0.5));
       ctx.beginPath();
       for (let i = 0; i < r.pts.length; i++) {
         const px = view.tx + (r.pts[i][0] + 0.5) * s;
@@ -359,16 +440,85 @@ export class Renderer {
     }
   }
 
+  _labelAlpha(kind, s) {
+    if (kind === "ocean" || kind === "sea" || kind === "continent") {
+      return Math.max(0, Math.min(0.95, 1.5 - s * 0.17));
+    }
+    if (kind === "range" || kind === "desert" || kind === "forest") {
+      return Math.max(0, Math.min(0.88, (s - 0.95) * 0.9)) *
+             Math.max(0, Math.min(1, 2.6 - s * 0.11));
+    }
+    return Math.max(0, Math.min(0.85, (s - 2.1) * 0.75));
+  }
+
+  _drawLabels(ctx, view) {
+    const feats = this.world.header.features || [];
+    if (!feats.length) return;
+    const s = view.scale;
+    const w = this.canvas.clientWidth;
+    const hgt = this.canvas.clientHeight;
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    for (const f of feats) {
+      const st = LABEL_STYLE[f.t];
+      if (!st) continue;
+      const alpha = this._labelAlpha(f.t, s);
+      if (alpha <= 0.03) continue;
+      const px = view.tx + f.x * s;
+      const py = view.ty + f.y * s;
+      if (px < -240 || py < -60 || px > w + 240 || py > hgt + 60) continue;
+
+      let font, text = f.name;
+      const lg = Math.log2(Math.max(f.size, 2));
+      if (f.t === "ocean" || f.t === "sea") {
+        font = `700 ${Math.min(24, 9 + lg * 0.95).toFixed(1)}px Cinzel, serif`;
+        text = f.name.toUpperCase();
+        ctx.letterSpacing = "3px";
+      } else if (f.t === "continent") {
+        font = `700 ${Math.min(22, 8 + lg * 0.9).toFixed(1)}px Cinzel, serif`;
+        text = f.name.toUpperCase();
+        ctx.letterSpacing = "4px";
+      } else if (f.t === "range" || f.t === "desert" || f.t === "forest") {
+        font = `italic 600 12.5px Georgia, serif`;
+        ctx.letterSpacing = "1px";
+      } else {
+        font = `italic 500 11px Georgia, serif`;
+        ctx.letterSpacing = "0.5px";
+      }
+      ctx.font = font;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = "rgba(6, 10, 18, 0.8)";
+      ctx.lineWidth = 3;
+      ctx.strokeText(text, px, py);
+      ctx.fillStyle = st.color;
+      ctx.fillText(text, px, py);
+      ctx.letterSpacing = "0px";
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   _drawSettlements(ctx, view, state) {
     const s = view.scale;
     const showAllLabels = s > 1.6;
     ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
     for (const st of this.world.header.settlements) {
       const sx = view.tx + (st.x + 0.5) * s;
       const sy = view.ty + (st.y + 0.5) * s;
       if (sx < -60 || sy < -30 || sx > this.canvas.clientWidth + 60 || sy > this.canvas.clientHeight + 30) continue;
       const r = TIER_RADIUS[st.tier] || 3;
-      const [cr, cg, cb] = settlementColor(st.id);
+      const [cr, cg, cb] = this.cultureColor(st);
+      const selected = state.selectedId === st.id;
+      if (selected) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, r + 4.5, 0, Math.PI * 2);
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = "rgba(212, 169, 74, 0.95)";
+        ctx.stroke();
+      }
       ctx.beginPath();
       ctx.arc(sx, sy, r, 0, Math.PI * 2);
       ctx.fillStyle = "#f4ecd7";
