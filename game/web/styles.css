@@ -361,6 +361,7 @@ button {
 
 .events { display: flex; flex-direction: column; gap: 7px; max-height: 220px; }
 .event { font-size: 12px; color: #c6cbd6; display: flex; gap: 8px; }
+.event .e-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; margin-top: 5px; opacity: .9; }
 .event .e-when { font: 500 10.5px var(--mono); color: var(--dim); white-space: nowrap; padding-top: 1.5px; }
 .event-empty { font-size: 12px; }
 
@@ -371,7 +372,15 @@ button {
 .culture .s-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; margin-top: 4px; border: 1px solid rgba(0,0,0,.4); }
 .culture .c-body { display: flex; flex-direction: column; min-width: 0; }
 .culture .c-name { font-weight: 600; font-size: 12.5px; }
+.culture .c-ruler { font-size: 11px; font-style: italic; color: #b9a8d8; }
 .culture .c-sub { font-size: 11px; }
+.culture .war-mark { color: #e05555; font-size: 11px; }
+.war-banner {
+  font-size: 11.5px; color: #e8a09a;
+  background: rgba(224, 85, 85, .10);
+  border: 1px solid rgba(224, 85, 85, .28);
+  border-radius: 7px; padding: 5px 9px;
+}
 
 /* ---------- settlement detail ---------- */
 
