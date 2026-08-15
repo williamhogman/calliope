@@ -632,9 +632,10 @@ impl World {
             "resources": resources::resource_meta(),
             "deposits": self.deposits,
             "settlements": self.settlements,
-            "cultures": self.cultures,
+            "cultures": self.cultures_json(),
             "features": self.features,
             "routes": self.routes,
+            "wars": self.chron.wars,
             "events": self.events[ev_start..],
             "timings": timings,
         })
