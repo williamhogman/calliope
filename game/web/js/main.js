@@ -5,7 +5,8 @@ import { Renderer } from "./render.js";
 import { View } from "./view.js";
 import {
   buildLayerList, buildOverlayList, buildLegend, buildResourceLegend,
-  renderSettlements, renderEvents, renderInspector, renderStats, toast,
+  buildCultureLegend, renderSettlements, renderEvents, renderInspector,
+  renderStats, renderDetail, toast,
 } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -17,7 +18,7 @@ const state = {
   layer: "biomes",
   overlays: {
     rivers: true, snow: true, settlements: true, routes: true,
-    resources: false, hillshade: true,
+    resources: false, labels: true, winds: false, hillshade: true,
   },
   month: 0,
   version: 0,
@@ -27,6 +28,7 @@ const state = {
   hover: null,
   events: [],
   popHistory: [],
+  selectedId: null,
 };
 
 let dirty = true;
@@ -38,8 +40,8 @@ window.__calliope = { state, view, renderer };
 // ---------- render loop ----------
 
 function frame() {
-  // caravans animate continuously while time flows
-  if (state.playing && state.overlays.routes) dirty = true;
+  // caravans and winds animate continuously while time flows
+  if (state.playing && (state.overlays.routes || state.overlays.winds)) dirty = true;
   if (dirty) {
     dirty = false;
     renderer.draw(state, view, state.hover);
@@ -66,6 +68,7 @@ const randomSeed = () => (Math.floor(Math.random() * 2147483646) + 1);
 
 async function generate(seed) {
   setPlaying(false);
+  closeDetail();
   $("generate").disabled = true;
   $("loading").classList.remove("fade");
   try {
@@ -76,9 +79,14 @@ async function generate(seed) {
     state.events = world.header.events || [];
     renderer.setWorld(world);
     view.fit(world.header.size);
+    $("tagline").textContent = world.header.world_name
+      ? `The world of ${world.header.world_name}` : "Welcome to Calliope";
     buildLegend($("legend"), world.header.biomes);
     buildResourceLegend($("res-legend"), world.header.resources);
-    renderSettlements($("settlements"), $("pop-total"), world.header.settlements, onPickSettlement);
+    const cultures = world.header.cultures || [];
+    $("cultures-group").classList.toggle("hidden", !cultures.length);
+    buildCultureLegend($("cultures"), cultures, world.header.settlements);
+    renderSettlements($("settlements"), $("pop-total"), world.header.settlements, cultures, onPickSettlement);
     renderEvents($("events"), state.events, world.header.months);
     buildDepositIndex();
     updateDate();
@@ -127,13 +135,17 @@ async function advance(months) {
     const res = await tickWorld(state.world.header.id, months);
     state.month = res.month;
     state.world.header.settlements = res.settlements;
+    if (res.routes) renderer.setRoutes(res.routes); // colonies joined the network
     if (res.events?.length) {
       state.events.push(...res.events);
       state.events = state.events.slice(-200);
       renderEvents($("events"), state.events, state.world.header.months);
     }
     state.version++;
-    renderSettlements($("settlements"), $("pop-total"), res.settlements, onPickSettlement);
+    const cultures = state.world.header.cultures || [];
+    renderSettlements($("settlements"), $("pop-total"), res.settlements, cultures, onPickSettlement);
+    buildCultureLegend($("cultures"), cultures, res.settlements);
+    refreshDetail();
     updateDate();
     state.popHistory.push({
       m: res.month,
@@ -160,7 +172,120 @@ function setPlaying(on) {
   if (on) playTimer = setInterval(() => advance(state.speed), 1000);
 }
 
+// ---------- settlement detail ----------
+
+function openDetail(s) {
+  state.selectedId = s.id;
+  const cultures = state.world.header.cultures || [];
+  renderDetail($("detail"), s, cultures[s.culture], state.world.header.resources, closeDetail);
+  markDirty();
+}
+
+function closeDetail() {
+  state.selectedId = null;
+  renderDetail($("detail"), null);
+  markDirty();
+}
+
+function refreshDetail() {
+  if (state.selectedId == null) return;
+  const s = state.world.header.settlements.find((o) => o.id === state.selectedId);
+  if (s) openDetail(s); else closeDetail();
+}
+
+function onPickSettlement(s) {
+  view.centerOn(s.x + 0.5, s.y + 0.5, Math.max(view.scale, 6));
+  openDetail(s);
+}
+
+// click (not drag) selects a settlement
+let downAt = null;
+canvas.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+canvas.addEventListener("pointerup", (e) => {
+  if (!downAt || !state.world) return;
+  const moved = Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]);
+  downAt = null;
+  if (moved > 5) return;
+  let best = null, bestD = Infinity;
+  for (const s of state.world.header.settlements) {
+    const sx = view.tx + (s.x + 0.5) * view.scale;
+    const sy = view.ty + (s.y + 0.5) * view.scale;
+    const d = Math.hypot(e.clientX - sx, e.clientY - sy);
+    if (d < bestD) { bestD = d; best = s; }
+  }
+  if (best && bestD <= 14) openDetail(best);
+  else if (state.selectedId != null) closeDetail();
+});
+
 // ---------- inspector ----------
+
+const WIND_NAME = (lat) =>
+  lat < 30 ? ["Trade winds", "E → W", -1]
+    : lat < 60 ? ["Westerlies", "W → E", 1]
+      : ["Polar easterlies", "E → W", -1];
+
+function explain(cx, cy, i, h, isWater) {
+  const w = state.world;
+  const size = w.header.size;
+  const { height, precip, tamp, flags, fertility } = w.arrays;
+  const notes = [];
+  const lat = Math.abs((cy / size) * 180 - 90);
+  const [, , dir] = WIND_NAME(lat);
+
+  // rain shadow: scan upwind for a crest this air had to climb
+  let shadow = false, crestX = -1, crestH = Math.max(h, 0);
+  if (!isWater && precip[i] < 480) {
+    for (let k = 1; k <= 48; k++) {
+      const x = cx - dir * k;
+      if (x < 0 || x >= size) break;
+      const hh = height[cy * size + x];
+      if (hh > crestH) { crestH = hh; crestX = x; }
+    }
+    if (crestH > Math.max(h + 0.28, 0.5)) shadow = true;
+  }
+  if (shadow) {
+    let rangeName = null, bd = Infinity;
+    for (const f of w.header.features || []) {
+      if (f.t !== "range") continue;
+      const d = Math.hypot(f.x - crestX, f.y - cy);
+      if (d < bd && d < 70) { bd = d; rangeName = f.name; }
+    }
+    notes.push(`Rain shadow — ${rangeName || "high peaks"} wring${rangeName ? "s" : ""} the winds dry`);
+  } else if (!isWater && precip[i] < 380 && lat > 15 && lat < 35) {
+    notes.push("Beneath the subtropical high — sinking air, cloudless skies");
+  }
+  if (!isWater && lat < 12 && precip[i] > 1300) {
+    notes.push("Equatorial convergence — rising air brings near-daily rains");
+  }
+  if (!isWater && fertility && fertility[i] > 0.55) {
+    let nearRiver = false;
+    for (let dy = -2; dy <= 2 && !nearRiver; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= size || ny >= size) continue;
+        if (flags[ny * size + nx] & 1) { nearRiver = true; break; }
+      }
+    }
+    notes.push(nearRiver ? "Floodplain silt makes these fields rich" : "Deep fertile soils");
+  }
+  if (!isWater && Math.abs(tamp[i]) > 17) {
+    notes.push("Deep continental interior — savage swings of season");
+  }
+  return notes.slice(0, 2);
+}
+
+function nearestFeature(cx, cy, isWater) {
+  const feats = state.world.header.features || [];
+  let best = null, bd = Infinity;
+  for (const f of feats) {
+    const waterKind = f.t === "ocean" || f.t === "sea" || f.t === "lake" || f.t === "river";
+    if (waterKind !== isWater) continue;
+    const reach = f.t === "ocean" ? 1e9 : Math.sqrt(f.size) * 1.6 + 12;
+    const d = Math.hypot(f.x - cx, f.y - cy);
+    if (d < reach && d < bd) { bd = d; best = f; }
+  }
+  return best ? best.name : null;
+}
 
 function inspect(cx, cy) {
   const w = state.world;
@@ -168,7 +293,7 @@ function inspect(cx, cy) {
   const size = w.header.size;
   if (cx < 0 || cy < 0 || cx >= size || cy >= size) return null;
   const i = cy * size + cx;
-  const { height, tmean, tamp, precip, discharge, biomes, flags } = w.arrays;
+  const { height, tmean, tamp, precip, discharge, fertility, biomes, flags } = w.arrays;
   const biomeMeta = w.header.biomes[biomes[i]];
   const h = height[i];
   const tNow = tmean[i] + tamp[i] * Math.cos((2 * Math.PI * (state.month % 12)) / 12);
@@ -190,12 +315,18 @@ function inspect(cx, cy) {
   const owner = renderer.territoryCache.owner;
   if (owner && owner[i] >= 0) {
     const s = w.header.settlements.find((s) => s.id === owner[i]);
-    if (s) territory = `${s.name} (${s.pop.toLocaleString("en-US")})`;
+    if (s) {
+      const c = (w.header.cultures || [])[s.culture];
+      territory = `Lands of ${s.name}${c ? ` · ${c.people}` : ""}`;
+    }
   }
 
   let frozen = null;
   if (!isWater && tNow < -1) frozen = "Snowbound";
   else if (h < 0 && tNow < -2) frozen = "Sea ice";
+
+  const lat = Math.abs((cy / size) * 180 - 90);
+  const [windName, windArrow] = WIND_NAME(lat);
 
   return {
     x: cx, y: cy,
@@ -204,6 +335,8 @@ function inspect(cx, cy) {
     tempNow: tNow.toFixed(1),
     tempMean: tmean[i].toFixed(1),
     precip: Math.round(precip[i]),
+    fertility: fertility ? fertility[i] : null,
+    wind: `${windName} ${windArrow}`,
     river: (flags[i] & 1) !== 0,
     lake: (flags[i] & 2) !== 0,
     flow: Math.round(discharge[i]),
@@ -211,6 +344,8 @@ function inspect(cx, cy) {
     frozen,
     resources: resources.slice(0, 3),
     territory,
+    place: nearestFeature(cx, cy, h < 0),
+    notes: explain(cx, cy, i, h, isWater),
   };
 }
 
@@ -273,11 +408,8 @@ window.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT") return;
   if (e.code === "Space") { e.preventDefault(); setPlaying(!state.playing); }
   if (e.key === "n") advance(1);
+  if (e.key === "Escape") closeDetail();
 });
-
-function onPickSettlement(s) {
-  view.centerOn(s.x + 0.5, s.y + 0.5, Math.max(view.scale, 6));
-}
 
 // ---------- boot ----------
 
