@@ -1,0 +1,7 @@
+apiVersion: exec.lovable.dev/v1
+kind: LifecycleScript
+metadata:
+  name: 99-build-dev
+spec:
+  purpose: build:dev
+  command: "bash -c 'rm -rf dist && mkdir -p dist && cp -r game/web/. dist/'"
