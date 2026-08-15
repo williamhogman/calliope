@@ -1,4 +1,5 @@
-// Network layer: binary world unpacking + JSON tick.
+// World engine bridge: the simulation is Rust compiled to WASM, running in
+// a worker. Same binary payload format as before, so unpack() is unchanged.
 
 const DTYPES = {
   float32: Float32Array,
@@ -25,22 +26,38 @@ export function unpack(buf) {
   return { header, arrays };
 }
 
-export async function generateWorld(seed, size) {
-  const res = await fetch("/api/world", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ seed, size }),
+const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+let seq = 0;
+const pending = new Map();
+
+worker.onmessage = (e) => {
+  const { id, ok, buf, json, error } = e.data;
+  const p = pending.get(id);
+  if (!p) return;
+  pending.delete(id);
+  if (ok) p.resolve({ buf, json });
+  else p.reject(new Error(error));
+};
+worker.onerror = (e) => {
+  const err = new Error(e.message || "simulation worker failed");
+  for (const [, p] of pending) p.reject(err);
+  pending.clear();
+};
+
+function call(msg, transfer = []) {
+  return new Promise((resolve, reject) => {
+    const id = ++seq;
+    pending.set(id, { resolve, reject });
+    worker.postMessage({ id, ...msg }, transfer);
   });
-  if (!res.ok) throw new Error(`world generation failed (${res.status})`);
-  return unpack(await res.arrayBuffer());
 }
 
-export async function tickWorld(id, months) {
-  const res = await fetch(`/api/world/${encodeURIComponent(id)}/tick`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ months }),
-  });
-  if (!res.ok) throw new Error(`tick failed (${res.status})`);
-  return res.json();
+export async function generateWorld(seed, size) {
+  const { buf } = await call({ op: "generate", seed, size });
+  return unpack(buf);
+}
+
+export async function tickWorld(_id, months) {
+  const { json } = await call({ op: "tick", months });
+  return JSON.parse(json);
 }
