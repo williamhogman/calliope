@@ -257,14 +257,234 @@ pub fn name_features(
     let comps = ndimage::top_components(&lab, 450.0 * sc, 7);
     add_features(&mut features, &mut rng, &mut taken, "forest", &lab, &comps, Anchor::Interior);
 
-    // rivers (anchored near their strongest reach) & lakes
-    let lab = ndimage::label(rivers, true);
-    let comps = ndimage::top_components(&lab, 45.0 * sc, 10);
-    add_features(&mut features, &mut rng, &mut taken, "river", &lab, &comps, Anchor::Peak(discharge));
+    // rivers (anchored near their strongest reach), keeping each river's word
+    // so its delta can carry the same name
+    let (hgt, wid) = height.dim();
+    let riv_lab = ndimage::label(rivers, true);
+    let riv_comps = ndimage::top_components(&riv_lab, 45.0 * sc, 10);
+    let mut river_words: Vec<(usize, String)> = Vec::new();
+    for &(idx, area) in &riv_comps {
+        let (y, x) = ndimage::peak_anchor(&riv_lab, idx, discharge);
+        let word = make_word(&mut rng, "old", &mut taken);
+        let name = phrase(&mut rng, "river", &word);
+        features.push(Feature { t: "river".into(), name, x: x as i64, y: y as i64, size: area as i64 });
+        river_words.push((idx, word));
+    }
+
+    // deltas: the mightiest river mouths, named for their rivers
+    let mut max_dis = 0.0f64;
+    for &d in discharge.iter() {
+        if d > max_dis { max_dis = d; }
+    }
+    let mut mouths: Vec<(f64, usize, usize, String)> = Vec::new();
+    for (idx, word) in &river_words {
+        let (y0, y1, x0, x1) = riv_lab.bbox[idx - 1];
+        let mut best: Option<(f64, usize, usize)> = None;
+        for y in y0..y1 {
+            for x in x0..x1 {
+                if riv_lab.lab[[y, x]] != *idx as i32 {
+                    continue;
+                }
+                let mut coastal = false;
+                for dy in -1isize..=1 {
+                    for dx in -1isize..=1 {
+                        let (ny, nx) = (y as isize + dy, x as isize + dx);
+                        if ny < 0 || nx < 0 || ny >= hgt as isize || nx >= wid as isize {
+                            continue;
+                        }
+                        if height[[ny as usize, nx as usize]] < 0.0 {
+                            coastal = true;
+                        }
+                    }
+                }
+                if coastal && best.map_or(true, |(d, _, _)| discharge[[y, x]] > d) {
+                    best = Some((discharge[[y, x]], y, x));
+                }
+            }
+        }
+        if let Some((d, y, x)) = best {
+            mouths.push((d, y, x, word.clone()));
+        }
+    }
+    mouths.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    for (d, y, x, word) in mouths.into_iter().take(3) {
+        if d < 0.15 * max_dis {
+            break;
+        }
+        let name = phrase(&mut rng, "delta", &word);
+        features.push(Feature { t: "delta".into(), name, x: x as i64, y: y as i64, size: 14 });
+    }
 
     let lab = ndimage::label(lakes, true);
     let comps = ndimage::top_components(&lab, 18.0 * sc, 6);
     add_features(&mut features, &mut rng, &mut taken, "lake", &lab, &comps, Anchor::Interior);
+
+    // ---- coastal geometry: how much land surrounds each cell ----
+    let land_f = land.mapv(|b| if b { 1.0 } else { 0.0 });
+    let landness = ndimage::gaussian_filter(&land_f, 3.0);
+    let wdist = ndimage::distance_transform_edt(&sea);
+
+    // straits: narrow channels pinched between shores, open at both ends
+    let strait_mask = Array2::from_shape_fn(height.dim(), |(y, x)| {
+        sea[[y, x]] && wdist[[y, x]] <= 3.0 && landness[[y, x]] > 0.42
+    });
+    let slab = ndimage::label(&strait_mask, true);
+    let scomps = ndimage::top_components(&slab, 10.0 * sc, 10);
+    let mut strait_cells: HashSet<(usize, usize)> = HashSet::new();
+    let mut straits_named = 0usize;
+    for &(idx, area) in &scomps {
+        if straits_named >= 4 {
+            break;
+        }
+        let (y0, y1, x0, x1) = slab.bbox[idx - 1];
+        let mut cells: Vec<(usize, usize)> = Vec::new();
+        for y in y0..y1 {
+            for x in x0..x1 {
+                if slab.lab[[y, x]] == idx as i32 {
+                    cells.push((y, x));
+                }
+            }
+        }
+        // farthest pair of channel cells (two greedy sweeps)
+        let far = |from: (usize, usize)| {
+            let mut best = from;
+            let mut bd = -1.0f64;
+            for &c in &cells {
+                let d = (c.0 as f64 - from.0 as f64).hypot(c.1 as f64 - from.1 as f64);
+                if d > bd {
+                    bd = d;
+                    best = c;
+                }
+            }
+            (best, bd)
+        };
+        let (a, _) = far(cells[0]);
+        let (b, span) = far(a);
+        if span < 7.0 {
+            continue; // a pinprick, not a passage
+        }
+        // both ends must open onto free water
+        let open = |p: (usize, usize)| {
+            for dy in -5isize..=5 {
+                for dx in -5isize..=5 {
+                    let (ny, nx) = (p.0 as isize + dy, p.1 as isize + dx);
+                    if ny < 0 || nx < 0 || ny >= hgt as isize || nx >= wid as isize {
+                        continue;
+                    }
+                    let (ny, nx) = (ny as usize, nx as usize);
+                    if sea[[ny, nx]] && landness[[ny, nx]] < 0.40 {
+                        return true;
+                    }
+                }
+            }
+            false
+        };
+        if !(open(a) && open(b)) {
+            continue;
+        }
+        for &c in &cells {
+            strait_cells.insert(c);
+        }
+        // anchor mid-channel, snapped to the nearest water cell of the strait
+        let (my, mx) = ((a.0 + b.0) as f64 / 2.0, (a.1 + b.1) as f64 / 2.0);
+        let mut anchor = cells[0];
+        let mut bd = f64::INFINITY;
+        for &c in &cells {
+            let d = (c.0 as f64 - my).hypot(c.1 as f64 - mx);
+            if d < bd {
+                bd = d;
+                anchor = c;
+            }
+        }
+        let word = make_word(&mut rng, "old", &mut taken);
+        let name = phrase(&mut rng, "strait", &word);
+        features.push(Feature { t: "strait".into(), name, x: anchor.1 as i64, y: anchor.0 as i64, size: area as i64 });
+        straits_named += 1;
+    }
+
+    // bays: sea reaching deep into the land
+    let bay_mask = Array2::from_shape_fn(height.dim(), |(y, x)| {
+        sea[[y, x]] && landness[[y, x]] > 0.58 && !strait_cells.contains(&(y, x))
+    });
+    let blab = ndimage::label(&bay_mask, true);
+    let bcomps = ndimage::top_components(&blab, 14.0 * sc, 6);
+    add_features(&mut features, &mut rng, &mut taken, "bay", &blab, &bcomps, Anchor::Interior);
+
+    // capes: land thrust far out into the water, attached to a big landmass
+    // (small free-standing islets are already named as islands)
+    let cape_mask = Array2::from_shape_fn(height.dim(), |(y, x)| {
+        land[[y, x]] && landness[[y, x]] < 0.40
+    });
+    let clab = ndimage::label(&cape_mask, true);
+    let ccomps = ndimage::top_components(&clab, 6.0 * sc, 14);
+    let llab = ndimage::label(&land, true);
+    let mut capes = 0usize;
+    for &(idx, area) in &ccomps {
+        if capes >= 5 {
+            break;
+        }
+        let (y, x) = ndimage::interior_anchor(&clab, idx);
+        let owner = llab.lab[[y, x]];
+        if owner <= 0 || llab.areas[(owner - 1) as usize] < 2500.0 * sc {
+            continue;
+        }
+        let word = make_word(&mut rng, "old", &mut taken);
+        let name = phrase(&mut rng, "cape", &word);
+        features.push(Feature { t: "cape".into(), name, x: x as i64, y: y as i64, size: area as i64 });
+        capes += 1;
+    }
+
+    // lone peaks: the tallest summits, held well apart
+    let maxf = ndimage::maximum_filter(height, 7);
+    let mut summits: Vec<(f64, usize, usize)> = Vec::new();
+    for y in 0..hgt {
+        for x in 0..wid {
+            if height[[y, x]] > 0.60 && (height[[y, x]] - maxf[[y, x]]).abs() < 1e-12 {
+                summits.push((height[[y, x]], y, x));
+            }
+        }
+    }
+    summits.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    let mut chosen: Vec<(usize, usize)> = Vec::new();
+    for (_, y, x) in summits {
+        if chosen.len() >= 5 {
+            break;
+        }
+        if chosen
+            .iter()
+            .any(|&(cy, cx)| (cy as f64 - y as f64).hypot(cx as f64 - x as f64) < 24.0)
+        {
+            continue;
+        }
+        chosen.push((y, x));
+        let word = make_word(&mut rng, "old", &mut taken);
+        let name = phrase(&mut rng, "peak", &word);
+        features.push(Feature { t: "peak".into(), name, x: x as i64, y: y as i64, size: 9 });
+    }
+
+    // highlands: broad elevated country with little local relief
+    let minf = ndimage::maximum_filter(&height.mapv(|h| -h), 7).mapv(|v| -v);
+    let hl_mask = Array2::from_shape_fn(height.dim(), |(y, x)| {
+        let h = height[[y, x]];
+        h > 0.28 && h < 0.52 && (maxf[[y, x]] - minf[[y, x]]) < 0.14
+    });
+    let hlab = ndimage::label(&hl_mask, true);
+    let hcomps = ndimage::top_components(&hlab, 260.0 * sc, 4);
+    add_features(&mut features, &mut rng, &mut taken, "highland", &hlab, &hcomps, Anchor::Interior);
+
+    // fens: low, rain-soaked ground beside fresh water
+    let fresh_src = Array2::from_shape_fn(height.dim(), |(y, x)| rivers[[y, x]] || lakes[[y, x]]);
+    let fresh = ndimage::binary_dilation(&fresh_src, 2);
+    let marsh_mask = Array2::from_shape_fn(height.dim(), |(y, x)| {
+        land[[y, x]]
+            && height[[y, x]] < 0.09
+            && precip[[y, x]] > 850.0
+            && tmean[[y, x]] > -1.0
+            && fresh[[y, x]]
+    });
+    let mlab = ndimage::label(&marsh_mask, true);
+    let mcomps = ndimage::top_components(&mlab, 26.0 * sc, 4);
+    add_features(&mut features, &mut rng, &mut taken, "marsh", &mlab, &mcomps, Anchor::Interior);
 
     let world_name = make_word(&mut rng, "old", &mut taken);
     (features, world_name)
