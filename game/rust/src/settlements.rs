@@ -44,6 +44,7 @@ pub struct Settlement {
     pub connections: i64,
     pub goods: Vec<String>,
     pub exports: Option<String>,
+    pub wealth: f64,
 }
 
 pub fn capacity(s: &Settlement) -> f64 {
@@ -173,6 +174,7 @@ pub fn found_settlements(
             connections: 0,
             goods: Vec::new(),
             exports: None,
+            wealth: crate::util::round2(pop as f64 * 0.2),
         });
         for y in 0..size {
             for x in 0..size {
@@ -195,11 +197,13 @@ pub fn found_settlements(
     }
 }
 
-/// Best colony site in the 16..60 cell band around a parent, clear of others.
+/// Best colony site in the ring around a parent, clear of others. The outer
+/// edge of the ring widens as a people masters sail and star-charts.
 pub fn colony_site(
     site_score: &Array2<f64>,
     settlements: &[Settlement],
     parent: &Settlement,
+    max_d2: f64,
 ) -> Option<(usize, usize)> {
     let size = site_score.dim().0;
     let min_d2 = (size as f64 / 22.0).powi(2);
@@ -214,7 +218,7 @@ pub fn colony_site(
             let dyp = y as f64 - parent.y as f64;
             let dxp = x as f64 - parent.x as f64;
             let d2p = dyp * dyp + dxp * dxp;
-            if !(256.0..=3600.0).contains(&d2p) {
+            if d2p < 256.0 || d2p > max_d2 {
                 continue;
             }
             let mut clear = true;

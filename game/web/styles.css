@@ -687,3 +687,25 @@ button {
 
   .toast { max-width: calc(100vw - 24px); text-align: center; }
 }
+
+/* ---------- markets & society ---------- */
+.market { display: flex; flex-direction: column; gap: 3px; }
+.market-row {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11.5px; padding: 1px 0; cursor: default;
+}
+.market-row .swatch {
+  width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+}
+.m-good {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; text-transform: capitalize;
+}
+.m-trend { width: 12px; text-align: center; font-size: 9px; color: #6a7183; }
+.m-trend.up { color: #8fd6a0; }
+.m-trend.down { color: #e07a6a; }
+.m-price {
+  font-variant-numeric: tabular-nums; color: #d9c78f; font-weight: 600;
+}
+.culture .c-era { font-size: 11px; color: #c9b06a; text-transform: capitalize; }

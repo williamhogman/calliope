@@ -9,7 +9,7 @@ import {
   world, settlements, cultures, wars, events, month, playing, speed,
   worldSize, setWorldSize, busy, layer, overlays, selected, hoverInfo,
   popHistory, open, toggleOpen, seenEvents, setSeenEvents,
-  isMobile, sheet, setSheet,
+  isMobile, sheet, setSheet, market,
 } from "./state.js";
 import {
   TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, HYDRO_GRAD, FERT_GRAD,
@@ -46,7 +46,7 @@ const STYLE_LABEL = {
 const EVENT_COLORS = {
   myth: "#c9b458", found: "#d4a94a", growth: "#8fb6dd", disaster: "#e07a6a",
   war: "#e05555", ruler: "#c9a0e8", omen: "#a8d4b8", festival: "#f0d090",
-  wonder: "#ffd766", trade: "#9fd0c8",
+  wonder: "#ffd766", trade: "#9fd0c8", tech: "#7fc4e8", society: "#e0b0d0",
 };
 const eventColor = (e) => EVENT_COLORS[e.k] || "#8a8fa0";
 
@@ -235,6 +235,11 @@ function LeftPanel(a) {
 function StatsSection() {
   let spark;
   const totalPop = createMemo(() => settlements().reduce((acc, s) => acc + s.pop, 0));
+  const totalWealth = createMemo(
+    () =>
+      settlements().reduce((acc, s) => acc + (s.wealth || 0), 0) +
+      (cultures() || []).reduce((acc, c) => acc + (c.treasury || 0), 0)
+  );
   const landStats = createMemo(() => {
     const w = world();
     if (!w) return null;
@@ -286,6 +291,7 @@ function StatsSection() {
       <div class="stat-row"><span class="dim">Dominant</span><span>${() => landStats()?.dominant.join(", ") || "\u2014"}</span></div>
       <div class="stat-row"><span class="dim">Souls</span><span class="stat-mono">${() => fmt(totalPop())}</span></div>
       <div class="stat-row"><span class="dim">Settlements</span><span class="stat-mono">${() => settlements().length}</span></div>
+      <div class="stat-row"><span class="dim">Coin</span><span class="stat-mono">${() => fmt(totalWealth())}</span></div>
       <canvas id="spark" width="220" height="44" ref=${(el) => (spark = el)}></canvas>
     </div>`,
   });
@@ -378,12 +384,15 @@ function PeoplesSection() {
           })
         : "")}
       ${() => rows().map(
-      (c) => html`<div class="culture">
+      (c) => html`<div class="culture"
+        title=${(c.techs || []).length ? `arts of the ${c.people}: ${c.techs.join(", ")}` : ""}>
         <span class="s-dot" style=${`background:${c.color}`}></span>
         <span class="c-body">
           <span class="c-name">${c.people}${atWar(c.id) ? html` <span class="war-mark">\u2694</span>` : ""}</span>
           ${c.ruler ? html`<span class="c-ruler dim">led by ${c.ruler}</span>` : ""}
+          ${c.era ? html`<span class="c-era">${c.polity} \u00b7 ${c.era}</span>` : ""}
           <span class="c-sub dim">${STYLE_LABEL[c.style] || c.style} \u00b7 ${c.n} settlement${c.n === 1 ? "" : "s"} \u00b7 ${fmt(c.pop)}</span>
+          ${c.era ? html`<span class="c-sub dim">${(c.techs || []).length} art${(c.techs || []).length === 1 ? "" : "s"} \u00b7 ${fmt(c.treasury || 0)} coin in the treasury</span>` : ""}
         </span>
       </div>`
     )}</div>`,
@@ -415,6 +424,38 @@ function SettlementsSection(a) {
             ${() => (showAll() ? "Show fewer" : `Show all ${sorted().length}`)}
           </button>`
         : "")}
+    </div>`,
+  });
+}
+
+// The world market: every good the land yields, priced by scarcity and
+// want, dearest first. The collapsed summary names the biggest mover.
+function EconomySection() {
+  const rows = () => market() || [];
+  const summary = () => {
+    const r = rows();
+    if (!r.length) return "no trade yet";
+    const mover = [...r].sort((x, y) => Math.abs(y.t) - Math.abs(x.t))[0];
+    return Math.abs(mover?.t || 0) > 0.02
+      ? `${mover.g} ${mover.t > 0 ? "\u25b2" : "\u25bc"}`
+      : `${r.length} goods traded`;
+  };
+  return Section({
+    id: "economy", title: "Markets", summary,
+    children: html`<div class="market">
+      ${() => rows().map((r) => {
+        const meta = world()?.header.resources?.[r.g];
+        const t = r.t > 0.02 ? "up" : r.t < -0.02 ? "down" : "";
+        return html`<div class="market-row" title=${`base worth ${r.b} \u00b7 now ${r.p}`}>
+          <span class="swatch" style=${`background:${meta?.color || "#8a8fa0"}`}></span>
+          <span class="m-good">${r.g}</span>
+          <span class=${"m-trend " + t}>${t === "up" ? "\u25b2" : t === "down" ? "\u25bc" : "\u00b7"}</span>
+          <span class="m-price">${r.p.toFixed(2)}</span>
+        </div>`;
+      })}
+      ${() => (rows().length
+        ? html`<div class="legend-note">Coin for one load of goods \u2014 scarcity sets the price.</div>`
+        : html`<div class="dim event-empty">The first caravans are still loading.</div>`)}
     </div>`,
   });
 }
@@ -454,7 +495,8 @@ function ChronicleSection() {
 function RightPanel(a) {
   return html`<div class="panel-body">${StatsSection()}${LegendSection()}${() =>
     (overlays.resources && world() ? ResourcesSection() : "")}${() =>
-    (cultures().length ? PeoplesSection() : "")}${SettlementsSection(a)}${ChronicleSection()}</div>`;
+    (cultures().length ? PeoplesSection() : "")}${SettlementsSection(a)}${() =>
+    (world() ? EconomySection() : "")}${ChronicleSection()}</div>`;
 }
 
 // ---------------------------------------------------------------- detail
@@ -487,6 +529,7 @@ function DetailPanel(a) {
         <div><span class="dim">Souls</span><b>${fmt(s.pop)}</b></div>
         <div><span class="dim">Food</span><b>${s.food}</b></div>
         <div><span class="dim">Routes</span><b>${s.connections ?? 0}</b></div>
+        <div><span class="dim">Coin</span><b>${fmt(s.wealth || 0)}</b></div>
       </div>
       ${tags.length ? html`<div class="d-tags">${tags.map((t) => html`<span class="d-tag">${t}</span>`)}</div>` : ""}
       ${goods.length ? html`<div class="d-goods-title dim">Produce</div><div class="d-goods">${goods}</div>` : ""}`;

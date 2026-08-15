@@ -61,16 +61,46 @@ fn main() {
             chunks -= step;
         }
         let pop: i64 = w.settlements.iter().map(|s| s.pop).sum();
+        let wealth: f64 = w.settlements.iter().map(|s| s.wealth).sum();
         println!(
-            "after {} months: month={} settlements={} pop={} routes={} events={}",
+            "after {} months: month={} settlements={} pop={} wealth={:.0} routes={} events={}",
             months,
             w.month,
             w.settlements.len(),
             pop,
+            wealth,
             w.routes.len(),
             all_events
         );
-        for e in w.events.iter().rev().take(5) {
+        for (soc, c) in w.societies.iter().zip(w.cultures.iter()) {
+            println!(
+                "  {}: {} \u{b7} {} \u{b7} {} arts \u{b7} treasury {:.0} \u{b7} lore {:.0}",
+                c.people,
+                calliope::society::POLITIES[soc.polity],
+                calliope::society::ERAS[soc.era],
+                soc.techs.len(),
+                soc.treasury,
+                soc.knowledge
+            );
+            if !soc.techs.is_empty() {
+                println!("    arts: {}", soc.techs.join(", "));
+            }
+        }
+        if let serde_json::Value::Array(rows) = w.market.snapshot() {
+            let tops: Vec<String> = rows
+                .iter()
+                .take(8)
+                .map(|r| {
+                    format!(
+                        "{} {:.2}",
+                        r["g"].as_str().unwrap_or("?"),
+                        r["p"].as_f64().unwrap_or(0.0)
+                    )
+                })
+                .collect();
+            println!("  market (dearest): {}", tops.join(" \u{b7} "));
+        }
+        for e in w.events.iter().rev().take(8) {
             println!("  [m{}] {}", e.m, e.text);
         }
     }

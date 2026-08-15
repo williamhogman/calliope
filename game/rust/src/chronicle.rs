@@ -11,6 +11,8 @@ use serde::Serialize;
 use crate::culture::Culture;
 use crate::naming::{self, Feature};
 use crate::settlements::Settlement;
+use crate::society::{self, Society};
+use crate::util::round2;
 use crate::world::Event;
 
 // ---------------------------------------------------------------- state
@@ -177,7 +179,8 @@ pub fn founding_myths(
 // ---------------------------------------------------------------- monthly
 
 /// Rulers age and die, wars kindle, rage and gutter out, omens pass over,
-/// festivals are held. Returns the month's narrated events.
+/// festivals are held. Raids now weigh the attacker's arts of war against
+/// the defender's walls, and carry off coin as plunder.
 #[allow(clippy::too_many_arguments)]
 pub fn monthly(
     state: &mut ChronicleState,
@@ -185,6 +188,7 @@ pub fn monthly(
     taken: &mut HashSet<String>,
     month_abs: i64,
     settlements: &mut [Settlement],
+    socs: &mut [Society],
     cultures: &[Culture],
     features: &[Feature],
     world_name: &str,
@@ -244,11 +248,19 @@ pub fn monthly(
         });
     }
 
-    // --- active wars: raids burn the borderlands
+    // --- active wars: raids burn the borderlands and carry off coin
     for wi in 0..state.wars.len() {
         if rng.gen::<f64>() < 0.22 {
             let w = &state.wars[wi];
             let (attacker, victim_c) = if rng.gen::<bool>() { (w.a, w.b) } else { (w.b, w.a) };
+            let att_war = socs
+                .get(attacker)
+                .map(|s| society::mods_for(s).war)
+                .unwrap_or(1.0);
+            let walls = socs
+                .get(victim_c)
+                .map(|s| society::mods_for(s).defense)
+                .unwrap_or(1.0);
             let victims: Vec<usize> = settlements
                 .iter()
                 .enumerate()
@@ -256,34 +268,74 @@ pub fn monthly(
                 .map(|(i, _)| i)
                 .collect();
             if let Some(&vi) = victims.get(rng.gen_range(0..victims.len().max(1))) {
-                let loss = ((settlements[vi].pop as f64 * rng.gen_range(0.02..0.07)) as i64).max(5);
+                let frac = rng.gen_range(0.02..0.07) * att_war * walls;
+                let loss = ((settlements[vi].pop as f64 * frac) as i64).max(5);
                 settlements[vi].pop = (settlements[vi].pop - loss).max(40);
+                let plunder = round2(settlements[vi].wealth * 0.25 * att_war.min(1.6) * walls);
+                settlements[vi].wealth = round2((settlements[vi].wealth - plunder).max(0.0));
+                if let Some(sa) = socs.get_mut(attacker) {
+                    sa.treasury = round2(sa.treasury + 0.6 * plunder);
+                }
+                let text = if plunder > 25.0 {
+                    format!(
+                        "Raiders of the {} burn the fields of {} — {} souls lost, {} in coin carried off.",
+                        cultures[attacker].people,
+                        settlements[vi].name,
+                        loss,
+                        plunder.round() as i64
+                    )
+                } else {
+                    format!(
+                        "Raiders of the {} burn the fields of {} — {} souls lost.",
+                        cultures[attacker].people, settlements[vi].name, loss
+                    )
+                };
                 events.push(Event {
                     m: month_abs,
                     s: settlements[vi].name.clone(),
                     k: "war".to_string(),
-                    text: format!(
-                        "Raiders of the {} burn the fields of {} — {} souls lost.",
-                        cultures[attacker].people, settlements[vi].name, loss
-                    ),
+                    text,
                 });
             }
         }
     }
 
-    // --- new wars kindle between neighbours
-    if cultures.len() >= 2 && state.wars.len() < 2 && rng.gen::<f64>() < 0.0045 {
-        let a = rng.gen_range(0..cultures.len());
-        let mut b = rng.gen_range(0..cultures.len());
-        if b == a {
-            b = (b + 1) % cultures.len();
+    // --- war chests drain while the banners fly
+    for w in &state.wars {
+        for side in [w.a, w.b] {
+            if let Some(s) = socs.get_mut(side) {
+                s.treasury = round2((s.treasury - 3.0).max(0.0));
+            }
         }
-        let already = state.wars.iter().any(|w| {
-            (w.a == a && w.b == b) || (w.a == b && w.b == a)
-        });
-        let a_has = settlements.iter().any(|s| s.culture == a);
-        let b_has = settlements.iter().any(|s| s.culture == b);
-        if !already && a_has && b_has {
+    }
+
+    // --- new wars kindle, but only between true neighbours
+    if cultures.len() >= 2 && state.wars.len() < 2 && rng.gen::<f64>() < 0.0045 {
+        let mut candidates: Vec<(usize, usize)> = Vec::new();
+        for a in 0..cultures.len() {
+            for b in (a + 1)..cultures.len() {
+                let already = state
+                    .wars
+                    .iter()
+                    .any(|w| (w.a == a && w.b == b) || (w.a == b && w.b == a));
+                if already {
+                    continue;
+                }
+                let mut d2min = f64::INFINITY;
+                for sa in settlements.iter().filter(|s| s.culture == a) {
+                    for sb in settlements.iter().filter(|s| s.culture == b) {
+                        let dy = (sa.y - sb.y) as f64;
+                        let dx = (sa.x - sb.x) as f64;
+                        d2min = d2min.min(dy * dy + dx * dx);
+                    }
+                }
+                if d2min <= 90.0 * 90.0 {
+                    candidates.push((a, b));
+                }
+            }
+        }
+        if !candidates.is_empty() {
+            let (a, b) = candidates[rng.gen_range(0..candidates.len())];
             let name = WAR_NAMES[rng.gen_range(0..WAR_NAMES.len())].to_string();
             let until = month_abs + rng.gen_range(8..30);
             events.push(Event {

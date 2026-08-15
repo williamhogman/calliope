@@ -10,6 +10,7 @@ export const [world, setWorld] = createSignal(null); // {header, arrays}
 export const [settlements, setSettlements] = createSignal([]);
 export const [cultures, setCultures] = createSignal([]);
 export const [wars, setWars] = createSignal([]);
+export const [market, setMarket] = createSignal([]);
 export const [events, setEvents] = createSignal([]);
 export const [month, setMonth] = createSignal(0);
 export const [playing, setPlaying] = createSignal(false);
@@ -55,6 +56,7 @@ export const [open, setOpen] = createStore({
   resources: true,   // only rendered while the overlay is on
   peoples: false,    // auto-opens with the political layer
   settlements: true,
+  economy: false,    // markets: summarised by the biggest mover
   chronicle: false,  // collects a badge while collapsed
   ...saved,
 });
