@@ -23,7 +23,7 @@ const markDirty = () => { dirty = true; };
 const view = new View(canvas, markDirty);
 let hover = null;
 
-window.__calliope = { view, renderer, world, month };
+window.__calliope = { view, renderer, world, month, advance: (m) => advance(m) };
 
 // ---------- render loop ----------
 
