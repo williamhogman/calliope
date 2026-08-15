@@ -9,6 +9,7 @@ import {
   world, settlements, cultures, wars, events, month, playing, speed,
   worldSize, setWorldSize, busy, layer, overlays, selected, hoverInfo,
   popHistory, open, toggleOpen, seenEvents, setSeenEvents,
+  isMobile, sheet, setSheet,
 } from "./state.js";
 import {
   TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, HYDRO_GRAD, FERT_GRAD,
@@ -127,7 +128,7 @@ function WorldSection(a) {
     if (!w) return "\u2014";
     return `${w.header.seed} \u00b7 ${w.header.width || w.header.size}\u00d7${w.header.size}`;
   };
-  const go = () => a.generate(input.value);
+  const go = () => { a.generate(input.value); setSheet(null); };
   return Section({
     id: "world", title: "World", summary,
     children: html`
@@ -403,7 +404,7 @@ function SettlementsSection(a) {
     children: html`<div class="settlement-list">
       ${() => shown().map((s) => html`<div
         class=${() => "settlement" + (selected()?.id === s.id ? " picked" : "")}
-        onClick=${() => a.pickSettlement(s)}>
+        onClick=${() => { a.pickSettlement(s); if (isMobile()) setSheet(null); }}>
         <span class="s-dot" style=${`background:${colorOf(s)}`}></span>
         <span class="s-name">${s.name}</span>
         <span class="s-tier">${s.tier}</span>
@@ -495,7 +496,7 @@ function DetailPanel(a) {
 
 // -------------------------------------------------------------- inspector
 
-function Inspector() {
+function Inspector(a) {
   const body = () => {
     const info = hoverInfo();
     if (!info) return "";
@@ -522,7 +523,66 @@ function Inspector() {
     }
     return bits;
   };
-  return html`<div class=${() => "inspector" + (hoverInfo() ? "" : " hidden")}>${body}</div>`;
+  return html`<div class=${() => "inspector" + (hoverInfo() ? "" : " hidden")}>${body}
+    <button class="i-close" aria-label="Dismiss" onClick=${() => a.clearHover()}>\u00d7</button>
+  </div>`;
+}
+
+// ----------------------------------------------------------------- mobile
+
+// Bottom tab bar: two sheets (World = controls, Almanac = knowledge) around
+// a central play/pause cluster, so one thumb runs the whole simulation.
+function MobileBar(a) {
+  const dateText = () => {
+    if (!world()) return "\u2014";
+    const m = month();
+    const months = monthsOf();
+    return `Y${Math.floor(m / 12) + 1} \u00b7 ${months[((m % 12) + 12) % 12]}`;
+  };
+  const unseen = () => Math.max(0, events().length - seenEvents());
+  const flip = (id) => setSheet(sheet() === id ? null : id);
+
+  // Drive the sheet-open classes on the panel roots (outside this Solid root).
+  createEffect(() => {
+    const s = isMobile() ? sheet() : null;
+    document.getElementById("left-root")?.classList.toggle("sheet-open", s === "world");
+    document.getElementById("right-root")?.classList.toggle("sheet-open", s === "almanac");
+  });
+
+  return html`
+    <div class=${() => "scrim" + (isMobile() && sheet() ? " show" : "")}
+      onClick=${() => setSheet(null)}></div>
+    <nav class="mbar">
+      <button class=${() => "mtab" + (sheet() === "world" ? " active" : "")}
+        onClick=${() => flip("world")}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M3 12h18M12 3c2.7 2.7 4.1 5.7 4.1 9s-1.4 6.3-4.1 9c-2.7-2.7-4.1-5.7-4.1-9S9.3 5.7 12 3z"/>
+        </svg>
+        <span>World</span>
+      </button>
+      <div class="mtime">
+        <button class="icon-btn" aria-label="Step one month" onClick=${() => a.step()}>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M5 5.5v13a1 1 0 0 0 1.5.87l9-6.5a1 1 0 0 0 0-1.74l-9-6.5A1 1 0 0 0 5 5.5z"/><rect x="17" y="5" width="3" height="14" rx="1"/></svg>
+        </button>
+        <button class="mplay" aria-label="Play / pause" onClick=${() => a.playPause()}>
+          ${() => (playing()
+            ? html`<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`
+            : html`<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M7 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 7 5.5z"/></svg>`)}
+        </button>
+        <span class="mdate">${dateText}</span>
+      </div>
+      <button class=${() => "mtab" + (sheet() === "almanac" ? " active" : "")}
+        onClick=${() => flip("almanac")}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+          <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21z"/>
+          <path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/>
+        </svg>
+        <span>Almanac</span>
+        ${() => (unseen() > 0 && sheet() !== "almanac"
+          ? html`<span class="badge">+${unseen()}</span>` : "")}
+      </button>
+    </nav>`;
 }
 
 // ------------------------------------------------------------------ mount
@@ -531,5 +591,6 @@ export function mountUI(actions) {
   render(() => LeftPanel(actions), document.getElementById("left-root"));
   render(() => RightPanel(actions), document.getElementById("right-root"));
   render(() => DetailPanel(actions), document.getElementById("float-root"));
-  render(() => Inspector(), document.getElementById("insp-root"));
+  render(() => Inspector(actions), document.getElementById("insp-root"));
+  render(() => MobileBar(actions), document.getElementById("bar-root"));
 }
