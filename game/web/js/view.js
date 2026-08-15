@@ -66,7 +66,6 @@ export class View {
 
     c.addEventListener("pointerdown", (e) => {
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      c.setPointerCapture(e.pointerId);
       if (pts.size === 1) {
         lastX = e.clientX;
         lastY = e.clientY;
@@ -74,6 +73,7 @@ export class View {
       } else if (pts.size === 2) {
         pinch = midOf();
       }
+      try { c.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     });
 
     c.addEventListener("pointermove", (e) => {
