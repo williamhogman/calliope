@@ -190,8 +190,11 @@ export class Renderer {
           else if (lake) { r = 46; g = 95; b = 143; }
           else {
             const t = Math.log1p(discharge[i]) / dLogMax;
-            if (t > 0.04) [r, g, b] = HYDRO_GRAD(t);
-            else { r = 19; g = 26; b = 36; }
+            if (t > 0.42) [r, g, b] = HYDRO_GRAD((t - 0.42) / 0.58);
+            else {
+              const s = this.shade[i];
+              r = 19 * s; g = 26 * s; b = 36 * s;
+            }
           }
         }
 
