@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 
 use crate::agriculture;
 use crate::biomes as biomes_mod;
+use crate::chronicle::{self, ChronicleState};
 use crate::climate;
 use crate::constants;
 use crate::culture::{self, Culture};
@@ -25,12 +26,14 @@ use crate::util::{now_ms, round3};
 pub struct Event {
     pub m: i64,
     pub s: String,
+    pub k: String,
     pub text: String,
 }
 
 pub struct World {
     pub seed: i64,
-    pub size: usize,
+    pub size: usize,  // grid rows (the generated square base)
+    pub width: usize, // grid columns after ocean margins are added
     pub month: i64,
 
     pub height: Array2<f64>,
@@ -53,6 +56,7 @@ pub struct World {
 
     rng: Pcg64Mcg,
     taken: HashSet<String>,
+    chron: ChronicleState,
     site_score: Array2<f64>,
     food_grid: Array2<f64>,
     near_fresh: Array2<bool>,
@@ -138,7 +142,12 @@ impl World {
         let routes = trade::build_routes(&trade_cost, trade_f, &mut setts);
         timings.push(("settlements", now_ms() - t7));
 
-        let mut events: Vec<Event> = Vec::new();
+        let mut rng = crate::util::rng(seed + 777);
+        let mut chron = ChronicleState::default();
+        chron.rulers = chronicle::init_rulers(&mut rng, &cultures, &mut taken);
+
+        let mut events: Vec<Event> =
+            chronicle::founding_myths(&mut rng, &cultures, &features, &world_name);
         for s in &setts {
             let people = if !cultures.is_empty() {
                 cultures[s.culture].people.clone()
@@ -155,14 +164,16 @@ impl World {
             events.push(Event {
                 m: 0,
                 s: s.name.clone(),
+                k: "found".to_string(),
                 text: format!("{} founded by the {}{}", s.name, people, suffix),
             });
         }
         timings.push(("total", now_ms() - t0));
 
-        World {
+        let mut world = World {
             seed,
             size,
+            width: size,
             month: 0,
             height,
             tmean,
@@ -180,8 +191,9 @@ impl World {
             routes,
             events,
             world_name,
-            rng: crate::util::rng(seed + 777),
+            rng,
             taken,
+            chron,
             site_score: founded.site_score,
             food_grid: founded.food_grid,
             near_fresh: founded.near_fresh,
@@ -190,7 +202,113 @@ impl World {
             trade_cost,
             trade_f,
             timings,
+        };
+        // Open-ocean margins east and west: the world breathes a little wider.
+        world.widen(size / 8);
+        world
+    }
+
+    /// Grow the map horizontally: every grid gains `pad` ocean columns on both
+    /// sides and every coordinate shifts east by `pad`. The simulation keeps
+    /// running in the widened frame, so colonies, routes and labels all agree.
+    fn widen(&mut self, pad: usize) {
+        if pad == 0 {
+            return;
         }
+        let (h, w) = self.height.dim();
+        let p = pad as isize;
+
+        fn grow_f64(
+            a: &Array2<f64>,
+            pad: usize,
+            margin: impl Fn(f64, f64) -> f64,
+        ) -> Array2<f64> {
+            let (h, w) = a.dim();
+            let p = pad as isize;
+            Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
+                let xi = x as isize - p;
+                if xi >= 0 && (xi as usize) < w {
+                    a[[y, xi as usize]]
+                } else {
+                    let (edge, k) = if xi < 0 {
+                        (a[[y, 0]], (-xi) as f64)
+                    } else {
+                        (a[[y, w - 1]], (xi as usize - (w - 1)) as f64)
+                    };
+                    margin(edge, k / pad as f64)
+                }
+            })
+        }
+        fn grow_bool(a: &Array2<bool>, pad: usize) -> Array2<bool> {
+            let (h, w) = a.dim();
+            let p = pad as isize;
+            Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
+                let xi = x as isize - p;
+                xi >= 0 && (xi as usize) < w && a[[y, xi as usize]]
+            })
+        }
+
+        // Bathymetry: slide from the coastal edge down toward open deep sea.
+        self.height = grow_f64(&self.height, pad, |e, t| {
+            let shelf = e.min(-0.03);
+            let deep = (-0.62_f64).min(e);
+            shelf + (deep - shelf) * t
+        });
+        // Climate margins keep zonal continuity by extending the edge column.
+        self.tmean = grow_f64(&self.tmean, pad, |e, _| e);
+        self.tamp = grow_f64(&self.tamp, pad, |e, _| e);
+        self.precip = grow_f64(&self.precip, pad, |e, _| e);
+        self.discharge = grow_f64(&self.discharge, pad, |_, _| 0.0);
+        self.fertility = grow_f64(&self.fertility, pad, |_, _| 0.0);
+        self.site_score = grow_f64(&self.site_score, pad, |_, _| 0.0);
+        self.food_grid = grow_f64(&self.food_grid, pad, |_, _| 0.0);
+        self.biomes = {
+            let a = &self.biomes;
+            Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
+                let xi = x as isize - p;
+                if xi >= 0 && (xi as usize) < w {
+                    a[[y, xi as usize]]
+                } else {
+                    0 // open water
+                }
+            })
+        };
+        self.rivers = grow_bool(&self.rivers, pad);
+        self.lakes = grow_bool(&self.lakes, pad);
+        self.near_fresh = grow_bool(&self.near_fresh, pad);
+        self.coast = grow_bool(&self.coast, pad);
+
+        // Downsampled trade grid: margins are open sea lanes (cost 0.8).
+        let dpad = pad / self.trade_f;
+        let (dh, dw) = self.trade_cost.dim();
+        let dp = dpad as isize;
+        let tc = self.trade_cost.clone();
+        self.trade_cost = Array2::from_shape_fn((dh, dw + 2 * dpad), |(y, x)| {
+            let xi = x as isize - dp;
+            if xi >= 0 && (xi as usize) < dw {
+                tc[[y, xi as usize]]
+            } else {
+                0.8
+            }
+        });
+
+        // Everything with an x slides east.
+        let shift = pad as i64;
+        for s in self.settlements.iter_mut() {
+            s.x += shift;
+        }
+        for d in self.deposits.iter_mut() {
+            d.x += shift;
+        }
+        for f in self.features.iter_mut() {
+            f.x += shift;
+        }
+        for r in self.routes.iter_mut() {
+            for pt in r.path.iter_mut() {
+                pt[0] += shift;
+            }
+        }
+        self.width = w + 2 * pad;
     }
 
     /// One month of growth for every settlement; returns events.
@@ -218,6 +336,7 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
+                    k: "disaster".to_string(),
                     text: format!("A brutal winter grips {} — {} lost.", s.name, loss),
                 });
             }
@@ -228,7 +347,56 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
+                    k: "disaster".to_string(),
                     text: format!("Plague stalks the streets of {} — {} souls perish.", s.name, loss),
+                });
+            }
+            // the earth shakes in the high country
+            if self.height[[y, x]] > 0.42 && pop > 120 && self.rng.gen::<f64>() < 0.0012 {
+                let loss = ((pop as f64 * self.rng.gen_range(0.03..0.09)) as i64).max(3);
+                pop -= loss;
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: "disaster".to_string(),
+                    text: format!("The earth shakes beneath {} — walls fall, {} are lost.", s.name, loss),
+                });
+            }
+            // fire leaps the rooftops in the dry season
+            if (5..=7).contains(&month)
+                && self.precip[[y, x]] < 700.0
+                && pop > 350
+                && self.rng.gen::<f64>() < 0.0025
+            {
+                let loss = ((pop as f64 * self.rng.gen_range(0.02..0.06)) as i64).max(3);
+                pop -= loss;
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: "disaster".to_string(),
+                    text: format!("Fire leaps the rooftops of {}; {} perish in the smoke.", s.name, loss),
+                });
+            }
+            // the spring melt bursts the banks
+            if s.river && (2..=4).contains(&month) && pop > 150 && self.rng.gen::<f64>() < 0.002 {
+                let loss = ((pop as f64 * self.rng.gen_range(0.01..0.04)) as i64).max(2);
+                pop -= loss;
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: "disaster".to_string(),
+                    text: format!("The river bursts its banks at {} — {} swept away in the brown water.", s.name, loss),
+                });
+            }
+            // black autumn storms off the open sea
+            if s.coastal && (8..=10).contains(&month) && pop > 150 && self.rng.gen::<f64>() < 0.002 {
+                let loss = ((pop as f64 * self.rng.gen_range(0.01..0.05)) as i64).max(2);
+                pop -= loss;
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: "disaster".to_string(),
+                    text: format!("A black storm off the open sea lashes {} — {} lost to the waves.", s.name, loss),
                 });
             }
             // a golden harvest, in high summer, on good soil
@@ -236,20 +404,60 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
+                    k: "growth".to_string(),
                     text: format!("The harvest overflows in {}; granaries groan.", s.name),
                 });
                 growth *= 2.0;
+            }
+            // markets overflow where many roads meet
+            if s.connections >= 3 && pop > 400 && self.rng.gen::<f64>() < 0.0015 {
+                let good = s
+                    .exports
+                    .clone()
+                    .unwrap_or_else(|| "grain".to_string());
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: "trade".to_string(),
+                    text: format!("Caravans crowd the gates of {}; {} flows out to every shore.", s.name, good),
+                });
+                growth += pop as f64 * 0.004;
             }
             pop = ((pop as f64 + growth).round() as i64).max(20);
             let old_tier = s.tier.clone();
             s.pop = pop;
             s.tier = settlements::tier(pop);
             if s.tier != old_tier {
-                events.push(Event {
-                    m: month_abs,
-                    s: s.name.clone(),
-                    text: format!("{} has grown into a {}.", s.name, s.tier.to_lowercase()),
-                });
+                let rank = |t: &str| {
+                    settlements::TIERS
+                        .iter()
+                        .position(|(_, n)| *n == t)
+                        .unwrap_or(0)
+                };
+                if rank(&s.tier) > rank(&old_tier) {
+                    events.push(Event {
+                        m: month_abs,
+                        s: s.name.clone(),
+                        k: "growth".to_string(),
+                        text: format!("{} has grown into a {}.", s.name, s.tier.to_lowercase()),
+                    });
+                    // rising tier: something worth singing about may be raised
+                    let wonders = chronicle::wonder_for(
+                        &mut self.chron,
+                        &mut self.rng,
+                        s,
+                        &self.cultures,
+                        month_abs,
+                    );
+                    events.extend(wonders);
+                } else {
+                    events.push(Event {
+                        m: month_abs,
+                        s: s.name.clone(),
+                        k: "disaster".to_string(),
+                        text: format!("{} dwindles to a {}.", s.name, s.tier.to_lowercase()),
+                    });
+                }
             }
         }
         events
@@ -334,6 +542,7 @@ impl World {
             events.push(Event {
                 m: month_abs,
                 s: name.clone(),
+                k: "found".to_string(),
                 text: format!("Settlers out of {} raise {}{}", pname, name, place),
             });
         }
@@ -353,11 +562,38 @@ impl World {
                 founded = true;
                 new_events.extend(col_evs);
             }
+            let chron_evs = chronicle::monthly(
+                &mut self.chron,
+                &mut self.rng,
+                &mut self.taken,
+                self.month,
+                &mut self.settlements,
+                &self.cultures,
+                &self.features,
+                &self.world_name,
+            );
+            new_events.extend(chron_evs);
         }
         self.events.extend(new_events.iter().cloned());
         let keep = self.events.len().saturating_sub(200);
         self.events.drain(..keep);
         (new_events, founded)
+    }
+
+    /// Cultures with their current ruler attached, for the client.
+    fn cultures_json(&self) -> Value {
+        let arr: Vec<Value> = self
+            .cultures
+            .iter()
+            .map(|c| {
+                let mut v = serde_json::to_value(c).unwrap();
+                if let Some(r) = self.chron.rulers.iter().find(|r| r.culture == c.id) {
+                    v["ruler"] = json!(r.title());
+                }
+                v
+            })
+            .collect();
+        Value::Array(arr)
     }
 
     pub fn tick_json(&mut self, months: i64) -> String {
@@ -366,6 +602,8 @@ impl World {
             "month": self.month,
             "settlements": self.settlements,
             "events": events,
+            "cultures": self.cultures_json(),
+            "wars": self.chron.wars,
         });
         if founded {
             out["routes"] = json!(self.routes);
@@ -383,6 +621,8 @@ impl World {
         json!({
             "seed": self.seed,
             "size": self.size,
+            "width": self.width,
+            "height_cells": self.size,
             "month": self.month,
             "months": constants::MONTHS,
             "sea_level": 0.0,
@@ -392,9 +632,10 @@ impl World {
             "resources": resources::resource_meta(),
             "deposits": self.deposits,
             "settlements": self.settlements,
-            "cultures": self.cultures,
+            "cultures": self.cultures_json(),
             "features": self.features,
             "routes": self.routes,
+            "wars": self.chron.wars,
             "events": self.events[ev_start..],
             "timings": timings,
         })
@@ -431,7 +672,7 @@ impl World {
             entries.push(json!({
                 "name": name,
                 "dtype": dtype,
-                "shape": [self.size, self.size],
+                "shape": [self.size, self.width],
                 "offset": offset,
                 "nbytes": raw.len(),
             }));

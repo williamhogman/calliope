@@ -13,15 +13,15 @@ export class View {
     this._bind();
   }
 
-  fit(worldSize) {
-    this.worldSize = worldSize;
+  fit(worldW, worldH = worldW) {
+    this.worldSize = Math.max(worldW, worldH);
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
     const pad = 40;
-    this.scale = Math.min((w - pad * 2) / worldSize, (h - pad * 2) / worldSize);
+    this.scale = Math.min((w - pad * 2) / worldW, (h - pad * 2) / worldH);
     this.minScale = this.scale * 0.5;
-    this.tx = (w - worldSize * this.scale) / 2;
-    this.ty = (h - worldSize * this.scale) / 2;
+    this.tx = (w - worldW * this.scale) / 2;
+    this.ty = (h - worldH * this.scale) / 2;
     this.onChange?.();
   }
 

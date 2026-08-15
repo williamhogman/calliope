@@ -87,8 +87,82 @@ body {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--dim);
-  margin-bottom: 10px;
 }
+.group-title.static { margin-bottom: 10px; }
+
+/* ---------- progressive disclosure ---------- */
+
+.group.disclosable { padding: 0; }
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 18px;
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  transition: background 0.12s;
+}
+.group-head:hover { background: var(--hover); }
+.group-head .chev {
+  color: var(--dim);
+  flex: 0 0 auto;
+  transition: transform 0.18s ease;
+}
+.group.open .group-head .chev { transform: rotate(90deg); }
+.group-head .group-title { margin-bottom: 0; }
+.group-summary {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--dim);
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+.badge {
+  background: var(--accent);
+  color: #191307;
+  font-size: 9.5px;
+  font-weight: 700;
+  border-radius: 99px;
+  padding: 1px 6px;
+  flex: 0 0 auto;
+}
+.group-body { padding: 2px 18px 14px; }
+
+.more-btn {
+  width: 100%;
+  text-align: center;
+  font-size: 11px;
+  color: var(--dim);
+  padding: 7px 0 2px;
+  letter-spacing: 0.04em;
+  transition: color 0.12s;
+}
+.more-btn:hover { color: var(--text); }
+
+.grad-bar {
+  height: 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+}
+.grad-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--dim);
+  margin-top: 4px;
+}
+.legend-note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.4;
+}
+.settlement.picked { background: var(--active); }
 
 .row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .row:last-child { margin-bottom: 0; }
@@ -287,6 +361,7 @@ button {
 
 .events { display: flex; flex-direction: column; gap: 7px; max-height: 220px; }
 .event { font-size: 12px; color: #c6cbd6; display: flex; gap: 8px; }
+.event .e-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; margin-top: 5px; opacity: .9; }
 .event .e-when { font: 500 10.5px var(--mono); color: var(--dim); white-space: nowrap; padding-top: 1.5px; }
 .event-empty { font-size: 12px; }
 
@@ -297,7 +372,15 @@ button {
 .culture .s-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; margin-top: 4px; border: 1px solid rgba(0,0,0,.4); }
 .culture .c-body { display: flex; flex-direction: column; min-width: 0; }
 .culture .c-name { font-weight: 600; font-size: 12.5px; }
+.culture .c-ruler { font-size: 11px; font-style: italic; color: #b9a8d8; }
 .culture .c-sub { font-size: 11px; }
+.culture .war-mark { color: #e05555; font-size: 11px; }
+.war-banner {
+  font-size: 11.5px; color: #e8a09a;
+  background: rgba(224, 85, 85, .10);
+  border: 1px solid rgba(224, 85, 85, .28);
+  border-radius: 7px; padding: 5px 9px;
+}
 
 /* ---------- settlement detail ---------- */
 
