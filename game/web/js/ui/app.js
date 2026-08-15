@@ -41,6 +41,14 @@ const STYLE_LABEL = {
   sylvan: "deep woods", steppe: "open plains", old: "old tongue",
 };
 
+// Every chronicle entry is tinted by what kind of thing happened.
+const EVENT_COLORS = {
+  myth: "#c9b458", found: "#d4a94a", growth: "#8fb6dd", disaster: "#e07a6a",
+  war: "#e05555", ruler: "#c9a0e8", omen: "#a8d4b8", festival: "#f0d090",
+  wonder: "#ffd766", trade: "#9fd0c8",
+};
+const eventColor = (e) => EVENT_COLORS[e.k] || "#8a8fa0";
+
 const FALLBACK_MONTHS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 const monthsOf = () => world()?.header.months || FALLBACK_MONTHS;
 const fmt = (n) => Math.round(n).toLocaleString("en-US");
