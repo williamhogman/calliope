@@ -142,21 +142,14 @@ pub fn assign_cultures(
                 counts.push((b, 1));
             }
         }
-        let dom = counts
-            .iter()
-            .max_by(|a, b| a.1.cmp(&b.1))
-            .map(|e| e.0)
-            .unwrap_or(gc::GRASSLAND);
-        // Vec::max_by returns the LAST max on ties; Python max() returns the
-        // first — walk manually to keep first-seen-wins.
-        let mut dom_first = counts[0];
+        // first-seen wins ties, like Python's max() over dict insertion order
+        let mut dom = counts[0];
         for e in &counts {
-            if e.1 > dom_first.1 {
-                dom_first = *e;
+            if e.1 > dom.1 {
+                dom = *e;
             }
         }
-        let _ = dom;
-        let mut style = style_by_biome(dom_first.0);
+        let mut style = style_by_biome(dom.0);
         if used_styles.contains(style) {
             style = ALL_STYLES
                 .iter()
