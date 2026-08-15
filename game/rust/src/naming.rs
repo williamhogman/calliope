@@ -130,6 +130,13 @@ fn templates(kind: &str) -> &'static [&'static str] {
         "forest" => &["The {w}wood", "{w} Forest", "The Woods of {w}"],
         "river" => &["River {w}", "The {w}"],
         "lake" => &["Lake {w}", "The {w} Mere"],
+        "bay" => &["The Bay of {w}", "{w} Bay", "The {w} Cove"],
+        "strait" => &["The Straits of {w}", "The {w} Narrows", "The {w} Passage"],
+        "cape" => &["Cape {w}", "The {w} Headland", "{w} Point"],
+        "peak" => &["Mount {w}", "The {w} Horn", "The Spire of {w}"],
+        "highland" => &["The {w} Highlands", "The {w} Plateau", "The {w} Tablelands"],
+        "marsh" => &["The {w} Fen", "The {w} Marshes", "The {w} Mire"],
+        "delta" => &["The {w} Delta", "The Mouths of the {w}"],
         _ => &["{w}"],
     }
 }
@@ -186,6 +193,8 @@ pub fn name_features(
     rivers: &Array2<bool>,
     lakes: &Array2<bool>,
     discharge: &Array2<f64>,
+    tmean: &Array2<f64>,
+    precip: &Array2<f64>,
     seed: i64,
 ) -> (Vec<Feature>, String) {
     let mut rng = crate::util::rng(seed + 12000);
