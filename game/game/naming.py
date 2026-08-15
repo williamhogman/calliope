@@ -96,10 +96,14 @@ def _phrase(rng, kind, word):
 
 
 def _interior_anchor(lab, idx, slices):
-    """Point deepest inside the component — labels land inside their shape."""
+    """Point deepest inside the component — labels land inside their shape.
+
+    The mask is zero-padded so map edges count as boundaries; otherwise the
+    ocean's anchor lands on the border of the map and the label gets cut off.
+    """
     sl = slices[idx - 1]
-    m = lab[sl] == idx
-    d = ndimage.distance_transform_edt(m)
+    m = np.pad(lab[sl] == idx, 1)
+    d = ndimage.distance_transform_edt(m)[1:-1, 1:-1]
     y, x = np.unravel_index(int(np.argmax(d)), d.shape)
     return int(y + sl[0].start), int(x + sl[1].start)
 
