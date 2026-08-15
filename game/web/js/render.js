@@ -32,10 +32,13 @@ export class Renderer {
 
   setWorld(world) {
     this.world = world;
-    const size = world.header.size;
-    this.size = size;
-    this.off.width = size;
-    this.off.height = size;
+    const w = world.header.width || world.header.size;
+    const hh = world.header.size;
+    this.w = w;
+    this.h = hh;
+    this.size = hh; // rows — used by scale-relative heuristics
+    this.off.width = w;
+    this.off.height = hh;
     this.cacheKey = null;
     this.tmonthCache.clear();
     this.territoryCache = { version: -1, owner: null };
@@ -49,15 +52,15 @@ export class Renderer {
 
     // hillshade (light from NW)
     const h = world.arrays.height;
-    const sh = new Float32Array(size * size);
-    const k = size / 16;
-    for (let y = 0; y < size; y++) {
-      const y0 = Math.max(0, y - 1) * size;
-      const y1 = Math.min(size - 1, y + 1) * size;
-      const yr = y * size;
-      for (let x = 0; x < size; x++) {
+    const sh = new Float32Array(w * hh);
+    const k = hh / 16;
+    for (let y = 0; y < hh; y++) {
+      const y0 = Math.max(0, y - 1) * w;
+      const y1 = Math.min(hh - 1, y + 1) * w;
+      const yr = y * w;
+      for (let x = 0; x < w; x++) {
         const x0 = Math.max(0, x - 1);
-        const x1 = Math.min(size - 1, x + 1);
+        const x1 = Math.min(w - 1, x + 1);
         const dzdx = (h[yr + x1] - h[yr + x0]) * 0.5;
         const dzdy = (h[y1 + x] - h[y0 + x]) * 0.5;
         let s = 1 + k * (-dzdx - dzdy) * 0.9;
@@ -123,20 +126,20 @@ export class Renderer {
     if (this.territoryCache.version === version && this.territoryCache.owner) {
       return this.territoryCache.owner;
     }
-    const size = this.size;
+    const w = this.w, h = this.h;
     const { biomes } = this.world.arrays;
-    const owner = new Int16Array(size * size).fill(-1);
-    const dist = new Float32Array(size * size).fill(Infinity);
+    const owner = new Int16Array(w * h).fill(-1);
+    const dist = new Float32Array(w * h).fill(Infinity);
     for (const s of this.world.header.settlements) {
-      const r = (2 + 2.4 * Math.log10(Math.max(s.pop, 10))) * (size / 512) * 2.2;
+      const r = (2 + 2.4 * Math.log10(Math.max(s.pop, 10))) * (h / 512) * 2.2;
       const r2 = r * r;
       const x0 = Math.max(0, Math.floor(s.x - r));
-      const x1 = Math.min(size - 1, Math.ceil(s.x + r));
+      const x1 = Math.min(w - 1, Math.ceil(s.x + r));
       const y0 = Math.max(0, Math.floor(s.y - r));
-      const y1 = Math.min(size - 1, Math.ceil(s.y + r));
+      const y1 = Math.min(h - 1, Math.ceil(s.y + r));
       for (let y = y0; y <= y1; y++) {
         for (let x = x0; x <= x1; x++) {
-          const i = y * size + x;
+          const i = y * w + x;
           if (biomes[i] === 0) continue;
           const d2 = (x - s.x) ** 2 + (y - s.y) ** 2;
           if (d2 <= r2 && d2 < dist[i]) {
@@ -172,9 +175,9 @@ export class Renderer {
     if (key === this.cacheKey) return;
     this.cacheKey = key;
 
-    const size = this.size;
+    const W = this.w, H = this.h;
     const { height, tmean, precip, discharge, fertility, biomes, flags } = this.world.arrays;
-    const img = this.octx.createImageData(size, size);
+    const img = this.octx.createImageData(W, H);
     const px = img.data;
     const shade = this.shade;
     const useShade = overlays.hillshade;
@@ -186,9 +189,9 @@ export class Renderer {
     if (owner) cultOf = this._cultureOf();
     const cRgb = this.cultureRgb;
 
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const i = y * size + x;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
         const o = i * 4;
         const h = height[i];
         const sea = h < 0;
@@ -218,9 +221,9 @@ export class Renderer {
               const cid = cultOf[ow] ?? 0;
               const c = cRgb[cid] || [220, 200, 140];
               const left = x > 0 ? owner[i - 1] : ow;
-              const up = y > 0 ? owner[i - size] : ow;
-              const right = x < size - 1 ? owner[i + 1] : ow;
-              const down = y < size - 1 ? owner[i + size] : ow;
+              const up = y > 0 ? owner[i - W] : ow;
+              const right = x < W - 1 ? owner[i + 1] : ow;
+              const down = y < H - 1 ? owner[i + W] : ow;
               const settBorder = left !== ow || up !== ow || right !== ow || down !== ow;
               const cidOf = (oo) => (oo >= 0 ? (cultOf[oo] ?? 0) : -1);
               const cultBorder = settBorder && (
@@ -337,7 +340,7 @@ export class Renderer {
   }
 
   _drawWinds(ctx, view, state) {
-    const size = this.size;
+    const H = this.h, W = this.w;
     const s = view.scale;
     const w = this.canvas.clientWidth;
     const drift = state.playing ? (performance.now() / 1000 * 26) : 0;
@@ -345,15 +348,15 @@ export class Renderer {
     ctx.lineWidth = 1.3;
     ctx.lineCap = "round";
     const rowStep = Math.max(18, 30 / Math.max(s / 2, 1));
-    for (let wy = rowStep / 2; wy < size; wy += rowStep) {
-      const lat = Math.abs((wy / size) * 180 - 90);
+    for (let wy = rowStep / 2; wy < H; wy += rowStep) {
+      const lat = Math.abs((wy / H) * 180 - 90);
       const dir = lat < 30 ? -1 : lat < 60 ? 1 : -1; // grid x direction of travel
       const py = view.ty + wy * s;
       if (py < -20 || py > this.canvas.clientHeight + 20) continue;
       const spacing = 96;
       const shift = ((drift * dir) % spacing + spacing) % spacing;
       const x0 = Math.max(0, view.tx) - spacing;
-      const x1 = Math.min(w, view.tx + size * s) + spacing;
+      const x1 = Math.min(w, view.tx + W * s) + spacing;
       const alpha = 0.34;
       ctx.strokeStyle = `rgba(205, 226, 250, ${alpha})`;
       for (let px = x0 + shift; px < x1; px += spacing) {

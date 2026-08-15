@@ -150,12 +150,12 @@ pub fn astar(
     start: (usize, usize),
     goal: (usize, usize),
 ) -> Option<Vec<(usize, usize)>> {
-    let size = cost.dim().0;
+    let (hh, ww) = cost.dim();
     let (sy, sx) = start;
     let (gy, gx) = goal;
     let min_cost = 0.75;
     let max_expand = 200_000usize;
-    let mut best = Array2::<f64>::from_elem((size, size), f64::INFINITY);
+    let mut best = Array2::<f64>::from_elem((hh, ww), f64::INFINITY);
     best[[sy, sx]] = 0.0;
     let mut came: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
     let h0 = min_cost * ((gy as f64 - sy as f64).hypot(gx as f64 - sx as f64));
@@ -185,7 +185,7 @@ pub fn astar(
         for (&(dy, dx), &dist) in N8.iter().zip(DIST.iter()) {
             let ny = y as isize + dy;
             let nx = x as isize + dx;
-            if ny < 0 || nx < 0 || ny >= size as isize || nx >= size as isize {
+            if ny < 0 || nx < 0 || ny >= hh as isize || nx >= ww as isize {
                 continue;
             }
             let (ny, nx) = (ny as usize, nx as usize);

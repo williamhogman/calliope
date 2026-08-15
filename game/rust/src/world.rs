@@ -30,7 +30,8 @@ pub struct Event {
 
 pub struct World {
     pub seed: i64,
-    pub size: usize,
+    pub size: usize,  // grid rows (the generated square base)
+    pub width: usize, // grid columns after ocean margins are added
     pub month: i64,
 
     pub height: Array2<f64>,
@@ -160,9 +161,10 @@ impl World {
         }
         timings.push(("total", now_ms() - t0));
 
-        World {
+        let mut world = World {
             seed,
             size,
+            width: size,
             month: 0,
             height,
             tmean,
@@ -190,7 +192,113 @@ impl World {
             trade_cost,
             trade_f,
             timings,
+        };
+        // Open-ocean margins east and west: the world breathes a little wider.
+        world.widen(size / 8);
+        world
+    }
+
+    /// Grow the map horizontally: every grid gains `pad` ocean columns on both
+    /// sides and every coordinate shifts east by `pad`. The simulation keeps
+    /// running in the widened frame, so colonies, routes and labels all agree.
+    fn widen(&mut self, pad: usize) {
+        if pad == 0 {
+            return;
         }
+        let (h, w) = self.height.dim();
+        let p = pad as isize;
+
+        fn grow_f64(
+            a: &Array2<f64>,
+            pad: usize,
+            margin: impl Fn(f64, f64) -> f64,
+        ) -> Array2<f64> {
+            let (h, w) = a.dim();
+            let p = pad as isize;
+            Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
+                let xi = x as isize - p;
+                if xi >= 0 && (xi as usize) < w {
+                    a[[y, xi as usize]]
+                } else {
+                    let (edge, k) = if xi < 0 {
+                        (a[[y, 0]], (-xi) as f64)
+                    } else {
+                        (a[[y, w - 1]], (xi as usize - (w - 1)) as f64)
+                    };
+                    margin(edge, k / pad as f64)
+                }
+            })
+        }
+        fn grow_bool(a: &Array2<bool>, pad: usize) -> Array2<bool> {
+            let (h, w) = a.dim();
+            let p = pad as isize;
+            Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
+                let xi = x as isize - p;
+                xi >= 0 && (xi as usize) < w && a[[y, xi as usize]]
+            })
+        }
+
+        // Bathymetry: slide from the coastal edge down toward open deep sea.
+        self.height = grow_f64(&self.height, pad, |e, t| {
+            let shelf = e.min(-0.03);
+            let deep = (-0.62_f64).min(e);
+            shelf + (deep - shelf) * t
+        });
+        // Climate margins keep zonal continuity by extending the edge column.
+        self.tmean = grow_f64(&self.tmean, pad, |e, _| e);
+        self.tamp = grow_f64(&self.tamp, pad, |e, _| e);
+        self.precip = grow_f64(&self.precip, pad, |e, _| e);
+        self.discharge = grow_f64(&self.discharge, pad, |_, _| 0.0);
+        self.fertility = grow_f64(&self.fertility, pad, |_, _| 0.0);
+        self.site_score = grow_f64(&self.site_score, pad, |_, _| 0.0);
+        self.food_grid = grow_f64(&self.food_grid, pad, |_, _| 0.0);
+        self.biomes = {
+            let a = &self.biomes;
+            Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
+                let xi = x as isize - p;
+                if xi >= 0 && (xi as usize) < w {
+                    a[[y, xi as usize]]
+                } else {
+                    0 // open water
+                }
+            })
+        };
+        self.rivers = grow_bool(&self.rivers, pad);
+        self.lakes = grow_bool(&self.lakes, pad);
+        self.near_fresh = grow_bool(&self.near_fresh, pad);
+        self.coast = grow_bool(&self.coast, pad);
+
+        // Downsampled trade grid: margins are open sea lanes (cost 0.8).
+        let dpad = pad / self.trade_f;
+        let (dh, dw) = self.trade_cost.dim();
+        let dp = dpad as isize;
+        let tc = self.trade_cost.clone();
+        self.trade_cost = Array2::from_shape_fn((dh, dw + 2 * dpad), |(y, x)| {
+            let xi = x as isize - dp;
+            if xi >= 0 && (xi as usize) < dw {
+                tc[[y, xi as usize]]
+            } else {
+                0.8
+            }
+        });
+
+        // Everything with an x slides east.
+        let shift = pad as i64;
+        for s in self.settlements.iter_mut() {
+            s.x += shift;
+        }
+        for d in self.deposits.iter_mut() {
+            d.x += shift;
+        }
+        for f in self.features.iter_mut() {
+            f.x += shift;
+        }
+        for r in self.routes.iter_mut() {
+            for pt in r.path.iter_mut() {
+                pt[0] += shift;
+            }
+        }
+        self.width = w + 2 * pad;
     }
 
     /// One month of growth for every settlement; returns events.
@@ -383,6 +491,8 @@ impl World {
         json!({
             "seed": self.seed,
             "size": self.size,
+            "width": self.width,
+            "height_cells": self.size,
             "month": self.month,
             "months": constants::MONTHS,
             "sea_level": 0.0,
@@ -431,7 +541,7 @@ impl World {
             entries.push(json!({
                 "name": name,
                 "dtype": dtype,
-                "shape": [self.size, self.size],
+                "shape": [self.size, self.width],
                 "offset": offset,
                 "nbytes": raw.len(),
             }));

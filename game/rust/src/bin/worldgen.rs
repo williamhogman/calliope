@@ -10,12 +10,12 @@ fn main() {
 
     let mut w = World::generate(seed, size);
 
-    let total = (size * size) as f64;
+    let total = w.height.len() as f64;
     let land = w.height.iter().filter(|&&h| h >= 0.0).count() as f64;
     let rivers = w.rivers.iter().filter(|&&r| r).count();
     let lakes = w.lakes.iter().filter(|&&l| l).count();
 
-    println!("world '{}' seed={} size={}", w.world_name, seed, size);
+    println!("world '{}' seed={} size={}x{}", w.world_name, seed, w.width, size);
     println!("land: {:.1}%  rivers: {} cells  lakes: {} cells", 100.0 * land / total, rivers, lakes);
     println!(
         "deposits: {}  settlements: {}  cultures: {}  features: {}  routes: {}",
