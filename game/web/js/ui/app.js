@@ -436,6 +436,7 @@ function ChronicleSection() {
         : shown().map((e) => {
             const months = monthsOf();
             return html`<div class="event">
+              <span class="e-dot" title=${e.k || ""} style=${`background:${eventColor(e)}`}></span>
               <span class="e-when">Y${Math.floor(e.m / 12) + 1} ${(months[((e.m % 12) + 12) % 12] || "").slice(0, 3)}</span>
               <span>${e.text}</span>
             </div>`;
