@@ -100,6 +100,7 @@ def generate(req: GenerateRequest):
         ("tamp", w.tamp),
         ("precip", w.precip),
         ("discharge", w.discharge),
+        ("fertility", w.fertility),
         ("biomes", w.biomes),
         ("flags", w.flags()),
     ])
@@ -110,12 +111,15 @@ def generate(req: GenerateRequest):
 def tick(world_id: str, req: TickRequest):
     w = _get_world(world_id)
     with _LOCK:
-        events = w.tick(req.months)
-    return {
+        res = w.tick(req.months)
+    out = {
         "month": w.month,
         "settlements": w.settlements,
-        "events": events,
+        "events": res["events"],
     }
+    if res["founded"]:
+        out["routes"] = w.routes
+    return out
 
 
 _WEB = Path(__file__).resolve().parent.parent / "web"

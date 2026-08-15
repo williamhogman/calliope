@@ -221,7 +221,7 @@ def place_resources(world, seed):
 
 
 def resource_meta():
-    return {
+    meta = {
         name: {
             "category": category(name),
             "abundance": abundance(name),
@@ -231,3 +231,9 @@ def resource_meta():
         }
         for name in ALL_PLACEABLE
     }
+    # grain is a produced good (fertile farmland), not a map deposit
+    meta["grain"] = {
+        "category": "food", "abundance": "common", "requires": "farming",
+        "isa": ["food"], "color": "#e3c96b", "virtual": True,
+    }
+    return meta

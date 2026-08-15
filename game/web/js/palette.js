@@ -80,3 +80,8 @@ export const SEA_GRAD = gradient([
 export const HYDRO_GRAD = gradient([
   [0, "#16283e"], [0.35, "#2b6cb0"], [0.75, "#57a8e0"], [1, "#a5ddff"],
 ]);
+
+export const FERT_GRAD = gradient([
+  [0, "#3a3630"], [0.15, "#6b5f42"], [0.35, "#8a7c3e"], [0.55, "#7d9a3c"],
+  [0.75, "#4d9c3f"], [1, "#1f8f4d"],
+]);
