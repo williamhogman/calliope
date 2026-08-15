@@ -82,6 +82,11 @@ async function generate(seed) {
     renderEvents($("events"), state.events, world.header.months);
     buildDepositIndex();
     updateDate();
+    state.popHistory = [{
+      m: state.month,
+      pop: world.header.settlements.reduce((a, s) => a + s.pop, 0),
+    }];
+    renderStats($("stats"), world, state.popHistory);
     history.replaceState(null, "", `?seed=${world.header.seed}&size=${world.header.size}`);
     $("seed").value = String(world.header.seed);
     markDirty();
@@ -130,6 +135,12 @@ async function advance(months) {
     state.version++;
     renderSettlements($("settlements"), $("pop-total"), res.settlements, onPickSettlement);
     updateDate();
+    state.popHistory.push({
+      m: res.month,
+      pop: res.settlements.reduce((a, s) => a + s.pop, 0),
+    });
+    if (state.popHistory.length > 600) state.popHistory.shift();
+    renderStats($("stats"), state.world, state.popHistory);
     markDirty();
   } catch (err) {
     console.error(err);
