@@ -364,14 +364,24 @@ function PeoplesSection() {
       return { ...c, n: mine.length, pop: mine.reduce((a, s) => a + s.pop, 0) };
     });
   };
+  const atWar = (id) => (wars() || []).some((w) => w.a === id || w.b === id);
   return Section({
     id: "peoples", title: "Peoples",
-    summary: () => `${cultures().length}`,
-    children: html`<div class="cultures">${() => rows().map(
+    summary: () => `${cultures().length}${(wars() || []).length ? " \u00b7 at war" : ""}`,
+    badge: () => ((wars() || []).length && !open.peoples ? "\u2694" : ""),
+    children: html`<div class="cultures">
+      ${() => ((wars() || []).length
+        ? wars().map((w) => {
+            const cs = cultures() || [];
+            return html`<div class="war-banner">\u2694 ${w.name} \u2014 ${cs[w.a]?.people || "?"} against ${cs[w.b]?.people || "?"}</div>`;
+          })
+        : "")}
+      ${() => rows().map(
       (c) => html`<div class="culture">
         <span class="s-dot" style=${`background:${c.color}`}></span>
         <span class="c-body">
-          <span class="c-name">${c.people}</span>
+          <span class="c-name">${c.people}${atWar(c.id) ? html` <span class="war-mark">\u2694</span>` : ""}</span>
+          ${c.ruler ? html`<span class="c-ruler dim">led by ${c.ruler}</span>` : ""}
           <span class="c-sub dim">${STYLE_LABEL[c.style] || c.style} \u00b7 ${c.n} settlement${c.n === 1 ? "" : "s"} \u00b7 ${fmt(c.pop)}</span>
         </span>
       </div>`
