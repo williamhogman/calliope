@@ -5,7 +5,7 @@ import time
 import numpy as np
 
 from game import biomes as biomes_mod
-from game import climate, constants, geo, hydrology, resources, settlements
+from game import climate, constants, geo, hydrology, resources, settlements, trade
 
 
 class World:
@@ -59,6 +59,7 @@ class World:
 
         t5 = time.time()
         self.settlements = settlements.found_settlements(wdict, seed)
+        self.routes = trade.build_routes(wdict, self.settlements)
         self.timings["settlements"] = time.time() - t5
 
         for s in self.settlements:
@@ -109,6 +110,7 @@ class World:
             "resources": resources.resource_meta(),
             "deposits": self.deposits,
             "settlements": self.settlements,
+            "routes": self.routes,
             "events": self.events[-60:],
             "timings": {k: round(v, 3) for k, v in self.timings.items()},
         }
