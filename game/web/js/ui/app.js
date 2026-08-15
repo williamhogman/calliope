@@ -6,7 +6,7 @@ import { render } from "solid-js/web";
 import html from "solid-js/html";
 
 import {
-  world, settlements, cultures, events, month, playing, speed,
+  world, settlements, cultures, wars, events, month, playing, speed,
   worldSize, setWorldSize, busy, layer, overlays, selected, hoverInfo,
   popHistory, open, toggleOpen, seenEvents, setSeenEvents,
 } from "./state.js";

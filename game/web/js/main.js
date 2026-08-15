@@ -6,7 +6,7 @@ import { Renderer } from "./render.js";
 import { View } from "./view.js";
 import { mountUI } from "./ui/app.js";
 import {
-  world, setWorld, setSettlements, setCultures, setEvents, events,
+  world, setWorld, setSettlements, setCultures, setWars, setEvents, events,
   month, setMonth, playing, setPlaying, speed, setSpeed,
   worldSize, setWorldSize, setBusy, layer, setLayer, overlays, setOverlays,
   selected, setSelected, setHoverInfo, popHistory, setPopHistory, setSeenEvents,
@@ -82,6 +82,7 @@ async function generate(rawSeed) {
     setSeenEvents((w.header.events || []).length);
     setSettlements(w.header.settlements);
     setCultures(w.header.cultures || []);
+    setWars(w.header.wars || []);
     renderer.setWorld(w);
     view.fit(w.header.width || w.header.size, w.header.size);
     buildDepositIndex(w);
@@ -128,6 +129,11 @@ async function advance(months) {
       w.header.routes = res.routes;
       renderer.setRoutes(res.routes); // colonies joined the network
     }
+    if (res.cultures) {
+      w.header.cultures = res.cultures;
+      setCultures(res.cultures);
+    }
+    if (res.wars) setWars(res.wars);
     if (res.events?.length) {
       setEvents([...events(), ...res.events].slice(-200));
     }

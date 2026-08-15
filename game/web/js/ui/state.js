@@ -9,6 +9,7 @@ import { createStore } from "solid-js/store";
 export const [world, setWorld] = createSignal(null); // {header, arrays}
 export const [settlements, setSettlements] = createSignal([]);
 export const [cultures, setCultures] = createSignal([]);
+export const [wars, setWars] = createSignal([]);
 export const [events, setEvents] = createSignal([]);
 export const [month, setMonth] = createSignal(0);
 export const [playing, setPlaying] = createSignal(false);
