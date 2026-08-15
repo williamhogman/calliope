@@ -56,6 +56,35 @@ export class Renderer {
     let max = 0;
     for (let i = 0; i < d.length; i++) if (d[i] > max) max = d[i];
     this.dischargeLogMax = Math.log1p(max);
+
+    // trade route geometry (cumulative lengths for caravan animation)
+    this.routes = (world.header.routes || []).map((r, idx) => {
+      const pts = r.path;
+      const cum = [0];
+      for (let i = 1; i < pts.length; i++) {
+        const dx = pts[i][0] - pts[i - 1][0];
+        const dy = pts[i][1] - pts[i - 1][1];
+        cum.push(cum[i - 1] + Math.hypot(dx, dy));
+      }
+      return { ...r, pts, cum, total: cum[cum.length - 1] || 1, phase: (idx * 0.37) % 1 };
+    });
+  }
+
+  routePoint(route, t) {
+    const target = t * route.total;
+    const { pts, cum } = route;
+    let lo = 0, hi = cum.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cum[mid] < target) lo = mid + 1; else hi = mid;
+    }
+    const i = Math.max(1, lo);
+    const seg = cum[i] - cum[i - 1] || 1;
+    const f = (target - cum[i - 1]) / seg;
+    return [
+      pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f,
+      pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f,
+    ];
   }
 
   monthTemp(month) {
@@ -261,9 +290,49 @@ export class Renderer {
     ctx.restore();
 
     // vector overlays in screen space
+    if (state.overlays.routes) this._drawRoutes(ctx, view, state);
     if (state.overlays.resources) this._drawDeposits(ctx, view);
     if (state.overlays.settlements) this._drawSettlements(ctx, view, state);
     if (hover && view.scale > 4) this._drawHover(ctx, view, hover);
+  }
+
+  _drawRoutes(ctx, view, state) {
+    const s = view.scale;
+    ctx.save();
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.setLineDash([6, 5]);
+    ctx.strokeStyle = "rgba(224, 196, 140, 0.55)";
+    ctx.lineWidth = Math.min(2.2, Math.max(1.1, s * 0.16));
+    for (const r of this.routes) {
+      ctx.beginPath();
+      for (let i = 0; i < r.pts.length; i++) {
+        const px = view.tx + (r.pts[i][0] + 0.5) * s;
+        const py = view.ty + (r.pts[i][1] + 0.5) * s;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    // caravans while time flows
+    if (state.playing) {
+      const now = performance.now() / 1000;
+      for (const r of this.routes) {
+        const t = ((now / 14 + r.phase) % 1);
+        const tt = t < 0.5 ? t * 2 : (1 - t) * 2; // there and back again
+        const [wx, wy] = this.routePoint(r, tt);
+        const px = view.tx + (wx + 0.5) * s;
+        const py = view.ty + (wy + 0.5) * s;
+        ctx.beginPath();
+        ctx.arc(px, py, 2.6, 0, Math.PI * 2);
+        ctx.fillStyle = "#f2d9a0";
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(0,0,0,0.65)";
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   _drawDeposits(ctx, view) {
