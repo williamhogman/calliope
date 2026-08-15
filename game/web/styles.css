@@ -524,7 +524,166 @@ button {
 @media (max-width: 1120px) {
   .inspector { max-width: calc(100vw - 40px); bottom: 12px; }
 }
-@media (max-width: 960px) {
+@media (min-width: 761px) and (max-width: 960px) {
   .panel { width: 220px; }
   .panel-right { display: none; }
+}
+
+/* ---------- mobile chrome ---------- */
+
+#bar-root { display: none; }
+.inspector .i-close { display: none; }
+
+@media (max-width: 760px) {
+  #bar-root { display: contents; }
+
+  /* panels become bottom sheets driven by the tab bar */
+  .panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: min(68vh, 540px);
+    border-radius: 18px 18px 0 0;
+    border-left: 0;
+    border-right: 0;
+    border-bottom: 0;
+    box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.55);
+    transform: translateY(106%);
+    transition: transform 0.32s cubic-bezier(0.32, 0.72, 0.28, 1);
+    z-index: 15;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  .panel-left, .panel-right { left: 0; right: 0; width: auto; display: block; }
+  .panel.sheet-open { transform: translateY(0); }
+  .panel::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 4px;
+    margin: 10px auto 0;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.22);
+  }
+
+  .brand { padding: 10px 18px 12px; }
+  .brand h1 { font-size: 20px; }
+
+  /* fatter touch targets */
+  .group-head { padding: 14px 18px; }
+  .option { padding: 11px 10px; }
+  .settlement { padding: 9px 8px; }
+  .icon-btn { width: 40px; height: 40px; }
+  .seg button { padding: 10px 0; }
+  input[type="text"] { padding: 10px 12px; font-size: 14px; }
+  button, .option, .settlement {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 6, 10, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s;
+    z-index: 14;
+  }
+  .scrim.show { opacity: 1; pointer-events: auto; }
+
+  /* bottom tab bar */
+  .mbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+    background: rgba(13, 18, 28, 0.94);
+    border-top: 1px solid var(--panel-border);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    z-index: 16;
+  }
+  .mtab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 6px 4px;
+    color: var(--dim);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    position: relative;
+    border-radius: 10px;
+    transition: color 0.15s;
+  }
+  .mtab svg { width: 21px; height: 21px; }
+  .mtab.active { color: var(--accent); }
+  .mtab .badge { position: absolute; top: 2px; left: calc(50% + 10px); }
+  .mtime { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
+  .mplay {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #191307;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 6px 18px rgba(212, 169, 74, 0.35);
+    transition: filter 0.15s, transform 0.05s;
+  }
+  .mplay:active { transform: scale(0.96); }
+  .mdate {
+    font: 600 11px "Cinzel", serif;
+    letter-spacing: 0.04em;
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* floating cards sit above the bar */
+  .detail {
+    top: auto;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    z-index: 13;
+  }
+  .inspector {
+    left: 8px;
+    right: 8px;
+    transform: none;
+    width: auto;
+    max-width: none;
+    bottom: calc(78px + env(safe-area-inset-bottom));
+    pointer-events: auto;
+    justify-content: flex-start;
+    gap: 6px 12px;
+    padding: 9px 34px 9px 12px;
+    font-size: 11.5px;
+  }
+  .inspector .i-close {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 28px;
+    height: 28px;
+    color: var(--dim);
+    font-size: 17px;
+    line-height: 1;
+    border-radius: 8px;
+  }
+
+  .toast { max-width: calc(100vw - 24px); text-align: center; }
 }

@@ -109,6 +109,8 @@ impl World {
             &hydro.rivers,
             &hydro.lakes,
             &hydro.discharge,
+            &tmean,
+            &precip,
             seed,
         );
         timings.push(("naming", now_ms() - t5));
