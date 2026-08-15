@@ -126,6 +126,7 @@ def tick_settlements(world, month_abs, rng):
             r *= 0.25
         elif t_now < 0.0:
             r *= 0.6
+        r *= 1.0 + 0.04 * min(s.get("connections", 0), 4)  # trade bonus
         k = _capacity(s)
         pop = s["pop"]
         growth = pop * r * (1.0 - pop / k)
