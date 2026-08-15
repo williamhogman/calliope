@@ -4,4 +4,4 @@ metadata:
   name: 99-dev
 spec:
   purpose: dev
-  command: "bash -c 'exec .venv/bin/uvicorn game.server:app --host 0.0.0.0 --port 8080 --app-dir game --reload --reload-dir game/game'"
+  command: "bash -c 'exec .venv/bin/uvicorn game.server:app --host 0.0.0.0 --port 8080 --app-dir game'"
