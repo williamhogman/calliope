@@ -542,6 +542,7 @@ impl World {
             events.push(Event {
                 m: month_abs,
                 s: name.clone(),
+                k: "found".to_string(),
                 text: format!("Settlers out of {} raise {}{}", pname, name, place),
             });
         }
@@ -561,11 +562,38 @@ impl World {
                 founded = true;
                 new_events.extend(col_evs);
             }
+            let chron_evs = chronicle::monthly(
+                &mut self.chron,
+                &mut self.rng,
+                &mut self.taken,
+                self.month,
+                &mut self.settlements,
+                &self.cultures,
+                &self.features,
+                &self.world_name,
+            );
+            new_events.extend(chron_evs);
         }
         self.events.extend(new_events.iter().cloned());
         let keep = self.events.len().saturating_sub(200);
         self.events.drain(..keep);
         (new_events, founded)
+    }
+
+    /// Cultures with their current ruler attached, for the client.
+    fn cultures_json(&self) -> Value {
+        let arr: Vec<Value> = self
+            .cultures
+            .iter()
+            .map(|c| {
+                let mut v = serde_json::to_value(c).unwrap();
+                if let Some(r) = self.chron.rulers.iter().find(|r| r.culture == c.id) {
+                    v["ruler"] = json!(r.title());
+                }
+                v
+            })
+            .collect();
+        Value::Array(arr)
     }
 
     pub fn tick_json(&mut self, months: i64) -> String {
@@ -574,6 +602,8 @@ impl World {
             "month": self.month,
             "settlements": self.settlements,
             "events": events,
+            "cultures": self.cultures_json(),
+            "wars": self.chron.wars,
         });
         if founded {
             out["routes"] = json!(self.routes);
