@@ -763,32 +763,42 @@ impl World {
 
         // --- discovery: hidden seams within a town's ranging distance may
         // come to light; rarer metals hide longer, better arts search wider.
+        // Beyond the home range there is a second, thinner channel — the far
+        // venture: prospecting parties that push into wild country, so even
+        // mountain gold no town can reach is found in the fullness of time.
         let mut found: Vec<(usize, usize)> = Vec::new();
         for (di, d) in self.deposits.iter().enumerate() {
             if d.known {
                 continue;
             }
-            let mut best: Option<(f64, f64, usize)> = None;
+            // closest town, measured in multiples of its own ranging distance
+            let mut best: Option<(f64, usize)> = None;
             for (si, s) in self.settlements.iter().enumerate() {
                 let reach = settlements::territory_radius(s.pop)
                     * 2.4
                     * mods.get(s.culture).map(|m| m.prospecting).unwrap_or(1.0);
                 let dx = (d.x - s.x) as f64;
                 let dy = (d.y - s.y) as f64;
-                let d2 = dx * dx + dy * dy;
-                if d2 <= reach * reach && best.map_or(true, |(b, _, _)| d2 < b) {
-                    best = Some((d2, reach, si));
+                let ratio = (dx * dx + dy * dy).sqrt() / reach.max(1e-9);
+                if best.map_or(true, |(b, _)| ratio < b) {
+                    best = Some((ratio, si));
                 }
             }
-            let Some((d2, reach, si)) = best else { continue };
+            let Some((ratio, si)) = best else { continue };
             let rarity = match resources::abundance(&d.r) {
                 "uncommon" => 0.6,
                 "rare" => 0.35,
                 "legendary" => 0.12,
                 _ => 1.0,
             };
-            let near = 1.0 - 0.65 * (d2.sqrt() / reach.max(1e-9));
-            if self.rng.gen::<f64>() < 0.007 * rarity * near {
+            let p = if ratio <= 1.0 {
+                0.012 * rarity * (1.0 - 0.65 * ratio) // combing the home range
+            } else if ratio <= 3.5 {
+                0.0018 * rarity // a far venture into unclaimed country
+            } else {
+                0.0
+            };
+            if p > 0.0 && self.rng.gen::<f64>() < p {
                 found.push((di, si));
             }
         }

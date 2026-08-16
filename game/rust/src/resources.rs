@@ -180,14 +180,15 @@ pub struct Deposit {
 }
 
 /// Chance a deposit starts the story already found. Everything that walks,
-/// grows or swims is plain to see; buried seams mostly are not.
+/// grows or swims is plain to see; buried seams mostly are not — the age of
+/// prospectors has to actually happen on stage.
 fn initial_known_p(name: &str) -> f64 {
     match name {
-        "stone" => 0.85,
-        "coal" | "copper" => 0.50,
-        "iron" => 0.45,
-        "silver" => 0.18,
-        "gold" => 0.10,
+        "stone" => 0.60,
+        "coal" | "copper" => 0.25,
+        "iron" => 0.20,
+        "silver" => 0.06,
+        "gold" => 0.03,
         "mithril" => 0.0,
         _ => 1.0,
     }
