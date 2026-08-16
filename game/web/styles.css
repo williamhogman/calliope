@@ -1063,6 +1063,37 @@ input { font: inherit; color: inherit; }
   letter-spacing: 0.34em;
   color: var(--dim);
 }
+.loading-bar {
+  margin: 14px auto 0;
+  width: 220px;
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.loading-bar-fill {
+  width: 0%;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.loading-abort {
+  margin-top: 18px;
+  padding: 5px 14px;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.loading-abort:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 
 /* ============================================================== mobile */
 

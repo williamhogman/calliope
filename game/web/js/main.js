@@ -5,6 +5,7 @@
 import {
   generateWorld, tickWorld, explainWorld, timingsWorld,
   storiesWorld, entitiesWorld, entityLogWorld, artifactsWorld,
+  abortGenerate, onWorkerLost, onWorkerRestored,
 } from "./net.js";
 import { Renderer } from "./render.js";
 import { createGpu, recreateGpuOnGl } from "./gpu.js";
@@ -222,53 +223,108 @@ function recordHistories(setts, marketRows, m) {
   ].slice(-600));
 }
 
+// The muse's stage lines — generation progress narration (E7.5).
+const STAGE_LINES = {
+  terrain: "RAISING THE LAND",
+  erosion: "CARVING THE VALLEYS",
+  climate: "BREATHING WIND AND RAIN",
+  hydrology: "DRAWING THE RIVERS",
+  biomes: "CLOTHING THE WILDS",
+  fertility: "SOWING THE SOILS",
+  naming: "NAMING WHAT IS",
+  resources: "HIDING THE DEEP SEAMS",
+  dawn: "WAKING THE FIRST PEOPLES",
+};
+
+function setLoadingProgress(p) {
+  const sub = $("loading-sub");
+  const fill = $("loading-fill");
+  if (!p) {
+    if (sub) sub.textContent = "THE MUSE IS SHAPING A WORLD";
+    if (fill) fill.style.width = "0%";
+    return;
+  }
+  if (sub) sub.textContent = STAGE_LINES[p.stage] || p.stage.toUpperCase();
+  if (fill) fill.style.width = `${Math.round((p.i / p.n) * 100)}%`;
+}
+
+// Everything the UI must do when a whole world arrives — used by generate
+// and by crash recovery (E7.10), which restores in place without refitting.
+function applyWorld(w, { fit = true } = {}) {
+  setWorld(w);
+  setMonth(w.header.month || 0);
+  version++;
+  setEvents(w.header.events || []);
+  setSeenEvents((w.header.events || []).length);
+  setSettlements(w.header.settlements);
+  setCultures(w.header.cultures || []);
+  setWars(w.header.wars || []);
+  setRuins(w.header.ruins || []);
+  setMarket(w.header.market || []);
+  setAreas(w.header.areas || null);
+  setMerchants(w.header.merchants || []);
+  renderer.setWorld(w);
+  renderer.gpu?.setWorld(w);
+  if (fit) view.fit(w.header.width || w.header.size, w.header.size);
+  buildDepositIndex(w);
+  popHistById = new Map();
+  priceHist = new Map();
+  setPopHistory([]);
+  setStories([]);
+  setEntities([]);
+  setArtifacts([]);
+  legendsAt = -1000;
+  refreshLegends(true); // the dawn already has a cast worth browsing
+  recordHistories(w.header.settlements, w.header.market, w.header.month || 0);
+  history.replaceState(null, "", `?seed=${w.header.seed}&size=${w.header.size}`);
+  markDirty();
+}
+
 async function generate(rawSeed) {
   const seed = seedFrom(rawSeed);
   setPlayingState(false);
   setSelection(null);
   setBusy(true);
+  setLoadingProgress(null);
   $("loading").classList.remove("fade");
   try {
-    const w = await generateWorld(seed, worldSize());
+    const w = await generateWorld(seed, worldSize(), setLoadingProgress);
     // stage timings live on a debug side channel, not the pack (E3.9)
     timingsWorld()
       .then((t) => console.debug("[calliope] generation timings (s)", t))
       .catch(() => {});
-    setWorld(w);
-    setMonth(w.header.month || 0);
-    version++;
-    setEvents(w.header.events || []);
-    setSeenEvents((w.header.events || []).length);
-    setSettlements(w.header.settlements);
-    setCultures(w.header.cultures || []);
-    setWars(w.header.wars || []);
-    setRuins(w.header.ruins || []);
-    setMarket(w.header.market || []);
-    setAreas(w.header.areas || null);
-    setMerchants(w.header.merchants || []);
-    renderer.setWorld(w);
-    renderer.gpu?.setWorld(w);
-    view.fit(w.header.width || w.header.size, w.header.size);
-    buildDepositIndex(w);
-    popHistById = new Map();
-    priceHist = new Map();
-    setPopHistory([]);
-    setStories([]);
-    setEntities([]);
-    setArtifacts([]);
-    legendsAt = -1000;
-    refreshLegends(true); // the dawn already has a cast worth browsing
-    recordHistories(w.header.settlements, w.header.market, w.header.month || 0);
-    history.replaceState(null, "", `?seed=${w.header.seed}&size=${w.header.size}`);
-    markDirty();
+    applyWorld(w);
   } catch (err) {
-    console.error(err);
-    pushToast({ kind: "error", text: `The muse falters: ${err.message}`, ttl: 9000 });
+    if (/abandoned/.test(err.message)) {
+      pushToast({ text: "The world was abandoned unfinished.", ttl: 5000 });
+    } else {
+      console.error(err);
+      pushToast({ kind: "error", text: `The muse falters: ${err.message}`, ttl: 9000 });
+    }
   } finally {
     setBusy(false);
     $("loading").classList.add("fade");
   }
 }
+
+// E7.4 — abandon a world mid-shaping; the previous world, if any, survives.
+$("loading-abort")?.addEventListener("click", () => abortGenerate());
+
+// E7.10 — the worker died mid-story: say so, hold the stage, and apply the
+// deterministically replayed world once the understudy catches up.
+onWorkerLost(() => {
+  setPlayingState(false);
+  setBusy(true);
+  setLoadingProgress(null);
+  $("loading").classList.remove("fade");
+  pushToast({ kind: "error", text: "The muse stumbled — reweaving the world…", ttl: 6000 });
+});
+onWorkerRestored((w) => {
+  applyWorld(w, { fit: false });
+  setBusy(false);
+  $("loading").classList.add("fade");
+  pushToast({ text: "The thread is rewoven; the chronicle stands.", ttl: 5000 });
+});
 
 // deposit lookup by cell (grid is width x height after ocean margins)
 let depositIndex = new Map();
