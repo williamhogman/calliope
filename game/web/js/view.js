@@ -19,8 +19,13 @@ export class View {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
     const pad = Math.min(40, w * 0.04);
-    this.scale = Math.min((w - pad * 2) / worldW, (h - pad * 2) / worldH);
-    this.minScale = this.scale * 0.5;
+    const contain = Math.min((w - pad * 2) / worldW, (h - pad * 2) / worldH);
+    // Contain on screens that roughly match the world's shape; when it would
+    // leave the map a thin band (portrait phones), start at cover instead —
+    // the map owns the screen, and pinching out still reaches the whole world.
+    const fill = Math.min((worldW * contain) / w, (worldH * contain) / h);
+    this.scale = fill < 0.6 ? Math.max(w / worldW, h / worldH) : contain;
+    this.minScale = contain * 0.5;
     this.tx = (w - worldW * this.scale) / 2;
     this.ty = (h - worldH * this.scale) / 2;
     this.onChange?.();
@@ -38,6 +43,33 @@ export class View {
     this.ty = h / 2 - wy * this.scale;
     this.onChange?.();
   }
+
+  // Smooth camera flight to a world point; any user input cancels it.
+  flyTo(wx, wy, scale, ms = 550) {
+    cancelAnimationFrame(this._flight);
+    const s1 = Math.max(this.minScale, Math.min(this.maxScale, scale || this.scale));
+    const w = this.canvas.clientWidth;
+    const h = this.canvas.clientHeight;
+    const from = { tx: this.tx, ty: this.ty, s: this.scale };
+    const to = { tx: w / 2 - wx * s1, ty: h / 2 - wy * s1, s: s1 };
+    const t0 = performance.now();
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+    const tick = (now) => {
+      const t = Math.min(1, (now - t0) / ms);
+      const k = ease(t);
+      // zoom interpolates in log space so the flight feels even
+      this.scale = from.s * Math.pow(to.s / from.s, k);
+      const ks = (this.scale - from.s) / (to.s - from.s || 1e-9);
+      const kk = to.s === from.s ? k : Math.max(0, Math.min(1, ks));
+      this.tx = from.tx + (to.tx - from.tx) * kk;
+      this.ty = from.ty + (to.ty - from.ty) * kk;
+      this.onChange?.();
+      if (t < 1) this._flight = requestAnimationFrame(tick);
+    };
+    this._flight = requestAnimationFrame(tick);
+  }
+
+  cancelFlight() { cancelAnimationFrame(this._flight); }
 
   _zoomAt(px, py, factor) {
     const ns = Math.max(this.minScale, Math.min(this.maxScale, this.scale * factor));

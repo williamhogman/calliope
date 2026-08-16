@@ -7,7 +7,7 @@ const ready = loadEngine();
 let world = null;
 
 self.onmessage = async (e) => {
-  const { id, op, seed, size, months } = e.data;
+  const { id, op, seed, size, months, kind, key } = e.data;
   try {
     const { WasmWorld } = await ready;
     if (op === "generate") {
@@ -21,6 +21,10 @@ self.onmessage = async (e) => {
     } else if (op === "tick") {
       if (!world) throw new Error("no world — generate one first");
       self.postMessage({ id, ok: true, json: world.tick(months) });
+    } else if (op === "explain") {
+      if (!world) throw new Error("no world — generate one first");
+      if (typeof world.explain !== "function") throw new Error("engine has no explain");
+      self.postMessage({ id, ok: true, json: world.explain(kind, key) });
     } else {
       throw new Error(`unknown op: ${op}`);
     }

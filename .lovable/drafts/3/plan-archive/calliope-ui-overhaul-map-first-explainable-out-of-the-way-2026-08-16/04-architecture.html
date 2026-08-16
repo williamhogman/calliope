@@ -1,0 +1,55 @@
+<svg viewBox="0 0 640 330" xmlns="http://www.w3.org/2000/svg" style="font-family: var(--font-sans);">
+  <!-- worker lane -->
+  <rect x="8" y="26" width="200" height="256" rx="8" fill="none" stroke="hsl(var(--border))" stroke-dasharray="4 3"/>
+  <text x="20" y="18" style="font-size:12px" fill="hsl(var(--muted-foreground))">web worker</text>
+  <rect x="28" y="46" width="160" height="64" rx="8" fill="none" stroke="hsl(var(--muted-foreground))"/>
+  <text x="108" y="72" text-anchor="middle" style="font-size:14px;font-weight:480" fill="hsl(var(--foreground))">Rust · WASM world</text>
+  <text x="108" y="92" text-anchor="middle" style="font-size:12px" fill="hsl(var(--muted-foreground))">generate · tick(months)</text>
+  <rect x="28" y="130" width="160" height="52" rx="8" fill="none" stroke="hsl(var(--accent))"/>
+  <text x="108" y="152" text-anchor="middle" style="font-size:13px;font-weight:480" fill="hsl(var(--foreground))">explain(kind, id)</text>
+  <text x="108" y="170" text-anchor="middle" style="font-size:12px" fill="hsl(var(--muted-foreground))">term ledger per stat</text>
+  <rect x="28" y="200" width="160" height="52" rx="8" fill="none" stroke="hsl(var(--accent))"/>
+  <text x="108" y="222" text-anchor="middle" style="font-size:13px;font-weight:480" fill="hsl(var(--foreground))">events(from, to)</text>
+  <text x="108" y="240" text-anchor="middle" style="font-size:12px" fill="hsl(var(--muted-foreground))">full chronicle, paged</text>
+
+  <!-- main lane -->
+  <rect x="300" y="26" width="332" height="256" rx="8" fill="none" stroke="hsl(var(--border))" stroke-dasharray="4 3"/>
+  <text x="312" y="18" style="font-size:12px" fill="hsl(var(--muted-foreground))">main thread</text>
+
+  <rect x="320" y="46" width="140" height="50" rx="8" fill="hsl(var(--muted))" stroke="hsl(var(--muted-foreground))"/>
+  <text x="390" y="67" text-anchor="middle" style="font-size:13px;font-weight:480" fill="hsl(var(--foreground))">wgpu canvas</text>
+  <text x="390" y="85" text-anchor="middle" style="font-size:11px" fill="hsl(var(--muted-foreground))">terrain · climate · tint</text>
+
+  <rect x="320" y="112" width="140" height="50" rx="8" fill="hsl(var(--muted))" stroke="hsl(var(--muted-foreground))"/>
+  <text x="390" y="133" text-anchor="middle" style="font-size:13px;font-weight:480" fill="hsl(var(--foreground))">2D vector canvas</text>
+  <text x="390" y="151" text-anchor="middle" style="font-size:11px" fill="hsl(var(--muted-foreground))">markers · labels · routes</text>
+
+  <rect x="320" y="178" width="140" height="50" rx="8" fill="hsl(var(--muted))" stroke="hsl(var(--muted-foreground))"/>
+  <text x="390" y="199" text-anchor="middle" style="font-size:13px;font-weight:480" fill="hsl(var(--foreground))">Solid DOM chrome</text>
+  <text x="390" y="217" text-anchor="middle" style="font-size:11px" fill="hsl(var(--muted-foreground))">inspector · outliner · strips</text>
+
+  <rect x="484" y="112" width="132" height="50" rx="8" fill="none" stroke="hsl(var(--muted-foreground))"/>
+  <text x="550" y="133" text-anchor="middle" style="font-size:13px;font-weight:480" fill="hsl(var(--foreground))">picking index</text>
+  <text x="550" y="151" text-anchor="middle" style="font-size:11px" fill="hsl(var(--muted-foreground))">towns · routes · deposits</text>
+
+  <rect x="484" y="178" width="132" height="50" rx="8" fill="none" stroke="hsl(var(--muted-foreground))"/>
+  <text x="550" y="199" text-anchor="middle" style="font-size:13px;font-weight:480" fill="hsl(var(--foreground))">normalized store</text>
+  <text x="550" y="217" text-anchor="middle" style="font-size:11px" fill="hsl(var(--muted-foreground))">by id · fine-grained</text>
+
+  <!-- wires -->
+  <defs>
+    <marker id="ch" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+      <path d="M0,0 L7,3.5 L0,7 z" fill="hsl(var(--muted-foreground))"/>
+    </marker>
+  </defs>
+  <line x1="188" y1="71" x2="320" y2="71" stroke="hsl(var(--muted-foreground))" marker-end="url(#ch)"/>
+  <text x="254" y="62" text-anchor="middle" style="font-size:11px;paint-order:stroke;stroke:hsl(var(--background));stroke-width:4" fill="hsl(var(--muted-foreground))">pack · typed arrays</text>
+  <line x1="188" y1="156" x2="320" y2="156" stroke="hsl(var(--muted-foreground))" stroke-dasharray="4 3" marker-end="url(#ch)"/>
+  <text x="254" y="147" text-anchor="middle" style="font-size:11px;paint-order:stroke;stroke:hsl(var(--background));stroke-width:4" fill="hsl(var(--muted-foreground))">on demand</text>
+  <line x1="188" y1="226" x2="320" y2="212" stroke="hsl(var(--muted-foreground))" stroke-dasharray="4 3" marker-end="url(#ch)"/>
+  <line x1="460" y1="137" x2="484" y2="137" stroke="hsl(var(--muted-foreground))" marker-end="url(#ch)"/>
+  <line x1="460" y1="203" x2="484" y2="203" stroke="hsl(var(--muted-foreground))" marker-end="url(#ch)"/>
+
+  <text x="8" y="312" style="font-size:12px" fill="hsl(var(--muted-foreground))">Existing pipeline stays: sim in the worker, all per-entity map drawing on canvas, DOM only for chrome and the</text>
+  <text x="8" y="328" style="font-size:12px" fill="hsl(var(--muted-foreground))">active selection. New engine surface (accented): the explain ledger and paged chronicle — the UI never invents a why.</text>
+</svg>

@@ -1,18 +1,25 @@
-// Calliope client: simulation driver, canvas orchestration, inspector logic.
-// All panel DOM is rendered by the Solid UI in ./ui/app.js from ./ui/state.js.
+// Calliope client: simulation driver, canvas orchestration, picking,
+// camera flights and notifications. All chrome DOM is the Solid UI in
+// ./ui/app.js reading ./ui/state.js.
 
-import { generateWorld, tickWorld } from "./net.js";
+import { generateWorld, tickWorld, explainWorld } from "./net.js";
 import { Renderer } from "./render.js";
 import { createGpu, recreateGpuOnGl } from "./gpu.js";
 import { View } from "./view.js";
+import { pick } from "./picking.js";
 import { mountUI } from "./ui/app.js";
 import {
   world, setWorld, setSettlements, setCultures, setWars, setEvents, events,
   month, setMonth, playing, setPlaying, speed, setSpeed,
   worldSize, setWorldSize, setBusy, layer, setLayer, overlays, setOverlays,
-  selected, setSelected, setHoverInfo, popHistory, setPopHistory, setSeenEvents,
-  setMarket, setDepositsTick,
+  selection, setSelection, setHoverTip,
+  popHistory, setPopHistory, setSeenEvents,
+  setMarket, setDepositsTick, setMarketTick, pushToast,
+  searchOpen, setSearchOpen, closePopovers,
+  overlaysOpen, setOverlaysOpen, legendOpen, setLegendOpen,
+  worldMenuOpen, notifOpen, notif, isMobile, sheet, setSheet,
 } from "./ui/state.js";
+import { LAYERS, eventFamily, eventColor } from "./ui/config.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("map");
@@ -150,13 +157,15 @@ function frame(ts) {
   if (playing() && (overlays.routes || overlays.winds)) dirty = true;
   if (dirty) {
     dirty = false;
+    const sel = selection();
     renderer.draw({
       layer: layer(),
       overlays,
       month: month(),
       version,
       playing: playing(),
-      selectedId: selected()?.id ?? null,
+      selectedId: sel?.kind === "settlement" ? sel.id : null,
+      selectedCell: sel?.kind === "cell" ? sel : null,
     }, view, hover);
     window.__calliope.draws = (window.__calliope.draws || 0) + 1;
   }
@@ -164,14 +173,6 @@ function frame(ts) {
 }
 requestAnimationFrame(frame);
 window.addEventListener("resize", markDirty);
-
-function toast(msg, ms = 4200) {
-  const el = $("toast");
-  el.textContent = msg;
-  el.classList.remove("hidden");
-  clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.add("hidden"), ms);
-}
 
 // ---------- generation ----------
 
@@ -187,10 +188,36 @@ function seedFrom(raw) {
   return (h >>> 0) % 2147483647 || 1;
 }
 
+// per-entity histories, rebuilt for every world
+let popHistById = new Map();   // settlement id -> [pop,...]
+let priceHist = new Map();     // good -> [price,...]
+
+function recordHistories(setts, marketRows, m) {
+  for (const s of setts) {
+    let h = popHistById.get(s.id);
+    if (!h) { h = []; popHistById.set(s.id, h); }
+    h.push(s.pop);
+    if (h.length > 480) h.shift();
+  }
+  if (marketRows) {
+    for (const r of marketRows) {
+      let h = priceHist.get(r.g);
+      if (!h) { h = []; priceHist.set(r.g, h); }
+      h.push(r.p);
+      if (h.length > 480) h.shift();
+    }
+    setMarketTick((t) => t + 1);
+  }
+  setPopHistory([
+    ...popHistory(),
+    { m, pop: setts.reduce((a, s) => a + s.pop, 0) },
+  ].slice(-600));
+}
+
 async function generate(rawSeed) {
   const seed = seedFrom(rawSeed);
   setPlayingState(false);
-  setSelected(null);
+  setSelection(null);
   setBusy(true);
   $("loading").classList.remove("fade");
   try {
@@ -208,15 +235,15 @@ async function generate(rawSeed) {
     renderer.gpu?.setWorld(w);
     view.fit(w.header.width || w.header.size, w.header.size);
     buildDepositIndex(w);
-    setPopHistory([{
-      m: w.header.month || 0,
-      pop: w.header.settlements.reduce((a, s) => a + s.pop, 0),
-    }]);
+    popHistById = new Map();
+    priceHist = new Map();
+    setPopHistory([]);
+    recordHistories(w.header.settlements, w.header.market, w.header.month || 0);
     history.replaceState(null, "", `?seed=${w.header.seed}&size=${w.header.size}`);
     markDirty();
   } catch (err) {
     console.error(err);
-    toast(`The muse falters: ${err.message}`);
+    pushToast({ kind: "error", text: `The muse falters: ${err.message}`, ttl: 9000 });
   } finally {
     setBusy(false);
     $("loading").classList.add("fade");
@@ -265,21 +292,16 @@ async function advance(months) {
       setDepositsTick((t) => t + 1);
     }
     if (res.events?.length) {
-      setEvents([...events(), ...res.events].slice(-200));
+      setEvents([...events(), ...res.events]);
+      notifyEvents(res.events);
     }
     version++;
-    // keep the selected settlement fresh across ticks
-    const sel = selected();
-    if (sel) setSelected(res.settlements.find((o) => o.id === sel.id) || null);
-    setPopHistory([
-      ...popHistory(),
-      { m: res.month, pop: res.settlements.reduce((a, s) => a + s.pop, 0) },
-    ].slice(-600));
+    recordHistories(res.settlements, res.market, res.month);
     markDirty();
   } catch (err) {
     console.error(err);
     setPlayingState(false);
-    toast(`Time refused to pass: ${err.message}`);
+    pushToast({ kind: "error", text: `Time refused to pass: ${err.message}`, ttl: 9000 });
   } finally {
     tickInFlight = false;
   }
@@ -292,26 +314,77 @@ function setPlayingState(on) {
   if (on) playTimer = setInterval(() => advance(speed()), 1000);
 }
 
+// ---------- notifications ----------
+
+// Kinds worth interrupting for, even inside an enabled family.
+const TOAST_KINDS = new Set([
+  "war", "found", "ruler", "wonder", "disaster", "discovery",
+  "depletion", "society", "tech", "myth",
+]);
+
+function locateEvent(e) {
+  const w = world();
+  if (!w || !e.s) return null;
+  const s = w.header.settlements.find((x) => x.name === e.s);
+  if (s) return { x: s.x + 0.5, y: s.y + 0.5 };
+  const f = (w.header.features || []).find((x) => x.name === e.s);
+  if (f) return { x: f.x, y: f.y };
+  return null;
+}
+
+
+function notifyEvents(list) {
+  let shown = 0;
+  for (const e of list) {
+    if (shown >= 2) break; // never bury the map in notices
+    if (!TOAST_KINDS.has(e.k)) continue;
+    if (!notif[eventFamily(e)]) continue;
+    const at = locateEvent(e);
+    pushToast({
+      text: e.text,
+      sub: e.s || "",
+      color: eventColor(e),
+      x: at?.x, y: at?.y,
+      ttl: 7000,
+    });
+    shown++;
+  }
+}
+
 // ---------- selection ----------
 
-function pickSettlement(s) {
-  view.centerOn(s.x + 0.5, s.y + 0.5, Math.max(view.scale, 6));
-  setSelected(s);
+function select(sel) {
+  closePopovers();
+  if (!sel) {
+    setSelection(null);
+    markDirty();
+    return;
+  }
+  if (sel.kind === "settlement") {
+    const s = world()?.header.settlements.find((x) => x.id === sel.id);
+    if (s && sel.fly) view.flyTo(s.x + 0.5, s.y + 0.5, Math.max(view.scale, 6));
+  } else if (sel.kind === "feature" && sel.fly) {
+    const f = (world()?.header.features || [])[sel.id];
+    if (f) {
+      const big = f.t === "ocean" || f.t === "continent" || f.t === "sea";
+      view.flyTo(f.x, f.y, big ? Math.max(view.scale, 1.6) : Math.max(view.scale, 5));
+    }
+  } else if (sel.kind === "deposit" && sel.fly) {
+    view.flyTo(sel.x + 0.5, sel.y + 0.5, Math.max(view.scale, 9));
+  }
+  setSelection(sel);
   markDirty();
 }
 
-function closeDetail() {
-  setSelected(null);
-  markDirty();
-}
-
-// tap/click (not drag, not pinch) selects a settlement; on touch a tap on
-// open ground inspects the cell instead — there is no hover on a phone.
+// tap/click (not drag, not pinch) picks the most specific thing under the
+// cursor. On touch there is no hover, so a tap on ground inspects the cell.
 let downAt = null, pointersDown = 0, multiTouch = false;
 canvas.addEventListener("pointerdown", (e) => {
   pointersDown++;
   if (pointersDown > 1) multiTouch = true;
   downAt = [e.clientX, e.clientY];
+  view.cancelFlight();
+  closePopovers();
 });
 canvas.addEventListener("pointercancel", () => {
   pointersDown = Math.max(0, pointersDown - 1);
@@ -328,38 +401,30 @@ canvas.addEventListener("pointerup", (e) => {
   downAt = null;
   if (moved > 5) return;
   const touch = e.pointerType === "touch";
-  let best = null, bestD = Infinity;
-  for (const s of w.header.settlements) {
-    const sx = view.tx + (s.x + 0.5) * view.scale;
-    const sy = view.ty + (s.y + 0.5) * view.scale;
-    const d = Math.hypot(e.clientX - sx, e.clientY - sy);
-    if (d < bestD) { bestD = d; best = s; }
+  const hit = pick(w, view, renderer, e.clientX, e.clientY, {
+    touch,
+    resourcesOn: overlays.resources,
+    labelsOn: overlays.labels,
+  });
+  if (touch) { hover = null; setHoverTip(null); }
+  if (!hit) { select(null); return; }
+  if (hit.kind === "cell") {
+    // clicking open ground: deselect if something was selected, else inspect
+    const cur = selection();
+    if (cur && cur.kind !== "cell") { select(null); return; }
+    if (cur && cur.kind === "cell" && cur.x === hit.x && cur.y === hit.y) { select(null); return; }
   }
-  if (best && bestD <= (touch ? 22 : 14)) {
-    if (touch) { hover = null; setHoverInfo(null); }
-    pickSettlement(best);
-    return;
-  }
-  if (selected()) closeDetail();
-  if (touch) {
-    const [wx, wy] = view.screenToWorld(e.clientX, e.clientY);
-    const cx = Math.floor(wx), cy = Math.floor(wy);
-    const W = w.header.width || w.header.size;
-    const H = w.header.size;
-    hover = (cx >= 0 && cy >= 0 && cx < W && cy < H) ? { x: cx, y: cy } : null;
-    setHoverInfo(hover ? inspect(cx, cy) : null);
-    markDirty();
-  }
+  select(hit);
 });
 
-// ---------- inspector ----------
+// ---------- inspector data ----------
 
 const WIND_NAME = (lat) =>
   lat < 30 ? ["Trade winds", "E \u2192 W", -1]
     : lat < 60 ? ["Westerlies", "W \u2192 E", 1]
       : ["Polar easterlies", "E \u2192 W", -1];
 
-function explain(w, cx, cy, i, h, isWater) {
+function cellNotes(w, cx, cy, i, h, isWater) {
   const W = w.header.width || w.header.size;
   const H = w.header.size;
   const { height, precip, tamp, flags, fertility } = w.arrays;
@@ -418,7 +483,7 @@ const WATER_FEATURES = new Set(["ocean", "sea", "lake", "river", "bay", "strait"
 
 function nearestFeature(w, cx, cy, isWater) {
   const feats = w.header.features || [];
-  let best = null, bd = Infinity, bestPri = Infinity;
+  let best = null, bestPri = Infinity;
   for (const f of feats) {
     const waterKind = WATER_FEATURES.has(f.t);
     if (waterKind !== isWater) continue;
@@ -426,12 +491,12 @@ function nearestFeature(w, cx, cy, isWater) {
     const d = Math.hypot(f.x - cx, f.y - cy);
     // prefer the tightest fitting name: a bay over the ocean, a cape over a continent
     const pri = d / Math.max(reach, 1);
-    if (d < reach && pri < bestPri) { bestPri = pri; bd = d; best = f; }
+    if (d < reach && pri < bestPri) { bestPri = pri; best = f; }
   }
   return best ? best.name : null;
 }
 
-function inspect(cx, cy) {
+function inspectCell(cx, cy) {
   const w = world();
   if (!w) return null;
   const W = w.header.width || w.header.size;
@@ -493,49 +558,144 @@ function inspect(cx, cy) {
     resources: resources.slice(0, 3),
     territory,
     place: nearestFeature(w, cx, cy, h < 0),
-    notes: explain(w, cx, cy, i, h, isWater),
+    notes: cellNotes(w, cx, cy, i, h, isWater),
   };
 }
 
+// ---------- hover tooltip ----------
+
+let tipTimer = 0;
 canvas.addEventListener("pointermove", (e) => {
   if (e.pointerType === "touch") return; // touch pans; taps inspect
   const w = world();
   if (!w) return;
+  if (e.buttons) { hover = null; setHoverTip(null); return; } // dragging
   const [wx, wy] = view.screenToWorld(e.clientX, e.clientY);
   const cx = Math.floor(wx), cy = Math.floor(wy);
-  if (hover && hover.x === cx && hover.y === cy) return;
   const W = w.header.width || w.header.size;
   const H = w.header.size;
-  hover = (cx >= 0 && cy >= 0 && cx < W && cy < H) ? { x: cx, y: cy } : null;
-  setHoverInfo(hover ? inspect(cx, cy) : null);
+  const inWorld = cx >= 0 && cy >= 0 && cx < W && cy < H;
+  hover = inWorld ? { x: cx, y: cy } : null;
   markDirty();
+  clearTimeout(tipTimer);
+  if (!inWorld) { setHoverTip(null); return; }
+  // a light, throttled tooltip — the full story arrives on click
+  tipTimer = setTimeout(() => {
+    // settlement under cursor? tease its name instead of the ground
+    const hit = pick(w, view, renderer, e.clientX, e.clientY, {
+      resourcesOn: overlays.resources, labelsOn: false,
+    });
+    if (hit?.kind === "settlement") {
+      const s = w.header.settlements.find((x) => x.id === hit.id);
+      const c = (w.header.cultures || [])[s?.culture];
+      if (s) {
+        setHoverTip({
+          px: e.clientX, py: e.clientY,
+          title: s.name,
+          sub: `${s.tier}${c ? ` of the ${c.people}` : ""} \u00b7 ${s.pop.toLocaleString("en-US")} souls`,
+          line: "click to inspect",
+        });
+        return;
+      }
+    }
+    if (hit?.kind === "deposit") {
+      const meta = w.header.resources[hit.id] || {};
+      setHoverTip({
+        px: e.clientX, py: e.clientY,
+        title: hit.id,
+        sub: `${meta.category || "resource"} \u00b7 ${meta.abundance || ""}`,
+        line: "click to inspect",
+      });
+      return;
+    }
+    const info = inspectCell(cx, cy);
+    if (!info) { setHoverTip(null); return; }
+    setHoverTip({
+      px: e.clientX, py: e.clientY,
+      title: info.place || info.biome,
+      sub: info.place
+        ? `${info.biome} \u00b7 ${info.elevation} m \u00b7 ${info.tempNow}\u00b0C`
+        : `${info.elevation} m \u00b7 ${info.tempNow}\u00b0C${info.isWater ? "" : ` \u00b7 ${info.precip} mm`}`,
+      line: info.notes?.[0] || (info.territory || ""),
+    });
+  }, 90);
 });
 canvas.addEventListener("pointerleave", (e) => {
-  if (e.pointerType === "touch") return; // keep tapped info up after the finger lifts
+  if (e.pointerType === "touch") return;
   hover = null;
-  setHoverInfo(null);
+  clearTimeout(tipTimer);
+  setHoverTip(null);
   markDirty();
 });
 
-// ---------- controls ----------
+// ---------- explain (term ledgers from the engine) ----------
 
-mountUI({
+async function explain(kind, id) {
+  try {
+    return await explainWorld(kind, String(id));
+  } catch {
+    return null; // older engine or unknown entity: the dock just omits the ledger
+  }
+}
+
+// ---------- actions ----------
+
+function fitView() {
+  const w = world();
+  if (w) view.fit(w.header.width || w.header.size, w.header.size);
+}
+
+const actions = {
   generate,
   setLayer: (id) => { setLayer(id); markDirty(); },
   toggleOverlay: (id) => { setOverlays(id, !overlays[id]); markDirty(); },
   playPause: () => setPlayingState(!playing()),
   step: () => advance(1),
   setSpeed,
-  pickSettlement,
-  closeDetail,
-  clearHover: () => { hover = null; setHoverInfo(null); markDirty(); },
-});
+  select,
+  flyTo: (x, y, scale) => view.flyTo(x, y, Math.max(view.scale, scale || 6)),
+  fitView,
+  explain,
+  inspectCell,
+  locateEvent,
+  popHistoryOf: (id) => popHistById.get(id) || [],
+  priceHistoryOf: (g) => priceHist.get(g) || [],
+};
+
+mountUI(actions);
+
+// ---------- keyboard ----------
 
 window.addEventListener("keydown", (e) => {
-  if (e.target.tagName === "INPUT") return;
-  if (e.code === "Space") { e.preventDefault(); setPlayingState(!playing()); }
-  if (e.key === "n") advance(1);
-  if (e.key === "Escape") closeDetail();
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (searchOpen()) return; // the omnibox owns the keys while open
+  const k = e.key;
+  if (k >= "1" && k <= "7") {
+    const lens = LAYERS[Number(k) - 1];
+    if (lens) { setLayer(lens[0]); markDirty(); }
+  } else if (e.code === "Space") {
+    e.preventDefault();
+    setPlayingState(!playing());
+  } else if (k === "n") {
+    advance(1);
+  } else if (k === "o") {
+    const v = !overlaysOpen(); closePopovers(); setOverlaysOpen(v);
+  } else if (k === "l") {
+    const v = !legendOpen(); closePopovers(); setLegendOpen(v);
+  } else if (k === "/") {
+    e.preventDefault();
+    setSearchOpen(true);
+  } else if (k === "f") {
+    fitView();
+  } else if (k === "+" || k === "=") {
+    view.flyTo(...view.screenToWorld(canvas.clientWidth / 2, canvas.clientHeight / 2), view.scale * 1.6, 240);
+  } else if (k === "-") {
+    view.flyTo(...view.screenToWorld(canvas.clientWidth / 2, canvas.clientHeight / 2), view.scale / 1.6, 240);
+  } else if (k === "Escape") {
+    if (worldMenuOpen() || overlaysOpen() || legendOpen() || notifOpen()) closePopovers();
+    else if (isMobile() && sheet()) setSheet(null);
+    else if (selection()) select(null);
+  }
 });
 
 // ---------- boot ----------
@@ -543,5 +703,5 @@ window.addEventListener("keydown", (e) => {
 const params = new URLSearchParams(location.search);
 const bootSeed = params.get("seed") ? Number(params.get("seed")) : randomSeed();
 const bootSize = Number(params.get("size"));
-if ([256, 384, 512].includes(bootSize)) setWorldSize(bootSize);
+if ([384, 512, 640, 768].includes(bootSize)) setWorldSize(bootSize);
 generate(String(bootSeed));

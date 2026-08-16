@@ -520,8 +520,10 @@ export class Renderer {
     if (state.overlays.routes) this._drawRoutes(ctx, view, state);
     if (state.overlays.resources) this._drawDeposits(ctx, view);
     if (state.overlays.labels) this._drawLabels(ctx, view);
+    else this.labelBoxes = [];
     if (state.overlays.settlements) this._drawSettlements(ctx, view, state);
     this._drawScaleBar(ctx, view);
+    if (state.selectedCell) this._drawSelectedCell(ctx, view, state.selectedCell);
     if (hover && view.scale > 4) this._drawHover(ctx, view, hover);
   }
 
@@ -688,6 +690,7 @@ export class Renderer {
 
   _drawLabels(ctx, view) {
     const feats = this.world.header.features || [];
+    this.labelBoxes = [];
     if (!feats.length) return;
     const s = view.scale;
     const w = this.canvas.clientWidth;
@@ -699,7 +702,8 @@ export class Renderer {
 
     // gather visible candidates, then place mighty-to-minor so nothing collides
     const cands = [];
-    for (const f of feats) {
+    for (let fi = 0; fi < feats.length; fi++) {
+      const f = feats[fi];
       const st = LABEL_STYLE[f.t];
       if (!st) continue;
       const alpha = this._labelAlpha(f.t, s);
@@ -731,7 +735,7 @@ export class Renderer {
         font = `italic 500 10.5px Inter, sans-serif`;
         spacing = 0.6;
       }
-      cands.push({ f, st, alpha, px, py, font, size, spacing, text });
+      cands.push({ f, fi, st, alpha, px, py, font, size, spacing, text });
     }
     cands.sort((a, b) => (a.st.pri - b.st.pri) || (b.f.size - a.f.size));
 
@@ -747,6 +751,7 @@ export class Renderer {
         continue; // a mightier name already holds this ground
       }
       placed.push(box);
+      this.labelBoxes.push({ ...box, index: c.fi }); // clickable names
       ctx.globalAlpha = c.alpha;
       ctx.strokeStyle = "rgba(4, 8, 15, 0.7)";
       ctx.lineWidth = 2.6;
@@ -822,6 +827,25 @@ export class Renderer {
     ctx.strokeStyle = "rgba(255,255,255,0.7)";
     ctx.lineWidth = 1.2;
     ctx.strokeRect(view.tx + hover.x * s, view.ty + hover.y * s, s, s);
+  }
+
+  // The inspected cell: corner ticks, calmer than a full box.
+  _drawSelectedCell(ctx, view, cell) {
+    const s = Math.max(view.scale, 6);
+    const x = view.tx + (cell.x + 0.5) * view.scale - s / 2;
+    const y = view.ty + (cell.y + 0.5) * view.scale - s / 2;
+    const c = Math.max(3, s * 0.3);
+    ctx.save();
+    ctx.strokeStyle = "rgba(212, 169, 74, 0.95)";
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x, y + c); ctx.lineTo(x, y); ctx.lineTo(x + c, y);
+    ctx.moveTo(x + s - c, y); ctx.lineTo(x + s, y); ctx.lineTo(x + s, y + c);
+    ctx.moveTo(x + s, y + s - c); ctx.lineTo(x + s, y + s); ctx.lineTo(x + s - c, y + s);
+    ctx.moveTo(x + c, y + s); ctx.lineTo(x, y + s); ctx.lineTo(x, y + s - c);
+    ctx.stroke();
+    ctx.restore();
   }
 
   // A quiet GIS-style scale bar, bottom centre — the one strip of map the

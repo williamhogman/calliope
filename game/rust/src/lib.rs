@@ -13,6 +13,7 @@ pub mod constants;
 pub mod culture;
 pub mod economy;
 pub mod erosion;
+pub mod explain;
 pub mod geo;
 pub mod hydrology;
 pub mod naming;
@@ -55,5 +56,11 @@ impl WasmWorld {
     /// Advance the simulation; returns {month, settlements, events, routes?} JSON.
     pub fn tick(&mut self, months: u32) -> String {
         self.inner.tick_json(months as i64)
+    }
+
+    /// Term ledger for a derived quantity ("why is this so?") as JSON.
+    /// kind: "settlement" (key = id) | "good" (key = good name).
+    pub fn explain(&self, kind: String, key: String) -> String {
+        explain::explain(&self.inner, &kind, &key)
     }
 }
