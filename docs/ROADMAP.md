@@ -80,6 +80,9 @@ pinned-price share stays PASS; arbitrage income correlates with price gaps.
 4. Drama-pacing modifier layer (S)
 5. Story sifter: 5-8 Felt-style patterns over the log (M-L)
 6. Legends browser UI over the entity graph (L)
+7. Eventfulness scoring + reversal detection ranking the sifter's output (S-M, research/15)
+8. Narration memory: earned epithets, callbacks, mention-aware templates (M, research/15)
+9. Two-layer telling: ground-truth log vs. mythologized legend rendering (M, research/13)
 
 Gates: every event carries ≥ 1 entity id; sifter yields ≥ N microstories
 per century within dedup bounds; browser renders full cross-link graph.
@@ -106,12 +109,31 @@ screenshot review at 3 zooms × 2 seeds.
 
 Gates: property suite green across sweep; ERA plots reviewed per milestone.
 
+## M9 — The Patina (residue, strata & the withheld)
+
+Feel milestone from `research/SYNTHESIS-FEEL.md` (dockets 12-15): let
+things die and leave marks, let names carry time, let the telling withhold.
+
+1. Settlement death & ruins: abandonment (war, depletion, famine) leaves named ruin entities on the map (M)
+2. Hydronym conservatism + bounded conquest name-layers: rivers keep the oldest culture's names; conquest renames settlements inside the conquered polygon only (S-M)
+3. Age-keyed name erosion with stored compositional etymology, glossed in the inspector (S)
+4. History marks the map: battle sites, war-renamed features, disused routes fading (M)
+5. Berúthiel emissions + disputed/unresolved chronicle entries, bounded share (S)
+
+Gates: mature worlds carry ruins across the sweep (≥ 1 per century after
+year 100); river names stable through 100 % of border changes; every
+emitted name carries an etymology; withheld/disputed entries within a
+2-8 % band; full diagnostics suite stays green.
+
 ## Later / research
 
 Trade-graph SIR plagues (L, after M4/M5 give it consequences) · vegetation
 succession + wildlife (M) · sound-change language families (L) · religion
 slot-grammar beyond pantheon (L) · myth drift (novel) · data-driven world
-recipes/templates (M) · GPU erosion compute pass (M-L).
+recipes/templates (M) · GPU erosion compute pass (M-L) · culture-seed
+permeation across subsystems (M-L, research/13) · myth with mechanical
+stakes (M, research/13) · consequential/atmospheric detail tagging (M,
+research/15) · von Thünen land-use rings in render (M, research/14).
 
 ## Rejected (do not re-open without a superseding ADR)
 

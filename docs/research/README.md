@@ -6,8 +6,10 @@ worldbuilding literature — blogs, papers, GDC talks, textbooks, postmortems
 
 ## Method
 
-Eleven themed dockets were researched in parallel, each hunting a seeded
-list of primary sources and then following citations outward. Every digest:
+Fifteen themed dockets were researched in parallel waves — 01-11 covering
+the technical literature, 12-15 the craft/feel literature — each hunting a
+seeded list of primary sources and then following citations outward. Every
+digest:
 
 - lists its sources with **URL** and a **depth marker** —
   `READ` (studied), `SKIM` (surveyed for the relevant sections),
@@ -36,9 +38,18 @@ invented quotes.
 | `09-politics-war.md` | Politics, war & diplomacy |
 | `10-cartography.md` | Cartography & map rendering |
 | `11-pcg-theory.md` | PCG theory, evaluation & orchestration |
+| `12-worldbuilding-craft.md` | Worldbuilding craft theory (the literary canon) |
+| `13-worldsim-feel-doctrines.md` | Feel doctrines of shipped world-simulators |
+| `14-toponymy-layered-history.md` | Toponymy as archaeology & geography of situation |
+| `15-tellability-chronicle-prose.md` | Tellability & chronicle prose |
 
 ## Synthesis
 
-`SYNTHESIS.md` — the cross-domain distillation: recurring principles, the
-techniques multiple dockets independently converged on, and the ranked gap
-list that feeds `../GAP-ANALYSIS.md` and `../ROADMAP.md`.
+`SYNTHESIS.md` — the cross-domain distillation of the technical corpus
+(01-11): recurring principles, the techniques multiple dockets
+independently converged on, and the ranked gap list that feeds
+`../GAP-ANALYSIS.md` and `../ROADMAP.md`.
+
+`SYNTHESIS-FEEL.md` — the craft-corpus distillation (12-15): the five
+feel-laws and the ranked feel-gap list that feeds M6/M9 in
+`../ROADMAP.md`.
