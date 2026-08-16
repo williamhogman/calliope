@@ -2,19 +2,15 @@
  CALLIOPE DIAGNOSTIC · TELLING                      seed 12345 · size 512 · 150y
 ========================================================================
 chronicle: 5569 entries over 150y (37.1/y)
-  ids on 99.9% · coords on 97.4% · legend layer on 1352/1352 loud entries
-  ID-LESS: war ×3
-    m161 [war] Yurtabek — Yurtabek passes from the Ordaganaks to the banners of the Idapolisians — taken by storm af
-    m1081 [war] Thorheim — Thorheim passes from the Jorvikfolk to the banners of the Aelgladekin — ceded at the peace
-    m1081 [war] Vargholm — Vargholm passes from the Jorvikfolk to the banners of the Aelgladekin — ceded at the peace
+  ids on 100.0% · coords on 97.5% · legend layer on 1352/1352 loud entries
 cast: artifact 8+0† · culture 4+1† · feature 66+0† · good 23+0† · person 7+43† · ruin 1+0† · settlement 104+1† · war 0+8† · world 1+0†
 epithets earned: 33  (Thalwydell "the Young", Orene "the Young", Khargol "the Unlucky", Skjalvik "the Old")
 artifacts: 8 wrought · 4 held · 4 lost
 
 stories sifted: 30 (mine-curse ×6 · relic-road ×1 · restless-crowns ×4 · rivalry ×2 · roads-of ×7 · trials ×10)
+  346.0  The Trials of Kordoopia  (y0–134, 12 beats)
   345.7  The Trials of Thalenshade  (y61–149, 12 beats)
   343.5  The Trials of Kharasarai  (y10–149, 12 beats)
-  343.0  The Trials of Kordoopia  (y0–134, 12 beats)
   304.5  The Trials of Frostvik  (y69–145, 12 beats)
   295.6  The Trials of Roewick  (y66–147, 12 beats)
   291.7  The Trials of Havgard  (y63–149, 12 beats)
@@ -22,9 +18,9 @@ stories sifted: 30 (mine-curse ×6 · relic-road ×1 · restless-crowns ×4 · r
   272.5  The Trials of Thesdoopia  (y0–147, 12 beats)
 
 ---- checks ----------------------------------------------------------
-[FAIL] every event carries an id                     99.9%   (M6.1 gate: ids = 100%)
+[PASS] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
 [PASS] every carried id is valid                     0 bad   (ids index the registry)
-[PASS] events mappable (coords)                      97.4%   (most entries can fly the camera)
+[PASS] events mappable (coords)                      97.5%   (most entries can fly the camera)
 [PASS] loud events carry a legend                1352/1352   (M6.9: two-layer telling on weight ≥ 3)
 [PASS] closed entities carry a fate              0 unfated   (every ending is written)
 [PASS] stories per century                            20.0   (M6.5 gate: the sifter yields)
@@ -34,4 +30,4 @@ stories sifted: 30 (mine-curse ×6 · relic-road ×1 · restless-crowns ×4 · r
 [PASS] relics wrought                                    8   (M6.3: artifacts enter the world)
 [PASS] epithets earned                                  33   (M6.8: names are coined in the field)
 [PASS] chronicle unbounded                            5569   (no truncation: the full log persists)
-CHECKS: 11 pass · 0 warn · 1 fail
+CHECKS: 12 pass · 0 warn · 0 fail
