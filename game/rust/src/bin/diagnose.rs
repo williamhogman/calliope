@@ -1643,6 +1643,13 @@ fn cmd_bench() {
     c.band("tick rate", rate, format!("{:.0} mo/s", rate));
     c.band("pack bytes per cell", bpc512, format!("{:.1} B/cell", bpc512));
     c.band("median tick payload", med, format!("{:.0} B", med));
+    // E5.10 — allocation regressions get an alarm: the count is a pure
+    // function of the seed (same code path ⇒ same allocations), so the
+    // band can sit tight against the measured baseline.
+    if let Some(a) = alloc_window {
+        let apm = a as f64 / 240.0;
+        c.band("allocations per month", apm, format!("{:.0}/mo", apm));
+    }
     c.print();
 }
 
