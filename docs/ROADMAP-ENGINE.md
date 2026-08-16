@@ -302,6 +302,12 @@ justifies a second pipeline.
   A struct-of-arrays codec for Settlement/Deposit/Ruin would be a second,
   hand-maintained encoding of structs the tick path still ships as JSON —
   dual declaration against ADR-0015 — to save single-digit kilobytes.
+- **E4.6/E7.6 Binary tick lane** (ADR-0017) — measured after E4's delta
+  work: main-thread `JSON.parse` is 0.080 ms median per tick (p90 0.145 ms,
+  max 0.720 ms on a 65 KB payload), 0.15 % of tick wall time at year 100.
+  A columnar codec with string tables would be a second encoding of
+  seventeen mostly string-bearing sections to reclaim sub-millisecond
+  parse; the tick wall lives in the canvas draw path (E9), not the wire.
 - **FlatBuffers/protobuf/Cap'n Proto for the boundary** — the pack is
   already zero-copy typed arrays with a registry as schema; an IDL compiler
   adds a toolchain for no measured win.
