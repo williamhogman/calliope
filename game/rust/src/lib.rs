@@ -38,8 +38,8 @@ impl WasmWorld {
     #[wasm_bindgen(constructor)]
     pub fn new(seed: u32, size: u32) -> Result<WasmWorld, JsValue> {
         let size = size as usize;
-        if !matches!(size, 256 | 384 | 512) {
-            return Err(JsValue::from_str("size must be 256, 384 or 512"));
+        if !matches!(size, 256 | 384 | 512 | 640 | 768) {
+            return Err(JsValue::from_str("size must be 256, 384, 512, 640 or 768"));
         }
         Ok(WasmWorld {
             inner: world::World::generate(seed as i64, size),
