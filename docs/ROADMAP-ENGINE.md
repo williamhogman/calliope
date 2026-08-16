@@ -196,23 +196,27 @@ never wedges the pending map.
 Fine-grained reactivity actually used finely; lists keyed and windowed;
 loading, error, focus, and motion states all first-class.
 
-- [ ] E8.1 Consolidate the ~25 flat signals (`state.js:9-33`) into grouped stores (`worldData`, `telling`, `view`) updated with `reconcile()` — multi-field consumers stop firing per-signal (M)
-- [ ] E8.2 Keyed list rendering: `<For>`/`Index` replaces `.map()`-in-template across `outliner.js:57,99`, `hud.js:205`, `inspector.js:405,435` — settlement/entity lists stop rebuilding their DOM every recompute (M)
-- [ ] E8.3 Windowed rendering for the unbounded lists: Chronicle (`outliner.js:201`), Market and Peoples (`outliner.js:99,134`) — the feed stays flat-cost at year 300 (M)
-- [ ] E8.4 `createResource` wrappers for `explain`/`entityLog`/`stories`/`artifacts` calls with built-in loading/error/stale-race semantics, replacing hand-rolled `setBusy` orchestration (`main.js:225-267`) (S-M)
-- [ ] E8.5 `popHistory` becomes a preallocated ring buffer — no full-array copy per tick (`main.js:219-222`) (S)
-- [ ] E8.6 `batch()` around tick application: the ~10 setters applied per tick flush once (S)
-- [ ] E8.7 Split `main.js` (797 lines) into sim-driver, input/shortcuts, and gpu-audit modules (M)
-- [ ] E8.8 `selectedSettlement` goes O(1) via a byId map instead of `find()` per recompute (`state.js:48-52`) (S)
-- [ ] E8.9 Incremental search index as a memo over the grouped store — `search.js` stops rebuilding its candidate list per keystroke (S)
-- [ ] E8.10 Focus management: focus trap + restore on every `role="dialog"` popover (`hud.js:42,131,138,186`); real roving-tabindex arrow keys on the `role="tablist"` lens strip (`hud.js:155-159`) and outliner tabs (`outliner.js:351`) (M)
-- [ ] E8.11 `prefers-reduced-motion` media block: the infinite `twinkle` (`styles.css:1048-1050`), sheet transitions, and toast keyframes soften or stop (S)
-- [ ] E8.12 ARIA pass: toggle groups get `aria-pressed` (`outliner.js:188`), toasts announce via `aria-live`, loading veil gets `role="status"` with stage text from E7.5 (S)
+- [x] E8.1 Consolidate the ~25 flat signals into grouped stores updated with `reconcile()` — **resolved without the consolidation**: the stated goal (multi-field consumers stop firing per-signal) is achieved by E8.6's `batch()` (every tick flushes as one transaction) plus keyed rows over protocol deltas that already arrive diffed by id — `reconcile()` would re-diff what the wire format diffs. Regrouping ~25 signals would churn every UI module for no additional recomputes saved; rejected as pure churn (M)
+- [x] E8.2 Keyed list rendering via `ui/list.js` (`each` = identity-keyed `For`, `eachIdx` = position-keyed `Index`) across outliner tabs, HUD toasts/wars, inspector beats/chips — a tick that patches three towns re-renders three rows (M)
+- [x] E8.3 Windowed rendering: Chronicle windows at 120 (+240 per step), Places at 60, cast at 30, all keyed — at year 300 with a 10,610-entry chronicle the DOM holds ~700 nodes, ~2,600 with two extra windows loaded (M)
+- [x] E8.4 `createResource` for `explain`/`entityLog` (inspector dock) and the legends sift (`sim.js` — stories/entities/artifacts ride one keyed resource with built-in dedupe and stale-race protection) (S-M)
+- [x] E8.5 `popHistory` is a preallocated `Float64Array` ring (`state.js` `pushPopSample`/`popSeries`); the timebar sparkline reads through it without allocating (S)
+- [x] E8.6 `batch()` wraps tick application and world arrival in `sim.js` — one flush per month (S)
+- [x] E8.7 `main.js` (927 lines) split into `sim.js` (driver), `input.js` (pointer/keyboard), `gpu-audit.js` (bring-up + frame loop), `inspect.js` (cell inspection); the composition root is 92 lines (M)
+- [x] E8.8 `settlementsById` memo — `selectedSettlement`, selection flights, hover teasers and market hub lookups all O(1) (S)
+- [x] E8.9 Search candidate index memoized over world/settlement/telling revisions — keystrokes only score, never rebuild (S)
+- [x] E8.10 `focus.js`: `trapFocus` (restore-on-close) on all dialog popovers; `roveTabs` arrow-key roving on both tablists, restructured so only `role="tab"` children are owned (axe `aria-required-children` clean) (M)
+- [x] E8.11 `prefers-reduced-motion` block stops `twinkle`, sheet slides and toast keyframes (S)
+- [x] E8.12 ARIA pass: `aria-pressed` on all toggle groups, `aria-live` toasts, `role="status"` loading veil with E7.5 stage text; canvases wrapped in `<main>`, HUD chrome in a labeled region, almanac a labeled section, viewport zoom un-blocked (S)
 
 Gates: Playwright interaction sweep — 300-year world, chronicle at
 5,000+ events, scroll/filter/tab through every panel with DOM-node and
 long-task budgets enforced; axe-core scan clean on landmarks, dialogs,
-tab semantics.
+tab semantics. **Status: gate green** — seed 777 @ 512 driven to year 300
+(chronicle 10,610 entries); every panel swept with DOM < 2,700 nodes and
+zero long tasks > 200 ms; axe-core 4.10 reports zero violations in default
+state and with dialogs open; arrow-key roving verified on both tablists;
+zero console errors across the sweep.
 
 ## E9 — Orbital II (render pipeline)
 
