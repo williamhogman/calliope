@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 12345 · 640x512
 ========================================================================
-world: "Sermar" · generated in 874 ms
+world: "Sermar" · generated in 875 ms
 land: 112023 cells of 327680 (34.2%) · 1792368 km²
 hypsometry (land h): p5 0.020 · p25 0.113 · p50 0.271 · p75 0.420 · p95 0.562 · max 0.684
 bathymetry (sea h): p5 -0.593 · p50 -0.402 · p95 -0.039

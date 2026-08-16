@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-16 09:10 UTC
+mode: 12345 · size: 512 · generated: 2026-08-16 09:39 UTC
 
-totals: 128 pass · 4 warn · 0 fail
+totals: 133 pass · 1 warn · 0 fail
 
 -- bench.txt
    all checks pass
@@ -28,13 +28,13 @@ totals: 128 pass · 4 warn · 0 fail
    all checks pass
 
 -- hydro-12345.txt
-[WARN] river-town share                             100.0%   (sweet 20–95% — fresh water pulls towns)
+   all checks pass
 
 -- hydro-777.txt
-[WARN] river-town share                             100.0%   (sweet 20–95% — fresh water pulls towns)
+   all checks pass
 
 -- hydro-90210.txt
-[WARN] river-town share                             100.0%   (sweet 20–95% — fresh water pulls towns)
+   all checks pass
 
 -- resources-12345.txt
    all checks pass

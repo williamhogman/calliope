@@ -13,25 +13,25 @@ world "Malnor" · 4 cultures · 16 settlements at dawn
   42    18583     16      22       2357       222     29     96     2
   48    25116     18      26       2680       242     31     97     3
   54    32224     27      43       4147       309     35     98     5
-  60    42084     37      59       7156       485     42    100    12
-  66    57932     55      90      11668       789     46    103    10
-  72    79017     64     104      17650      1330     50    105    11
-  78   103144     64     104      24918      1889     53    106     7
-  84   129680     64     104      30862      2500     54    107    17
-  90   155779     64     104      36533      3177     57    107     7
-  96   179090     64     104      42011      3961     58    107     8
- 102   198031     64     104      52806      4850     59    108    12
- 108   211687     64     104      64143      5802     61    109     9
- 114   220137     64     104      73295      7619     61    109    10
- 120   229754     64     104      70445      8614     61    109    10
- 126   236123     64     104      75639      9660     62    109     8
- 132   241265     64     104      80327     10745     62    109     6
- 138   244462     64     104      89423     11828     62    109     8
- 144   247993     64     104      89778     12897     62    109     9
- 150   248885     66     106      97227     16231     62    109     7
+  60    42452     36      56       7144       491     42    100     7
+  66    58019     53      86      11098       741     46    101     8
+  72    77577     62      99      16950      1140     50    105    11
+  78   103761     64     102      22205      1607     52    105     7
+  84   130553     64     102      23481      2154     54    105     8
+  90   158310     64     102      30144      2725     57    105     6
+  96   183486     65     103      37793      3450     59    106     5
+ 102   203918     65     103      46395      4325     59    107     8
+ 108   219516     65     103      53773      5374     61    109    10
+ 114   230371     65     103      65795      6495     61    109    12
+ 120   240577     65     103      75970      7649     62    109     8
+ 126   245396     65     103      80528      8825     62    109    16
+ 132   251090     65     103      85731     10017     62    109     6
+ 138   253417     65     103     100496     11211     62    109    12
+ 144   255691     65     103      92942     12390     62    109    10
+ 150   256739     65     103      96357     15588     62    109    11
 
-event census: depletion:5 · disaster:241 · discovery:23 · festival:118 · found:50 · growth:389 · omen:5 · ruler:23 · society:22 · tech:62 · trade:75 · war:27 · wonder:87
-strikes 23 · depletions 5 · mining camps 5 · wars 27
+event census: depletion:4 · disaster:240 · discovery:23 · festival:119 · found:49 · growth:365 · omen:6 · ruler:21 · society:22 · tech:62 · trade:70 · war:11 · wonder:95
+strikes 23 · depletions 4 · mining camps 4 · wars 11
 longest silence between events: 25 months
 
 the arc of the ages (tech & society events):
@@ -56,25 +56,26 @@ the arc of the ages (tech & society events):
   … and 66 more
 
 societies at year 150:
-  Aelwickkin             empire     the High Age   21 arts · treasury     9595 · lore  64325
-  Orpolisians            empire     the High Age   16 arts · treasury     2112 · lore 255388
-  Altagegolaks           kingdom    the High Age   12 arts · treasury     3388 · lore   4068
-  Brynarstadfolk         kingdom    the High Age   13 arts · treasury     1136 · lore  96557
+  Aelwickkin             empire     the High Age   21 arts · treasury    11899 · lore  63003
+  Orpolisians            empire     the High Age   16 arts · treasury     2364 · lore 273070
+  Altagegolaks           kingdom    the High Age   12 arts · treasury      230 · lore   5374
+  Brynarstadfolk         kingdom    the High Age   13 arts · treasury     1096 · lore  88978
 
 ---- checks ----------------------------------------------------------
-[PASS] population growth ×                         192.93×   (sweet 2–500× — dawn towns are tiny)
-[PASS] still growing at half-run              37% of final   (pop at half-run ≤92% of final)
-[PASS] settlements grew                              16→66   (colonies should outnumber the dawn towns)
-[PASS] routes exist                                    106   (a world without trade is broken)
+[PASS] population growth ×                         199.02×   (sweet 2–500× — dawn towns are tiny)
+[PASS] still growing at half-run              35% of final   (pop at half-run ≤92% of final)
+[PASS] settlements grew                              16→65   (colonies should outnumber the dawn towns)
+[PASS] dry-country towns exist                     8 of 65   (≥1 town beyond fresh water by the century mark)
+[PASS] routes exist                                    103   (a world without trade is broken)
 [PASS] no unconnected towns                              0   (every town should reach the web of trade)
 [PASS] no template placeholders                          0   (no {P}/{S} may leak into chronicle text)
 [PASS] no empty event texts                              0   (every event tells its story)
-[PASS] settlement names unique              66 names / 66 towns   (the taken-set must hold)
-[PASS] events per year                                 7.5   (sweet 2–40 · hard 0.5–100)
+[PASS] settlement names unique              65 names / 65 towns   (the taken-set must hold)
+[PASS] events per year                                 7.2   (sweet 2–40 · hard 0.5–100)
 [PASS] no long silences                              25 mo   (≤36 months between chronicle entries)
 [PASS] strikes happened                                 23   (the age of prospectors must actually happen)
 [PASS] era advanced past Stone                the High Age   (≥ Age of Bronze by now)
 [PASS] arts accumulate                      62 arts / 4 peoples   (≥3 arts per people)
 [PASS] era reached Iron                       the High Age   (≥ Age of Iron by now)
 [PASS] numbers stay finite                             yes   (no NaN pops, wealth or prices)
-CHECKS: 15 pass · 0 warn · 0 fail
+CHECKS: 16 pass · 0 warn · 0 fail

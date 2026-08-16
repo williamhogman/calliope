@@ -16,5 +16,5 @@ river towns: 16 of 16
 [PASS] river systems                                   119   (sweet 8–400 · hard 3–2000)
 [PASS] named deltas                                      3   (≥1 — great river mouths get names)
 [PASS] discharge finite                                yes   (no NaN/inf in flow accumulation)
-[WARN] river-town share                             100.0%   (sweet 20–95% — fresh water pulls towns)
-CHECKS: 5 pass · 1 warn · 0 fail
+[PASS] dawn towns reach fresh water                 100.0%   (≥20% — rivers should pull the first peoples)
+CHECKS: 6 pass · 0 warn · 0 fail

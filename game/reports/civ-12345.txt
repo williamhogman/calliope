@@ -11,27 +11,27 @@ world "Sermar" · 4 cultures · 16 settlements at dawn
   30     9698     16      23       3548       302     23    102     7
   36    14388     16      23       4653       376     27    105     4
   42    20193     16      23       5639       455     29    105     0
-  48    27584     19      29       7028       545     34    106     2
-  54    36127     32      55       8776       618     38    107     7
-  60    47708     39      64      10665       730     44    109     8
-  66    63235     53      88      14713       951     48    113    14
-  72    87089     62     102      21562      1431     55    116     9
-  78   116387     64     106      29797      2072     59    119    14
-  84   147965     64     106      38175      2760     61    120     8
-  90   177524     64     106      46750      3479     62    120     8
-  96   204224     64     106      55551      4230     62    120     4
- 102   225130     64     106      64601      5012     62    120     8
- 108   238623     64     106      73506      5943     62    120     7
- 114   252062     64     106      83327      6765     62    120     6
- 120   262210     64     106      88670      7580     62    120     6
- 126   268215     64     106      97147      8402     62    120     8
- 132   272165     64     106     103748      9226     62    120     8
- 138   272900     64     106     108309     10869     62    120    14
- 144   276492     64     106     109241     12972     62    120    14
- 150   280732     64     106     118047     13820     62    120     6
+  48    27362     19      29       7082       548     34    106     4
+  54    35293     29      49       7990       699     38    107     7
+  60    45681     37      63       9914       825     41    107     7
+  66    59806     48      81      13155      1012     46    109    16
+  72    82315     61     102      19422      1578     55    113    12
+  78   111998     65     108      27162      2172     60    116     9
+  84   144251     65     108      35434      2849     60    116    10
+  90   176259     65     108      43853      3543     61    116     7
+  96   204554     65     108      52133      4419     61    118     9
+ 102   229358     65     108      60449      5149     61    118     7
+ 108   248068     65     108      69257      5895     61    119     8
+ 114   260440     65     108      76608      6657     61    119    12
+ 120   269544     65     108      82353      7441     62    120     5
+ 126   276999     65     108      92642      8386     62    120     3
+ 132   282466     65     108     104335      9339     62    121     8
+ 138   285631     65     108     107886     10246     62    121    11
+ 144   287414     65     108     118294     11519     62    121     8
+ 150   290888     65     108     118134     12451     62    121     9
 
-event census: depletion:5 · disaster:256 · discovery:33 · festival:116 · found:48 · growth:336 · omen:10 · ruler:22 · society:21 · tech:62 · trade:70 · war:30 · wonder:72
-strikes 33 · depletions 5 · mining camps 0 · wars 30
+event census: depletion:4 · disaster:269 · discovery:34 · festival:108 · found:49 · growth:380 · omen:8 · ruler:24 · society:22 · tech:62 · trade:81 · war:35 · wonder:80
+strikes 34 · depletions 4 · mining camps 2 · wars 35
 longest silence between events: 20 months
 
 the arc of the ages (tech & society events):
@@ -53,28 +53,29 @@ the arc of the ages (tech & society events):
   y13   The wise-women of the Kaldenstadfolk set down which roots cure and which kill.
   y15   Wainwrights of the Mossthornkin set carts on true-turning wheels; the roads grow short.
   y15   The Mossthornkin pass into an age of bronze — the old stone tools are laid in barrows.
-  … and 65 more
+  … and 66 more
 
 societies at year 150:
-  Mossthornkin           empire     the High Age   20 arts · treasury     9423 · lore 252394
-  Kalsyikosians          kingdom    the High Age   15 arts · treasury      716 · lore  38694
-  Saraganaks             kingdom    the High Age   12 arts · treasury     1376 · lore  50211
-  Kaldenstadfolk         kingdom    the High Age   15 arts · treasury     2304 · lore 128854
+  Mossthornkin           empire     the High Age   21 arts · treasury     9148 · lore 257169
+  Kalsyikosians          kingdom    the High Age   12 arts · treasury      427 · lore  33648
+  Saraganaks             kingdom    the High Age   12 arts · treasury      135 · lore  37740
+  Kaldenstadfolk         empire     the High Age   17 arts · treasury     2740 · lore 145357
 
 ---- checks ----------------------------------------------------------
-[PASS] population growth ×                         206.27×   (sweet 2–500× — dawn towns are tiny)
-[PASS] still growing at half-run              36% of final   (pop at half-run ≤92% of final)
-[PASS] settlements grew                              16→64   (colonies should outnumber the dawn towns)
-[PASS] routes exist                                    106   (a world without trade is broken)
+[PASS] population growth ×                         213.73×   (sweet 2–500× — dawn towns are tiny)
+[PASS] still growing at half-run              33% of final   (pop at half-run ≤92% of final)
+[PASS] settlements grew                              16→65   (colonies should outnumber the dawn towns)
+[PASS] dry-country towns exist                     8 of 65   (≥1 town beyond fresh water by the century mark)
+[PASS] routes exist                                    108   (a world without trade is broken)
 [PASS] no unconnected towns                              0   (every town should reach the web of trade)
 [PASS] no template placeholders                          0   (no {P}/{S} may leak into chronicle text)
 [PASS] no empty event texts                              0   (every event tells its story)
-[PASS] settlement names unique              64 names / 64 towns   (the taken-set must hold)
-[PASS] events per year                                 7.2   (sweet 2–40 · hard 0.5–100)
+[PASS] settlement names unique              65 names / 65 towns   (the taken-set must hold)
+[PASS] events per year                                 7.7   (sweet 2–40 · hard 0.5–100)
 [PASS] no long silences                              20 mo   (≤36 months between chronicle entries)
-[PASS] strikes happened                                 33   (the age of prospectors must actually happen)
+[PASS] strikes happened                                 34   (the age of prospectors must actually happen)
 [PASS] era advanced past Stone                the High Age   (≥ Age of Bronze by now)
 [PASS] arts accumulate                      62 arts / 4 peoples   (≥3 arts per people)
 [PASS] era reached Iron                       the High Age   (≥ Age of Iron by now)
 [PASS] numbers stay finite                             yes   (no NaN pops, wealth or prices)
-CHECKS: 15 pass · 0 warn · 0 fail
+CHECKS: 16 pass · 0 warn · 0 fail
