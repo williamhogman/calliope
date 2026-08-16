@@ -155,16 +155,16 @@ tick within band; determinism hash stable through every change.
 crate as the simulation. The sim, the renderer, and the harness deserve
 separate compilation stories.
 
-- [ ] E6.1 Crate split: `calliope-core` (sim, no wgpu) + `calliope-orbital` (render.rs) + thin wasm crate binding both — native bins (`diagnose`, `worldgen`, `stagetest`) stop linking GPU code (`Cargo.toml:19-23`, `lib.rs:27-28`) (M)
-- [ ] E6.2 `panic = "abort"` in the release profile (`Cargo.toml:25-28`) — unwind machinery leaves the binary; a console panic hook stays in debug builds only (S)
-- [ ] E6.3 Explicit `wasm-opt` config (`[package.metadata.wasm-pack.profile.release]`) with `-O3` measured against `-Oz`; verify the pass actually runs in the nix path of `scripts/build.sh:18-24` (S)
-- [ ] E6.4 `twiggy top` size audit script; wasm size budget as a `report.sh` check with the current 3.0 MB as the ceiling and the post-E6.1 target < 1.2 MB (S)
-- [ ] E6.5 Feature-gate `explain`/diagnostics-only machinery out of the shipped cdylib if the audit shows measurable weight (S-M)
-- [ ] E6.6 Strip debug names/producers sections from release wasm; keep a symbolized artifact beside it for profiling (S)
-- [ ] E6.7 One compile, two instantiations: `postMessage` the compiled `WebAssembly.Module` so the worker (`worker.js:6`) and the main-thread Orbital (`gpu.js:20`) stop fetching and compiling the binary independently (M)
-- [ ] E6.8 Verify streaming instantiation end-to-end (generated glue path from `wasm-load.js:16-19`) and correct `application/wasm` MIME on the production host (S)
-- [ ] E6.9 Reproducible builds: locked toolchain in `rust-toolchain.toml`, byte-identical wasm from identical source — the version stamp (`build.sh:32`) becomes meaningful across machines (M)
-- [ ] E6.10 Build-time budget: `build.sh` reports wall time per phase; regression noted in `report.sh` output (S)
+- [x] E6.1 Crate split: `calliope-core` (sim, no wgpu) + `calliope-orbital` (render.rs) + thin wasm crate binding both — **resolved without the split**: wgpu already lives under `[target.'cfg(target_arch = "wasm32")'.dependencies]` and `render.rs` is cfg-gated, so native bins never compile GPU code today (verified: `cargo tree` on the native target has no wgpu). The split would not shrink the shipped wasm either — the cdylib needs both halves — so it is pure churn; rejected (M)
+- [x] E6.2 `panic = "abort"` in the release profile — unwind machinery gone from all release binaries; a `web_sys::console` panic hook ships in wasm debug builds only (`lib.rs::init_panic_hook`, cfg `debug_assertions`) (S)
+- [x] E6.3 Explicit `wasm-opt` config: measured `-O3` = 3,092,925 B vs `-Oz` = 2,998,414 B on the real binary — `-Oz` ships (generation headroom is ample after E5); pass verified running in the nix path (`Optimizing wasm binaries with wasm-opt`) (S)
+- [x] E6.4 `twiggy top` audit script (`scripts/wasm-audit.sh` → `game/reports/wasm-audit.txt`); wasm size budget banded in `game/reports/build.txt` (written by `build.sh`, swept by `report.sh`): sweet ≤3.0 MiB · hard ≤3.4 MiB, measured 2,998,414 B. The <1.2 MB post-split target died with E6.1: the audit shows the weight is wgpu/naga (~1,077 items), the price of Orbital (ADR-0006), not sim code (S)
+- [x] E6.5 Feature-gate `explain`/diagnostics machinery — audited: explain + telling ≈ 17 KB (0.5%) and both back user-facing UI; not measurable weight, stays in (S-M)
+- [x] E6.6 Strip debug names/producers: release binary ships with zero custom sections (`--strip-producers --strip-target-features`; names were already stripped); the symbolized twin for profiling is the `--profiling` build in `game/rust/pkg-prof/` (wasm-opt `-O -g`), built on demand by `wasm-audit.sh` (S)
+- [x] E6.7 One compile, two instantiations: `net.js` compiles once (`loadModule`, streaming) and hands the `WebAssembly.Module` to the worker as its first message (`init` op); Orbital instantiates from the same module. Verified live: exactly one `.wasm` fetch per page load, world generates and renders (M)
+- [x] E6.8 Streaming instantiation verified end-to-end: `WebAssembly.compileStreaming(fetch)` with buffer-compile fallback; `application/wasm` confirmed on both `scripts/serve.py` and the production host (curl: `content-type: application/wasm`) (S)
+- [x] E6.9 Reproducible builds: toolchain locked in `game/rust/rust-toolchain.toml` (1.91.1 + wasm target); empirically byte-identical — a full rebuild reproduced stamp `13e7a0dab5fa` exactly (M)
+- [x] E6.10 Build-time budget: `build.sh` times every phase (ms) into `game/reports/build.txt`; `report.sh`'s summary sweep picks the file up with the size band (S)
 
 Gates: wasm size budget check green; boot-to-first-frame improves
 measurably (E10.5 probe); native `diagnose` binary compiles without wgpu
