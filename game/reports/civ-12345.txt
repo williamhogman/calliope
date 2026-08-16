@@ -1,42 +1,37 @@
 ========================================================================
- CALLIOPE DIAGNOSTIC · CIVILIZATION                 seed 12345 · 640x512 · 60y
+ CALLIOPE DIAGNOSTIC · CIVILIZATION                 seed 12345 · 640x512 · 150y
 ========================================================================
 world "Quelia" · 4 cultures · 16 settlements at dawn
 
   yr      pop  towns  routes     wealth  treasury   arts  seams  ev/y
-   2     1579     16      23        382       105      2     90     5
-   4     1799     16      23        541       110      3     92     2
    6     2017     16      23        712       116      6     94     3
-   8     2200     16      23        692       100      9     94     9
-  10     2462     16      23        794        77      9     95     9
   12     2794     16      23       1025        81     13     98     5
-  14     3199     16      23       1162        89     13     99     4
-  16     3671     16      23       1255        97     14     99     4
   18     4184     16      23       1358       106     17     99     5
-  20     4782     16      23       1522       115     17    100     2
-  22     5497     16      23       1743       125     17    102     2
   24     6265     16      23       1926       136     20    103     2
-  26     7013     16      23       1897       171     21    103     6
-  28     8007     16      23       2194       182     21    106     8
   30     9152     16      23       2376       193     23    107     6
-  32    10497     16      23       2552       203     24    108    10
-  34    12046     16      23       2747       212     25    109     6
   36    13687     16      23       2845       219     27    109     4
-  38    15586     16      23       3031       226     27    111     1
-  40    17579     16      23       3097       231     28    111     4
   42    19403     16      23       3141       236     30    111     6
-  44    21675     16      23       3170       239     31    111     2
-  46    24155     17      25       3241       243     32    111     4
   48    26683     19      29       3418       248     33    111     5
-  50    29480     21      33       3762       262     35    113     2
-  52    31817     24      39       4252       284     37    114     2
   54    34801     26      43       4647       310     38    114     7
-  56    38166     29      49       5192       340     40    114     9
-  58    41802     33      57       5932       379     40    114     5
   60    46259     37      61       6812       426     44    115    11
+  66    61270     46      72       9927       642     48    117     8
+  72    82009     62      97      15491       968     55    121    17
+  78   109021     64     100      21637      1601     58    122    15
+  84   139475     64     100      28135      2201     61    124     7
+  90   171303     64     100      37822      2998     66    125    11
+  96   205430     64     100      45397      4037     66    125     3
+ 102   238648     64     100      59036      5205     70    125     9
+ 108   265733     64     100      68230      6460     70    125    10
+ 114   287852     64     100      82357      7777     70    125    12
+ 120   306028     64     100      88374      9126     70    125     8
+ 126   318848     64     100      98624     10540     70    125     6
+ 132   328610     64     100     102051     12081     71    126    14
+ 138   333720     64     100     114789     14464     71    126    10
+ 144   337402     64     100     125087     17048     71    126     8
+ 150   341665     64     100     140700     18644     71    126    13
 
-event census: disaster:19 · discovery:26 · festival:40 · found:21 · growth:86 · omen:4 · ruler:7 · society:16 · tech:44 · trade:14 · war:17 · wonder:11
-strikes 26 · depletions 0 · mining camps 1 · wars 17
+event census: depletion:7 · disaster:275 · discovery:37 · festival:114 · found:48 · growth:421 · omen:6 · ruler:18 · society:22 · tech:71 · trade:67 · war:42 · wonder:81
+strikes 37 · depletions 7 · mining camps 1 · wars 42
 longest silence between events: 21 months
 
 the arc of the ages (tech & society events):
@@ -58,23 +53,29 @@ the arc of the ages (tech & society events):
   y11   The scattered camps of the Mossthornkin bind themselves under one chief.
   y15   The wise-women of the Saraganaks set down which roots cure and which kill.
   y16   The Kaldenstadfolk shape river clay into jars and kilns — the harvest no longer rots before spring.
-  … and 42 more
+  … and 75 more
 
-societies at year 60:
-  Mossthornkin           kingdom    Age of Iron    13 arts · treasury      153 · lore    684
-  Kalsyikosians          kingdom    the High Age   12 arts · treasury      113 · lore   2760
-  Saraganaks             kingdom    Age of Iron    11 arts · treasury       56 · lore    533
-  Kaldenstadfolk         kingdom    Age of Bronze   8 arts · treasury      104 · lore     79
+societies at year 150:
+  Mossthornkin           empire     the High Age   21 arts · treasury    12230 · lore 140012
+  Kalsyikosians          kingdom    the High Age   19 arts · treasury     3093 · lore 199292
+  Saraganaks             empire     the High Age   16 arts · treasury     1353 · lore  90808
+  Kaldenstadfolk         kingdom    the High Age   15 arts · treasury     1968 · lore  47643
 
 ---- checks ----------------------------------------------------------
-[PASS] population growth ×                          33.99×   (sweet 2–500× — dawn towns are tiny)
-[PASS] settlements grew                              16→37   (colonies should outnumber the dawn towns)
-[PASS] routes exist                                     61   (a world without trade is broken)
+[PASS] population growth ×                         251.04×   (sweet 2–500× — dawn towns are tiny)
+[PASS] still growing at half-run              28% of final   (pop at half-run ≤92% of final)
+[PASS] settlements grew                              16→64   (colonies should outnumber the dawn towns)
+[PASS] dry-country towns exist                     2 of 64   (≥1 town beyond fresh water by the century mark)
+[PASS] routes exist                                    100   (a world without trade is broken)
 [PASS] no unconnected towns                              0   (every town should reach the web of trade)
 [PASS] no template placeholders                          0   (no {P}/{S} may leak into chronicle text)
 [PASS] no empty event texts                              0   (every event tells its story)
-[PASS] settlement names unique              37 names / 37 towns   (the taken-set must hold)
-[PASS] events per year                                 5.1   (sweet 2–40 · hard 0.5–100)
+[PASS] settlement names unique              64 names / 64 towns   (the taken-set must hold)
+[PASS] events per year                                 8.1   (sweet 2–40 · hard 0.5–100)
 [PASS] no long silences                              21 mo   (≤36 months between chronicle entries)
+[PASS] strikes happened                                 37   (the age of prospectors must actually happen)
+[PASS] era advanced past Stone                the High Age   (≥ Age of Bronze by now)
+[PASS] arts accumulate                      71 arts / 4 peoples   (≥3 arts per people)
+[PASS] era reached Iron                       the High Age   (≥ Age of Iron by now)
 [PASS] numbers stay finite                             yes   (no NaN pops, wealth or prices)
-CHECKS: 10 pass · 0 warn · 0 fail
+CHECKS: 16 pass · 0 warn · 0 fail

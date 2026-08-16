@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: quick · size: 512 · generated: 2026-08-16 10:02 UTC
+mode: full · size: 512 · generated: 2026-08-16 10:32 UTC
 
-totals: 129 pass · 1 warn · 0 fail
+totals: 151 pass · 1 warn · 0 fail
 
 -- bench.txt
    all checks pass
@@ -16,7 +16,7 @@ totals: 129 pass · 1 warn · 0 fail
    all checks pass
 
 -- climate-777.txt
-[WARN] forest share of land                          23.9%   (sweet 25–60% · hard 15–75%)
+[WARN] forest share of land                          22.6%   (sweet 25–60% · hard 15–75%)
 
 -- climate-90210.txt
    all checks pass

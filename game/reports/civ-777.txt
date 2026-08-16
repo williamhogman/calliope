@@ -1,81 +1,81 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · CIVILIZATION                 seed 777 · 640x512 · 150y
 ========================================================================
-world "Malnor" · 4 cultures · 16 settlements at dawn
+world "Zaranion" · 4 cultures · 16 settlements at dawn
 
   yr      pop  towns  routes     wealth  treasury   arts  seams  ev/y
-   6     1872     16      22        453       111      6     87     3
-  12     2643     16      22        730       124     11     89     5
-  18     3917     16      22        995       141     15     90     4
-  24     5866     16      22       1452       162     19     91     2
-  30     8919     16      22       1867       182     21     94     3
-  36    13034     16      22       2150       202     26     95     5
-  42    18583     16      22       2357       222     29     96     2
-  48    25116     18      26       2680       242     31     97     3
-  54    32224     27      43       4147       309     35     98     5
-  60    42452     36      56       7144       491     42    100     7
-  66    58019     53      86      11098       741     46    101     8
-  72    77577     62      99      16950      1140     50    105    11
-  78   103761     64     102      22205      1607     52    105     7
-  84   130553     64     102      23481      2154     54    105     8
-  90   158310     64     102      30144      2725     57    105     6
-  96   183486     65     103      37793      3450     59    106     5
- 102   203918     65     103      46395      4325     59    107     8
- 108   219516     65     103      53773      5374     61    109    10
- 114   230371     65     103      65795      6495     61    109    12
- 120   240577     65     103      75970      7649     62    109     8
- 126   245396     65     103      80528      8825     62    109    16
- 132   251090     65     103      85731     10017     62    109     6
- 138   253417     65     103     100496     11211     62    109    12
- 144   255691     65     103      92942     12390     62    109    10
- 150   256739     65     103      96357     15588     62    109    11
+   6     1870     16      24        551       115      7     90     7
+  12     2641     16      24        779        75     13     90     7
+  18     3899     16      24       1151        78     15     91     5
+  24     5781     16      24       1765       120     18     93     6
+  30     8583     16      24       2506       176     22     94     6
+  36    12867     16      24       3467       237     26     96     3
+  42    18397     16      24       4370       306     29     97     5
+  48    24668     17      26       5581       381     33    101     5
+  54    31360     21      34       7177       504     37    103     3
+  60    40947     35      59      10240       671     43    104    11
+  66    55528     56      98      16147      1011     51    105    12
+  72    77597     62     108      23887      1586     57    107    14
+  78   103665     64     111      33055      2329     59    110     7
+  84   130170     64     111      42033      3551     60    111     8
+  90   157307     64     111      50696      4371     60    111     2
+  96   180315     64     111      59262      5218     60    112    10
+ 102   202971     64     111      66937      6111     64    112     5
+ 108   225936     64     111      75503      7062     64    112     7
+ 114   245092     64     111      84525      8028     64    112     9
+ 120   260367     64     111      91241      9002     64    112     5
+ 126   270322     64     111     101555      9946     64    112     7
+ 132   276094     64     111     107659     10925     65    113    12
+ 138   277478     64     111     120803     12382     65    113    12
+ 144   278335     64     111     129424     14487     65    113    10
+ 150   281789     65     112     132699     15809     65    113     6
 
-event census: depletion:4 · disaster:240 · discovery:23 · festival:119 · found:49 · growth:365 · omen:6 · ruler:21 · society:22 · tech:62 · trade:70 · war:11 · wonder:95
-strikes 23 · depletions 4 · mining camps 4 · wars 11
-longest silence between events: 25 months
+event census: depletion:9 · disaster:255 · discovery:25 · festival:136 · found:49 · growth:385 · omen:8 · ruler:20 · society:22 · tech:65 · trade:53 · war:52 · wonder:85
+strikes 25 · depletions 9 · mining camps 4 · wars 52
+longest silence between events: 16 months
 
 the arc of the ages (tech & society events):
-  y1    The Orpolisians learn to bend seasoned yew — no beast nor foe outruns an arrow.
-  y2    The scattered camps of the Orpolisians bind themselves under one chief.
-  y2    The Aelwickkin learn to bend seasoned yew — no beast nor foe outruns an arrow.
-  y3    The Altagegolaks learn to bend seasoned yew — no beast nor foe outruns an arrow.
-  y3    The Orpolisians shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y3    The Brynarstadfolk learn to bend seasoned yew — no beast nor foe outruns an arrow.
-  y5    Weavers among the Orpolisians string the first tall looms; good cloth becomes as good as coin.
-  y6    The Aelwickkin shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y7    The Altagegolaks shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y8    The wise-women of the Orpolisians set down which roots cure and which kill.
-  y8    The Brynarstadfolk shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y11   Weavers among the Aelwickkin string the first tall looms; good cloth becomes as good as coin.
-  y13   Weavers among the Altagegolaks string the first tall looms; good cloth becomes as good as coin.
-  y13   The Orpolisians raise woven sails above their hulls, and the wind carries trade beyond the horizon.
-  y13   The Orpolisians pass into an age of bronze — the old stone tools are laid in barrows.
-  y13   The scattered camps of the Brynarstadfolk bind themselves under one chief.
-  y13   Weavers among the Brynarstadfolk string the first tall looms; good cloth becomes as good as coin.
-  y14   The scattered camps of the Aelwickkin bind themselves under one chief.
-  … and 66 more
+  y1    The Aelwickkin learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y2    The Orpolisians learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y2    The Altagegolaks learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y4    Weavers among the Aelwickkin string the first tall looms; good cloth becomes as good as coin.
+  y4    The Brynarstadfolk learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y4    The Orpolisians shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y5    Weavers among the Altagegolaks string the first tall looms; good cloth becomes as good as coin.
+  y7    The Aelwickkin shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y8    Weavers among the Orpolisians string the first tall looms; good cloth becomes as good as coin.
+  y8    The scattered camps of the Orpolisians bind themselves under one chief.
+  y8    The Altagegolaks shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y9    The scattered camps of the Altagegolaks bind themselves under one chief.
+  y11   Weavers among the Brynarstadfolk string the first tall looms; good cloth becomes as good as coin.
+  y11   The wise-women of the Aelwickkin set down which roots cure and which kill.
+  y12   The wise-women of the Orpolisians set down which roots cure and which kill.
+  y12   The wise-women of the Altagegolaks set down which roots cure and which kill.
+  y17   The Brynarstadfolk shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y18   The scattered camps of the Aelwickkin bind themselves under one chief.
+  … and 69 more
 
 societies at year 150:
-  Aelwickkin             empire     the High Age   21 arts · treasury    11899 · lore  63003
-  Orpolisians            empire     the High Age   16 arts · treasury     2364 · lore 273070
-  Altagegolaks           kingdom    the High Age   12 arts · treasury      230 · lore   5374
-  Brynarstadfolk         kingdom    the High Age   13 arts · treasury     1096 · lore  88978
+  Aelwickkin             kingdom    the High Age   12 arts · treasury      252 · lore  74677
+  Orpolisians            empire     the High Age   20 arts · treasury     3984 · lore 174775
+  Altagegolaks           empire     the High Age   21 arts · treasury     9534 · lore 152929
+  Brynarstadfolk         kingdom    the High Age   12 arts · treasury     2040 · lore  41753
 
 ---- checks ----------------------------------------------------------
-[PASS] population growth ×                         199.02×   (sweet 2–500× — dawn towns are tiny)
-[PASS] still growing at half-run              35% of final   (pop at half-run ≤92% of final)
+[PASS] population growth ×                         218.44×   (sweet 2–500× — dawn towns are tiny)
+[PASS] still growing at half-run              32% of final   (pop at half-run ≤92% of final)
 [PASS] settlements grew                              16→65   (colonies should outnumber the dawn towns)
 [PASS] dry-country towns exist                     8 of 65   (≥1 town beyond fresh water by the century mark)
-[PASS] routes exist                                    103   (a world without trade is broken)
+[PASS] routes exist                                    112   (a world without trade is broken)
 [PASS] no unconnected towns                              0   (every town should reach the web of trade)
 [PASS] no template placeholders                          0   (no {P}/{S} may leak into chronicle text)
 [PASS] no empty event texts                              0   (every event tells its story)
 [PASS] settlement names unique              65 names / 65 towns   (the taken-set must hold)
-[PASS] events per year                                 7.2   (sweet 2–40 · hard 0.5–100)
-[PASS] no long silences                              25 mo   (≤36 months between chronicle entries)
-[PASS] strikes happened                                 23   (the age of prospectors must actually happen)
+[PASS] events per year                                 7.8   (sweet 2–40 · hard 0.5–100)
+[PASS] no long silences                              16 mo   (≤36 months between chronicle entries)
+[PASS] strikes happened                                 25   (the age of prospectors must actually happen)
 [PASS] era advanced past Stone                the High Age   (≥ Age of Bronze by now)
-[PASS] arts accumulate                      62 arts / 4 peoples   (≥3 arts per people)
+[PASS] arts accumulate                      65 arts / 4 peoples   (≥3 arts per people)
 [PASS] era reached Iron                       the High Age   (≥ Age of Iron by now)
 [PASS] numbers stay finite                             yes   (no NaN pops, wealth or prices)
 CHECKS: 16 pass · 0 warn · 0 fail

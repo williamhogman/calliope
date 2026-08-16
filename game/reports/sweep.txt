@@ -1,21 +1,26 @@
 ========================================================================
- CALLIOPE DIAGNOSTIC · SWEEP                        size 512 · 60y · 3 seeds
+ CALLIOPE DIAGNOSTIC · SWEEP                        size 512 · 100y · 5 seeds
 ========================================================================
    seed  land%   des%   for%  mtn%   isl  dep towns       pop   grw×   era arts strk camp  war   rt  ev/y  genms  flags
-  12345   34.2   20.1   25.4  13.9    15  126 16→37     46259  33.99     3   44   26    1   17   61   5.1   1253  ·
-    777   31.8   20.9   22.6   7.9    23  113 16→35     40947  31.74     3   43   16    0   10   59   4.7   1110  ·
-  31337   33.5   23.6   28.0  10.0    13  132 16→41     51791  37.58     3   43   20    1    2   70   4.8   1256  ·
----mean   33.2   21.5   25.3  10.6                                      34.44                         4.9
+  12345   34.2   20.1   25.4  13.9    15  126 16→64    227810 167.38     3   70   36    1   28  100   7.5   1207  ·
+    777   31.8   20.9   22.6   7.9    23  113 16→64    193730 150.18     3   62   24    3   17  111   7.1   1138  ·
+  31337   33.5   23.6   28.0  10.0    13  132 16→65    210559 152.80     3   65   32    4   10  112   7.5   1153  ·
+  90210   35.3   18.3   27.1  12.3    26  149 16→65    266016 169.54     3   61   39    2   33  111   8.1   1107  ·
+    555   33.2   22.8   27.4   7.5    15  139 16→66    235857 144.88     3   56   25    2   26  116   8.1   1162  ·
+---mean   33.6   21.1   26.1  10.3                                     156.96                         7.7
 
 flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected
 
 ---- checks ----------------------------------------------------------
-[PASS] mean land fraction                            33.2%   (sweet 22–40%)
-[PASS] mean desert share                             21.5%   (sweet 12–28%)
-[PASS] mean forest share                             25.3%   (sweet 25–60%)
-[PASS] mean mountain share                           10.6%   (sweet 2–14%)
-[PASS] mean growth                                  34.44×   (sweet 2–500×)
-[PASS] mean events/year                                4.9   (sweet 2–40)
+[PASS] mean land fraction                            33.6%   (sweet 22–40%)
+[PASS] mean desert share                             21.1%   (sweet 12–28%)
+[PASS] mean forest share                             26.1%   (sweet 25–60%)
+[PASS] mean mountain share                           10.3%   (sweet 2–14%)
+[PASS] mean growth                                 156.96×   (sweet 2–500×)
+[PASS] mean events/year                                7.7   (sweet 2–40)
 [PASS] all seeds clean of hard flags             all clean   (no B/P/R/G/S/U flags on any seed)
-[PASS] strikes on every seed                           3/3   (prospecting fires everywhere)
-CHECKS: 8 pass · 0 warn · 0 fail
+[PASS] strikes on every seed                           5/5   (prospecting fires everywhere)
+[PASS] mining camps emerge (≥60% of seeds)             5/5   (ore pull creates colonies)
+[PASS] Iron Age reached (≥50% of seeds)                5/5   (history should not stall in bronze)
+[PASS] worlds still growing at half-run (≥60%)            5/5   (no century-long plateaus)
+CHECKS: 11 pass · 0 warn · 0 fail

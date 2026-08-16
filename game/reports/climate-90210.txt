@@ -2,35 +2,38 @@
  CALLIOPE DIAGNOSTIC · CLIMATE                      seed 90210 · 640x512
 ========================================================================
 biome shares of land:
-  Desert                     24072  20.8%
-  Savanna                    17476  15.1%
-  Tropical Rainforest        10902  9.4%
-  Grasslands                 10698  9.3%
-  Woodlands                  13902  12.0%
-  Seasonal Rainforest         1298  1.1%
-  Temperate Rainforest        2065  1.8%
-  Boreal Forest               3628  3.1%
-  Tundra                     19824  17.2%
-  Ice                         8703  7.5%
-land temperature °C: mean 6.8 · p10 -8.6 · p50 8.4 · p90 20.3
-land precipitation mm/yr: mean 797 · p10 180 · p50 404 · p90 2060
+  Desert                     21192  18.3%
+  Savanna                    19715  17.0%
+  Tropical Rainforest        11179  9.7%
+  Grasslands                 11907  10.3%
+  Woodlands                  14098  12.2%
+  Seasonal Rainforest         1525  1.3%
+  Temperate Rainforest        1542  1.3%
+  Boreal Forest               2954  2.6%
+  Tundra                     19975  17.3%
+  Ice                         8957  7.7%
+land temperature °C: mean 6.7 · p10 -8.7 · p50 8.3 · p90 20.2
+land precipitation mm/yr: mean 771 · p10 156 · p50 405 · p90 1962
 seasonal swing |amp| °C: mean 5.7 · p90 9.2
-land freezing in deep winter: 44.4%
+land freezing in deep winter: 44.6%
 latitude bands (land only):
   band          cells   T mean    P mean  dominant biome
-  90°–60°       13005    -8.8C     335mm  Tundra
-  60°–30°       22967     6.4C     799mm  Woodlands
-  30°–0°        23221    17.4C    1086mm  Savanna
-  0°–30°        22618    15.5C    1023mm  Desert
-  30°–60°       22843     3.6C     733mm  Grasslands
-  60°–90°       10895    -7.5C     390mm  Tundra
+  90°–60°       13044    -8.9C     290mm  Tundra
+  60°–30°       22972     6.2C     698mm  Woodlands
+  30°–0°        23227    17.3C    1147mm  Savanna
+  0°–30°        22617    15.5C    1078mm  Savanna
+  30°–60°       22846     3.5C     643mm  Grasslands
+  60°–90°       10957    -7.6C     338mm  Tundra
+monsoon |amp| of annual rain: tropics 0.30 · extratropics 0.01
 
 ---- checks ----------------------------------------------------------
-[PASS] desert share of land                          20.8%   (sweet 12–28% · hard 6–38%)
-[PASS] tundra+ice share of land                      24.7%   (sweet 5–30% · hard 1–45%)
-[PASS] forest share of land                          27.5%   (sweet 25–60% · hard 15–75%)
-[PASS] grass+savanna share of land                   24.4%   (sweet 10–45% · hard 4–60%)
-[PASS] land mean temperature                         6.8°C   (sweet 5–20°C · hard -2–28°C)
-[PASS] land mean precipitation                       797mm   (sweet 500–1500 · hard 250–2400)
+[PASS] desert share of land                          18.3%   (sweet 12–28% · hard 6–38%)
+[PASS] tundra+ice share of land                      25.0%   (sweet 5–30% · hard 1–45%)
+[PASS] forest share of land                          27.1%   (sweet 25–60% · hard 15–75%)
+[PASS] grass+savanna share of land                   27.3%   (sweet 10–45% · hard 4–60%)
+[PASS] land mean temperature                         6.7°C   (sweet 5–20°C · hard -2–28°C)
+[PASS] land mean precipitation                       771mm   (sweet 500–1500 · hard 250–2400)
 [PASS] mean seasonal swing                           5.7°C   (sweet 4–14°C · hard 2–20°C)
-CHECKS: 7 pass · 0 warn · 0 fail
+[PASS] tropical monsoon amplitude                     0.30   (sweet .12–.55 · hard .05–.85)
+[PASS] monsoon lives in the tropics           0.30 vs 0.01   (ITCZ march beats continental swing)
+CHECKS: 9 pass · 0 warn · 0 fail
