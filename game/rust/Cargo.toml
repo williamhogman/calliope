@@ -35,3 +35,13 @@ web-sys = { version = "0.3", features = ["HtmlCanvasElement", "console"] }
 opt-level = 3
 lto = true
 codegen-units = 1
+# E6.2 — no unwind machinery in the shipped binary; nothing in the crate
+# catches panics, and the diagnose harness treats a panic as a hard stop
+# anyway. Debug builds keep unwinding (and the wasm console panic hook).
+panic = "abort"
+
+# E6.3 — explicit wasm-opt pass (wasm-pack runs this via binaryen on PATH;
+# scripts/build.sh's nix path provides it). -O3 measured against -Oz on the
+# real binary; producers/target-features metadata stripped (E6.6).
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O3", "--strip-producers", "--strip-target-features"]

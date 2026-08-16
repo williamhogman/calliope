@@ -37,6 +37,17 @@ pub mod world;
 
 use wasm_bindgen::prelude::*;
 
+/// E6.2 — debug builds only: route panic messages to the console before
+/// the abort. Release builds ship `panic = "abort"` with no hook at all,
+/// so none of this machinery reaches the production binary.
+#[cfg(all(target_arch = "wasm32", debug_assertions))]
+#[wasm_bindgen(start)]
+pub fn init_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        web_sys::console::error_1(&format!("calliope panic: {info}").into());
+    }));
+}
+
 #[wasm_bindgen]
 pub struct WasmWorld {
     inner: world::World,
