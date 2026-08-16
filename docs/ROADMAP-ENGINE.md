@@ -139,11 +139,11 @@ The audit found the quadratic and the wasteful; this track retires them.
 - [x] E5.5 Event emission slims down: `SmallVec` for `Event.ids` rides 0–2 ids inline. The shared-`Vec<Event>` half is rejected: `artifact::monthly` reads the current month's slice while emitting, which a shared buffer cannot lend mutably and immutably at once — the ~15 small per-month `Vec`s are the cheap side of that trade (S-M)
 - [x] E5.6 `artifact::monthly` takes `&new_events[month_start..]`, not a full clone (`world.rs:1794`) (S)
 - [x] E5.7 Merchant pass stops cloning every good name per area per month (`economy.rs:751-752`) (S)
-- [ ] E5.8 `tick_json` serializes into a reused `String` buffer via `to_writer` (S)
+- [x] E5.8 `tick_json` serializes into a reused `String` buffer via `to_writer` (S)
 - [ ] E5.9 Criterion benches: per-stage generation and a 1200-month tick, results written into `game/reports/bench.txt` by `report.sh` (M)
 - [ ] E5.10 Counting allocator behind a diagnose feature: allocations/tick becomes a banded metric — allocation regressions get an alarm (M)
 - [ ] E5.11 Pass-fusion profile pass over generation: fuse adjacent full-grid sweeps in `erosion.rs`/`climate.rs` where the profiler shows wins, guarded by the determinism hash (M)
-- [ ] E5.12 `cultures_json` stops re-deriving ruler/era/tech-name arrays for unchanged societies every tick (`world.rs:2149-2191`) — memoize on society version (S)
+- [x] E5.12 `cultures_json` stops re-deriving ruler/era/tech-name arrays for unchanged societies every tick (`world.rs:2149-2191`) — done as a one-pass cold/hot build gated on the two half-hashes; the full block is only assembled on the rare cold-change tick (S)
 
 Gates: native tick rate band in `diagnose perf` (≥ 2,000 months/min at
 640×512, year-100 world); generation stays < 400 ms native; allocations/
