@@ -113,6 +113,14 @@ fn main() {
             all_events += evs.len();
             discoveries += evs.iter().filter(|e| e.k == "discovery").count();
             depletions += evs.iter().filter(|e| e.k == "depletion").count();
+            for e in &evs {
+                if e.k == "discovery"
+                    || e.k == "depletion"
+                    || e.text.contains("mining camp")
+                {
+                    println!("  [m{}] ({}) {}", e.m, e.k, e.text);
+                }
+            }
             chunks -= step;
         }
         let known_now = w.deposits.iter().filter(|d| d.known).count();
