@@ -10,8 +10,17 @@ export const [world, setWorld] = createSignal(null); // {header, arrays}
 export const [settlements, setSettlements] = createSignal([]);
 export const [cultures, setCultures] = createSignal([]);
 export const [wars, setWars] = createSignal([]);
+// M9.1 — what remains of towns that died: [{name, of, x, y, since, why, people, ety, eid}]
+export const [ruins, setRuins] = createSignal([]);
 export const [market, setMarket] = createSignal([]);
+// M5.2 — {hubs:[{id,name,n,p}], of:[areaIdx per settlement], spread:[...]}
+export const [areas, setAreas] = createSignal(null);
+export const [merchants, setMerchants] = createSignal([]);
 export const [events, setEvents] = createSignal([]);
+// M6 — the telling: sifted microstories, the full cast, the relics.
+export const [stories, setStories] = createSignal([]);
+export const [entities, setEntities] = createSignal([]);
+export const [artifacts, setArtifacts] = createSignal([]);
 export const [month, setMonth] = createSignal(0);
 export const [playing, setPlaying] = createSignal(false);
 export const [speed, setSpeed] = createSignal(1);
@@ -88,6 +97,10 @@ export const [outlinerTab, setOutlinerTab] = createSignal(savedUi.outlinerTab ||
 export const [placeSort, setPlaceSort] = createSignal(savedUi.placeSort || "pop");
 export const [pins, setPins] = createSignal(new Set(savedUi.pins || []));
 
+// M6.9 — which layer of the telling the reader gets: the ground-truth
+// chronicle ("plain") or the fireside legend ("songs").
+export const [legendMode, setLegendMode] = createSignal(savedUi.legendMode || "plain");
+
 // Chronicle filters: which event families show in the feed.
 export const [chronFilter, setChronFilter] = createStore({
   realm: true, war: true, economy: true, myth: true, nature: true,
@@ -108,6 +121,7 @@ export function persistUi() {
       outlinerTab: outlinerTab(),
       placeSort: placeSort(),
       pins: [...pins()],
+      legendMode: legendMode(),
       chronFilter: { ...chronFilter },
       notif: { ...notif },
     }));

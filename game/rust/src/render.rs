@@ -134,6 +134,18 @@ fn elev_ramp(v: f32) -> vec3<f32> {
   return c / 255.0;
 }
 
+// M7.4 — the dry-country hypsometric ladder: ochre lowlands through
+// rust-brown uplands to pale desert-varnish summits.
+fn elev_arid_ramp(v: f32) -> vec3<f32> {
+  var c = seg(v, 0.0, 0.15, vec3<f32>(163.0, 145.0, 99.0), vec3<f32>(185.0, 159.0, 104.0));
+  if (v > 0.15) { c = seg(v, 0.15, 0.30, vec3<f32>(185.0, 159.0, 104.0), vec3<f32>(199.0, 168.0, 110.0)); }
+  if (v > 0.30) { c = seg(v, 0.30, 0.45, vec3<f32>(199.0, 168.0, 110.0), vec3<f32>(178.0, 139.0, 97.0)); }
+  if (v > 0.45) { c = seg(v, 0.45, 0.62, vec3<f32>(178.0, 139.0, 97.0), vec3<f32>(152.0, 118.0, 92.0)); }
+  if (v > 0.62) { c = seg(v, 0.62, 0.80, vec3<f32>(152.0, 118.0, 92.0), vec3<f32>(206.0, 197.0, 188.0)); }
+  if (v > 0.80) { c = seg(v, 0.80, 1.00, vec3<f32>(206.0, 197.0, 188.0), vec3<f32>(246.0, 244.0, 240.0)); }
+  return c / 255.0;
+}
+
 fn sea_ramp(v: f32) -> vec3<f32> {
   var c = seg(v, 0.0, 0.25, vec3<f32>(58.0, 119.0, 184.0), vec3<f32>(43.0, 92.0, 150.0));
   if (v > 0.25) { c = seg(v, 0.25, 0.60, vec3<f32>(43.0, 92.0, 150.0), vec3<f32>(28.0, 63.0, 110.0)); }
@@ -204,6 +216,13 @@ fn sea_surface(p: vec2<f32>, h: f32, tmean: f32, coast: f32, t: f32, cpp: f32) -
     let rip = vnoise(p * 7.0 + vec2<f32>(t * 0.5, t * 0.31)) - 0.5;
     col += vec3<f32>(rip * 0.035 * (1.0 - cpp / 0.12) * (1.0 - vis * 0.5));
   }
+
+  // M7.1 — atlas vignette: coast-parallel bands ring the shore like the
+  // engraved shallows of an old chart, fading out across the shelf
+  let ring = (0.5 + 0.5 * cos(coast * 2.4))
+           * (1.0 - smoothstep(1.2, 10.0, coast))
+           * smoothstep(0.2, 0.9, coast);
+  col += vec3<f32>(0.030, 0.052, 0.060) * ring;
 
   // breakers whiten the last cells before the strand
   let foam = (1.0 - smoothstep(0.15, 1.6, coast))
@@ -276,11 +295,19 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
   let wadi_m = clamp(-misc.z, 0.0, 1.0);
   let water_m = max(1.0 - land_m, max(lake_m, salt_m));
 
-  // hillshade from the smooth height field (light from the NW) — forward
-  // differences reuse the centre sample, two taps instead of four
-  let hx = sample_h(p + vec2<f32>(1.0, 0.0));
-  let hy = sample_h(p + vec2<f32>(0.0, 1.0));
-  let shade = clamp(1.0 + U.opts.y * ((h - hx) + (h - hy)) * 0.9, 0.6, 1.32);
+  // M7.5 — multi-directional oblique-weighted hillshade: four low suns
+  // (NW leading, N, W, SW filling) instead of one, so ridges running every
+  // direction carve; a Laplacian curvature accent etches ridgelines bright
+  // and valley floors dark (texture shading), all from the same four taps.
+  let he = sample_h(p + vec2<f32>(1.0, 0.0));
+  let hs = sample_h(p + vec2<f32>(0.0, 1.0));
+  let hw = sample_h(p - vec2<f32>(1.0, 0.0));
+  let hn = sample_h(p - vec2<f32>(0.0, 1.0));
+  let gx = (he - hw) * 0.5;
+  let gy = (hs - hn) * 0.5;
+  let mdow = (-gx - gy) * 0.62 + (-gy) * 0.24 + (-gx) * 0.24 + (gx - gy) * 0.08;
+  let curv = clamp((he + hs + hw + hn - 4.0 * h) * U.opts.y * 0.55, -0.10, 0.10);
+  let shade = clamp(1.0 + U.opts.y * mdow * 1.05 - curv, 0.58, 1.34);
 
   var col = vec3<f32>(0.0);
 
@@ -308,7 +335,14 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
     if (h < 0.0) {
       col = sea_ramp(min(1.0, -h / 0.75)) * vec3<f32>(0.9, 0.95, 1.0);
     } else {
-      col = mix(elev_ramp(h), vec3<f32>(74.0, 128.0, 168.0) / 255.0, lake_m);
+      // M7.4 — climate-blended hypsometry: wet country climbs through green,
+      // dry country through ochre, and the frozen lands grey toward firn
+      let arid = 1.0 - clamp((clim.z - 240.0) / 700.0, 0.0, 1.0);
+      var hyp = mix(elev_ramp(h), elev_arid_ramp(h), arid);
+      let chill = clamp((-2.0 - clim.x) / 14.0, 0.0, 1.0);
+      let polar = mix(vec3<f32>(0.60, 0.64, 0.69), vec3<f32>(0.93, 0.94, 0.96), clamp(h, 0.0, 1.0));
+      hyp = mix(hyp, polar, chill * 0.85);
+      col = mix(hyp, vec3<f32>(74.0, 128.0, 168.0) / 255.0, lake_m);
       col = mix(col, vec3<f32>(198.0, 202.0, 196.0) / 255.0, salt_m);
     }
   } else if (layer == 3) {

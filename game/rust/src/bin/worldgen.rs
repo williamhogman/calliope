@@ -171,5 +171,38 @@ fn main() {
         for e in w.events.iter().rev().take(8) {
             println!("  [m{}] {}", e.m, e.text);
         }
+
+        // decline probe — how far below their peaks do towns actually fall?
+        // Calibrates the M9.1 abandonment thresholds against real dynamics.
+        let mut pops: Vec<i64> = w.settlements.iter().map(|s| s.pop).collect();
+        pops.sort_unstable();
+        let median = pops[pops.len() / 2];
+        let mut ratios: Vec<f64> = w
+            .settlements
+            .iter()
+            .filter(|s| s.peak > 0)
+            .map(|s| s.pop as f64 / s.peak as f64)
+            .collect();
+        ratios.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let q = |p: f64| ratios[((ratios.len() - 1) as f64 * p) as usize];
+        println!(
+            "  decline: median pop {} · pop/peak p05 {:.2} p25 {:.2} p50 {:.2} · min pop {} · ruins {}",
+            median, q(0.05), q(0.25), q(0.50), pops[0], w.ruins.len()
+        );
+        let mut worst: Vec<&calliope::settlements::Settlement> =
+            w.settlements.iter().filter(|s| s.peak > 0).collect();
+        worst.sort_by(|a, b| {
+            (a.pop as f64 / a.peak as f64)
+                .partial_cmp(&(b.pop as f64 / b.peak as f64))
+                .unwrap()
+        });
+        for s in worst.iter().take(6) {
+            println!(
+                "    {}: pop {} / peak {} ({:.0}%) · goods {} · wealth {:.0}",
+                s.name, s.pop, s.peak,
+                100.0 * s.pop as f64 / s.peak.max(1) as f64,
+                s.goods.len(), s.wealth
+            );
+        }
     }
 }

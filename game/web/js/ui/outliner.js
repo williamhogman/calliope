@@ -5,7 +5,9 @@ import { createMemo, createSignal, createEffect } from "solid-js";
 import html from "solid-js/html";
 
 import {
-  world, settlements, cultures, wars, market, events, month, selection,
+  world, settlements, cultures, wars, market, areas, merchants,
+  events, month, selection,
+  stories, entities, artifacts, legendMode, setLegendMode,
   outlinerOpen, setOutlinerOpen, outlinerTab, setOutlinerTab,
   placeSort, setPlaceSort, pins, togglePin, persistUi,
   chronFilter, setChronFilter, chronQuery, setChronQuery,
@@ -13,6 +15,7 @@ import {
 } from "./state.js";
 import {
   EVENT_FAMILIES, eventColor, eventFamily, FALLBACK_MONTHS, fmt,
+  patternMeta, entityKind,
 } from "./config.js";
 import { I } from "./icons.js";
 import { settlementCss } from "../palette.js";
@@ -113,8 +116,21 @@ function PeoplesTab(a) {
 function MarketTab(a) {
   const rows = createMemo(() =>
     [...(market() || [])].sort((x, y) => y.p - x.p));
+  const spread = () => areas()?.spread || [];
+  const traders = createMemo(() =>
+    [...(merchants() || [])].sort((x, y) => (y.alive - x.alive) || (y.wealth - x.wealth)));
+  const hubById = (id) => settlements().find((s) => s.id === id);
   return html`<div class="ol-tabbody">
     <div class="ol-list">
+      ${() => (spread().length ? html`<div class="ol-sect dim">Widest price gaps</div>` : "")}
+      ${() => spread().map((r) => html`<div class="ol-row gap"
+        onClick=${() => a.select({ kind: "good", id: r.g })}>
+        <span class="swatch" style=${`background:${world()?.header.resources?.[r.g]?.color || "#8a8fa0"}`}></span>
+        <span class="s-name">${r.g}</span>
+        <span class="c-sub dim gap-route">${r.lo.hub} ${r.lo.p.toFixed(1)} \u2192 ${r.hi.hub} ${r.hi.p.toFixed(1)}</span>
+        <span class="m-price">\u00d7${r.ratio.toFixed(1)}</span>
+      </div>`)}
+      ${() => (spread().length ? html`<div class="ol-sect dim">All goods \u00b7 world mean</div>` : "")}
       ${() => rows().map((r) => {
         const meta = world()?.header.resources?.[r.g];
         const t = r.t > 0.02 ? "up" : r.t < -0.02 ? "down" : "";
@@ -127,8 +143,18 @@ function MarketTab(a) {
         </div>`;
       })}
       ${() => (!rows().length ? html`<div class="ol-empty dim">The first caravans are still loading.</div>` : "")}
+      ${() => (traders().length ? html`<div class="ol-sect dim">Merchants on the roads</div>` : "")}
+      ${() => traders().slice(0, 8).map((m) => {
+        const home = hubById(m.home);
+        return html`<div class=${"ol-row" + (m.alive ? "" : " gone")}
+          onClick=${() => home && a.select({ kind: "settlement", id: home.id, fly: true })}>
+          <span class="s-name">${m.name}</span>
+          <span class="c-sub dim">${home ? `of ${home.name}` : ""}${m.alive ? "" : ` \u00b7 ${m.fate || "gone"}`}</span>
+          <span class="m-price">${fmt(Math.round(m.wealth))}</span>
+        </div>`;
+      })}
     </div>
-    ${() => (rows().length ? html`<div class="ol-foot dim">Coin for one load \u2014 scarcity sets the price.</div>` : "")}
+    ${() => (rows().length ? html`<div class="ol-foot dim">Coin for one load \u2014 each market area prices its own.</div>` : "")}
   </div>`;
 }
 
@@ -143,7 +169,8 @@ function ChronicleTab(a) {
     for (let i = evs.length - 1; i >= 0; i--) {
       const e = evs[i];
       if (!chronFilter[eventFamily(e)]) continue;
-      if (q && !e.text.toLowerCase().includes(q) && !(e.s || "").toLowerCase().includes(q)) continue;
+      if (q && !e.text.toLowerCase().includes(q) && !(e.s || "").toLowerCase().includes(q)
+        && !(e.legend || "").toLowerCase().includes(q)) continue;
       out.push(e);
     }
     return out;
@@ -161,6 +188,10 @@ function ChronicleTab(a) {
         ${EVENT_FAMILIES.map(([id, label]) => html`<button
           class=${() => "chip" + (chronFilter[id] ? " on" : "")}
           onClick=${() => flip(id)}>${label}</button>`)}
+        <button class=${() => "chip fireside" + (legendMode() === "songs" ? " on" : "")}
+          title="Read the fireside telling \u2014 numbers blur into song (M6.9)"
+          onClick=${() => { setLegendMode(legendMode() === "songs" ? "plain" : "songs"); persistUi(); }}>
+          \u266a Fireside</button>
       </div>
       <input class="chron-search" type="search" placeholder="search the chronicle\u2026"
         value=${chronQuery()}
@@ -174,7 +205,9 @@ function ChronicleTab(a) {
           onClick=${() => { if (target) a.flyTo(target.x, target.y, 8); }}>
           <span class="e-dot" title=${e.k || ""} style=${`background:${eventColor(e)}`}></span>
           <span class="e-when">Y${Math.floor(e.m / 12) + 1} ${(months[((e.m % 12) + 12) % 12] || "").slice(0, 3)}</span>
-          <span class="e-text">${e.text}</span>
+          <span class=${() => "e-text" + (legendMode() === "songs" && e.legend ? " sung" : "") + (e.veiled ? " veiled" : "")}
+            title=${e.veiled ? "The chronicle is not sure of this (M9.5)" : ""}>
+            ${() => (legendMode() === "songs" && e.legend ? e.legend : e.text)}</span>
         </div>`;
       })}
       ${() => (filtered().length > cap()
@@ -188,6 +221,98 @@ function ChronicleTab(a) {
   </div>`;
 }
 
+// ---------------------------------------------------------------- legends
+// M6.6 — the browser over the telling: sifted sagas, the relics with
+// their keepers, and the whole cast of the chronicle, searchable.
+
+const CAST_ORDER = {
+  person: 0, artifact: 1, war: 2, ruin: 3,
+  culture: 4, settlement: 5, feature: 6,
+};
+
+function LegendsTab(a) {
+  // ask the engine for a fresh sift while the reader is looking
+  createEffect(() => {
+    month();
+    if (outlinerTab() === "legends" && (outlinerOpen() || sheet() === "outliner")) {
+      a.refreshLegends();
+    }
+  });
+  const [castQ, setCastQ] = createSignal("");
+  const [cap, setCap] = createSignal(30);
+  const cast = createMemo(() => {
+    const q = castQ().trim().toLowerCase();
+    let list = entities().filter((e) => e.kind !== "good" && e.kind !== "world");
+    if (q) list = list.filter((e) => e.name.toLowerCase().includes(q));
+    return [...list].sort((x, y) =>
+      (CAST_ORDER[x.kind] ?? 9) - (CAST_ORDER[y.kind] ?? 9) || y.since - x.since);
+  });
+  const relics = createMemo(() =>
+    [...(artifacts() || [])].sort((x, y) => (x.lost - y.lost) || (x.made - y.made)));
+  const holderName = (id) => settlements().find((s) => s.id === id)?.name;
+  const isPicked = (s) =>
+    selection()?.kind === "story" && selection()?.story?.pattern === s.pattern
+    && selection()?.story?.title === s.title;
+  const setMode = (m) => { setLegendMode(m); persistUi(); };
+  return html`<div class="ol-tabbody">
+    <div class="ol-toolbar">
+      <div class="seg tiny">
+        <button class=${() => (legendMode() === "plain" ? "active" : "")}
+          title="The chronicle as it happened"
+          onClick=${() => setMode("plain")}>As it was</button>
+        <button class=${() => (legendMode() === "songs" ? "active" : "")}
+          title="The fireside telling \u2014 numbers blur, songs embroider"
+          onClick=${() => setMode("songs")}>As sung</button>
+      </div>
+      <span class="ol-count">${() => stories().length}</span>
+    </div>
+    <div class="ol-list">
+      ${() => (stories().length ? html`<div class="ol-sect dim">Sagas the sifter found</div>` : "")}
+      ${() => stories().map((s) => html`<div
+        class=${() => "ol-row tall saga" + (isPicked(s) ? " picked" : "")}
+        onClick=${() => a.select({ kind: "story", story: s })}>
+        <span class="s-dot" style=${`background:${patternMeta(s.pattern).color}`}></span>
+        <span class="c-body">
+          <span class="c-name">${s.title}</span>
+          <span class="c-sub dim">${patternMeta(s.pattern).label}
+            \u00b7 Y${s.y0}${s.y1 !== s.y0 ? `\u2013${s.y1}` : ""}
+            \u00b7 ${s.beats.length} beat${s.beats.length === 1 ? "" : "s"}</span>
+        </span>
+      </div>`)}
+      ${() => (!stories().length
+        ? html`<div class="ol-empty dim">No sagas yet \u2014 the sifter wants years, wars and reversals. Let time pass.</div>`
+        : "")}
+      ${() => (relics().length ? html`<div class="ol-sect dim">Relics & their keepers</div>` : "")}
+      ${() => relics().map((r) => html`<div
+        class=${() => "ol-row" + (r.lost ? " gone" : "")
+          + (selection()?.kind === "entity" && selection()?.id === r.ent ? " picked" : "")}
+        onClick=${() => a.select({ kind: "entity", id: r.ent, fly: !r.lost })}>
+        <span class="s-dot" style=${`background:${entityKind("artifact").color}`}></span>
+        <span class="s-name">${r.name}</span>
+        <span class="c-sub dim">${r.lost ? "lost" : holderName(r.holder) ? `at ${holderName(r.holder)}` : "\u2014"}</span>
+      </div>`)}
+      <div class="ol-sect dim cast-head">The cast
+        <input class="chron-search cast-search" type="search" placeholder="search the cast\u2026"
+          value=${castQ()} onInput=${(e) => setCastQ(e.target.value)} />
+      </div>
+      ${() => cast().slice(0, cap()).map((e) => html`<div
+        class=${() => "ol-row" + (selection()?.kind === "entity" && selection()?.id === e.id ? " picked" : "")}
+        onClick=${() => a.select({ kind: "entity", id: e.id })}>
+        <span class="s-dot" style=${`background:${entityKind(e.kind).color}`}></span>
+        <span class=${"s-name" + (e.until != null ? " dim" : "")}>${e.name}</span>
+        <span class="s-tier">${e.role || entityKind(e.kind).label}</span>
+        <span class="s-pop">${e.until != null ? "\u2020" : `Y${Math.floor(e.since / 12) + 1}`}</span>
+      </div>`)}
+      ${() => (cast().length > cap()
+        ? html`<button class="more-btn" onClick=${() => setCap(cap() + 60)}>
+            More of the cast (${cast().length - cap()})</button>`
+        : "")}
+      ${() => (!cast().length ? html`<div class="ol-empty dim">No one answers to that name.</div>` : "")}
+    </div>
+    <div class="ol-foot dim">\u2020 marks a story that has ended \u00b7 click anyone for their whole tale.</div>
+  </div>`;
+}
+
 // ---------------------------------------------------------------- rail
 
 const TABS = [
@@ -195,6 +320,7 @@ const TABS = [
   ["peoples", "Peoples", I.people],
   ["market", "Market", I.market],
   ["chronicle", "Chronicle", I.book],
+  ["legends", "Legends", I.quill],
 ];
 
 export function Outliner(a) {
@@ -205,6 +331,7 @@ export function Outliner(a) {
       case "peoples": return PeoplesTab(a);
       case "market": return MarketTab(a);
       case "chronicle": return ChronicleTab(a);
+      case "legends": return LegendsTab(a);
       default: return PlacesTab(a);
     }
   };

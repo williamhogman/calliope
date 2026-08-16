@@ -1,13 +1,13 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-16 10:46 UTC
+mode: full · size: 512 · generated: 2026-08-16 15:39 UTC
 
-totals: 151 pass · 1 warn · 0 fail
+totals: 266 pass · 2 warn · 0 fail
 
 -- bench.txt
    all checks pass
 
 -- civ-12345.txt
-   all checks pass
+[WARN] median town spacing                           48 km   (M2.5: market-town band ~15–30 km in settled cores)
 
 -- civ-777.txt
    all checks pass
@@ -27,6 +27,9 @@ totals: 151 pass · 1 warn · 0 fail
 -- economy-12345.txt
    all checks pass
 
+-- era.txt
+   all checks pass
+
 -- hydro-12345.txt
    all checks pass
 
@@ -34,6 +37,12 @@ totals: 151 pass · 1 warn · 0 fail
    all checks pass
 
 -- hydro-90210.txt
+   all checks pass
+
+-- patina.txt
+   all checks pass
+
+-- properties.txt
    all checks pass
 
 -- resources-12345.txt
@@ -46,6 +55,9 @@ totals: 151 pass · 1 warn · 0 fail
    all checks pass
 
 -- sweep.txt
+   all checks pass
+
+-- telling-12345.txt
    all checks pass
 
 -- terrain-12345.txt

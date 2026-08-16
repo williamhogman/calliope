@@ -9,10 +9,9 @@ use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
 use crate::culture::Culture;
+use crate::entity::Registry;
 use crate::naming::{self, Feature};
 use crate::settlements::Settlement;
-use crate::society::{self, Society};
-use crate::util::round2;
 use crate::world::Event;
 
 // ---------------------------------------------------------------- state
@@ -25,6 +24,9 @@ pub struct Ruler {
     pub since: i64,
     #[serde(skip)]
     pub age_months: i64,
+    /// Registry id of the person under the circlet (M6.2).
+    #[serde(skip)]
+    pub ent: i64,
 }
 
 impl Ruler {
@@ -37,18 +39,9 @@ impl Ruler {
     }
 }
 
-#[derive(Serialize, Clone)]
-pub struct War {
-    pub a: usize,
-    pub b: usize,
-    pub until: i64,
-    pub name: String,
-}
-
 #[derive(Default)]
 pub struct ChronicleState {
     pub rulers: Vec<Ruler>,
-    pub wars: Vec<War>,
     pub had_town: bool,
     pub had_city: bool,
 }
@@ -62,12 +55,6 @@ const EPITHETS: [&str; 20] = [
     "the Lawgiver", "the Generous", "Half-blind", "the Pilgrim", "the Red",
 ];
 
-const WAR_NAMES: [&str; 12] = [
-    "the Salt War", "the Amber War", "the Cattle War", "the Winter War",
-    "the War of the Broken Oath", "the Border War", "the Bitter War",
-    "the War of Low Tides", "the Nameless War", "the Widows' War",
-    "the War of Two Rivers", "the Quarrel of Kings",
-];
 
 const OMENS: [&str; 9] = [
     "A bearded star hangs in the night sky for a full month; the priests read doom in its tail.",
@@ -81,6 +68,15 @@ const OMENS: [&str; 9] = [
     "A white stag is seen at the edge of {F}, and vanishes when hunters give chase.",
 ];
 
+/// M3.5 — omens that name a god: {G} god, {D} domain, {P} people.
+const OMENS_GOD: [&str; 5] = [
+    "{G} is silent this season; the priests of the {P} give a white bull to the fire and wait.",
+    "Lightning splits the shrine of {G}, keeper of {D}. The augurs of the {P} quarrel over the meaning.",
+    "A child among the {P} speaks three days in the voice of {G}, and afterward remembers nothing.",
+    "The offerings to {G} are found untouched by morning — a thing the old ones of the {P} say means a hard year for {D}.",
+    "Dreams of {G} trouble every hearth of the {P} on the same night, and no two dreamers dreamed alike.",
+];
+
 // ---------------------------------------------------------------- rulers
 
 pub fn new_ruler(
@@ -88,9 +84,12 @@ pub fn new_ruler(
     culture: &Culture,
     taken: &mut HashSet<String>,
     since: i64,
+    reg: &mut Registry,
 ) -> Ruler {
     let name = naming::make_word(rng, &culture.style, taken);
     let epithet = EPITHETS[rng.gen_range(0..EPITHETS.len())].to_string();
+    let ent = reg.add_person(&name, "ruler", since, Some(culture.id));
+    reg.earn_epithet(ent, &epithet);
     Ruler {
         culture: culture.id,
         name,
@@ -98,6 +97,7 @@ pub fn new_ruler(
         since,
         // takes power somewhere in adult life: 20..45 "years"
         age_months: rng.gen_range(240..540),
+        ent,
     }
 }
 
@@ -105,8 +105,12 @@ pub fn init_rulers(
     rng: &mut Pcg64Mcg,
     cultures: &[Culture],
     taken: &mut HashSet<String>,
+    reg: &mut Registry,
 ) -> Vec<Ruler> {
-    cultures.iter().map(|c| new_ruler(rng, c, taken, 0)).collect()
+    cultures
+        .iter()
+        .map(|c| new_ruler(rng, c, taken, 0, reg))
+        .collect()
 }
 
 // ---------------------------------------------------------------- myths
@@ -137,6 +141,7 @@ pub fn founding_myths(
             "In the elder dark there was only {}. Then the gods drew {} up from the deep, and the first fires were kindled.",
             ocean, continent
         ),
+        ..Default::default()
     });
     for c in cultures {
         let range = features.iter().find(|f| f.t == "range").map(|f| f.name.as_str());
@@ -170,7 +175,23 @@ pub fn founding_myths(
             s: c.people.clone(),
             k: "myth".to_string(),
             text: line,
+            ..Default::default()
         });
+        // M3.5 — each people names its gods at the dawn of the telling.
+        if c.pantheon.len() >= 2 {
+            let g0 = &c.pantheon[0];
+            let g1 = &c.pantheon[1];
+            events.push(Event {
+                m: 0,
+                s: c.people.clone(),
+                k: "myth".to_string(),
+                text: format!(
+                    "Chief among the gods of the {} stands {}, who holds {}; after them {}, who holds {}.",
+                    c.people, g0.name, g0.domain, g1.name, g1.domain
+                ),
+                ..Default::default()
+            });
+        }
         let _ = rng; // style banks are deterministic; rng reserved for future variants
     }
     events
@@ -178,9 +199,12 @@ pub fn founding_myths(
 
 // ---------------------------------------------------------------- monthly
 
-/// Rulers age and die, wars kindle, rage and gutter out, omens pass over,
-/// festivals are held. Raids now weigh the attacker's arts of war against
-/// the defender's walls, and carry off coin as plunder.
+/// Rulers age and die, omens pass over, festivals are held. War and
+/// statecraft live in `politics.rs` — the chronicle keeps the human pulse.
+///
+/// `pace` is the drama-pacing modifier (M6.4): above 1 in quiet years
+/// (the telling reaches for omens and feasts to fill the silence), below
+/// 1 when the world is already loud with war and famine.
 #[allow(clippy::too_many_arguments)]
 pub fn monthly(
     state: &mut ChronicleState,
@@ -188,10 +212,11 @@ pub fn monthly(
     taken: &mut HashSet<String>,
     month_abs: i64,
     settlements: &mut [Settlement],
-    socs: &mut [Society],
     cultures: &[Culture],
     features: &[Feature],
     world_name: &str,
+    reg: &mut Registry,
+    pace: f64,
 ) -> Vec<Event> {
     let mut events = Vec::new();
     if cultures.is_empty() {
@@ -207,152 +232,51 @@ pub fn monthly(
             let cid = state.rulers[ri].culture;
             let culture = &cultures[cid];
             let old_title = state.rulers[ri].title();
-            let heir = new_ruler(rng, culture, taken, month_abs);
-            let mut heir = heir;
+            let old_ent = state.rulers[ri].ent;
+            let years = ((month_abs - state.rulers[ri].since) / 12).max(0);
+            let mut heir = new_ruler(rng, culture, taken, month_abs, reg);
             heir.age_months = rng.gen_range(200..420);
+            reg.close(
+                old_ent,
+                month_abs,
+                &format!(
+                    "laid to rest after {} years under the circlet of the {}",
+                    years, culture.people
+                ),
+            );
             let text = format!(
                 "{} of the {} is laid to rest. {} takes up the circlet.",
                 old_title,
                 culture.people,
                 heir.title()
             );
+            // the seat of the realm anchors the succession on the map
+            let seat = settlements
+                .iter()
+                .filter(|s| s.culture == cid)
+                .max_by_key(|s| s.pop);
+            let culture_ent = reg.find_kind("culture", &culture.people);
+            let mut ids = vec![old_ent, heir.ent];
+            if let Some(ce) = culture_ent {
+                ids.insert(0, ce);
+            }
             events.push(Event {
                 m: month_abs,
                 s: culture.people.clone(),
                 k: "ruler".to_string(),
                 text,
+                ids,
+                x: seat.map(|s| s.x).unwrap_or(-1),
+                y: seat.map(|s| s.y).unwrap_or(-1),
+                ..Default::default()
             });
             state.rulers[ri] = heir;
         }
     }
 
-    // --- wars end
-    let mut ended = Vec::new();
-    state.wars.retain(|w| {
-        if month_abs >= w.until {
-            ended.push(w.clone());
-            false
-        } else {
-            true
-        }
-    });
-    for w in ended {
-        events.push(Event {
-            m: month_abs,
-            s: w.name.clone(),
-            k: "war".to_string(),
-            text: format!(
-                "Peace is sworn between the {} and the {}; {} is over.",
-                cultures[w.a].people, cultures[w.b].people, w.name
-            ),
-        });
-    }
-
-    // --- active wars: raids burn the borderlands and carry off coin
-    for wi in 0..state.wars.len() {
-        if rng.gen::<f64>() < 0.22 {
-            let w = &state.wars[wi];
-            let (attacker, victim_c) = if rng.gen::<bool>() { (w.a, w.b) } else { (w.b, w.a) };
-            let att_war = socs
-                .get(attacker)
-                .map(|s| society::mods_for(s).war)
-                .unwrap_or(1.0);
-            let walls = socs
-                .get(victim_c)
-                .map(|s| society::mods_for(s).defense)
-                .unwrap_or(1.0);
-            let victims: Vec<usize> = settlements
-                .iter()
-                .enumerate()
-                .filter(|(_, s)| s.culture == victim_c && s.pop > 90)
-                .map(|(i, _)| i)
-                .collect();
-            if let Some(&vi) = victims.get(rng.gen_range(0..victims.len().max(1))) {
-                let frac = rng.gen_range(0.02..0.07) * att_war * walls;
-                let loss = ((settlements[vi].pop as f64 * frac) as i64).max(5);
-                settlements[vi].pop = (settlements[vi].pop - loss).max(40);
-                let plunder = round2(settlements[vi].wealth * 0.25 * att_war.min(1.6) * walls);
-                settlements[vi].wealth = round2((settlements[vi].wealth - plunder).max(0.0));
-                if let Some(sa) = socs.get_mut(attacker) {
-                    sa.treasury = round2(sa.treasury + 0.6 * plunder);
-                }
-                let text = if plunder > 25.0 {
-                    format!(
-                        "Raiders of the {} burn the fields of {} — {} souls lost, {} in coin carried off.",
-                        cultures[attacker].people,
-                        settlements[vi].name,
-                        loss,
-                        plunder.round() as i64
-                    )
-                } else {
-                    format!(
-                        "Raiders of the {} burn the fields of {} — {} souls lost.",
-                        cultures[attacker].people, settlements[vi].name, loss
-                    )
-                };
-                events.push(Event {
-                    m: month_abs,
-                    s: settlements[vi].name.clone(),
-                    k: "war".to_string(),
-                    text,
-                });
-            }
-        }
-    }
-
-    // --- war chests drain while the banners fly
-    for w in &state.wars {
-        for side in [w.a, w.b] {
-            if let Some(s) = socs.get_mut(side) {
-                s.treasury = round2((s.treasury - 3.0).max(0.0));
-            }
-        }
-    }
-
-    // --- new wars kindle, but only between true neighbours
-    if cultures.len() >= 2 && state.wars.len() < 2 && rng.gen::<f64>() < 0.0045 {
-        let mut candidates: Vec<(usize, usize)> = Vec::new();
-        for a in 0..cultures.len() {
-            for b in (a + 1)..cultures.len() {
-                let already = state
-                    .wars
-                    .iter()
-                    .any(|w| (w.a == a && w.b == b) || (w.a == b && w.b == a));
-                if already {
-                    continue;
-                }
-                let mut d2min = f64::INFINITY;
-                for sa in settlements.iter().filter(|s| s.culture == a) {
-                    for sb in settlements.iter().filter(|s| s.culture == b) {
-                        let dy = (sa.y - sb.y) as f64;
-                        let dx = (sa.x - sb.x) as f64;
-                        d2min = d2min.min(dy * dy + dx * dx);
-                    }
-                }
-                if d2min <= 90.0 * 90.0 {
-                    candidates.push((a, b));
-                }
-            }
-        }
-        if !candidates.is_empty() {
-            let (a, b) = candidates[rng.gen_range(0..candidates.len())];
-            let name = WAR_NAMES[rng.gen_range(0..WAR_NAMES.len())].to_string();
-            let until = month_abs + rng.gen_range(8..30);
-            events.push(Event {
-                m: month_abs,
-                s: name.clone(),
-                k: "war".to_string(),
-                text: format!(
-                    "War kindles between the {} and the {} — men will call it {}.",
-                    cultures[a].people, cultures[b].people, name
-                ),
-            });
-            state.wars.push(War { a, b, until, name });
-        }
-    }
 
     // --- omens pass over the world
-    if rng.gen::<f64>() < 0.0035 {
+    if rng.gen::<f64>() < 0.0035 * pace {
         let raw = OMENS[rng.gen_range(0..OMENS.len())];
         let feat = features
             .iter()
@@ -365,14 +289,36 @@ pub fn monthly(
             s: world_name.to_string(),
             k: "omen".to_string(),
             text,
+            ..Default::default()
         });
     }
 
-    // --- festivals at midsummer and midwinter
+    // --- and sometimes the gods themselves are read in the signs (M3.5)
+    if rng.gen::<f64>() < 0.0022 * pace {
+        let c = &cultures[rng.gen_range(0..cultures.len())];
+        if !c.pantheon.is_empty() {
+            let g = &c.pantheon[rng.gen_range(0..c.pantheon.len())];
+            let raw = OMENS_GOD[rng.gen_range(0..OMENS_GOD.len())];
+            let text = raw
+                .replace("{G}", &g.name)
+                .replace("{D}", &g.domain)
+                .replace("{P}", &c.people);
+            events.push(Event {
+                m: month_abs,
+                s: c.people.clone(),
+                k: "omen".to_string(),
+                text,
+                ..Default::default()
+            });
+        }
+    }
+
+    // --- festivals at midsummer and midwinter; in loud years the feasts
+    // thin out (the telling has no room), in quiet ones they carry it
     let month = month_abs.rem_euclid(12);
     if month == 5 || month == 11 {
         for c in cultures {
-            if rng.gen::<f64>() > 0.10 {
+            if rng.gen::<f64>() > 0.10 * pace {
                 continue;
             }
             let host = settlements
@@ -393,11 +339,25 @@ pub fn monthly(
                 _ => "burns sweet grass to the sky-father and feasts for three days",
             };
             host.pop += (host.pop / 100).max(1); // festivals draw folk in
+            // M3.5 — feasts are held in a god's name: midsummer belongs to
+            // the chief god, midwinter to the keeper of the dead or hearth.
+            let dedication = if month == 5 {
+                c.pantheon.first()
+            } else {
+                c.pantheon
+                    .iter()
+                    .find(|g| g.domain == "the dead" || g.domain == "the hearth")
+                    .or_else(|| c.pantheon.first())
+            };
+            let feast = dedication
+                .map(|g| format!(" — the feast of {}, who holds {}", g.name, g.domain))
+                .unwrap_or_default();
             events.push(Event {
                 m: month_abs,
                 s: host.name.clone(),
                 k: "festival".to_string(),
-                text: format!("{} {} in {}.", c.people, what, host.name),
+                text: format!("{} {} in {}{}.", c.people, what, host.name, feast),
+                ..Default::default()
             });
         }
     }
@@ -431,6 +391,7 @@ pub fn wonder_for(
             s: s.name.clone(),
             k: "wonder".to_string(),
             text: format!("{} {}.", s.name, built),
+            ..Default::default()
         });
         if !state.had_town {
             state.had_town = true;
@@ -442,6 +403,7 @@ pub fn wonder_for(
                     "Travellers carry the word to every shore: {} is the first true town of the age.",
                     s.name
                 ),
+                ..Default::default()
             });
         }
     } else if s.tier == "City" && !state.had_city {
@@ -454,6 +416,7 @@ pub fn wonder_for(
                 "{} has become a city — the first the world has known. Its walls swallow whole hills.",
                 s.name
             ),
+            ..Default::default()
         });
     }
     let _ = rng;

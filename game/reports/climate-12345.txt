@@ -26,6 +26,8 @@ latitude bands (land only):
   60°–90°       13248   -10.6C     267mm  Ice
 monsoon |amp| of annual rain: tropics 0.29 · extratropics 0.00
 
+crop packages of the land: wheat 21.2% · rice 3.3% · maize 7.2% · pastoral 33.5% · wildland 34.8%
+
 ---- checks ----------------------------------------------------------
 [PASS] desert share of land                          20.1%   (sweet 12–28% · hard 6–38%)
 [PASS] tundra+ice share of land                      27.4%   (sweet 5–30% · hard 1–45%)
@@ -36,4 +38,7 @@ monsoon |amp| of annual rain: tropics 0.29 · extratropics 0.00
 [PASS] mean seasonal swing                           5.8°C   (sweet 4–14°C · hard 2–20°C)
 [PASS] tropical monsoon amplitude                     0.29   (sweet .12–.55 · hard .05–.85)
 [PASS] monsoon lives in the tropics           0.29 vs 0.00   (ITCZ march beats continental swing)
-CHECKS: 9 pass · 0 warn · 0 fail
+[PASS] arable share of land                          31.7%   (M2.1: wheat+rice+maize belts cover the good land)
+[PASS] pastoral share of land                        33.5%   (M2.1: the dry steppe carries herds)
+[PASS] rice hugs the water                  rice 3695 vs wheat+maize 31864   (paddies are the exception, not the rule)
+CHECKS: 12 pass · 0 warn · 0 fail

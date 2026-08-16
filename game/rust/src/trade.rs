@@ -6,7 +6,7 @@
 //! harbours grow wherever cargo changes from wheel to keel.
 
 use std::cmp::Ordering;
-use std::collections::{BTreeSet, BinaryHeap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap};
 
 use ndarray::Array2;
 use serde::Serialize;
@@ -15,7 +15,7 @@ use crate::constants as gc;
 use crate::hydrology::{DIST, N8};
 use crate::ndimage;
 use crate::resources::{abundance, Deposit};
-use crate::settlements::{territory_radius, Settlement};
+use crate::settlements::Settlement;
 
 fn rarity_w(ab: &str) -> f64 {
     match ab {
@@ -55,11 +55,15 @@ pub struct Route {
     /// signed seasonal swing of the barge legs: high water lifts trade
     pub ramp: f64,
     pub goods: Vec<Option<String>>,
+    /// Disused (M9.4): years without realized flow let the grass grow —
+    /// the road stays on the map, drawn faded, a mark history left.
+    #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+    pub old: bool,
 }
 
 /// Work out what a settlement produces from its hinterland.
 pub fn goods_for(s: &mut Settlement, deposits: &[Deposit], fertility: &Array2<f64>) {
-    let r = territory_radius(s.pop) * 1.8;
+    let r = crate::settlements::work_radius(s.pop);
     let r2 = r * r;
     let mut near: Vec<&Deposit> = deposits
         .iter()
@@ -397,6 +401,7 @@ pub fn route_entry(
         sea: crate::util::round2(sea_frac),
         ramp,
         goods: vec![sa.exports.clone(), sb.exports.clone()],
+        old: false,
     }
 }
 
@@ -500,6 +505,7 @@ pub fn build_routes(
     }
     recount_connections(settlements, &routes);
     rescue_unconnected(settlements, &mut routes, grid, height, rivers, discharge, flow_amp);
+    bridge_components(settlements, &mut routes, grid, height, rivers, discharge, flow_amp);
     routes
 }
 
@@ -587,5 +593,127 @@ pub fn connect_settlement(
     routes.extend(new_routes);
     recount_connections(settlements, routes);
     rescue_unconnected(settlements, routes, grid, height, rivers, discharge, flow_amp);
+    bridge_components(settlements, routes, grid, height, rivers, discharge, flow_amp);
     mark_ports(settlements, routes);
+}
+
+/// One world, one web (M8.1). The loneliness rescue works at the level of
+/// a single town's degree — it cannot see an archipelago pair that trades
+/// only with itself, a component of two invisible to every degree count.
+/// Union the route graph and, while more than one component stands, bridge
+/// the smallest one to the largest by the cheapest lifeline crossing,
+/// taken at whatever price the terrain asks.
+#[allow(clippy::too_many_arguments)]
+pub fn bridge_components(
+    settlements: &mut [Settlement],
+    routes: &mut Vec<Route>,
+    grid: &TradeGrid,
+    height: &Array2<f64>,
+    rivers: &Array2<bool>,
+    discharge: &Array2<f64>,
+    flow_amp: &Array2<f64>,
+) {
+    let n = settlements.len();
+    if n < 2 {
+        return;
+    }
+    let f = grid.f;
+    let idx_of: HashMap<i64, usize> = settlements
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (s.id, i))
+        .collect();
+
+    fn find(uf: &mut Vec<usize>, mut i: usize) -> usize {
+        while uf[i] != i {
+            uf[i] = uf[uf[i]];
+            i = uf[i];
+        }
+        i
+    }
+
+    let mut bridged = false;
+    // Each pass joins two components; n passes always suffice.
+    for _ in 0..n {
+        let mut uf: Vec<usize> = (0..n).collect();
+        for r in routes.iter() {
+            if let (Some(&ia), Some(&ib)) = (idx_of.get(&r.a), idx_of.get(&r.b)) {
+                let (ra, rb) = (find(&mut uf, ia), find(&mut uf, ib));
+                if ra != rb {
+                    uf[ra] = rb;
+                }
+            }
+        }
+        let mut comps: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+        for i in 0..n {
+            let r = find(&mut uf, i);
+            comps.entry(r).or_default().push(i);
+        }
+        if comps.len() <= 1 {
+            break;
+        }
+        // Largest component is the mainland web; smallest is next to join.
+        // BTreeMap order + (len, root) keys keep the choice deterministic.
+        let main_root = *comps
+            .iter()
+            .max_by_key(|(root, m)| (m.len(), usize::MAX - **root))
+            .map(|(root, _)| root)
+            .unwrap();
+        let minor_root = *comps
+            .iter()
+            .filter(|(root, _)| **root != main_root)
+            .min_by_key(|(root, m)| (m.len(), **root))
+            .map(|(root, _)| root)
+            .unwrap();
+        let main = &comps[&main_root];
+        let minor = &comps[&minor_root];
+
+        // For each stranded town, its nearest mainland partner; then court
+        // the closest few crossings and keep the cheapest path that answers.
+        let mut cands: Vec<(i64, usize, usize)> = minor
+            .iter()
+            .map(|&mi| {
+                let s = &settlements[mi];
+                let (bj, d2) = main
+                    .iter()
+                    .map(|&mj| {
+                        let o = &settlements[mj];
+                        (mj, (o.x - s.x).pow(2) + (o.y - s.y).pow(2))
+                    })
+                    .min_by_key(|&(mj, d2)| (d2, settlements[mj].id))
+                    .unwrap();
+                (d2, mi, bj)
+            })
+            .collect();
+        cands.sort_by_key(|&(d2, a, b)| (d2, settlements[a].id, settlements[b].id));
+        cands.truncate(6);
+
+        let mut best: Option<(Route, f64)> = None;
+        for &(_, mi, mj) in &cands {
+            let s = &settlements[mi];
+            let o = &settlements[mj];
+            let start = (s.y as usize / f, s.x as usize / f);
+            let goal = (o.y as usize / f, o.x as usize / f);
+            if let Some((path, cost)) = astar(grid, start, goal) {
+                if best.as_ref().map_or(true, |(_, c)| cost < *c) {
+                    best = Some((
+                        route_entry(s, o, &path, f, cost, height, rivers, discharge, flow_amp),
+                        cost,
+                    ));
+                }
+            }
+        }
+        match best {
+            Some((r, _)) => {
+                routes.push(r);
+                bridged = true;
+            }
+            // No crossing answered at all — impassable by every measure;
+            // leave the world as it is rather than loop forever.
+            None => break,
+        }
+    }
+    if bridged {
+        recount_connections(settlements, routes);
+    }
 }

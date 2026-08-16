@@ -2,46 +2,53 @@
  CALLIOPE DIAGNOSTIC · ECONOMY                      seed 12345 · 640x512 · 100y
 ========================================================================
 good        base    mean     min     max mean/base   pinned
-coal        1.00    0.80    0.68    1.24      0.80       0%
-copper      1.00    1.05    0.89    1.27      1.05       0%
-fish        0.85    0.36    0.27    0.73      0.42       0%
-gold        3.40    6.71    3.48    8.69      1.97       0%
-grain       1.00    0.38    0.32    0.81      0.38       0%
-iron        1.00    1.16    0.91    1.76      1.16       0%
-mithril     7.00   11.32    7.31   12.17      1.62       0%
-silver      1.80    3.73    1.74    5.55      2.07       0%
-stone       1.00    1.11    1.00    1.38      1.11       0%
-timber      1.00    1.16    1.00    1.48      1.16       0%
+coal        1.00    1.05    0.63    1.86      1.05       0%
+copper      1.00    1.15    0.80    1.79      1.15       0%
+fish        0.85    0.30    0.27    0.74      0.36       0%
+gold        3.40   11.23    4.64   14.11      3.30       0%
+grain       1.00    0.36    0.32    0.80      0.36       0%
+iron        1.00    1.57    0.97    2.71      1.57       0%
+silver      1.80    3.24    2.49    7.57      1.80       0%
+stone       1.00    1.69    1.19    3.61      1.69       0%
+timber      1.00    1.27    0.41    3.09      1.27       0%
 (pinned = months at the 0.3×/5× clamp — a pinned price is a mis-tuned market)
 
-market shocks: 36 strikes · 0 depletions · 38 trade chronicle entries
-wealth: total 54302 · gini 0.69
+market shocks: 35 strikes · 5 depletions · 926 trade chronicle entries
+wealth: total 931758 · gini 0.60
 richest towns:
-  Wiladell             pop   1305 · wealth    10500 · exports mithril 
-  Elthorn              pop   5939 · wealth     5996 · exports horse · harbour
-  Sylaglade            pop   2590 · wealth     3488 · exports sheep 
-  Yewenleaf            pop   2789 · wealth     3477 · exports grain 
-  Wilarun              pop   2581 · wealth     2786 · exports copper 
+  Ashenwood            pop  33714 · wealth    87811 · exports horse · harbour
+  Kalikos              pop  63755 · wealth    54013 · exports fish · harbour
+  Olynion              pop  28632 · wealth    50213 · exports horse · harbour
+  Thesanossa           pop  15013 · wealth    47740 · exports pig · harbour
+  Aelendell            pop  23572 · wealth    45937 · exports fish · harbour
 poorest towns:
-  Kalantheia           pop   4804 · wealth        0
-  Delanthe             pop   3491 · wealth        0
-  Heleiopia            pop   5761 · wealth        0
+  Pelaia               pop     50 · wealth       35
+  Pelliopia            pop    113 · wealth       38
+  Brynberg             pop    349 · wealth      186
 
-routes: 100 (71 sea / 1 mixed / 28 land) · mean cost 53.3 · mean length 50 km
-harbours: 40 · unconnected towns: 0
+routes: 169 (93 sea / 39 mixed / 37 land) · mean cost 46.1 · mean length 39 km
+harbours: 77 · unconnected towns: 0
 treasuries:
-  Mossthornkin                3382
-  Kalsyikosians                763
-  Saraganaks                   221
-  Kaldenstadfolk               438
+  Aelgladekin                41761
+  Idapolisians               30274
+  Ordaganaks                     0
+  Jorvikfolk                  2912
+
+mines: 37 live mineral seams known · 34 worked by a town
+towns listing each good: bananas 15 · blackberries 8 · blueberries 5 · cattle 3 · coal 9 · copper 11 · deer 6 · fish 43 · gold 1 · grain 14 · horse 6 · iron 8 · pig 1 · sheep 11 · silver 3 · stone 5 · strawberries 5 · timber 14 · tools 4 · weapons 1
 
 ---- checks ----------------------------------------------------------
 [PASS] max pinned price share                         0.0%   (sweet ≤25% · hard ≤55%)
-[PASS] wealth gini                                    0.69   (sweet 0.20–0.80 — some inequality, no monopoly)
-[PASS] routes exist                                    100   (the web of trade must hold)
+[PASS] wealth gini                                    0.60   (sweet 0.20–0.80 — some inequality, no monopoly)
+[PASS] routes exist                                    169   (the web of trade must hold)
 [PASS] no unconnected towns                              0   (every town trades)
-[PASS] harbours exist                                   40   (coastal trade should produce ports)
+[PASS] harbours exist                                   77   (coastal trade should produce ports)
 [PASS] prices finite                                   yes   (no NaN in the market)
 [PASS] treasuries sane                                 yes   (≥0 and finite)
-[PASS] strikes moved markets                            36   (discovery shocks should fire)
-CHECKS: 8 pass · 0 warn · 0 fail
+[PASS] strikes moved markets                            35   (discovery shocks should fire)
+[PASS] known seams worked                            91.9%   (found ore must reach the market, not rust in the hills)
+[PASS] wealth~pop scaling β                 1.07 over 100 towns   (M2.4: superlinear output, target ≈1.15)
+[PASS] iron/grain price ratio                         4.4×   (M2.7: metal dear, bread cheap)
+[PASS] staples cheaper than metal           grain 0.36 · timber 1.27 · iron 1.57   (the ordering of the price lists holds)
+[PASS] gold/grain price ratio                        31.5×   (M2.7: the precious envelope)
+CHECKS: 13 pass · 0 warn · 0 fail

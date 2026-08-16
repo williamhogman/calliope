@@ -1,7 +1,8 @@
 // Renderer: composites the world into an offscreen canvas, draws to screen.
 
 import {
-  TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, SEA_GRAD, HYDRO_GRAD, FERT_GRAD,
+  TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, ELEV_ARID_GRAD, SEA_GRAD,
+  HYDRO_GRAD, FERT_GRAD,
   gradient, hash2, hexRgb, settlementColor,
 } from "./palette.js";
 
@@ -74,6 +75,10 @@ export class Renderer {
     this.tmonthCache.clear();
     this.territoryCache = { version: -1, owner: null };
     this._tintCache = null;
+    // Engine-authoritative political map (M4.1): owner culture per cell,
+    // −1 wilderness. Ships in the pack, updates arrive as RLE patches.
+    this.territoryOwner = world.arrays.territory || null;
+    this.ownerIsCulture = !!this.territoryOwner;
 
     // biome palette by id
     this.biomePal = [];
@@ -82,7 +87,10 @@ export class Renderer {
     // culture colors
     this.cultureRgb = (world.header.cultures || []).map((c) => hexRgb(c.color));
 
-    // hillshade (light from NW)
+    // M7.5 — multi-directional oblique-weighted hillshade with a curvature
+    // accent (texture shading), precomputed once per world: four low suns
+    // so ridges running every direction carve; the Laplacian etches
+    // ridgelines bright and valley floors dark.
     const h = world.arrays.height;
     const sh = new Float32Array(w * hh);
     const k = hh / 16;
@@ -93,13 +101,17 @@ export class Renderer {
       for (let x = 0; x < w; x++) {
         const x0 = Math.max(0, x - 1);
         const x1 = Math.min(w - 1, x + 1);
-        const dzdx = (h[yr + x1] - h[yr + x0]) * 0.5;
-        const dzdy = (h[y1 + x] - h[y0 + x]) * 0.5;
-        let s = 1 + k * (-dzdx - dzdy) * 0.9;
-        sh[yr + x] = s < 0.6 ? 0.6 : s > 1.32 ? 1.32 : s;
+        const gx = (h[yr + x1] - h[yr + x0]) * 0.5;
+        const gy = (h[y1 + x] - h[y0 + x]) * 0.5;
+        const mdow = (-gx - gy) * 0.62 + (-gy) * 0.24 + (-gx) * 0.24 + (gx - gy) * 0.08;
+        let curv = (h[yr + x1] + h[yr + x0] + h[y1 + x] + h[y0 + x] - 4 * h[yr + x]) * k * 0.55;
+        curv = curv < -0.1 ? -0.1 : curv > 0.1 ? 0.1 : curv;
+        let s = 1 + k * mdow * 1.05 - curv;
+        sh[yr + x] = s < 0.58 ? 0.58 : s > 1.34 ? 1.34 : s;
       }
     }
     this.shade = sh;
+    this._riverPaths = new Map(); // curved-label courses, rebuilt per world
 
     // discharge normaliser
     const d = world.arrays.discharge;
@@ -122,6 +134,45 @@ export class Renderer {
     return n00 + (n10 - n00) * sx + (n01 - n00) * sy + (n00 - n10 - n01 + n11) * sx * sy;
   }
 
+  // Chamfer distance (cells) from every sea cell to the nearest land —
+  // powers the engraved coastal vignette (M7.1) on the CPU path.
+  _coastDistance() {
+    const W = this.w, H = this.h;
+    const hgt = this.world.arrays.height;
+    const INF = 1e9;
+    const d = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) d[i] = hgt[i] >= 0 ? 0 : INF;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (d[i] === 0) continue;
+        let best = d[i];
+        if (x > 0) best = Math.min(best, d[i - 1] + 1);
+        if (y > 0) {
+          best = Math.min(best, d[i - W] + 1);
+          if (x > 0) best = Math.min(best, d[i - W - 1] + 1.4);
+          if (x < W - 1) best = Math.min(best, d[i - W + 1] + 1.4);
+        }
+        d[i] = best;
+      }
+    }
+    for (let y = H - 1; y >= 0; y--) {
+      for (let x = W - 1; x >= 0; x--) {
+        const i = y * W + x;
+        if (d[i] === 0) continue;
+        let best = d[i];
+        if (x < W - 1) best = Math.min(best, d[i + 1] + 1);
+        if (y < H - 1) {
+          best = Math.min(best, d[i + W] + 1);
+          if (x < W - 1) best = Math.min(best, d[i + W + 1] + 1.4);
+          if (x > 0) best = Math.min(best, d[i + W - 1] + 1.4);
+        }
+        d[i] = best;
+      }
+    }
+    return d;
+  }
+
   // True-colour composite: what a survey satellite would see in high summer.
   // Computed once per world; seasonal snow rides on top as an overlay.
   _buildSatellite() {
@@ -129,6 +180,8 @@ export class Renderer {
     const { height, tmean, precip, fertility, flags } = this.world.arrays;
     const sat = new Float32Array(W * H * 3);
     const cl = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+    const sm = (a, b, v) => { const t = cl((v - a) / (b - a)); return t * t * (3 - 2 * t); };
+    const coast = this._coastDistance();
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const i = y * W + x, o = i * 3;
@@ -144,6 +197,12 @@ export class Renderer {
           b = (116 + warm * 32) * (1 - depth) + 40 * depth;
           const swell = (this._noise(x, y, 11) - 0.5) * 6 * (1 - depth * 0.75);
           r += swell; g += swell; b += swell;
+          // M7.1 — atlas vignette: coast-parallel bands ring the shore like
+          // the engraved shallows of an old chart, fading over the shelf
+          const cd = coast[i];
+          const ring = (0.5 + 0.5 * Math.cos(cd * 2.4)) *
+                       (1 - sm(1.2, 10, cd)) * sm(0.2, 0.9, cd);
+          r += 7.7 * ring; g += 13.3 * ring; b += 15.3 * ring;
         } else if (flags[i] & 4) {
           // dead seas: blinding mineral crusts with a faint aqua bloom
           const n = (this._noise(x, y, 5) - 0.5) * 12;
@@ -202,6 +261,89 @@ export class Renderer {
       }
       return { ...r, pts, cum, total: cum[cum.length - 1] || 1, phase: (idx * 0.37) % 1 };
     });
+    this._buildDrawPaths();
+  }
+
+  // M7.6 — junction-merged, smoothed draw geometry. Every undirected
+  // cell-to-cell segment draws once, carrying the sum of the traffic that
+  // shares it; chains between junctions become single polylines; two rounds
+  // of corner-cutting let roads flow instead of stair-stepping.
+  _buildDrawPaths() {
+    const segs = new Map(); // "ax,ay|bx,by|mode" -> {a, b, m, w, old}
+    for (const r of this.routes) {
+      const m = r.m || [];
+      const wgt = r.w || 1;
+      const old = !!r.old; // M9.4 — a way no caravan has walked in years
+      for (let i = 1; i < r.pts.length; i++) {
+        const mode = m[i] ?? 0;
+        const a = r.pts[i - 1], b = r.pts[i];
+        const ka = a[0] + "," + a[1], kb = b[0] + "," + b[1];
+        const key = (ka < kb ? ka + "|" + kb : kb + "|" + ka) + "|" + mode;
+        const e = segs.get(key);
+        if (e) { e.w += wgt; e.old = e.old && old; } // one live route keeps it alive
+        else segs.set(key, { a: [a[0], a[1]], b: [b[0], b[1]], m: mode, w: wgt, old });
+      }
+    }
+    const adj = new Map(); // "x,y" -> [segKey…]
+    for (const [key, e] of segs) {
+      for (const n of [e.a, e.b]) {
+        const k = n[0] + "," + n[1];
+        if (!adj.has(k)) adj.set(k, []);
+        adj.get(k).push(key);
+      }
+    }
+    const wClass = (w2) => Math.round(Math.log2(1 + w2) * 2);
+    const nodeKey = (n) => n[0] + "," + n[1];
+    const other = (e, n) => (e.a[0] === n[0] && e.a[1] === n[1] ? e.b : e.a);
+    const isJunction = (k) => (adj.get(k) || []).length !== 2;
+    const used = new Set();
+    const paths = [];
+    const walk = (startSeg, from) => {
+      const e0 = segs.get(startSeg);
+      used.add(startSeg);
+      const pts = [from];
+      let cur = startSeg;
+      let node = other(e0, from);
+      pts.push(node);
+      const mode = e0.m, cls = wClass(e0.w), old = !!e0.old;
+      let wSum = e0.w, wN = 1;
+      while (!isJunction(nodeKey(node))) {
+        const nexts = (adj.get(nodeKey(node)) || []).filter((k) => k !== cur && !used.has(k));
+        if (nexts.length !== 1) break;
+        const e = segs.get(nexts[0]);
+        if (e.m !== mode || wClass(e.w) !== cls || !!e.old !== old) break;
+        used.add(nexts[0]);
+        cur = nexts[0];
+        node = other(e, node);
+        pts.push(node);
+        wSum += e.w; wN++;
+      }
+      return { pts, m: mode, w: wSum / wN, old };
+    };
+    for (const [k, list] of adj) {
+      if (list.length === 2) continue; // junctions and endpoints seed chains
+      for (const segKey of list) {
+        if (!used.has(segKey)) paths.push(walk(segKey, k.split(",").map(Number)));
+      }
+    }
+    for (const [key, e] of segs) {
+      if (!used.has(key)) paths.push(walk(key, e.a)); // leftover pure loops
+    }
+    for (const p of paths) {
+      let pts = p.pts;
+      for (let it = 0; it < 2 && pts.length > 2; it++) {
+        const out = [pts[0]];
+        for (let i = 0; i < pts.length - 1; i++) {
+          const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+          out.push([ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25],
+                   [ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75]);
+        }
+        out.push(pts[pts.length - 1]);
+        pts = out;
+      }
+      p.draw = pts;
+    }
+    this.drawPaths = paths;
   }
 
   routePoint(route, t) {
@@ -235,10 +377,30 @@ export class Renderer {
     return out;
   }
 
+  // Decode an engine RLE patch ([run, value, run, value, …] row-major)
+  // into the live territory grid; the next composite picks it up.
+  setTerritory(rle) {
+    if (!rle || !rle.length) return;
+    const owner = new Int16Array(this.w * this.h).fill(-1);
+    let i = 0;
+    for (let k = 0; k + 1 < rle.length; k += 2) {
+      const run = rle[k], v = rle[k + 1];
+      if (v >= 0) owner.fill(v, i, i + run);
+      i += run;
+    }
+    this.territoryOwner = owner;
+    this.ownerIsCulture = true;
+    this._tintCache = null;
+    this.territoryCache = { version: -1, owner: null };
+  }
+
   territory(version) {
+    // Engine-authoritative influence map (M4.1) when the pack carries one.
+    if (this.territoryOwner) return this.territoryOwner;
     if (this.territoryCache.version === version && this.territoryCache.owner) {
       return this.territoryCache.owner;
     }
+    // Fallback for packs older than the politics engine: settlement disks.
     const w = this.w, h = this.h;
     const { biomes } = this.world.arrays;
     const owner = new Int16Array(w * h).fill(-1);
@@ -266,6 +428,15 @@ export class Renderer {
     return owner;
   }
 
+  /// Culture that holds cell i, or −1 for wilderness — semantics-safe
+  /// across both the engine grid (culture ids) and the fallback (settlement ids).
+  ownerCultureAt(i) {
+    if (this.territoryOwner) return this.territoryOwner[i];
+    const owner = this.territoryCache.owner;
+    if (!owner || owner[i] < 0) return -1;
+    return this._cultureOf()[owner[i]] ?? -1;
+  }
+
   // political tint as an RGBA texture for the GPU path: culture colour with
   // alpha for interior/edge, and a bright opaque frontier between cultures
   tintRgba(version) {
@@ -277,13 +448,14 @@ export class Renderer {
     const cultOf = this._cultureOf();
     const cRgb = this.cultureRgb;
     const data = new Uint8Array(W * H * 4);
-    const cidOf = (oo) => (oo >= 0 ? (cultOf[oo] ?? 0) : -1);
+    const asC = this.ownerIsCulture;
+    const cidOf = (oo) => (oo >= 0 ? (asC ? oo : (cultOf[oo] ?? 0)) : -1);
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const i = y * W + x, o = i * 4;
         const ow = owner[i];
         if (ow < 0) continue;
-        const cid = cultOf[ow] ?? 0;
+        const cid = cidOf(ow);
         const c = cRgb[cid] || [220, 200, 140];
         const left = x > 0 ? owner[i - 1] : ow;
         const up = y > 0 ? owner[i - W] : ow;
@@ -367,14 +539,15 @@ export class Renderer {
             b = (b * 0.52 + lum * 0.48) * 0.84;
             const ow = owner[i];
             if (ow >= 0) {
-              const cid = cultOf[ow] ?? 0;
+              const asC = this.ownerIsCulture;
+              const cidOf = (oo) => (oo >= 0 ? (asC ? oo : (cultOf[oo] ?? 0)) : -1);
+              const cid = cidOf(ow);
               const c = cRgb[cid] || [220, 200, 140];
               const left = x > 0 ? owner[i - 1] : ow;
               const up = y > 0 ? owner[i - W] : ow;
               const right = x < W - 1 ? owner[i + 1] : ow;
               const down = y < H - 1 ? owner[i + W] : ow;
               const settBorder = left !== ow || up !== ow || right !== ow || down !== ow;
-              const cidOf = (oo) => (oo >= 0 ? (cultOf[oo] ?? 0) : -1);
               const cultBorder = settBorder && (
                 cidOf(left) !== cid || cidOf(up) !== cid ||
                 cidOf(right) !== cid || cidOf(down) !== cid);
@@ -401,7 +574,19 @@ export class Renderer {
           } else if (lake) {
             r = 74; g = 128; b = 168;
           } else {
-            [r, g, b] = ELEV_LAND_GRAD(h);
+            // M7.4 — climate-blended hypsometry: wet country climbs through
+            // green, dry country through ochre, frozen lands grey to firn
+            const gc = ELEV_LAND_GRAD(h);
+            const ac = ELEV_ARID_GRAD(h);
+            const arid = 1 - Math.min(1, Math.max(0, (precip[i] - 240) / 700));
+            r = gc[0] + (ac[0] - gc[0]) * arid;
+            g = gc[1] + (ac[1] - gc[1]) * arid;
+            b = gc[2] + (ac[2] - gc[2]) * arid;
+            const chill = Math.min(1, Math.max(0, (-2 - tmean[i]) / 14)) * 0.85;
+            const h01 = Math.min(1, Math.max(0, h));
+            r += (153 + 84 * h01 - r) * chill;
+            g += (163 + 77 * h01 - g) * chill;
+            b += (176 + 69 * h01 - b) * chill;
           }
         } else if (layer === "temperature") {
           [r, g, b] = TEMP_GRAD(tnow[i]);
@@ -515,13 +700,13 @@ export class Renderer {
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, w, hgt);
 
-    // vector overlays in screen space
+    // vector overlays in screen space — dots first, then one unified label
+    // pass so every name on the map is placed collision-free (M7.2)
     if (state.overlays.winds) this._drawWinds(ctx, view, state);
     if (state.overlays.routes) this._drawRoutes(ctx, view, state);
     if (state.overlays.resources) this._drawDeposits(ctx, view);
-    if (state.overlays.labels) this._drawLabels(ctx, view);
-    else this.labelBoxes = [];
     if (state.overlays.settlements) this._drawSettlements(ctx, view, state);
+    this._drawLabels(ctx, view, state);
     this._drawScaleBar(ctx, view);
     if (state.selectedCell) this._drawSelectedCell(ctx, view, state.selectedCell);
     if (hover && view.scale > 4) this._drawHover(ctx, view, hover);
@@ -572,44 +757,44 @@ export class Renderer {
     ctx.save();
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    for (const r of this.routes) {
-      const wgt = r.w || 1;
-      const lw = Math.min(2.4, Math.max(0.8, s * 0.11 * wgt + 0.4));
-      const alpha = Math.min(0.68, 0.34 + wgt * 0.16);
-      const m = r.m || [];
-      const pts = r.pts;
-      // draw runs of the same travel mode: road, sea lane, or river barge
-      let i = 1;
-      while (i < pts.length) {
-        const mode = m[i] ?? 0;
-        let j = i;
-        while (j + 1 < pts.length && (m[j + 1] ?? 0) === mode) j++;
-        if (mode === 1) {
-          ctx.setLineDash([7, 6]);
-          ctx.strokeStyle = `rgba(126, 178, 226, ${alpha})`;
-        } else if (mode === 2) {
-          ctx.setLineDash([2, 4]);
-          ctx.strokeStyle = `rgba(118, 204, 214, ${alpha})`;
-        } else {
-          ctx.setLineDash([]);
-          ctx.strokeStyle = `rgba(224, 196, 140, ${alpha})`;
-        }
-        ctx.lineWidth = lw;
-        ctx.beginPath();
-        for (let k = i - 1; k <= j; k++) {
-          const px = view.tx + (pts[k][0] + 0.5) * s;
-          const py = view.ty + (pts[k][1] + 0.5) * s;
-          if (k === i - 1) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-        }
-        ctx.stroke();
-        i = j + 1;
+    // M7.6 — the merged, smoothed network: shared trunks draw once, wider
+    // with the traffic they carry, and chains flow instead of stair-stepping
+    for (const p of this.drawPaths || []) {
+      const wgt = p.w || 1;
+      const lw = Math.min(2.8, Math.max(0.8, s * 0.11 * wgt + 0.4));
+      const alpha = Math.min(0.7, 0.34 + wgt * 0.16);
+      if (p.m === 1) {
+        ctx.setLineDash([7, 6]);
+        ctx.strokeStyle = `rgba(126, 178, 226, ${alpha})`;
+      } else if (p.m === 2) {
+        ctx.setLineDash([2, 4]);
+        ctx.strokeStyle = `rgba(118, 204, 214, ${alpha})`;
+      } else {
+        ctx.setLineDash([]);
+        ctx.strokeStyle = `rgba(224, 196, 140, ${alpha})`;
       }
+      ctx.lineWidth = lw;
+      if (p.old) {
+        // M9.4 — disused ways: grass in the wheel-ruts, still faintly there
+        ctx.setLineDash([2, 5]);
+        ctx.strokeStyle = `rgba(168, 164, 152, ${Math.min(0.28, alpha * 0.45)})`;
+        ctx.lineWidth = Math.min(1.1, lw * 0.55);
+      }
+      ctx.beginPath();
+      const pts = p.draw;
+      for (let k = 0; k < pts.length; k++) {
+        const px = view.tx + (pts[k][0] + 0.5) * s;
+        const py = view.ty + (pts[k][1] + 0.5) * s;
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
     }
     ctx.setLineDash([]);
     // caravans on the roads, sails on the lanes, while time flows
     if (state.playing) {
       const now = performance.now() / 1000;
       for (const r of this.routes) {
+        if (r.old) continue; // no caravan takes the disused ways
         const t = ((now / 14 + r.phase) % 1);
         const tt = t < 0.5 ? t * 2 : (1 - t) * 2; // there and back again
         const [wx, wy, mode] = this.routePoint(r, tt);
@@ -688,70 +873,319 @@ export class Renderer {
     return Math.max(0, Math.min(0.85, (s - 2.1) * 0.75));
   }
 
-  _drawLabels(ctx, view) {
-    const feats = this.world.header.features || [];
-    this.labelBoxes = [];
-    if (!feats.length) return;
+  // ---- the unified label engine (M7.2/M7.3/M7.7) ---------------------------
+  // One placement pass for every name on the map: feature labels and
+  // settlement names compete for the same ground, mighty-to-minor, and
+  // nothing overlaps — ever. Settlement label density follows Töpfer's
+  // radical law: at scale s the map keeps N·√(s/S_full) of the names it
+  // would carry fully zoomed in.
+
+  _labelBudget(total, s) {
+    const S_FULL = 6;
+    if (s >= S_FULL) return total;
+    return Math.max(4, Math.ceil(total * Math.sqrt(Math.max(s, 0.12) / S_FULL)));
+  }
+
+  // M7.7 — trace the river's course around a label anchor so the name can
+  // ride the water. Walks the channel both ways along the discharge slope.
+  _riverPath(f) {
+    this._riverPaths ??= new Map();
+    const ck = f.x + "," + f.y;
+    if (this._riverPaths.has(ck)) return this._riverPaths.get(ck);
+    const { flags, discharge } = this.world.arrays;
+    const W = this.w, H = this.h;
+    const at = (x, y) => y * W + x;
+    // nearest channel cell to the anchor
+    let cx = -1, cy = -1, bd = Infinity;
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        const x = f.x + dx, y = f.y + dy;
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        if (!(flags[at(x, y)] & 1)) continue;
+        const d = dx * dx + dy * dy;
+        if (d < bd) { bd = d; cx = x; cy = y; }
+      }
+    }
+    if (cx < 0) { this._riverPaths.set(ck, null); return null; }
+    const walk = (down) => {
+      const out = [];
+      let x = cx, y = cy, prev = -1;
+      for (let n = 0; n < 26; n++) {
+        const cur = discharge[at(x, y)];
+        let bx = -1, by = -1, best = down ? cur : -Infinity;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+            const i = at(nx, ny);
+            if (i === prev || !(flags[i] & 1)) continue;
+            const d = discharge[i];
+            if (down ? d > best : (d < cur && d > best)) { best = d; bx = nx; by = ny; }
+          }
+        }
+        if (bx < 0) break;
+        prev = at(x, y);
+        x = bx; y = by;
+        out.push([x + 0.5, y + 0.5]);
+      }
+      return out;
+    };
+    const up = walk(false).reverse();
+    const down = walk(true);
+    let pts = [...up, [cx + 0.5, cy + 0.5], ...down];
+    if (pts.length < 6) { this._riverPaths.set(ck, null); return null; }
+    // two rounds of corner-cutting so the course flows instead of stepping
+    for (let it = 0; it < 2; it++) {
+      const sm = [pts[0]];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+        sm.push([ax * 0.75 + bx * 0.25, ay * 0.75 + by * 0.25],
+                [ax * 0.25 + bx * 0.75, ay * 0.25 + by * 0.75]);
+      }
+      sm.push(pts[pts.length - 1]);
+      pts = sm;
+    }
+    this._riverPaths.set(ck, pts);
+    return pts;
+  }
+
+  // Lay text along a world-space polyline, centred on its arc. Returns the
+  // screen bbox it covered, or null when the course is too short.
+  _drawCurvedText(ctx, view, pts, text, color, alpha, dryRun) {
+    const s = view.scale;
+    const sp = pts.map(([x, y]) => [view.tx + x * s, view.ty + y * s]);
+    const cum = [0];
+    for (let i = 1; i < sp.length; i++) {
+      cum.push(cum[i - 1] + Math.hypot(sp[i][0] - sp[i - 1][0], sp[i][1] - sp[i - 1][1]));
+    }
+    const total = cum[cum.length - 1];
+    const tw = ctx.measureText(text).width;
+    if (total < tw * 1.15) return null;
+    // read left-to-right: flip when the course runs westward on screen
+    if (sp[sp.length - 1][0] < sp[0][0]) {
+      sp.reverse();
+      for (let i = 0; i < cum.length; i++) cum[i] = total - cum[i];
+      cum.reverse();
+    }
+    const atLen = (d) => {
+      let lo = 0, hi = cum.length - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] < d) lo = m + 1; else hi = m; }
+      const i = Math.max(1, lo);
+      const seg = cum[i] - cum[i - 1] || 1;
+      const f2 = (d - cum[i - 1]) / seg;
+      return [
+        sp[i - 1][0] + (sp[i][0] - sp[i - 1][0]) * f2,
+        sp[i - 1][1] + (sp[i][1] - sp[i - 1][1]) * f2,
+        Math.atan2(sp[i][1] - sp[i - 1][1], sp[i][0] - sp[i - 1][0]),
+      ];
+    };
+    let d = (total - tw) / 2;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    const glyphs = [];
+    for (const ch of text) {
+      const cw = ctx.measureText(ch).width;
+      const [gx, gy, ang] = atLen(d + cw / 2);
+      glyphs.push([ch, gx, gy, ang]);
+      x0 = Math.min(x0, gx - 8); y0 = Math.min(y0, gy - 9);
+      x1 = Math.max(x1, gx + 8); y1 = Math.max(y1, gy + 5);
+      d += cw;
+    }
+    if (dryRun) return { x0, y0, x1, y1, glyphs };
+    ctx.globalAlpha = alpha;
+    for (const [ch, gx, gy, ang] of glyphs) {
+      ctx.save();
+      ctx.translate(gx, gy);
+      ctx.rotate(ang);
+      ctx.strokeStyle = "rgba(4, 8, 15, 0.7)";
+      ctx.lineWidth = 2.6;
+      ctx.strokeText(ch, 0, -3);
+      ctx.fillStyle = color;
+      ctx.fillText(ch, 0, -3);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    return { x0, y0, x1, y1 };
+  }
+
+  _drawLabels(ctx, view, state) {
     const s = view.scale;
     const w = this.canvas.clientWidth;
     const hgt = this.canvas.clientHeight;
+    this.labelBoxes = [];
+    const placed = [];
+    const stats = { scale: s, candidates: 0, placed: 0, overlaps: 0,
+                    setBudget: 0, setPlaced: 0, featPlaced: 0, curved: 0 };
+
     ctx.save();
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
 
-    // gather visible candidates, then place mighty-to-minor so nothing collides
     const cands = [];
-    for (let fi = 0; fi < feats.length; fi++) {
-      const f = feats[fi];
-      const st = LABEL_STYLE[f.t];
-      if (!st) continue;
-      const alpha = this._labelAlpha(f.t, s);
-      if (alpha <= 0.03) continue;
-      const px = view.tx + f.x * s;
-      const py = view.ty + f.y * s;
-      if (px < -240 || py < -60 || px > w + 240 || py > hgt + 60) continue;
 
-      let font, size, spacing, text = f.name;
-      const lg = Math.log2(Math.max(f.size, 2));
-      if (f.t === "ocean" || f.t === "sea") {
-        size = Math.min(21, 8.5 + lg * 0.85);
-        font = `500 ${size.toFixed(1)}px Inter, sans-serif`;
-        text = f.name.toUpperCase();
-        spacing = 4;
-      } else if (f.t === "continent") {
-        size = Math.min(20, 8 + lg * 0.8);
-        font = `600 ${size.toFixed(1)}px Inter, sans-serif`;
-        text = f.name.toUpperCase();
-        spacing = 5;
-      } else if (f.t === "range" || f.t === "desert" || f.t === "forest" ||
-                 f.t === "highland" || f.t === "archipelago") {
-        size = 11;
-        font = `600 11px Inter, sans-serif`;
-        text = f.name.toUpperCase();
-        spacing = 1.8;
+    // -- feature names ------------------------------------------------------
+    if (state.overlays.labels) {
+      const feats = this.world.header.features || [];
+      for (let fi = 0; fi < feats.length; fi++) {
+        const f = feats[fi];
+        const st = LABEL_STYLE[f.t];
+        if (!st) continue;
+        const alpha = this._labelAlpha(f.t, s);
+        if (alpha <= 0.03) continue;
+        const px = view.tx + f.x * s;
+        const py = view.ty + f.y * s;
+        if (px < -280 || py < -60 || px > w + 280 || py > hgt + 60) continue;
+
+        let font, size, text = f.name;
+        const lg = Math.log2(Math.max(f.size, 2));
+        const areaKind = f.t === "range" || f.t === "desert" || f.t === "forest" ||
+                         f.t === "highland" || f.t === "archipelago";
+        const grand = f.t === "ocean" || f.t === "sea" || f.t === "continent";
+        if (grand) {
+          size = Math.min(f.t === "continent" ? 20 : 21, (f.t === "continent" ? 8 : 8.5) + lg * 0.8);
+          font = `${f.t === "continent" ? 600 : 500} ${size.toFixed(1)}px Inter, sans-serif`;
+          text = f.name.toUpperCase();
+        } else if (areaKind) {
+          size = 11;
+          font = `600 11px Inter, sans-serif`;
+          text = f.name.toUpperCase();
+        } else {
+          size = 10.5;
+          font = `italic 500 10.5px Inter, sans-serif`;
+        }
+        cands.push({ type: "feat", f, fi, st, alpha, px, py, font, size, text,
+                     pri: st.pri, mass: f.size, areaKind, grand });
+      }
+    }
+
+    // -- settlement names, budgeted by the radical law (M7.2) ---------------
+    if (state.overlays.settlements) {
+      const sets = [...this.world.header.settlements].sort(
+        (a, b) => (b.pop - a.pop) || (a.id - b.id));
+      stats.setBudget = this._labelBudget(sets.length, s);
+      let taken = 0;
+      for (const st of sets) {
+        if (taken >= stats.setBudget) break;
+        const px = view.tx + (st.x + 0.5) * s;
+        const py = view.ty + (st.y + 0.5) * s;
+        if (px < -80 || py < -40 || px > w + 80 || py > hgt + 40) continue;
+        taken++;
+        const isBig = st.tier === "Town" || st.tier === "City";
+        const pri = st.tier === "City" ? 2.3 : st.tier === "Town" ? 3.3
+                  : st.tier === "Village" ? 6.3 : 7.3;
+        cands.push({ type: "set", st, px, py, pri, mass: st.pop, isBig,
+                     r: TIER_RADIUS[st.tier] || 3 });
+      }
+    }
+
+    // -- ruin names — quiet italics, only when the eye is close (M9.1) ------
+    if (state.overlays.settlements && state.overlays.labels) {
+      const ra = Math.max(0, Math.min(0.8, (s - 3.4) * 0.55));
+      if (ra > 0.03) {
+        for (const ru of this.world.header.ruins || []) {
+          const px = view.tx + (ru.x + 0.5) * s;
+          const py = view.ty + (ru.y + 0.5) * s;
+          if (px < -80 || py < -40 || px > w + 80 || py > hgt + 40) continue;
+          cands.push({ type: "ruin", ru, px, py, pri: 8.6, mass: 1, alpha: ra });
+        }
+      }
+    }
+
+    stats.candidates = cands.length;
+    cands.sort((a, b) => (a.pri - b.pri) || (b.mass - a.mass));
+
+    const collides = (box) =>
+      placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0);
+
+    for (const c of cands) {
+      if (c.type === "set") {
+        // name above the dot, souls below at close zoom; the box spans the
+        // whole block so no other name may crowd the town it belongs to
+        ctx.font = `600 ${c.isBig ? 12 : 11}px Inter, sans-serif`;
+        const name = c.st.name;
+        const tw = Math.max(ctx.measureText(name).width, c.r * 2) + 8;
+        const yTop = c.py - c.r - 5 - (c.isBig ? 12 : 11);
+        const yBot = c.py + c.r + (s > 3 ? 14 : 2);
+        const box = { x0: c.px - tw / 2, x1: c.px + tw / 2, y0: yTop, y1: yBot };
+        if (collides(box)) continue;
+        placed.push(box);
+        stats.setPlaced++;
+        ctx.textBaseline = "alphabetic";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(8,12,20,0.85)";
+        ctx.strokeText(name, c.px, c.py - c.r - 5);
+        ctx.fillStyle = "#f0ead8";
+        ctx.fillText(name, c.px, c.py - c.r - 5);
+        if (s > 3) {
+          const pop = c.st.pop.toLocaleString("en-US");
+          ctx.font = "500 9.5px Inter, sans-serif";
+          ctx.strokeText(pop, c.px, c.py + c.r + 11);
+          ctx.fillStyle = "#b9c0cf";
+          ctx.fillText(pop, c.px, c.py + c.r + 11);
+        }
+        ctx.textBaseline = "middle";
+        continue;
+      }
+
+      if (c.type === "ruin") {
+        ctx.font = "italic 500 10px Inter, sans-serif";
+        const tw = ctx.measureText(c.ru.name).width + 8;
+        const box = { x0: c.px - tw / 2, x1: c.px + tw / 2, y0: c.py - 18, y1: c.py + 5 };
+        if (collides(box)) continue;
+        placed.push(box);
+        ctx.textBaseline = "alphabetic";
+        ctx.globalAlpha = c.alpha;
+        ctx.lineWidth = 2.4;
+        ctx.strokeStyle = "rgba(8,12,20,0.8)";
+        ctx.strokeText(c.ru.name, c.px, c.py - 7);
+        ctx.fillStyle = "#b7b1a2";
+        ctx.fillText(c.ru.name, c.px, c.py - 7);
+        ctx.globalAlpha = 1;
+        ctx.textBaseline = "middle";
+        continue;
+      }
+
+      // -- feature label ----------------------------------------------------
+      ctx.font = c.font;
+
+      // M7.7 — river names ride their water at close zoom
+      if (c.f.t === "river" && s >= 3.2) {
+        const path = this._riverPath(c.f);
+        if (path) {
+          const dry = this._drawCurvedText(ctx, view, path, c.text, c.st.color, c.alpha, true);
+          if (dry && !collides(dry)) {
+            this._drawCurvedText(ctx, view, path, c.text, c.st.color, c.alpha, false);
+            placed.push(dry);
+            this.labelBoxes.push({ x0: dry.x0, x1: dry.x1, y0: dry.y0, y1: dry.y1, index: c.fi });
+            stats.featPlaced++;
+            stats.curved++;
+            continue;
+          }
+        }
+      }
+
+      // M7.3 — area names letter-space to the ground they cover: the name
+      // of a great desert strides across it, a lesser wood sits close
+      let spacing;
+      if (c.grand || c.areaKind) {
+        const extent = Math.sqrt(Math.max(c.f.size, 4)) * s * 1.45;
+        const baseW = ctx.measureText(c.text).width;
+        const maxSp = c.grand ? 18 : 9;
+        const minSp = c.grand ? 2.5 : 1.4;
+        spacing = Math.max(minSp, Math.min(maxSp,
+          (extent - baseW) / Math.max(3, c.text.length - 1)));
       } else {
-        size = 10.5;
-        font = `italic 500 10.5px Inter, sans-serif`;
         spacing = 0.6;
       }
-      cands.push({ f, fi, st, alpha, px, py, font, size, spacing, text });
-    }
-    cands.sort((a, b) => (a.st.pri - b.st.pri) || (b.f.size - a.f.size));
-
-    const placed = [];
-    for (const c of cands) {
-      ctx.font = c.font;
-      ctx.letterSpacing = `${c.spacing}px`;
+      ctx.letterSpacing = `${spacing.toFixed(1)}px`;
       const tw = ctx.measureText(c.text).width + 10;
       const th = c.size + 9;
       const box = { x0: c.px - tw / 2, x1: c.px + tw / 2, y0: c.py - th / 2, y1: c.py + th / 2 };
-      if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) {
-        ctx.letterSpacing = "0px";
-        continue; // a mightier name already holds this ground
-      }
+      if (collides(box)) { ctx.letterSpacing = "0px"; continue; }
       placed.push(box);
-      this.labelBoxes.push({ ...box, index: c.fi }); // clickable names
+      this.labelBoxes.push({ ...box, index: c.fi });
+      stats.featPlaced++;
       ctx.globalAlpha = c.alpha;
       ctx.strokeStyle = "rgba(4, 8, 15, 0.7)";
       ctx.lineWidth = 2.6;
@@ -760,15 +1194,69 @@ export class Renderer {
       ctx.fillText(c.text, c.px, c.py);
       ctx.letterSpacing = "0px";
     }
+
     ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // the gate's evidence: recheck every placed box against every other
+    for (let i = 0; i < placed.length; i++) {
+      for (let j = i + 1; j < placed.length; j++) {
+        const a = placed[i], b = placed[j];
+        if (a.x0 < b.x1 && a.x1 > b.x0 && a.y0 < b.y1 && a.y1 > b.y0) stats.overlaps++;
+      }
+    }
+    stats.placed = placed.length;
+    this.labelStatsData = stats;
+  }
+
+  labelStats() {
+    return this.labelStatsData || null;
+  }
+
+  // M9.1 — what remains: three walls standing, the fourth long fallen.
+  _drawRuins(ctx, view, state) {
+    const ruins = this.world.header.ruins || [];
+    if (!ruins.length) return;
+    const s = view.scale;
+    const a = Math.max(0, Math.min(0.85, (s - 1.1) * 0.45));
+    if (a <= 0.02) return;
+    const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
+    ctx.save();
+    ctx.lineCap = "round";
+    for (const r of ruins) {
+      const sx = view.tx + (r.x + 0.5) * s;
+      const sy = view.ty + (r.y + 0.5) * s;
+      if (sx < -30 || sy < -30 || sx > W + 30 || sy > H + 30) continue;
+      const g = Math.max(2.2, Math.min(4.4, s * 0.5));
+      if (state.selectedRuin === r.eid) {
+        ctx.beginPath();
+        ctx.arc(sx, sy, g + 4.5, 0, Math.PI * 2);
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = "rgba(212, 169, 74, 0.95)";
+        ctx.stroke();
+      }
+      ctx.globalAlpha = a;
+      ctx.lineWidth = 1.15;
+      ctx.strokeStyle = "rgba(203, 198, 185, 0.92)";
+      ctx.beginPath();
+      ctx.moveTo(sx - g, sy - g * 0.35);
+      ctx.lineTo(sx - g, sy + g * 0.8);
+      ctx.lineTo(sx + g, sy + g * 0.8);
+      ctx.lineTo(sx + g, sy - g * 0.05);
+      ctx.stroke();
+      // the fallen lintel, resting where it dropped
+      ctx.beginPath();
+      ctx.moveTo(sx - g * 0.45, sy - g * 0.95);
+      ctx.lineTo(sx + g * 0.6, sy - g * 0.55);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
   }
 
   _drawSettlements(ctx, view, state) {
     const s = view.scale;
-    const showAllLabels = s > 1.6;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
+    this._drawRuins(ctx, view, state);
     for (const st of this.world.header.settlements) {
       const sx = view.tx + (st.x + 0.5) * s;
       const sy = view.ty + (st.y + 0.5) * s;
@@ -800,24 +1288,6 @@ export class Renderer {
         ctx.lineWidth = 1.3;
         ctx.strokeStyle = "rgba(126, 178, 226, 0.85)";
         ctx.stroke();
-      }
-
-      const isBig = st.tier === "Town" || st.tier === "City";
-      if (showAllLabels || isBig) {
-        ctx.font = `600 ${isBig ? 12 : 11}px Inter, sans-serif`;
-        ctx.lineWidth = 3;
-        ctx.strokeStyle = "rgba(8,12,20,0.85)";
-        ctx.lineJoin = "round";
-        ctx.strokeText(st.name, sx, sy - r - 5);
-        ctx.fillStyle = "#f0ead8";
-        ctx.fillText(st.name, sx, sy - r - 5);
-        if (s > 3) {
-          const pop = st.pop.toLocaleString("en-US");
-          ctx.font = "500 9.5px Inter, sans-serif";
-          ctx.strokeText(pop, sx, sy + r + 11);
-          ctx.fillStyle = "#b9c0cf";
-          ctx.fillText(pop, sx, sy + r + 11);
-        }
       }
     }
   }

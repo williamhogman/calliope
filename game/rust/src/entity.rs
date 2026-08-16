@@ -91,11 +91,62 @@ impl Registry {
         self.items.get_mut(id as usize)
     }
 
+    /// Latest entity carrying this exact name — the living one if any,
+    /// else the most recent dead. Names are globally unique (the `taken`
+    /// set), so this is the event-resolution workhorse.
+    pub fn find(&self, name: &str) -> Option<i64> {
+        let mut dead: Option<i64> = None;
+        for e in self.items.iter().rev() {
+            if e.name == name {
+                if e.until.is_none() {
+                    return Some(e.id);
+                }
+                if dead.is_none() {
+                    dead = Some(e.id);
+                }
+            }
+        }
+        dead
+    }
+
+    /// Same, filtered to one kind.
+    pub fn find_kind(&self, kind: &str, name: &str) -> Option<i64> {
+        let mut dead: Option<i64> = None;
+        for e in self.items.iter().rev() {
+            if e.kind == kind && e.name == name {
+                if e.until.is_none() {
+                    return Some(e.id);
+                }
+                if dead.is_none() {
+                    dead = Some(e.id);
+                }
+            }
+        }
+        dead
+    }
+
     /// Close an entity's story: record when and how it ended.
     pub fn close(&mut self, id: i64, m: i64, fate: &str) {
         if let Some(e) = self.items.get_mut(id as usize) {
             e.until = Some(m);
             e.fate = fate.to_string();
+        }
+    }
+
+    /// The living entity of `kind` anchored at (x, y), if any — used to
+    /// follow a place through renames and ruin (M9).
+    pub fn find_alive(&self, kind: &str, x: i64, y: i64) -> Option<i64> {
+        self.items
+            .iter()
+            .find(|e| e.kind == kind && e.x == x && e.y == y && e.until.is_none())
+            .map(|e| e.id)
+    }
+
+    /// A place's name changes but its story continues (M9.2/M9.3): keep
+    /// the id, swap the name the chronicle will use from here on.
+    pub fn rename(&mut self, id: i64, new_name: &str) {
+        if let Some(e) = self.items.get_mut(id as usize) {
+            e.name = new_name.to_string();
         }
     }
 

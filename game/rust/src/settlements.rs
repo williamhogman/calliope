@@ -38,23 +38,110 @@ pub struct Settlement {
     pub pop: i64,
     pub tier: String,
     pub food: f64,
+    /// Carrying capacity, souls — recomputed monthly by `capacity_at`
+    /// (crop package + soil + Kaplan arts factor). Shipped to the client.
+    pub k: f64,
     pub coastal: bool,
     pub river: bool,
     pub culture: usize,
+    /// Culture whose tongue coined the name — stable through conquest
+    /// (names carry time, M9.2); the M3 label audit classifies against
+    /// this, not the current owner.
+    pub namer: usize,
     pub connections: i64,
     pub goods: Vec<String>,
     pub exports: Option<String>,
     pub wealth: f64,
     /// true when this town's trade takes to the sea at its own quays
     pub port: bool,
+    /// Reading of the name's parts in its people's tongue (M3.3).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub ety: String,
+    /// Fortification level 0–3 (M4.4): palisade, stone walls, towers.
+    pub fort: u8,
+    /// Older names this place has carried, oldest first (M9.2/M9.3):
+    /// conquest lays a new name over the old, wear smooths a long-spoken
+    /// one — the strata stay readable in the inspector.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub formerly: Vec<String>,
+    /// Highest population this town has ever carried (M9.1: a town that
+    /// has fallen far below its peak is dying, not merely small).
+    #[serde(skip)]
+    pub peak: i64,
+    /// Month of founding (0 = the dawn) — young towns get grace (M9.1).
+    #[serde(skip)]
+    pub born: i64,
+    /// M9.1 — the emigration spiral: true once the town has fallen deep
+    /// below its own peak and the young are leaving faster than they are
+    /// born. Shipped so the inspector can say a place is dying.
+    #[serde(default)]
+    pub failing: bool,
+    /// Months spent pinned below two-fifths of peak (with hysteresis) —
+    /// the spiral only opens after years of it, so one plague year or a
+    /// Gibrat dip never kills a town that would have recovered.
+    #[serde(skip)]
+    pub ail: u16,
 }
 
-pub fn capacity(s: &Settlement) -> f64 {
-    900.0 * s.food.max(0.3)
+/// Effective hinterland a town can actually farm, km² — a half-day's
+/// cart out and back, shared with its neighbours (M2.5 spacing).
+pub const KM2_HINTERLAND: f64 = 110.0;
+
+/// M2.2 — carrying capacity from the crop package around (y,x).
+/// Mean package density over the ~12 km disc, tuned by soil, raised by
+/// arts via `kaplan` (Kaplan land-per-soul ∝ T^−0.5) and specific arts
+/// (`cap_mod`: plough, aqueducts…), plus the site's own larder (delta
+/// silt, fisheries, food kernels — the `food_site` term).
+///
+/// SINGLE SOURCE OF TRUTH: tick_month stores the result on `s.k`,
+/// try_colonize and explain.rs read `s.k` — no second copy exists.
+pub fn capacity_at(
+    crops: &Array2<u8>,
+    fert: &Array2<f64>,
+    y: usize,
+    x: usize,
+    coastal: bool,
+    food_site: f64,
+    kaplan: f64,
+    cap_mod: f64,
+) -> f64 {
+    let (rows, cols) = crops.dim();
+    let mut dsum = 0.0;
+    let mut n = 0.0;
+    for dy in -3i64..=3 {
+        for dx in -3i64..=3 {
+            if dy * dy + dx * dx > 9 {
+                continue;
+            }
+            let (yy, xx) = (y as i64 + dy, x as i64 + dx);
+            if yy < 0 || xx < 0 || yy >= rows as i64 || xx >= cols as i64 {
+                continue;
+            }
+            let (yy, xx) = (yy as usize, xx as usize);
+            let d = crate::agriculture::PACK_DENSITY[crops[[yy, xx]] as usize]
+                * (0.45 + 0.9 * fert[[yy, xx]]);
+            dsum += d;
+            n += 1.0;
+        }
+    }
+    let mut density = if n > 0.0 { dsum / n } else { 0.0 };
+    if coastal {
+        density = density.max(6.0); // the sea is a field that never fails
+    }
+    density = density.max(1.2); // hunting, wells and kitchen gardens
+    (KM2_HINTERLAND * density * kaplan * cap_mod + 210.0 * food_site).max(180.0)
 }
 
 pub fn territory_radius(pop: i64) -> f64 {
     2.0 + 2.4 * (pop.max(10) as f64).log10()
+}
+
+/// The working hinterland: how far a town's carters, herders and mining
+/// crews actually range. One shared constant for goods listing, seam
+/// claiming, crew counting and the harness — these systems drifted apart
+/// once (goods at 1.8r, prospecting at 2.4r) and ore rusted in the hills.
+pub fn work_radius(pop: i64) -> f64 {
+    territory_radius(pop) * 2.4
 }
 
 pub fn site_food(
@@ -224,14 +311,23 @@ pub fn found_settlements(
             pop,
             tier: tier(pop),
             food: site_food(&food, fert, &near_fresh, &coast, by, bx),
+            k: 0.0, // set by World::generate once the crop grid exists
             coastal: coast[[by, bx]],
             river: near_fresh[[by, bx]],
             culture: 0,
+            namer: 0,
             connections: 0,
             goods: Vec::new(),
             exports: None,
             wealth: crate::util::round2(pop as f64 * 0.2),
             port: false,
+            ety: String::new(), // filled when cultures re-name in their tongue
+            fort: 0,
+            formerly: Vec::new(),
+            peak: pop,
+            born: 0,
+            failing: false,
+            ail: 0,
         });
         for y in 0..size {
             for x in 0..size {
@@ -250,11 +346,17 @@ pub fn found_settlements(
         food_grid: food,
         near_fresh,
         coast,
-        // 4× the dawn towns: the map can hold it now that growth is paced,
-        // and a binding cap was silently vetoing late-run mining ventures.
-        max_settlements: n_target * 4,
+        // 6× the dawn towns: with market-town spacing (M2.5) the land can
+        // hold a dense web of villages between the regional capitals.
+        max_settlements: n_target * 6,
     }
 }
+
+/// Minimum spacing between any two towns, in cells. Calibrated against
+/// the 15–30 km market-town band (M2.5): 6 cells = 24 km at 4 km/cell,
+/// so settled cores tighten toward real market-shed distances while the
+/// frontier stays sparse.
+pub const MIN_TOWN_SPACING_CELLS: f64 = 6.0;
 
 /// Best colony site in the ring around a parent, clear of others. The outer
 /// edge of the ring widens as a people masters sail and star-charts.
@@ -270,7 +372,7 @@ pub fn colony_site(
     max_d2: f64,
 ) -> Option<(usize, usize)> {
     let (rows, cols) = site_score.dim();
-    let min_d2 = (rows as f64 / 22.0).powi(2);
+    let min_d2 = MIN_TOWN_SPACING_CELLS * MIN_TOWN_SPACING_CELLS;
     let mut best = f64::NEG_INFINITY;
     let mut found: Option<(usize, usize)> = None;
     for y in 0..rows {
@@ -282,7 +384,7 @@ pub fn colony_site(
             let dyp = y as f64 - parent.y as f64;
             let dxp = x as f64 - parent.x as f64;
             let d2p = dyp * dyp + dxp * dxp;
-            if d2p < 256.0 || d2p > max_d2 {
+            if d2p < 64.0 || d2p > max_d2 {
                 continue;
             }
             let mut clear = true;

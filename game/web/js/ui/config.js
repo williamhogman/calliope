@@ -30,6 +30,7 @@ export const EVENT_KINDS = {
   found:     { color: "#d4a94a", family: "realm" },
   growth:    { color: "#8fb6dd", family: "realm" },
   ruler:     { color: "#c9a0e8", family: "realm" },
+  realm:     { color: "#e8c07a", family: "realm" },
   society:   { color: "#e0b0d0", family: "realm" },
   tech:      { color: "#7fc4e8", family: "realm" },
   wonder:    { color: "#ffd766", family: "realm" },
@@ -55,6 +56,35 @@ export const STYLE_LABEL = {
   hellenic: "coastal south", nordic: "far north", arid: "desert marches",
   sylvan: "deep woods", steppe: "open plains", old: "old tongue",
 };
+
+// M6.5 — the sifter's patterns, named for the reader and tinted for the rail.
+export const PATTERN_META = {
+  "rise-fall":       { label: "Rise & fall",     color: "#d4a94a" },
+  "trials":          { label: "Trials",          color: "#e07a6a" },
+  "rivalry":         { label: "Rivalry",         color: "#e05555" },
+  "mine-curse":      { label: "Mine-curse",      color: "#b09a86" },
+  "tide-turned":     { label: "Tide turned",     color: "#c9a0e8" },
+  "founders-dream":  { label: "Founder's dream", color: "#f0d090" },
+  "roads-of":        { label: "Merchant's road", color: "#9fd0c8" },
+  "restless-crowns": { label: "Restless crowns", color: "#e8c07a" },
+  "relic-road":      { label: "Relic's road",    color: "#7fc4e8" },
+};
+export const patternMeta = (p) => PATTERN_META[p] || { label: p, color: "#8a8fa0" };
+
+// M6.1 — how the cast reads in lists: a tint per entity kind.
+export const ENTITY_KINDS = {
+  person:     { label: "person",     color: "#c9a0e8" },
+  ruler:      { label: "ruler",      color: "#c9a0e8" },
+  artifact:   { label: "relic",      color: "#7fc4e8" },
+  war:        { label: "war",        color: "#e05555" },
+  settlement: { label: "settlement", color: "#d4a94a" },
+  culture:    { label: "people",     color: "#e8c07a" },
+  feature:    { label: "place",      color: "#8fb6dd" },
+  ruin:       { label: "ruin",       color: "#b09a86" },
+  world:      { label: "world",      color: "#a8d4b8" },
+  good:       { label: "good",       color: "#9fd0c8" },
+};
+export const entityKind = (k) => ENTITY_KINDS[k] || { label: k, color: "#8a8fa0" };
 
 export const FALLBACK_MONTHS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 

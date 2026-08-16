@@ -1,15 +1,19 @@
 // Inspector dock (bottom-left): one contextual card for whatever is
-// selected — cell, settlement, people, deposit, feature, war or good.
-// Hover gets a light cursor tooltip; click promotes into this dock.
+// selected — cell, settlement, people, deposit, feature, war, good,
+// story or entity. Hover gets a light cursor tooltip; click promotes
+// into this dock.
 
 import { createEffect, createMemo, createSignal, on } from "solid-js";
 import html from "solid-js/html";
 
 import {
-  world, settlements, cultures, wars, market, month, selection,
+  world, settlements, cultures, wars, market, areas, month, selection,
   selectedSettlement, hoverTip, isMobile, sheet, setSheet, marketTick,
+  stories, entities, legendMode, setLegendMode, persistUi, ruins,
 } from "./state.js";
-import { STYLE_LABEL, fmt, FALLBACK_MONTHS } from "./config.js";
+import {
+  STYLE_LABEL, fmt, FALLBACK_MONTHS, patternMeta, entityKind, eventColor,
+} from "./config.js";
 import { I } from "./icons.js";
 
 const monthsOf = () => world()?.header.months || FALLBACK_MONTHS;
@@ -135,6 +139,15 @@ function SettlementView(a) {
   const s = selectedSettlement;
   const culture = () => (cultures() || [])[s()?.culture];
   const explain = useExplain(a, () => (s() ? { kind: "settlement", id: s().id } : null));
+  // M5.2 — which market area this town trades in
+  const marketArea = () => {
+    const st = s(), ar = areas();
+    if (!st || !ar?.hubs?.length) return null;
+    const idx = settlements().findIndex((x) => x.id === st.id);
+    if (idx < 0) return null;
+    const hub = ar.hubs[ar.of?.[idx] ?? 0];
+    return hub ? { ...hub, seat: hub.id === st.id } : null;
+  };
   return () => {
     const st = s();
     if (!st) return html`<div class="insp-body"><div class="insp-note">Lost to the mists.</div></div>`;
@@ -147,7 +160,11 @@ function SettlementView(a) {
         <span class="insp-kicker" style=${`color:${culture()?.color || "#999"}`}>
           ${st.tier}${culture() ? ` of the ${culture().people}` : ""}</span>
         <span class="insp-name">${st.name}</span>
+        ${st.ety ? html`<span class="insp-sub ety">\u201c${st.ety}\u201d in the tongue of the ${culture()?.people || "first peoples"}</span>` : ""}
       </div>
+      ${(st.formerly || []).length ? html`<div class="insp-strata">
+        Once ${st.formerly.join(", then ")} \u2014 the old name${st.formerly.length > 1 ? "s" : ""} linger${st.formerly.length > 1 ? "" : "s"} on shepherds' tongues.</div>` : ""}
+      ${st.failing ? html`<div class="insp-note fail">\u26e9 The young take the roads out; houses stand empty by the gate.</div>` : ""}
       <div class="kv">
         <div><span class="dim">Souls</span><b>${fmt(st.pop)}</b></div>
         <div><span class="dim">Food</span><b>${st.food}</b></div>
@@ -161,6 +178,15 @@ function SettlementView(a) {
           title=${g === st.exports ? "chief export \u2014 open the market view" : "open the market view"}
           onClick=${() => a.select({ kind: "good", id: g })}>${g}${g === st.exports ? html`<span class="d-star">\u2605</span>` : ""}</button>`)}
       </div>` : ""}
+      ${() => {
+        const ma = marketArea();
+        if (!ma) return "";
+        return ma.seat
+          ? html`<div class="insp-line dim">Seat of a market of ${ma.n} town${ma.n === 1 ? "" : "s"} \u2014 prices are set here.</div>`
+          : html`<div class="insp-line dim">Trades in the market of
+              <button class="link-btn" onClick=${() => a.select({ kind: "settlement", id: ma.id, fly: true })}>${ma.name}</button>
+              \u00b7 ${ma.n} towns</div>`;
+      }}
       ${() => (explain() ? Ledger({ data: explain }) : "")}
       <div class="insp-actions">
         <button class="ghost-btn" onClick=${() => a.flyTo(st.x + 0.5, st.y + 0.5, 8)}>${I.fly()} Fly to</button>
@@ -191,6 +217,13 @@ function CultureView(a, sel) {
         <div><span class="dim">Arts</span><b>${(cu.techs || []).length}</b></div>
       </div>
       ${() => atWar().map((w) => html`<div class="insp-note war">\u2694 ${w.name}</div>`)}
+      ${(cu.pantheon || []).length ? html`<div class="pantheon">
+        <div class="insp-goods-title dim">Pantheon</div>
+        ${(cu.pantheon || []).map((g, i) => html`<div class="god-row">
+          <span class="god-name">${i === 0 ? "\u2726 " : ""}${g.name}</span>
+          <span class="god-domain dim">${g.domain}</span>
+        </div>`)}
+      </div>` : ""}
       ${(cu.techs || []).length ? html`<div class="insp-goods techs">
         ${(cu.techs || []).slice(-8).map((t) => html`<span class="d-tag">${t}</span>`)}
       </div>` : ""}
@@ -243,14 +276,41 @@ function FeatureView(a, sel) {
     const km = (w?.header.km_per_cell || 4) ** 2 * ft.size;
     return html`<div class="insp-body">
       <div class="insp-head">
-        <span class="insp-kicker">${ft.t}</span>
+        <span class="insp-kicker">${ft.t}${ft.people ? ` \u00b7 named by the ${ft.people}` : ""}</span>
         <span class="insp-name">${ft.name}</span>
+        ${ft.ety ? html`<span class="insp-sub ety">\u201c${ft.ety}\u201d in ${ft.people ? `the tongue of the ${ft.people}` : "the Old Tongue"}</span>` : ""}
       </div>
+      ${ft.formerly ? html`<div class="insp-strata">The old maps name it ${ft.formerly}.</div>` : ""}
       <div class="kv">
         <div><span class="dim">Extent</span><b>~${fmt(km)} km\u00b2</b></div>
       </div>
+      ${ft.alt ? html`<div class="insp-note">The ${ft.alt_people} across the border call it ${ft.alt}.</div>` : ""}
       <div class="insp-actions">
         <button class="ghost-btn" onClick=${() => a.flyTo(ft.x, ft.y, ft.t === "ocean" || ft.t === "continent" ? 2 : 6)}>${I.fly()} Fly to</button>
+      </div>
+    </div>`;
+  };
+}
+
+// M9.1 — a town that was: why it emptied, whose it had been, what the
+// stones still say. The eid doubles as the door into the telling.
+function RuinView(a, sel) {
+  const r = () => (ruins() || []).find((x) => x.eid === sel.id) || null;
+  return () => {
+    const ru = r();
+    if (!ru) return html`<div class="insp-body"><div class="insp-note">Even the ruin is gone.</div></div>`;
+    const y = Math.floor(ru.since / 12) + 1;
+    return html`<div class="insp-body">
+      <div class="insp-head">
+        <span class="insp-kicker ruin-k">ruin \u00b7 abandoned Y${y}</span>
+        <span class="insp-name">${ru.name}</span>
+        ${ru.ety ? html`<span class="insp-sub ety">\u201c${ru.ety}\u201d \u2014 so the old name read</span>` : ""}
+      </div>
+      <div class="insp-note">${ru.why}</div>
+      ${ru.people ? html`<div class="insp-line dim">Its folk were of the ${ru.people}.</div>` : ""}
+      <div class="insp-actions">
+        <button class="ghost-btn" onClick=${() => a.flyTo(ru.x + 0.5, ru.y + 0.5, 8)}>${I.fly()} Fly to</button>
+        <button class="ghost-btn" onClick=${() => a.select({ kind: "entity", id: ru.eid })}>${I.book()} The telling</button>
       </div>
     </div>`;
   };
@@ -307,6 +367,19 @@ function GoodView(a, sel) {
         <div><span class="dim">Trend</span><b class=${r.t > 0.02 ? "pos" : r.t < -0.02 ? "neg" : ""}>${r.t > 0.02 ? "\u25b2 rising" : r.t < -0.02 ? "\u25bc falling" : "steady"}</b></div>
       </div>` : html`<div class="insp-note">Not yet traded.</div>`}
       ${() => { marketTick(); return Spark({ points: () => a.priceHistoryOf(sel.id), color: meta().color || "#9fd0c8", h: 36, empty: "price \u2014 let the caravans roll" }); }}
+      ${() => {
+        // M5.2 — where it is dear and where it is cheap, across market areas
+        const hubs = (areas()?.hubs || []).filter((h) => h.p && h.p[sel.id] != null);
+        if (hubs.length < 2) return "";
+        const sorted = [...hubs].sort((x, y) => y.p[sel.id] - x.p[sel.id]);
+        const hi = sorted[0], lo = sorted[sorted.length - 1];
+        if (hi.p[sel.id] / Math.max(lo.p[sel.id], 1e-9) < 1.05) return "";
+        return html`<div class="insp-line dim">Dearest in the market of
+          <button class="link-btn" onClick=${() => a.select({ kind: "settlement", id: hi.id, fly: true })}>${hi.name}</button>
+          (${hi.p[sel.id].toFixed(2)}) \u00b7 cheapest at
+          <button class="link-btn" onClick=${() => a.select({ kind: "settlement", id: lo.id, fly: true })}>${lo.name}</button>
+          (${lo.p[sel.id].toFixed(2)})</div>`;
+      }}
       ${() => (explain() ? Ledger({ data: explain }) : "")}
       ${() => (producers().length ? html`<div class="insp-goods-title dim">Worked at</div>
         <div class="insp-list">
@@ -316,6 +389,146 @@ function GoodView(a, sel) {
             <span class="s-pop">${fmt(s.pop)}</span>
           </button>`)}
         </div>` : "")}
+    </div>`;
+  };
+}
+
+// ---------------------------------------------------------------- telling
+
+// Shared beat row: one chronicle entry inside a story or an entity's log,
+// rendered in whichever layer of the telling the reader chose (M6.9).
+const tellText = (e) => (legendMode() === "songs" && e.legend ? e.legend : e.text);
+
+function BeatRows(a, list) {
+  const months = () => world()?.header.months || FALLBACK_MONTHS;
+  return html`<div class="story-beats">
+    ${() => list().map((b) => {
+      const canFly = b.x >= 0;
+      return html`<div class=${"beat" + (canFly ? " clickable" : "")}
+        title=${canFly ? "fly to where it happened" : ""}
+        onClick=${() => { if (canFly) a.flyTo(b.x + 0.5, b.y + 0.5, 8); }}>
+        <span class="e-dot" title=${b.k || ""} style=${`background:${eventColor(b)}`}></span>
+        <span class="e-when">Y${Math.floor(b.m / 12) + 1} ${(months()[((b.m % 12) + 12) % 12] || "").slice(0, 3)}</span>
+        <span class=${() => "e-text" + (legendMode() === "songs" && b.legend ? " sung" : "")}>${() => tellText(b)}</span>
+      </div>`;
+    })}
+  </div>`;
+}
+
+// The little "as it was / as sung" switch every telling view carries.
+function TellingToggle() {
+  const setMode = (m) => { setLegendMode(m); persistUi(); };
+  return html`<div class="seg tiny telling-seg">
+    <button class=${() => (legendMode() === "plain" ? "active" : "")}
+      onClick=${() => setMode("plain")}>As it was</button>
+    <button class=${() => (legendMode() === "songs" ? "active" : "")}
+      onClick=${() => setMode("songs")}>As sung</button>
+  </div>`;
+}
+
+// Chips linking to other members of the cast — the cross-link graph (M6.6).
+function EntityChips(a, list, label) {
+  return html`<div class="ent-links">
+    ${() => (list().length ? html`
+      <div class="insp-goods-title dim">${label}</div>
+      <div class="ent-chips">
+        ${list().map((e) => html`<button class="ent-chip"
+          style=${`--ec:${entityKind(e.kind).color}`}
+          onClick=${() => a.select({ kind: "entity", id: e.id, fly: true })}>
+          <span class="s-dot" style=${`background:${entityKind(e.kind).color}`}></span>
+          ${e.name}${e.until != null ? " \u2020" : ""}
+        </button>`)}
+      </div>` : "")}
+  </div>`;
+}
+
+// M6.5/M6.7 — one sifted saga, its beats in order, its cast linked.
+function StoryView(a, sel) {
+  // prefer the live story from the latest sift — it grows as years pass
+  const story = createMemo(() =>
+    (stories() || []).find((s) => s.pattern === sel.story.pattern && s.title === sel.story.title)
+    || sel.story);
+  const cast = createMemo(() => {
+    const ids = story().ids || [];
+    return ids.map((id) => (entities() || []).find((e) => e.id === id)).filter(Boolean);
+  });
+  return () => {
+    const s = story();
+    const pm = patternMeta(s.pattern);
+    return html`<div class="insp-body">
+      <div class="insp-head">
+        <span class="insp-kicker" style=${`color:${pm.color}`}>
+          ${pm.label} \u00b7 Y${s.y0}${s.y1 !== s.y0 ? `\u2013${s.y1}` : ""}</span>
+        <span class="insp-name">${s.title}</span>
+        <span class="insp-sub">${s.beats.length} beats \u00b7 eventfulness ${s.score.toFixed(1)}</span>
+      </div>
+      ${TellingToggle()}
+      ${BeatRows(a, () => story().beats || [])}
+      ${EntityChips(a, cast, "The cast")}
+    </div>`;
+  };
+}
+
+// M6.6 — one member of the cast: their life, their log, their links.
+function EntityView(a, sel) {
+  const ent = createMemo(() =>
+    (entities() || []).find((e) => e.id === sel.id) || null);
+  const [log, setLog] = createSignal([]);
+  let token = 0;
+  createEffect(() => {
+    month(); // the log grows as time passes
+    const t = ++token;
+    a.entityLog(sel.id).then((l) => { if (t === token) setLog(l); });
+  });
+  const links = createMemo(() => {
+    const seen = new Map();
+    for (const e of log()) {
+      for (const id of e.ids || []) {
+        if (id === sel.id || seen.has(id)) continue;
+        const en = (entities() || []).find((x) => x.id === id);
+        if (en && en.kind !== "world" && en.kind !== "good") seen.set(id, en);
+      }
+    }
+    return [...seen.values()].slice(0, 14);
+  });
+  // bridges into the living views, when the entity still walks the map
+  const liveTown = () => {
+    const e = ent();
+    return e?.kind === "settlement" && e.until == null
+      ? settlements().find((s) => s.name === e.name) : null;
+  };
+  const liveCulture = () => {
+    const e = ent();
+    return e?.kind === "culture"
+      ? (cultures() || []).find((c) => c.people === e.name) : null;
+  };
+  return () => {
+    const e = ent();
+    if (!e) return html`<div class="insp-body"><div class="insp-note">The telling knows no such name.</div></div>`;
+    const ek = entityKind(e.kind);
+    const home = e.culture != null ? (cultures() || [])[e.culture] : null;
+    const born = Math.floor(e.since / 12) + 1;
+    const died = e.until != null ? Math.floor(e.until / 12) + 1 : null;
+    return html`<div class="insp-body">
+      <div class="insp-head">
+        <span class="insp-kicker" style=${`color:${ek.color}`}>
+          ${e.role || ek.label}${home ? ` of the ${home.people}` : ""}</span>
+        <span class="insp-name">${e.name}${(e.epithets || []).length ? ` ${e.epithets[e.epithets.length - 1]}` : ""}</span>
+        <span class="insp-sub">Y${born}${died != null ? ` \u2014 Y${died}` : " \u2014 still in the telling"}</span>
+      </div>
+      ${(e.epithets || []).length > 1 ? html`<div class="insp-tagrow">
+        ${e.epithets.map((t) => html`<span class="d-tag">${t}</span>`)}
+      </div>` : ""}
+      ${e.fate ? html`<div class="insp-note">${e.fate}</div>` : ""}
+      ${TellingToggle()}
+      ${() => (log().length ? BeatRows(a, log)
+        : html`<div class="insp-note dim">The chronicle has not spoken of ${e.name} yet.</div>`)}
+      ${EntityChips(a, links, "Spoken of alongside")}
+      <div class="insp-actions">
+        ${e.x >= 0 ? html`<button class="ghost-btn" onClick=${() => a.flyTo(e.x + 0.5, e.y + 0.5, 8)}>${I.fly()} Fly to</button>` : ""}
+        ${() => { const t = liveTown(); return t ? html`<button class="ghost-btn" onClick=${() => a.select({ kind: "settlement", id: t.id, fly: true })}>${I.place()} The town today</button>` : ""; }}
+        ${() => { const c = liveCulture(); return c ? html`<button class="ghost-btn" onClick=${() => a.select({ kind: "culture", id: c.id })}>${I.people()} The people today</button>` : ""; }}
+      </div>
     </div>`;
   };
 }
@@ -332,8 +545,11 @@ export function InspectorDock(a) {
       case "culture": return CultureView(a, sel);
       case "deposit": return DepositView(a, sel);
       case "feature": return FeatureView(a, sel);
+      case "ruin": return RuinView(a, sel);
       case "war": return WarView(a, sel);
       case "good": return GoodView(a, sel);
+      case "story": return StoryView(a, sel);
+      case "entity": return EntityView(a, sel);
       default: return null;
     }
   });

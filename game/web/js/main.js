@@ -2,7 +2,10 @@
 // camera flights and notifications. All chrome DOM is the Solid UI in
 // ./ui/app.js reading ./ui/state.js.
 
-import { generateWorld, tickWorld, explainWorld } from "./net.js";
+import {
+  generateWorld, tickWorld, explainWorld,
+  storiesWorld, entitiesWorld, entityLogWorld, artifactsWorld,
+} from "./net.js";
 import { Renderer } from "./render.js";
 import { createGpu, recreateGpuOnGl } from "./gpu.js";
 import { View } from "./view.js";
@@ -10,14 +13,16 @@ import { pick } from "./picking.js";
 import { mountUI } from "./ui/app.js";
 import {
   world, setWorld, setSettlements, setCultures, setWars, setEvents, events,
+  setRuins,
   month, setMonth, playing, setPlaying, speed, setSpeed,
   worldSize, setWorldSize, setBusy, layer, setLayer, overlays, setOverlays,
   selection, setSelection, setHoverTip,
   popHistory, setPopHistory, setSeenEvents,
-  setMarket, setDepositsTick, setMarketTick, pushToast,
+  setMarket, setAreas, setMerchants, setDepositsTick, setMarketTick, pushToast,
   searchOpen, setSearchOpen, closePopovers,
   overlaysOpen, setOverlaysOpen, legendOpen, setLegendOpen,
   worldMenuOpen, notifOpen, notif, isMobile, sheet, setSheet,
+  entities, setStories, setEntities, setArtifacts,
 } from "./ui/state.js";
 import { LAYERS, eventFamily, eventColor } from "./ui/config.js";
 
@@ -35,6 +40,8 @@ window.__calliope = {
   view, renderer, world, month, advance: (m) => advance(m),
   gpuMode: () => (gpuLive ? "live" : "on-demand"),
   gpuForceLive: () => { governorOn = false; gpuLive = true; },
+  // M7 gate evidence: label placement stats from the last drawn frame
+  labelStats: () => renderer.labelStats(),
 };
 
 // GPU imagery: bring up the Rust wgpu engine (WebGPU, else WebGL2).
@@ -165,6 +172,7 @@ function frame(ts) {
       version,
       playing: playing(),
       selectedId: sel?.kind === "settlement" ? sel.id : null,
+      selectedRuin: sel?.kind === "ruin" ? sel.id : null,
       selectedCell: sel?.kind === "cell" ? sel : null,
     }, view, hover);
     window.__calliope.draws = (window.__calliope.draws || 0) + 1;
@@ -230,7 +238,10 @@ async function generate(rawSeed) {
     setSettlements(w.header.settlements);
     setCultures(w.header.cultures || []);
     setWars(w.header.wars || []);
+    setRuins(w.header.ruins || []);
     setMarket(w.header.market || []);
+    setAreas(w.header.areas || null);
+    setMerchants(w.header.merchants || []);
     renderer.setWorld(w);
     renderer.gpu?.setWorld(w);
     view.fit(w.header.width || w.header.size, w.header.size);
@@ -238,6 +249,11 @@ async function generate(rawSeed) {
     popHistById = new Map();
     priceHist = new Map();
     setPopHistory([]);
+    setStories([]);
+    setEntities([]);
+    setArtifacts([]);
+    legendsAt = -1000;
+    refreshLegends(true); // the dawn already has a cast worth browsing
     recordHistories(w.header.settlements, w.header.market, w.header.month || 0);
     history.replaceState(null, "", `?seed=${w.header.seed}&size=${w.header.size}`);
     markDirty();
@@ -284,12 +300,27 @@ async function advance(months) {
     }
     if (res.wars) setWars(res.wars);
     if (res.market) setMarket(res.market);
+    if (res.areas) setAreas(res.areas);
+    if (res.merchants) setMerchants(res.merchants);
     if (res.deposits) {
       // discoveries or dead mines: refresh the map's mineral ledger
       w.header.deposits = res.deposits;
       if (res.deposits_hidden !== undefined) w.header.deposits_hidden = res.deposits_hidden;
       buildDepositIndex(w);
       setDepositsTick((t) => t + 1);
+    }
+    if (res.features) {
+      // the tongues caught up with the map: features gained doubled names
+      w.header.features = res.features;
+    }
+    if (res.ruins) {
+      // a town died (M9.1): its ruin joins the map's quiet inventory
+      w.header.ruins = res.ruins;
+      setRuins(res.ruins);
+    }
+    if (res.territory) {
+      // borders moved: the engine redrew the political map (M4.1)
+      renderer.setTerritory(res.territory);
     }
     if (res.events?.length) {
       setEvents([...events(), ...res.events]);
@@ -324,9 +355,14 @@ const TOAST_KINDS = new Set([
 
 function locateEvent(e) {
   const w = world();
-  if (!w || !e.s) return null;
+  if (!w) return null;
+  // events carry their own map anchor when they have one (M6.1/M9.4)
+  if (e.x != null && e.x >= 0) return { x: e.x + 0.5, y: e.y + 0.5 };
+  if (!e.s) return null;
   const s = w.header.settlements.find((x) => x.name === e.s);
   if (s) return { x: s.x + 0.5, y: s.y + 0.5 };
+  const ru = (w.header.ruins || []).find((x) => x.name === e.s || x.of === e.s);
+  if (ru) return { x: ru.x + 0.5, y: ru.y + 0.5 };
   const f = (w.header.features || []).find((x) => x.name === e.s);
   if (f) return { x: f.x, y: f.y };
   return null;
@@ -371,6 +407,12 @@ function select(sel) {
     }
   } else if (sel.kind === "deposit" && sel.fly) {
     view.flyTo(sel.x + 0.5, sel.y + 0.5, Math.max(view.scale, 9));
+  } else if (sel.kind === "ruin" && sel.fly) {
+    const r = (world()?.header.ruins || []).find((x) => x.eid === sel.id);
+    if (r) view.flyTo(r.x + 0.5, r.y + 0.5, Math.max(view.scale, 6));
+  } else if (sel.kind === "entity" && sel.fly) {
+    const e = entities().find((x) => x.id === sel.id);
+    if (e && e.x >= 0) view.flyTo(e.x + 0.5, e.y + 0.5, Math.max(view.scale, 6));
   }
   setSelection(sel);
   markDirty();
@@ -522,12 +564,13 @@ function inspectCell(cx, cy) {
   }
 
   let territory = null;
-  const owner = renderer.territoryCache.owner;
-  if (owner && owner[i] >= 0) {
-    const s = w.header.settlements.find((s) => s.id === owner[i]);
-    if (s) {
-      const c = (w.header.cultures || [])[s.culture];
-      territory = `Lands of ${s.name}${c ? ` \u00b7 ${c.people}` : ""}`;
+  const cid = renderer.ownerCultureAt(i);
+  if (cid >= 0) {
+    const c = (w.header.cultures || [])[cid];
+    if (c) {
+      territory = c.vassal_of
+        ? `Lands of the ${c.people} \u00b7 sworn to the ${c.vassal_of}`
+        : `Lands of the ${c.people}`;
     }
   }
 
@@ -598,6 +641,18 @@ canvas.addEventListener("pointermove", (e) => {
         return;
       }
     }
+    if (hit?.kind === "ruin") {
+      const r = (w.header.ruins || []).find((x) => x.eid === hit.id);
+      if (r) {
+        setHoverTip({
+          px: e.clientX, py: e.clientY,
+          title: r.name,
+          sub: `abandoned Y${Math.floor(r.since / 12) + 1}${r.people ? ` \u00b7 once of the ${r.people}` : ""}`,
+          line: "click to inspect",
+        });
+        return;
+      }
+    }
     if (hit?.kind === "deposit") {
       const meta = w.header.resources[hit.id] || {};
       setHoverTip({
@@ -638,6 +693,39 @@ async function explain(kind, id) {
   }
 }
 
+// ---------- the telling (M6.6) ----------
+
+// The sifter reads the whole log, so the client asks sparingly: at most
+// once per handful of sim-months, and only while someone is looking.
+let legendsAt = -1000;
+let legendsBusy = false;
+async function refreshLegends(force = false) {
+  if (!world() || legendsBusy) return;
+  if (!force && month() - legendsAt < 6) return;
+  legendsBusy = true;
+  try {
+    const [st, en, ar] = await Promise.all([
+      storiesWorld(), entitiesWorld(), artifactsWorld(),
+    ]);
+    setStories(st);
+    setEntities(en);
+    setArtifacts(ar);
+    legendsAt = month();
+  } catch (err) {
+    console.warn("the telling is silent:", err);
+  } finally {
+    legendsBusy = false;
+  }
+}
+
+async function entityLog(id) {
+  try {
+    return await entityLogWorld(id);
+  } catch {
+    return [];
+  }
+}
+
 // ---------- actions ----------
 
 function fitView() {
@@ -660,6 +748,8 @@ const actions = {
   locateEvent,
   popHistoryOf: (id) => popHistById.get(id) || [],
   priceHistoryOf: (g) => priceHist.get(g) || [],
+  refreshLegends,
+  entityLog,
 };
 
 mountUI(actions);

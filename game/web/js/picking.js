@@ -20,6 +20,18 @@ export function pick(world, view, renderer, px, py, opts = {}) {
     return { kind: "settlement", id: best.id };
   }
 
+  // 1b. ruins (M9.1) — quiet marks on the ground, a touch harder to hit
+  let bru = null, bruD = Infinity;
+  for (const r of header.ruins || []) {
+    const sx = view.tx + (r.x + 0.5) * view.scale;
+    const sy = view.ty + (r.y + 0.5) * view.scale;
+    const d = Math.hypot(px - sx, py - sy);
+    if (d < bruD) { bruD = d; bru = r; }
+  }
+  if (bru && bruD <= (touch ? 20 : 11)) {
+    return { kind: "ruin", id: bru.eid };
+  }
+
   // 2. mineral deposits, when the resources overlay is lit
   if (opts.resourcesOn) {
     let bd = Infinity, bdep = null;
