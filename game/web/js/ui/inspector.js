@@ -3,18 +3,19 @@
 // story or entity. Hover gets a light cursor tooltip; click promotes
 // into this dock.
 
-import { createEffect, createMemo, createSignal, on } from "solid-js";
+import { createEffect, createMemo, createResource, on } from "solid-js";
 import html from "solid-js/html";
 
 import {
   world, settlements, cultures, wars, market, areas, month, selection,
-  selectedSettlement, hoverTip, isMobile, sheet, setSheet, marketTick,
-  stories, entities, legendMode, setLegendMode, persistUi, ruins,
+  selectedSettlement, settlementsById, hoverTip, isMobile, sheet, setSheet,
+  marketTick, stories, entities, legendMode, setLegendMode, persistUi, ruins,
 } from "./state.js";
 import {
   STYLE_LABEL, fmt, FALLBACK_MONTHS, patternMeta, entityKind, eventColor,
 } from "./config.js";
 import { I } from "./icons.js";
+import { each, eachIdx } from "./list.js";
 
 const monthsOf = () => world()?.header.months || FALLBACK_MONTHS;
 
@@ -69,35 +70,34 @@ function Ledger(p) {
   const rows = () => p.data()?.terms || [];
   return html`<div class="ledger">
     <div class="ledger-head">${I.why()}<span>${() => p.data()?.title || "Why?"}</span></div>
-    ${() => rows().map((t) => html`<div class="ledger-row">
-      <span class="lg-label">${t.l}</span>
-      <span class=${() => "lg-val" + (t.v > 0.0005 ? " pos" : t.v < -0.0005 ? " neg" : "")}>
-        ${t.v > 0 ? "+" : ""}${typeof t.v === "number" ? t.v.toFixed(p.data()?.dp ?? 2) : t.v}
+    ${eachIdx(rows, (t) => html`<div class="ledger-row">
+      <span class="lg-label">${() => t().l}</span>
+      <span class=${() => "lg-val" + (t().v > 0.0005 ? " pos" : t().v < -0.0005 ? " neg" : "")}>
+        ${() => `${t().v > 0 ? "+" : ""}${typeof t().v === "number" ? t().v.toFixed(p.data()?.dp ?? 2) : t().v}`}
       </span>
     </div>`)}
     ${() => (p.data()?.total != null
       ? html`<div class="ledger-row ledger-total">
-          <span class="lg-label">${p.data()?.total_label || "Total"}</span>
-          <span class="lg-val">${p.data().total.toFixed(p.data()?.dp ?? 2)}${p.data()?.unit || ""}</span>
+          <span class="lg-label">${() => p.data()?.total_label || "Total"}</span>
+          <span class="lg-val">${() => `${p.data().total.toFixed(p.data()?.dp ?? 2)}${p.data()?.unit || ""}`}</span>
         </div>`
       : "")}
   </div>`;
 }
 
-// Async explain fetch, guarded against stale selections.
+// E8.4 — the explain fetch rides createResource: stale-race protection,
+// loading and error semantics come built in. `latest` keeps the previous
+// ledger on screen while the next month's answer is in flight, so the
+// dock never flickers as time passes.
 function useExplain(a, keyFn) {
-  const [data, setData] = createSignal(null);
-  let token = 0;
-  createEffect(() => {
-    const key = keyFn();
-    month(); // refresh the ledger as time passes
-    const t = ++token;
-    if (!key) { setData(null); return; }
-    a.explain(key.kind, key.id).then((d) => {
-      if (t === token) setData(d);
-    }).catch(() => { if (t === token) setData(null); });
-  });
-  return data;
+  const [data] = createResource(
+    () => {
+      const key = keyFn();
+      return key ? { ...key, m: month() } : null;
+    },
+    (key) => a.explain(key.kind, key.id).catch(() => null),
+  );
+  return () => data.latest ?? null;
 }
 
 // ---------------------------------------------------------------- views
@@ -200,6 +200,8 @@ function CultureView(a, sel) {
   const c = () => (cultures() || [])[sel.id];
   const mine = createMemo(() => settlements().filter((s) => s.culture === sel.id));
   const atWar = () => (wars() || []).filter((w) => w.a === sel.id || w.b === sel.id);
+  const top = createMemo(() =>
+    mine().slice().sort((x, y) => y.pop - x.pop).slice(0, 6));
   return () => {
     const cu = c();
     if (!cu) return "";
@@ -228,11 +230,10 @@ function CultureView(a, sel) {
         ${(cu.techs || []).slice(-8).map((t) => html`<span class="d-tag">${t}</span>`)}
       </div>` : ""}
       <div class="insp-list">
-        ${() => mine().slice().sort((x, y) => y.pop - x.pop).slice(0, 6).map(
-          (s) => html`<button class="insp-list-row" onClick=${() => a.select({ kind: "settlement", id: s.id, fly: true })}>
-            <span class="s-name">${s.name}</span><span class="s-tier">${s.tier}</span>
-            <span class="s-pop">${fmt(s.pop)}</span>
-          </button>`)}
+        ${each(top, (s) => html`<button class="insp-list-row" onClick=${() => a.select({ kind: "settlement", id: s.id, fly: true })}>
+          <span class="s-name">${s.name}</span><span class="s-tier">${s.tier}</span>
+          <span class="s-pop">${fmt(s.pop)}</span>
+        </button>`)}
       </div>
     </div>`;
   };
@@ -351,7 +352,7 @@ function GoodView(a, sel) {
   const meta = () => world()?.header.resources?.[sel.id] || {};
   const producers = createMemo(() =>
     settlements().filter((s) => (s.goods || []).includes(sel.id))
-      .sort((x, y) => y.pop - x.pop));
+      .sort((x, y) => y.pop - x.pop).slice(0, 5));
   const explain = useExplain(a, () => ({ kind: "good", id: sel.id }));
   return () => {
     const r = row();
@@ -383,7 +384,7 @@ function GoodView(a, sel) {
       ${() => (explain() ? Ledger({ data: explain }) : "")}
       ${() => (producers().length ? html`<div class="insp-goods-title dim">Worked at</div>
         <div class="insp-list">
-          ${producers().slice(0, 5).map((s) => html`<button class="insp-list-row"
+          ${each(producers, (s) => html`<button class="insp-list-row"
             onClick=${() => a.select({ kind: "settlement", id: s.id, fly: true })}>
             <span class="s-name">${s.name}</span><span class="s-tier">${s.tier}</span>
             <span class="s-pop">${fmt(s.pop)}</span>
@@ -399,19 +400,22 @@ function GoodView(a, sel) {
 // rendered in whichever layer of the telling the reader chose (M6.9).
 const tellText = (e) => (legendMode() === "songs" && e.legend ? e.legend : e.text);
 
+// E8.2 — beats arrive as fresh JSON on every sift, so rows are keyed by
+// position: a growing log updates its text in place and appends.
 function BeatRows(a, list) {
   const months = () => world()?.header.months || FALLBACK_MONTHS;
   return html`<div class="story-beats">
-    ${() => list().map((b) => {
-      const canFly = b.x >= 0;
-      return html`<div class=${"beat" + (canFly ? " clickable" : "")}
-        title=${canFly ? "fly to where it happened" : ""}
-        onClick=${() => { if (canFly) a.flyTo(b.x + 0.5, b.y + 0.5, 8); }}>
-        <span class="e-dot" title=${b.k || ""} style=${`background:${eventColor(b)}`}></span>
-        <span class="e-when">Y${Math.floor(b.m / 12) + 1} ${(months()[((b.m % 12) + 12) % 12] || "").slice(0, 3)}</span>
-        <span class=${() => "e-text" + (legendMode() === "songs" && b.legend ? " sung" : "")}>${() => tellText(b)}</span>
-      </div>`;
-    })}
+    ${eachIdx(list, (b) => html`<div
+      class=${() => "beat" + (b().x >= 0 ? " clickable" : "")}
+      title=${() => (b().x >= 0 ? "fly to where it happened" : "")}
+      onClick=${() => { const e = b(); if (e.x >= 0) a.flyTo(e.x + 0.5, e.y + 0.5, 8); }}>
+      <span class="e-dot" title=${() => b().k || ""} style=${() => `background:${eventColor(b())}`}></span>
+      <span class="e-when">${() => {
+        const e = b();
+        return `Y${Math.floor(e.m / 12) + 1} ${(months()[((e.m % 12) + 12) % 12] || "").slice(0, 3)}`;
+      }}</span>
+      <span class=${() => "e-text" + (legendMode() === "songs" && b().legend ? " sung" : "")}>${() => tellText(b())}</span>
+    </div>`)}
   </div>`;
 }
 
@@ -420,8 +424,10 @@ function TellingToggle() {
   const setMode = (m) => { setLegendMode(m); persistUi(); };
   return html`<div class="seg tiny telling-seg">
     <button class=${() => (legendMode() === "plain" ? "active" : "")}
+      aria-pressed=${() => String(legendMode() === "plain")}
       onClick=${() => setMode("plain")}>As it was</button>
     <button class=${() => (legendMode() === "songs" ? "active" : "")}
+      aria-pressed=${() => String(legendMode() === "songs")}
       onClick=${() => setMode("songs")}>As sung</button>
   </div>`;
 }
@@ -432,11 +438,11 @@ function EntityChips(a, list, label) {
     ${() => (list().length ? html`
       <div class="insp-goods-title dim">${label}</div>
       <div class="ent-chips">
-        ${list().map((e) => html`<button class="ent-chip"
-          style=${`--ec:${entityKind(e.kind).color}`}
-          onClick=${() => a.select({ kind: "entity", id: e.id, fly: true })}>
-          <span class="s-dot" style=${`background:${entityKind(e.kind).color}`}></span>
-          ${e.name}${e.until != null ? " \u2020" : ""}
+        ${eachIdx(list, (e) => html`<button class="ent-chip"
+          style=${() => `--ec:${entityKind(e().kind).color}`}
+          onClick=${() => a.select({ kind: "entity", id: e().id, fly: true })}>
+          <span class="s-dot" style=${() => `background:${entityKind(e().kind).color}`}></span>
+          ${() => `${e().name}${e().until != null ? " \u2020" : ""}`}
         </button>`)}
       </div>` : "")}
   </div>`;
@@ -473,13 +479,14 @@ function StoryView(a, sel) {
 function EntityView(a, sel) {
   const ent = createMemo(() =>
     (entities() || []).find((e) => e.id === sel.id) || null);
-  const [log, setLog] = createSignal([]);
-  let token = 0;
-  createEffect(() => {
-    month(); // the log grows as time passes
-    const t = ++token;
-    a.entityLog(sel.id).then((l) => { if (t === token) setLog(l); });
-  });
+  // E8.4 — the log rides createResource keyed on (entity, month): stale
+  // fetches lose the race by construction, and `latest` holds the previous
+  // log while the next one loads.
+  const [logRes] = createResource(
+    () => ({ id: sel.id, m: month() }),
+    (k) => a.entityLog(k.id).catch(() => []),
+  );
+  const log = () => logRes.latest || [];
   const links = createMemo(() => {
     const seen = new Map();
     for (const e of log()) {
