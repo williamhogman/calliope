@@ -61,3 +61,11 @@ export async function tickWorld(_id, months) {
   const { json } = await call({ op: "tick", months });
   return JSON.parse(json);
 }
+
+// Term ledger for a derived quantity ("why is this so?"); null when the
+// engine has nothing to say about that entity.
+export async function explainWorld(kind, key) {
+  const { json } = await call({ op: "explain", kind, key });
+  const parsed = JSON.parse(json);
+  return parsed && parsed.terms ? parsed : null;
+}

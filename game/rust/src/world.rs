@@ -420,6 +420,7 @@ impl World {
             let (y, x) = (s.y as usize, s.x as usize);
             let t_now =
                 climate::month_temperature(self.tmean[[y, x]], self.tamp[[y, x]], month);
+            // NOTE: this growth chain is mirrored by explain.rs — change both.
             // ~6%/yr at best: the world should still be filling in at year
             // 100, not saturated by year 45 with a century of flat plateau.
             let mut r = 0.005;

@@ -32,7 +32,8 @@ pub fn base_value(good: &str) -> f64 {
     round2(v)
 }
 
-fn demand_weight(good: &str, luxury: f64) -> f64 {
+// pub(crate): explain.rs mirrors the price math for its term ledger.
+pub(crate) fn demand_weight(good: &str, luxury: f64) -> f64 {
     let chain = isa_chain(good);
     if chain.iter().any(|s| s == "food") {
         1.15
