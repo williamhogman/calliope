@@ -270,8 +270,11 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
   let tnow = clim.x + clim.y * cos(6.2831853 * month / 12.0);
   let coast = misc.w * 32.0;
   let land_m = smoothstep(-0.006, 0.006, h);
-  let lake_m = smoothstep(0.35, 0.65, misc.z);
-  let water_m = max(1.0 - land_m, lake_m);
+  // misc.z encodes standing water: 1 fresh lake, 0.55 salt flat, -1 wadi bed
+  let lake_m = smoothstep(0.72, 0.95, misc.z);
+  let salt_m = smoothstep(0.30, 0.50, misc.z) * (1.0 - smoothstep(0.62, 0.80, misc.z));
+  let wadi_m = clamp(-misc.z, 0.0, 1.0);
+  let water_m = max(1.0 - land_m, max(lake_m, salt_m));
 
   // hillshade from the smooth height field (light from the NW) — forward
   // differences reuse the centre sample, two taps instead of four
@@ -288,6 +291,9 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
     // lakes ride on top of land
     let ln = vnoise(p * 1.3) - 0.5;
     col = mix(col, vec3<f32>(25.0 + ln * 7.0, 57.0 + ln * 7.0, 69.0 + ln * 7.0) / 255.0, lake_m);
+    // dead seas: blinding mineral crusts with a faint aqua bloom at the rim
+    let sc = vec3<f32>(216.0 + ln * 10.0, 222.0 + ln * 8.0, 214.0 + ln * 6.0) / 255.0;
+    col = mix(col, mix(sc, vec3<f32>(158.0, 199.0, 196.0) / 255.0, 0.25 + 0.3 * ln), salt_m);
     if (layer == 1) {
       // mute the imagery so informational tints read like annotation
       let lum = dot(col, vec3<f32>(0.3, 0.59, 0.11));
@@ -303,6 +309,7 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
       col = sea_ramp(min(1.0, -h / 0.75)) * vec3<f32>(0.9, 0.95, 1.0);
     } else {
       col = mix(elev_ramp(h), vec3<f32>(74.0, 128.0, 168.0) / 255.0, lake_m);
+      col = mix(col, vec3<f32>(198.0, 202.0, 196.0) / 255.0, salt_m);
     }
   } else if (layer == 3) {
     col = temp_ramp(tnow);
@@ -317,10 +324,12 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
       if (flow > 0.42) { col = hydro_ramp((flow - 0.42) / 0.58); }
       else { col = vec3<f32>(19.0, 26.0, 36.0) / 255.0 * shade; }
       col = mix(col, vec3<f32>(46.0, 95.0, 143.0) / 255.0, lake_m);
+      col = mix(col, vec3<f32>(176.0, 182.0, 178.0) / 255.0, salt_m);
     }
   } else {
     if (h < 0.0) { col = vec3<f32>(20.0, 33.0, 52.0) / 255.0; }
     else { col = mix(fert_ramp(clim.w), vec3<f32>(46.0, 95.0, 143.0) / 255.0, lake_m); }
+    col = mix(col, vec3<f32>(176.0, 182.0, 178.0) / 255.0, salt_m * land_m);
   }
 
   // hillshade on land (soft for the analytic climate layers, none for hydro)
@@ -330,11 +339,19 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
     col *= mix(s, 1.0, water_m);
   }
 
-  // rivers overlay — natural water blue, weighted by discharge
+  // rivers overlay — width and weight follow Strahler order (misc.y holds
+  // channel strength), and wadis breathe with the rains: brimming in the
+  // wet season, a pale ribbon of cracked silt in the dry.
   if (U.anim.y > 0.5 && layer != 5) {
-    let riv = smoothstep(0.22, 0.58, misc.y);
-    let a = min(0.8, 0.38 + misc.x * 0.5) * riv * land_m * (1.0 - lake_m);
+    let str = misc.y;
+    let riv = smoothstep(0.14, 0.42, str);
+    let north = step(p.y, size.y * 0.5);
+    let wet = 0.5 - 0.5 * cos(6.2831853 * (month - 5.5 - 6.0 * (1.0 - north)) / 12.0);
+    let presence = mix(1.0, 0.10 + 0.90 * wet, wadi_m);
+    let a = min(0.85, 0.30 + misc.x * 0.40 + 0.25 * str) * riv * land_m * (1.0 - lake_m) * presence;
     col = mix(col, vec3<f32>(62.0, 124.0, 186.0) / 255.0, a);
+    let dry = riv * wadi_m * (1.0 - presence) * land_m * 0.4;
+    col = mix(col, vec3<f32>(203.0, 192.0, 168.0) / 255.0, dry);
   }
 
   // seasonal snow and sea ice, breaking up along a noisy snowline of floes
@@ -413,6 +430,8 @@ fn coast_distance(height: &[f32], w: usize, h: usize) -> Vec<f32> {
 
 #[wasm_bindgen]
 pub struct Orbital {
+    /// Keeps the backend instance alive for the lifetime of the surface.
+    _instance: wgpu::Instance,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface: wgpu::Surface<'static>,
@@ -427,6 +446,24 @@ pub struct Orbital {
     cfg_w: u32,
     cfg_h: u32,
     srgb: f32,
+    backend: &'static str,
+}
+
+/// Device descriptor with every requested limit clamped to what the adapter
+/// actually offers — a GL adapter capped at 6 color attachments must not be
+/// asked for the 8 in the downlevel defaults.
+fn device_desc(adapter: &wgpu::Adapter) -> wgpu::DeviceDescriptor<'static> {
+    let al = adapter.limits();
+    let mut limits = wgpu::Limits::downlevel_webgl2_defaults().using_resolution(al.clone());
+    limits.max_color_attachments = limits.max_color_attachments.min(al.max_color_attachments);
+    limits.max_texture_dimension_1d = limits.max_texture_dimension_1d.min(al.max_texture_dimension_1d);
+    limits.max_texture_dimension_2d = limits.max_texture_dimension_2d.min(al.max_texture_dimension_2d);
+    wgpu::DeviceDescriptor {
+        label: Some("calliope-orbital"),
+        required_features: wgpu::Features::empty(),
+        required_limits: limits,
+        memory_hints: wgpu::MemoryHints::default(),
+    }
 }
 
 fn tex_layout_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -451,58 +488,80 @@ impl Orbital {
     /// WebGPU is probed adapter-first (no canvas involved), and the canvas is
     /// only handed to the backend that proved it has hardware behind it.
     pub async fn create(canvas: web_sys::HtmlCanvasElement) -> Result<Orbital, JsValue> {
-        let probe = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        // WebGPU is probed adapter-and-device first, with no canvas involved:
+        // only a backend that fully brought a device up gets to claim the
+        // canvas, so a browser whose WebGPU rejects our device request still
+        // falls through cleanly to WebGL2.
+        let probe = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::BROWSER_WEBGPU,
             ..Default::default()
         });
-        let webgpu = probe
+        if let Some(adapter) = probe
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: None,
                 force_fallback_adapter: false,
             })
             .await
-            .map(|adapter| (probe, adapter));
-
-        let (surface, adapter) = match webgpu {
-            Some((instance, adapter)) => {
-                let surface = instance
-                    .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
+        {
+            if let Ok((device, queue)) = adapter.request_device(&device_desc(&adapter), None).await
+            {
+                let surface = probe
+                    .create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))
                     .map_err(|e| JsValue::from_str(&format!("webgpu surface: {e}")))?;
-                (surface, adapter)
+                return Self::finish(probe, surface, adapter, device, queue, "webgpu");
             }
-            None => {
-                let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-                    backends: wgpu::Backends::GL,
-                    ..Default::default()
-                });
-                let surface = instance
-                    .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
-                    .map_err(|e| JsValue::from_str(&format!("webgl surface: {e}")))?;
-                let adapter = instance
-                    .request_adapter(&wgpu::RequestAdapterOptions {
-                        power_preference: wgpu::PowerPreference::HighPerformance,
-                        compatible_surface: Some(&surface),
-                        force_fallback_adapter: false,
-                    })
-                    .await
-                    .ok_or_else(|| JsValue::from_str("no graphics adapter"))?;
-                (surface, adapter)
-            }
-        };
+        }
+        Self::create_gl(canvas).await
+    }
 
+    /// Bring the engine up on WebGL2 directly, skipping the WebGPU probe.
+    ///
+    /// Exposed on its own so the client can retry on a fresh canvas when a
+    /// browser's WebGPU hands out a device but never presents a frame — the
+    /// original canvas is claimed by its webgpu context forever, so the retry
+    /// must arrive with a new one.
+    pub async fn create_gl(canvas: web_sys::HtmlCanvasElement) -> Result<Orbital, JsValue> {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::GL,
+            ..Default::default()
+        });
+        let surface = instance
+            .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
+            .map_err(|e| JsValue::from_str(&format!("webgl surface: {e}")))?;
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
+            .await
+            .ok_or_else(|| JsValue::from_str("no graphics adapter"))?;
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: Some("calliope-orbital"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_webgl2_defaults()
-                        .using_resolution(adapter.limits()),
-                },
-                None,
-            )
+            .request_device(&device_desc(&adapter), None)
             .await
             .map_err(|e| JsValue::from_str(&format!("device request failed: {e}")))?;
+        Self::finish(instance, surface, adapter, device, queue, "webgl2")
+    }
+
+    /// Which backend the engine came up on: "webgpu" or "webgl2".
+    pub fn backend(&self) -> String {
+        self.backend.to_string()
+    }
+
+    fn finish(
+        instance: wgpu::Instance,
+        surface: wgpu::Surface<'static>,
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        backend: &'static str,
+    ) -> Result<Orbital, JsValue> {
+        // surface any late GPU validation error in the console instead of
+        // swallowing it into a silent white canvas
+        device.on_uncaptured_error(Box::new(|e| {
+            web_sys::console::error_1(&format!("wgpu uncaptured: {e}").into());
+        }));
 
         let caps = surface.get_capabilities(&adapter);
         let format = caps.formats[0];
@@ -544,22 +603,25 @@ impl Orbital {
             layout: Some(&pipe_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs",
+                entry_point: Some("vs"),
                 buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs",
+                entry_point: Some("fs"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
@@ -570,6 +632,7 @@ impl Orbital {
         });
 
         Ok(Orbital {
+            _instance: instance,
             device,
             queue,
             surface,
@@ -584,6 +647,7 @@ impl Orbital {
             cfg_w: 0,
             cfg_h: 0,
             srgb,
+            backend,
         })
     }
 
@@ -602,14 +666,14 @@ impl Orbital {
 
     fn upload(&self, tex: &wgpu::Texture, data: &[u8], w: u32, h: u32, bpp: u32) {
         self.queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: tex,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             data,
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(w * bpp),
                 rows_per_image: Some(h),
@@ -631,6 +695,7 @@ impl Orbital {
         fertility: &[f32],
         discharge: &[f32],
         flags: &[u8],
+        strahler: &[u8],
     ) {
         let n = (w * h) as usize;
         self.world_w = w;
@@ -652,10 +717,28 @@ impl Orbital {
         let dlog = (1.0 + dmax).ln().max(1e-6);
         let coast = coast_distance(height, w as usize, h as usize);
         let mut misc = vec![0.0f32; n * 4];
+        // river strength: Strahler order sets channel weight — creeks stay
+        // threads, 7th-order mainstems read as broad valley rivers
+        let strength = |i: usize| -> f32 {
+            if flags[i] & 1 == 0 {
+                return 0.0;
+            }
+            let o = if i < strahler.len() { strahler[i] as f32 } else { 1.0 };
+            0.35 + 0.65 * ((o - 1.0) / 6.0).clamp(0.0, 1.0)
+        };
         for i in 0..n {
             misc[i * 4] = (1.0 + discharge[i]).ln() / dlog;
-            misc[i * 4 + 1] = if flags[i] & 1 != 0 { 1.0 } else { 0.0 };
-            misc[i * 4 + 2] = if flags[i] & 2 != 0 { 1.0 } else { 0.0 };
+            misc[i * 4 + 1] = strength(i);
+            // z encodes standing water: 1 fresh lake, 0.55 salt flat, -1 wadi
+            misc[i * 4 + 2] = if flags[i] & 4 != 0 {
+                0.55
+            } else if flags[i] & 2 != 0 {
+                1.0
+            } else if flags[i] & 8 != 0 {
+                -1.0
+            } else {
+                0.0
+            };
             misc[i * 4 + 3] = coast[i].min(32.0) / 32.0;
         }
         // bridge diagonal river steps so the shader's bilinear mask reads as
@@ -668,11 +751,13 @@ impl Orbital {
                 let (a, b) = (riv(i, flags), riv(i + 1, flags));
                 let (c, d) = (riv(i + wu, flags), riv(i + wu + 1, flags));
                 if a && d && !b && !c {
-                    misc[(i + 1) * 4 + 1] = misc[(i + 1) * 4 + 1].max(0.5);
-                    misc[(i + wu) * 4 + 1] = misc[(i + wu) * 4 + 1].max(0.5);
+                    let v = strength(i).min(strength(i + wu + 1)) * 0.6;
+                    misc[(i + 1) * 4 + 1] = misc[(i + 1) * 4 + 1].max(v);
+                    misc[(i + wu) * 4 + 1] = misc[(i + wu) * 4 + 1].max(v);
                 } else if b && c && !a && !d {
-                    misc[i * 4 + 1] = misc[i * 4 + 1].max(0.5);
-                    misc[(i + wu + 1) * 4 + 1] = misc[(i + wu + 1) * 4 + 1].max(0.5);
+                    let v = strength(i + 1).min(strength(i + wu)) * 0.6;
+                    misc[i * 4 + 1] = misc[i * 4 + 1].max(v);
+                    misc[(i + wu + 1) * 4 + 1] = misc[(i + wu + 1) * 4 + 1].max(v);
                 }
             }
         }

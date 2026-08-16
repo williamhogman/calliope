@@ -159,8 +159,15 @@ pub fn monthly(
         let (sa, sb) = (&settlements[ia], &settlements[ib]);
         let pa = market.price(sa.exports.as_deref().unwrap_or("grain"));
         let pb = market.price(sb.exports.as_deref().unwrap_or("grain"));
-        let flow = 0.30 * r.w * 0.5 * (pa + pb)
+        let mut flow = 0.30 * r.w * 0.5 * (pa + pb)
             * (sa.pop.min(sb.pop) as f64 / 600.0).min(1.0);
+        // barge legs ride the seasons: high water carries more cargo
+        if r.ramp != 0.0 {
+            let phase = (2.0 * std::f64::consts::PI
+                * (month_abs.rem_euclid(12)) as f64 / 12.0)
+                .cos();
+            flow *= (1.0 + 0.5 * r.ramp * phase).max(0.4);
+        }
         let ta = mods.get(sa.culture).map(|m| m.trade).unwrap_or(1.0);
         let tb = mods.get(sb.culture).map(|m| m.trade).unwrap_or(1.0);
         // a harbour works the cranes: more cargo through, more dues taken

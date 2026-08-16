@@ -567,8 +567,9 @@ function Inspector(a) {
       bits.push(html`<span class="i-val">Fertility <b>${Math.round(info.fertility * 100)}%</b></span>`);
     }
     if (info.wind) bits.push(html`<span class="i-val dim">${info.wind}</span>`);
-    if (info.river) bits.push(html`<span class="i-val">River \u00b7 flow <b>${info.flow}</b></span>`);
-    if (info.lake) bits.push(html`<span class="i-val">Lake</span>`);
+    if (info.river) bits.push(html`<span class="i-val">${info.wadi ? "Wadi" : "River"} \u00b7 flow <b>${info.flow}</b>${info.order > 1 ? html` <span class="dim">\u00b7 order ${info.order}</span>` : ""}</span>`);
+    if (info.salt) bits.push(html`<span class="i-val">Salt lake</span>`);
+    else if (info.lake) bits.push(html`<span class="i-val">Lake</span>`);
     if (info.frozen) bits.push(html`<span class="i-val">${info.frozen}</span>`);
     for (const r of info.resources) {
       bits.push(html`<span class="i-res">\u25c6 ${r.name} <span class="dim">(${r.abundance}${r.requires ? `, requires ${r.requires}` : ""})</span></span>`);

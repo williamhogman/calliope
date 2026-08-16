@@ -147,8 +147,20 @@ fn hash_state(w: &World) -> u64 {
     for &b in w.biomes.iter() {
         bytes.push(b);
     }
-    for (&r, &l) in w.rivers.iter().zip(w.lakes.iter()) {
-        bytes.push((r as u8) | ((l as u8) << 1));
+    for (((&r, &l), &s), &sw) in w
+        .rivers
+        .iter()
+        .zip(w.lakes.iter())
+        .zip(w.salt.iter())
+        .zip(w.seasonal.iter())
+    {
+        bytes.push((r as u8) | ((l as u8) << 1) | ((s as u8) << 2) | ((sw as u8) << 3));
+    }
+    for &o in w.strahler.iter() {
+        bytes.push(o);
+    }
+    for &v in w.pamp.iter().chain(w.flow_amp.iter()) {
+        bytes.extend_from_slice(&v.to_bits().to_le_bytes());
     }
     let mut s = String::new();
     for d in &w.deposits {
@@ -418,6 +430,26 @@ fn cmd_climate(seed: i64, size: usize) {
         println!("  {:<12} {:>6} {:>7.1}C {:>7.0}mm  {}", label, n, tsum / n as f64, psum / n as f64, gc::PRETTY_BIOMES[dom]);
     }
 
+    // monsoon: the ITCZ march should breathe hardest in the tropics
+    let mut trop_amp: Vec<f64> = Vec::new();
+    let mut mid_amp: Vec<f64> = Vec::new();
+    for y in 0..rows {
+        for x in 0..cols {
+            if !land[[y, x]] {
+                continue;
+            }
+            let a = w.pamp[[y, x]].abs();
+            if y >= rows / 3 && y < 2 * rows / 3 {
+                trop_amp.push(a);
+            } else {
+                mid_amp.push(a);
+            }
+        }
+    }
+    let trop_m = trop_amp.iter().sum::<f64>() / trop_amp.len().max(1) as f64;
+    let mid_m = mid_amp.iter().sum::<f64>() / mid_amp.len().max(1) as f64;
+    println!("monsoon |amp| of annual rain: tropics {:.2} · extratropics {:.2}", trop_m, mid_m);
+
     let mut c = Checks::default();
     c.range("desert share of land", desert, pct(desert), (0.12, 0.28), (0.06, 0.38), "sweet 12–28% · hard 6–38%");
     c.range("tundra+ice share of land", frozen, pct(frozen), (0.05, 0.30), (0.01, 0.45), "sweet 5–30% · hard 1–45%");
@@ -426,6 +458,8 @@ fn cmd_climate(seed: i64, size: usize) {
     c.range("land mean temperature", t_mean, format!("{:.1}°C", t_mean), (5.0, 20.0), (-2.0, 28.0), "sweet 5–20°C · hard -2–28°C");
     c.range("land mean precipitation", p_mean, format!("{:.0}mm", p_mean), (500.0, 1500.0), (250.0, 2400.0), "sweet 500–1500 · hard 250–2400");
     c.range("mean seasonal swing", a_mean, format!("{:.1}°C", a_mean), (4.0, 14.0), (2.0, 20.0), "sweet 4–14°C · hard 2–20°C");
+    c.range("tropical monsoon amplitude", trop_m, format!("{:.2}", trop_m), (0.12, 0.55), (0.05, 0.85), "sweet .12–.55 · hard .05–.85");
+    c.want("monsoon lives in the tropics", trop_m > mid_m, format!("{:.2} vs {:.2}", trop_m, mid_m), "ITCZ march beats continental swing");
     c.print();
 }
 
@@ -459,6 +493,36 @@ fn cmd_hydro(seed: i64, size: usize) {
     let river_towns = w.settlements.iter().filter(|s| s.river).count();
     println!("river towns: {} of {}", river_towns, w.settlements.len());
 
+    // Strahler orders, wadis, and the dead seas of the dry country
+    let mut order_hist = [0usize; 13];
+    let mut top_order = 0u8;
+    for (&o, &r) in w.strahler.iter().zip(w.rivers.iter()) {
+        if r && o > 0 {
+            order_hist[(o as usize).min(12)] += 1;
+            top_order = top_order.max(o);
+        }
+    }
+    print!("strahler orders:");
+    for o in 1..=top_order.max(1) as usize {
+        print!(" {}:{}", o, order_hist[o]);
+    }
+    println!(" · top {}", top_order);
+    let wadi_n = w.seasonal.iter().filter(|&&s| s).count();
+    let salt_cells = w.salt.iter().filter(|&&s| s).count();
+    let salt_comp = ndimage::label(&w.salt, true).areas.len();
+    let famp: Vec<f64> = w
+        .flow_amp
+        .iter()
+        .zip(w.rivers.iter())
+        .filter(|(_, &r)| r)
+        .map(|(&a, _)| a.abs())
+        .collect();
+    let famp_mean = famp.iter().sum::<f64>() / famp.len().max(1) as f64;
+    println!(
+        "wadis: {} cells · salt basins: {} ({} cells) · river |flow amp| mean {:.2}",
+        wadi_n, salt_comp, salt_cells, famp_mean
+    );
+
     let finite = dis.iter().all(|d| d.is_finite());
     let mut c = Checks::default();
     c.range("river share of land", river_n / land_n.max(1.0), pct(river_n / land_n.max(1.0)), (0.008, 0.05), (0.003, 0.10), "sweet 0.8–5% · hard 0.3–10%");
@@ -470,6 +534,10 @@ fn cmd_hydro(seed: i64, size: usize) {
     // harbours and mining camps arrive with the colonies (checked in civ).
     let rt_share = river_towns as f64 / w.settlements.len().max(1) as f64;
     c.want("dawn towns reach fresh water", rt_share >= 0.2, pct(rt_share), "≥20% — rivers should pull the first peoples");
+    c.range("strahler top order", top_order as f64, format!("{}", top_order), (4.0, 9.0), (3.0, 12.0), "sweet 4–9 · hard 3–12");
+    c.range("river seasonal swing", famp_mean, format!("{:.2}", famp_mean), (0.05, 0.50), (0.01, 0.90), "mean |amp| · sweet .05–.50 · hard .01–.90");
+    c.want("endorheic salt basins", salt_comp >= 1, format!("{}", salt_comp), "≥1 — the desert keeps its dead seas");
+    c.want("wadis", wadi_n >= 1, format!("{}", wadi_n), "≥1 — some rivers should run dry half the year");
     c.print();
 }
 

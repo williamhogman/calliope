@@ -3,7 +3,7 @@
 
 import { generateWorld, tickWorld } from "./net.js";
 import { Renderer } from "./render.js";
-import { createGpu } from "./gpu.js";
+import { createGpu, recreateGpuOnGl } from "./gpu.js";
 import { View } from "./view.js";
 import { mountUI } from "./ui/app.js";
 import {
@@ -32,7 +32,7 @@ window.__calliope = {
 
 // GPU imagery: bring up the Rust wgpu engine (WebGPU, else WebGL2).
 // If no adapter exists the CPU compositor stays in charge.
-const glCanvas = $("gl");
+let glCanvas = $("gl");
 createGpu(glCanvas)
   .then((gpu) => {
     renderer.gpu = gpu;
@@ -44,6 +44,53 @@ createGpu(glCanvas)
     console.warn("GPU engine unavailable; CPU compositor in charge:", err);
     glCanvas.remove();
   });
+
+// ---------- GPU present audit ----------
+//
+// Some browsers hand out a GPU device that never puts a pixel on screen
+// (broken WebGPU drivers, headless software rasterisers). After the engine
+// has had a fair number of frames with a world, read the canvas back once:
+// if it is still fully transparent, the imagery never arrived — retry on
+// WebGL2 with a fresh canvas, and past that let the CPU compositor carry.
+const gpuAudit = { engine: null, frames: 0 };
+
+function gpuCanvasHasPixels() {
+  const t = document.createElement("canvas");
+  t.width = 16; t.height = 16;
+  const c = t.getContext("2d", { willReadFrequently: true });
+  try { c.drawImage(glCanvas, 0, 0, 16, 16); } catch { return true; }
+  const d = c.getImageData(0, 0, 16, 16).data;
+  for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return true;
+  return false;
+}
+
+function handleBlankGpu() {
+  const gpu = renderer.gpu;
+  if (!gpu) return;
+  if (gpu.backend() === "webgpu") {
+    console.warn("calliope: WebGPU presents nothing — retrying on WebGL2");
+    renderer.gpu = null;
+    markDirty();
+    recreateGpuOnGl(glCanvas)
+      .then(({ gpu: g, canvas: fresh }) => {
+        glCanvas = fresh;
+        renderer.gpu = g;
+        const w = world();
+        if (w) g.setWorld(w);
+        markDirty();
+      })
+      .catch((err) => {
+        console.warn("calliope: WebGL2 retry failed — CPU compositor in charge:", err);
+        glCanvas.remove();
+        markDirty();
+      });
+  } else {
+    console.warn("calliope: GL engine presents nothing — CPU compositor in charge");
+    renderer.gpu = null;
+    glCanvas.remove();
+    markDirty();
+  }
+}
 
 // ---------- render loop ----------
 
@@ -57,6 +104,7 @@ let gpuLive = true;
 let governorOn = true;
 
 function frame(ts) {
+  window.__calliope.frames = (window.__calliope.frames || 0) + 1;
   if (lastTs) {
     frameEma += (Math.min(ts - lastTs, 250) - frameEma) * 0.05;
     if (governorOn && gpuLive && ts > 6000 && frameEma > 70) {
@@ -69,10 +117,34 @@ function frame(ts) {
   const gpu = renderer.gpu;
   if (gpu && gpu.hasWorld && renderer.world && (gpuLive || dirty)) {
     if (layer() === "political") gpu.setTint(renderer.tintRgba(version), version);
-    gpu.render(
-      { layer: layer(), overlays, month: month() },
-      view, canvas.clientWidth, canvas.clientHeight,
-    );
+    try {
+      gpu.render(
+        { layer: layer(), overlays, month: month() },
+        view, canvas.clientWidth, canvas.clientHeight,
+      );
+      // Present audit once the engine has had 40 world frames. WebGL2 reads
+      // back in the same task (without preserveDrawingBuffer the drawing
+      // buffer is only valid here). WebGPU reads back a macrotask later:
+      // drawImage then snapshots the *presented* frame — exactly the thing
+      // a broken driver never delivers, while a same-task read would see
+      // the submitted texture and miss the failure.
+      if (gpuAudit.engine !== gpu) { gpuAudit.engine = gpu; gpuAudit.frames = 0; }
+      if (++gpuAudit.frames === 40) {
+        if (gpu.backend() === "webgpu") {
+          setTimeout(() => {
+            if (renderer.gpu === gpu && !gpuCanvasHasPixels()) handleBlankGpu();
+          }, 0);
+        } else if (!gpuCanvasHasPixels()) {
+          handleBlankGpu();
+        }
+      }
+    } catch (err) {
+      // one bad GPU frame must not kill the annotation layer or the loop
+      console.error("calliope: GPU frame failed, CPU compositor takes over:", err);
+      renderer.gpu = null;
+      glCanvas.remove();
+      dirty = true;
+    }
   }
   // caravans and winds animate continuously while time flows
   if (playing() && (overlays.routes || overlays.winds)) dirty = true;
@@ -86,6 +158,7 @@ function frame(ts) {
       playing: playing(),
       selectedId: selected()?.id ?? null,
     }, view, hover);
+    window.__calliope.draws = (window.__calliope.draws || 0) + 1;
   }
   requestAnimationFrame(frame);
 }
@@ -333,6 +406,11 @@ function explain(w, cx, cy, i, h, isWater) {
   if (!isWater && Math.abs(tamp[i]) > 17) {
     notes.push("Deep continental interior \u2014 savage swings of season");
   }
+  if (flags[i] & 4) {
+    notes.unshift("An endorheic basin \u2014 rivers die here and leave their salt");
+  } else if (flags[i] & 8) {
+    notes.unshift("A wadi \u2014 roaring in the rains, cracked mud by the dry solstice");
+  }
   return notes.slice(0, 2);
 }
 
@@ -364,7 +442,7 @@ function inspect(cx, cy) {
   const biomeMeta = w.header.biomes[biomes[i]];
   const h = height[i];
   const tNow = tmean[i] + tamp[i] * Math.cos((2 * Math.PI * (month() % 12)) / 12);
-  const isWater = h < 0 || (flags[i] & 2) !== 0;
+  const isWater = h < 0 || (flags[i] & 2) !== 0 || (flags[i] & 4) !== 0;
 
   const resources = [];
   for (let dy = -1; dy <= 1; dy++) {
@@ -406,6 +484,9 @@ function inspect(cx, cy) {
     wind: `${windName} ${windArrow}`,
     river: (flags[i] & 1) !== 0,
     lake: (flags[i] & 2) !== 0,
+    salt: (flags[i] & 4) !== 0,
+    wadi: (flags[i] & 8) !== 0,
+    order: w.arrays.strahler ? w.arrays.strahler[i] : 0,
     flow: Math.round(discharge[i]),
     isWater,
     frozen,

@@ -15,6 +15,7 @@ use crate::climate;
 use crate::constants;
 use crate::culture::{self, Culture};
 use crate::economy::{self, Market};
+use crate::erosion;
 use crate::geo;
 use crate::hydrology;
 use crate::naming::{self, Feature};
@@ -47,6 +48,16 @@ pub struct World {
     pub biomes: Array2<u8>,
     pub rivers: Array2<bool>,
     pub lakes: Array2<bool>,
+    /// Signed monsoon share of the year's rain (positive peaks month 0).
+    pub pamp: Array2<f64>,
+    /// Signed seasonal discharge swing per cell, -1..1.
+    pub flow_amp: Array2<f64>,
+    /// Strahler stream order, 0 off-river.
+    pub strahler: Array2<u8>,
+    /// Endorheic salt lakes.
+    pub salt: Array2<bool>,
+    /// Rivers that run dry half the year.
+    pub seasonal: Array2<bool>,
 
     pub deposits: Vec<Deposit>,
     pub settlements: Vec<Settlement>,
@@ -75,19 +86,23 @@ impl World {
         let t0 = now_ms();
         let mut timings: Vec<(&'static str, f64)> = Vec::new();
 
-        let height = geo::heightmap(seed, size);
-        let water = height.mapv(|h| h < 0.0);
+        let mut height = geo::heightmap(seed, size);
         timings.push(("terrain", now_ms() - t0));
+
+        let te = now_ms();
+        erosion::erode(&mut height);
+        let water = height.mapv(|h| h < 0.0);
+        timings.push(("erosion", now_ms() - te));
 
         let t1 = now_ms();
         let lat = climate::latitude_deg(size);
         let tmean = climate::temperature_mean(&height, &lat);
         let tamp = climate::temperature_amplitude(&lat, &water);
-        let precip = climate::precipitation(&height, &water, &tmean, &lat);
+        let (precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat);
         timings.push(("climate", now_ms() - t1));
 
         let t2 = now_ms();
-        let hydro = hydrology::hydrology(&height, &water, &precip);
+        let hydro = hydrology::hydrology(&height, &water, &precip, &pamp, &tmean);
         timings.push(("hydrology", now_ms() - t2));
 
         let t3 = now_ms();
@@ -176,6 +191,7 @@ impl World {
             &height,
             &hydro.rivers,
             &hydro.discharge,
+            &hydro.flow_amp,
         );
         trade::mark_ports(&mut setts, &routes);
         // The roads themselves name the land: passes where they climb,
@@ -236,6 +252,11 @@ impl World {
             biomes: biome_map,
             rivers: hydro.rivers,
             lakes: hydro.lakes,
+            pamp,
+            flow_amp: hydro.flow_amp,
+            strahler: hydro.strahler,
+            salt: hydro.salt,
+            seasonal: hydro.seasonal,
             deposits,
             settlements: setts,
             cultures,
@@ -328,8 +349,23 @@ impl World {
         };
         self.rivers = grow_bool(&self.rivers, pad);
         self.lakes = grow_bool(&self.lakes, pad);
+        self.salt = grow_bool(&self.salt, pad);
+        self.seasonal = grow_bool(&self.seasonal, pad);
         self.near_fresh = grow_bool(&self.near_fresh, pad);
         self.coast = grow_bool(&self.coast, pad);
+        self.pamp = grow_f64(&self.pamp, pad, |e, _| e);
+        self.flow_amp = grow_f64(&self.flow_amp, pad, |_, _| 0.0);
+        self.strahler = {
+            let a = &self.strahler;
+            Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
+                let xi = x as isize - p;
+                if xi >= 0 && (xi as usize) < w {
+                    a[[y, xi as usize]]
+                } else {
+                    0
+                }
+            })
+        };
 
         // Downsampled trade grid: margins are open blue-water lanes.
         let dpad = pad / self.trade.f;
@@ -677,6 +713,7 @@ impl World {
                 &self.height,
                 &self.rivers,
                 &self.discharge,
+                &self.flow_amp,
             );
             founded = true;
             let coastal = self.settlements[idx].coastal;
@@ -1019,22 +1056,32 @@ impl World {
             let v: Vec<f32> = a.iter().map(|&x| x as f32).collect();
             bytemuck::cast_slice(&v).to_vec()
         }
-        let flags: Vec<u8> = self
+        let mut flags: Vec<u8> = Vec::with_capacity(self.rivers.len());
+        for (((&r, &l), &s), &sw) in self
             .rivers
             .iter()
             .zip(self.lakes.iter())
-            .map(|(&r, &l)| (r as u8) | ((l as u8) << 1))
-            .collect();
+            .zip(self.salt.iter())
+            .zip(self.seasonal.iter())
+        {
+            flags.push(
+                (r as u8) | ((l as u8) << 1) | ((s as u8) << 2) | ((sw as u8) << 3),
+            );
+        }
         let biomes: Vec<u8> = self.biomes.iter().cloned().collect();
+        let strahler: Vec<u8> = self.strahler.iter().cloned().collect();
 
         let arrays: Vec<(&str, &str, Vec<u8>)> = vec![
             ("height", "float32", f32_bytes(&self.height)),
             ("tmean", "float32", f32_bytes(&self.tmean)),
             ("tamp", "float32", f32_bytes(&self.tamp)),
             ("precip", "float32", f32_bytes(&self.precip)),
+            ("pamp", "float32", f32_bytes(&self.pamp)),
             ("discharge", "float32", f32_bytes(&self.discharge)),
+            ("flow_amp", "float32", f32_bytes(&self.flow_amp)),
             ("fertility", "float32", f32_bytes(&self.fertility)),
             ("biomes", "uint8", biomes),
+            ("strahler", "uint8", strahler),
             ("flags", "uint8", flags),
         ];
 

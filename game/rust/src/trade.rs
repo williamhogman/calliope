@@ -52,6 +52,8 @@ pub struct Route {
     pub cost: f64,
     /// fraction of the way spent under sail
     pub sea: f64,
+    /// signed seasonal swing of the barge legs: high water lifts trade
+    pub ramp: f64,
     pub goods: Vec<Option<String>>,
 }
 
@@ -332,6 +334,7 @@ pub fn route_entry(
     height: &Array2<f64>,
     rivers: &Array2<bool>,
     discharge: &Array2<f64>,
+    flow_amp: &Array2<f64>,
 ) -> Route {
     let mut pts: Vec<[i64; 2]> = path
         .iter()
@@ -359,6 +362,28 @@ pub fn route_entry(
     modes[n - 1] = MODE_LAND;
     let sea_frac = modes.iter().filter(|&&m| m == MODE_SEA).count() as f64 / n as f64;
 
+    // The barge legs remember their river's seasons: a route that rides
+    // monsoon water swells and shrinks with it.
+    let (hh, ww) = flow_amp.dim();
+    let mut amp_sum = 0.0f64;
+    let mut nriv = 0usize;
+    for (p, &m) in pts.iter().zip(modes.iter()) {
+        if m == MODE_RIVER
+            && p[0] >= 0
+            && p[1] >= 0
+            && (p[0] as usize) < ww
+            && (p[1] as usize) < hh
+        {
+            amp_sum += flow_amp[[p[1] as usize, p[0] as usize]];
+            nriv += 1;
+        }
+    }
+    let ramp = if nriv > 0 {
+        crate::util::round2(amp_sum / nriv as f64 * (nriv as f64 / n as f64))
+    } else {
+        0.0
+    };
+
     let base_w = (0.5 + (((sa.pop + sb.pop) as f64).log10() - 2.0) * 0.6).clamp(0.5, 2.0);
     // the sea multiplies what a route can carry
     let w = crate::util::round2((base_w * (0.8 + 0.55 * sea_frac)).clamp(0.4, 2.4));
@@ -370,6 +395,7 @@ pub fn route_entry(
         w,
         cost: crate::util::round2(total_cost),
         sea: crate::util::round2(sea_frac),
+        ramp,
         goods: vec![sa.exports.clone(), sb.exports.clone()],
     }
 }
@@ -427,6 +453,7 @@ pub fn build_routes(
     height: &Array2<f64>,
     rivers: &Array2<bool>,
     discharge: &Array2<f64>,
+    flow_amp: &Array2<f64>,
 ) -> Vec<Route> {
     let f = grid.f;
     let rows = grid.cost.dim().0 * f;
@@ -467,12 +494,12 @@ pub fn build_routes(
         let goal = (sb.y as usize / f, sb.x as usize / f);
         if let Some((path, cost)) = astar(grid, start, goal) {
             if viable(cost, start, goal) {
-                routes.push(route_entry(sa, sb, &path, f, cost, height, rivers, discharge));
+                routes.push(route_entry(sa, sb, &path, f, cost, height, rivers, discharge, flow_amp));
             }
         }
     }
     recount_connections(settlements, &routes);
-    rescue_unconnected(settlements, &mut routes, grid, height, rivers, discharge);
+    rescue_unconnected(settlements, &mut routes, grid, height, rivers, discharge, flow_amp);
     routes
 }
 
@@ -486,6 +513,7 @@ pub fn rescue_unconnected(
     height: &Array2<f64>,
     rivers: &Array2<bool>,
     discharge: &Array2<f64>,
+    flow_amp: &Array2<f64>,
 ) {
     let f = grid.f;
     let lonely: Vec<usize> = settlements
@@ -513,7 +541,7 @@ pub fn rescue_unconnected(
             if let Some((path, cost)) = astar(grid, start, goal) {
                 if best.as_ref().map_or(true, |(_, c)| cost < *c) {
                     best = Some((
-                        route_entry(&s, o, &path, f, cost, height, rivers, discharge),
+                        route_entry(&s, o, &path, f, cost, height, rivers, discharge, flow_amp),
                         cost,
                     ));
                 }
@@ -536,6 +564,7 @@ pub fn connect_settlement(
     height: &Array2<f64>,
     rivers: &Array2<bool>,
     discharge: &Array2<f64>,
+    flow_amp: &Array2<f64>,
 ) {
     let f = grid.f;
     let s = settlements[idx].clone();
@@ -551,12 +580,12 @@ pub fn connect_settlement(
         let goal = (o.y as usize / f, o.x as usize / f);
         if let Some((path, cost)) = astar(grid, start, goal) {
             if viable(cost, start, goal) {
-                new_routes.push(route_entry(&s, o, &path, f, cost, height, rivers, discharge));
+                new_routes.push(route_entry(&s, o, &path, f, cost, height, rivers, discharge, flow_amp));
             }
         }
     }
     routes.extend(new_routes);
     recount_connections(settlements, routes);
-    rescue_unconnected(settlements, routes, grid, height, rivers, discharge);
+    rescue_unconnected(settlements, routes, grid, height, rivers, discharge, flow_amp);
     mark_ports(settlements, routes);
 }

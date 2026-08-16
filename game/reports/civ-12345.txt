@@ -1,81 +1,80 @@
 ========================================================================
- CALLIOPE DIAGNOSTIC · CIVILIZATION                 seed 12345 · 640x512 · 150y
+ CALLIOPE DIAGNOSTIC · CIVILIZATION                 seed 12345 · 640x512 · 60y
 ========================================================================
-world "Sermar" · 4 cultures · 16 settlements at dawn
+world "Quelia" · 4 cultures · 16 settlements at dawn
 
   yr      pop  towns  routes     wealth  treasury   arts  seams  ev/y
-   6     2017     16      23        797       120      6     92     4
-  12     2920     16      23       1273       146     13     95     7
-  18     4336     16      23       1927       183     17     99     3
-  24     6484     16      23       2578       236     19     99     1
-  30     9698     16      23       3548       302     23    102     7
-  36    14388     16      23       4653       376     27    105     4
-  42    20193     16      23       5639       455     29    105     0
-  48    27362     19      29       7082       548     34    106     4
-  54    35293     29      49       7990       699     38    107     7
-  60    45681     37      63       9914       825     41    107     7
-  66    59806     48      81      13155      1012     46    109    16
-  72    82315     61     102      19422      1578     55    113    12
-  78   111998     65     108      27162      2172     60    116     9
-  84   144251     65     108      35434      2849     60    116    10
-  90   176259     65     108      43853      3543     61    116     7
-  96   204554     65     108      52133      4419     61    118     9
- 102   229358     65     108      60449      5149     61    118     7
- 108   248068     65     108      69257      5895     61    119     8
- 114   260440     65     108      76608      6657     61    119    12
- 120   269544     65     108      82353      7441     62    120     5
- 126   276999     65     108      92642      8386     62    120     3
- 132   282466     65     108     104335      9339     62    121     8
- 138   285631     65     108     107886     10246     62    121    11
- 144   287414     65     108     118294     11519     62    121     8
- 150   290888     65     108     118134     12451     62    121     9
+   2     1579     16      23        382       105      2     90     5
+   4     1799     16      23        541       110      3     92     2
+   6     2017     16      23        712       116      6     94     3
+   8     2200     16      23        692       100      9     94     9
+  10     2462     16      23        794        77      9     95     9
+  12     2794     16      23       1025        81     13     98     5
+  14     3199     16      23       1162        89     13     99     4
+  16     3671     16      23       1255        97     14     99     4
+  18     4184     16      23       1358       106     17     99     5
+  20     4782     16      23       1522       115     17    100     2
+  22     5497     16      23       1743       125     17    102     2
+  24     6265     16      23       1926       136     20    103     2
+  26     7013     16      23       1897       171     21    103     6
+  28     8007     16      23       2194       182     21    106     8
+  30     9152     16      23       2376       193     23    107     6
+  32    10497     16      23       2552       203     24    108    10
+  34    12046     16      23       2747       212     25    109     6
+  36    13687     16      23       2845       219     27    109     4
+  38    15586     16      23       3031       226     27    111     1
+  40    17579     16      23       3097       231     28    111     4
+  42    19403     16      23       3141       236     30    111     6
+  44    21675     16      23       3170       239     31    111     2
+  46    24155     17      25       3241       243     32    111     4
+  48    26683     19      29       3418       248     33    111     5
+  50    29480     21      33       3762       262     35    113     2
+  52    31817     24      39       4252       284     37    114     2
+  54    34801     26      43       4647       310     38    114     7
+  56    38166     29      49       5192       340     40    114     9
+  58    41802     33      57       5932       379     40    114     5
+  60    46259     37      61       6812       426     44    115    11
 
-event census: depletion:4 · disaster:269 · discovery:34 · festival:108 · found:49 · growth:380 · omen:8 · ruler:24 · society:22 · tech:62 · trade:81 · war:35 · wonder:80
-strikes 34 · depletions 4 · mining camps 2 · wars 35
-longest silence between events: 20 months
+event census: disaster:19 · discovery:26 · festival:40 · found:21 · growth:86 · omen:4 · ruler:7 · society:16 · tech:44 · trade:14 · war:17 · wonder:11
+strikes 26 · depletions 0 · mining camps 1 · wars 17
+longest silence between events: 21 months
 
 the arc of the ages (tech & society events):
   y1    The Mossthornkin learn to bend seasoned yew — no beast nor foe outruns an arrow.
-  y2    The Kaldenstadfolk learn to bend seasoned yew — no beast nor foe outruns an arrow.
-  y2    The Kalsyikosians learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y1    The Kalsyikosians learn to bend seasoned yew — no beast nor foe outruns an arrow.
   y2    The Saraganaks learn to bend seasoned yew — no beast nor foe outruns an arrow.
-  y4    Weavers among the Mossthornkin string the first tall looms; good cloth becomes as good as coin.
-  y4    The scattered camps of the Mossthornkin bind themselves under one chief.
-  y5    The Kaldenstadfolk shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y4    The Mossthornkin shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y4    Weavers among the Kalsyikosians string the first tall looms; good cloth becomes as good as coin.
+  y4    The Kaldenstadfolk learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y6    The scattered camps of the Kalsyikosians bind themselves under one chief.
   y6    Weavers among the Saraganaks string the first tall looms; good cloth becomes as good as coin.
-  y6    The Kalsyikosians shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y6    The Mossthornkin shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y9    The scattered camps of the Kaldenstadfolk bind themselves under one chief.
-  y9    Weavers among the Kaldenstadfolk string the first tall looms; good cloth becomes as good as coin.
-  y10   The wise-women of the Mossthornkin set down which roots cure and which kill.
+  y7    Weavers among the Mossthornkin string the first tall looms; good cloth becomes as good as coin.
+  y7    The Kalsyikosians shape river clay into jars and kilns — the harvest no longer rots before spring.
   y10   The Saraganaks shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y11   Weavers among the Kalsyikosians string the first tall looms; good cloth becomes as good as coin.
-  y13   The wise-women of the Kaldenstadfolk set down which roots cure and which kill.
-  y15   Wainwrights of the Mossthornkin set carts on true-turning wheels; the roads grow short.
-  y15   The Mossthornkin pass into an age of bronze — the old stone tools are laid in barrows.
-  … and 66 more
+  y10   Weavers among the Kaldenstadfolk string the first tall looms; good cloth becomes as good as coin.
+  y10   The wise-women of the Mossthornkin set down which roots cure and which kill.
+  y10   The wise-women of the Kalsyikosians set down which roots cure and which kill.
+  y10   The scattered camps of the Saraganaks bind themselves under one chief.
+  y11   The scattered camps of the Mossthornkin bind themselves under one chief.
+  y15   The wise-women of the Saraganaks set down which roots cure and which kill.
+  y16   The Kaldenstadfolk shape river clay into jars and kilns — the harvest no longer rots before spring.
+  … and 42 more
 
-societies at year 150:
-  Mossthornkin           empire     the High Age   21 arts · treasury     9148 · lore 257169
-  Kalsyikosians          kingdom    the High Age   12 arts · treasury      427 · lore  33648
-  Saraganaks             kingdom    the High Age   12 arts · treasury      135 · lore  37740
-  Kaldenstadfolk         empire     the High Age   17 arts · treasury     2740 · lore 145357
+societies at year 60:
+  Mossthornkin           kingdom    Age of Iron    13 arts · treasury      153 · lore    684
+  Kalsyikosians          kingdom    the High Age   12 arts · treasury      113 · lore   2760
+  Saraganaks             kingdom    Age of Iron    11 arts · treasury       56 · lore    533
+  Kaldenstadfolk         kingdom    Age of Bronze   8 arts · treasury      104 · lore     79
 
 ---- checks ----------------------------------------------------------
-[PASS] population growth ×                         213.73×   (sweet 2–500× — dawn towns are tiny)
-[PASS] still growing at half-run              33% of final   (pop at half-run ≤92% of final)
-[PASS] settlements grew                              16→65   (colonies should outnumber the dawn towns)
-[PASS] dry-country towns exist                     8 of 65   (≥1 town beyond fresh water by the century mark)
-[PASS] routes exist                                    108   (a world without trade is broken)
+[PASS] population growth ×                          33.99×   (sweet 2–500× — dawn towns are tiny)
+[PASS] settlements grew                              16→37   (colonies should outnumber the dawn towns)
+[PASS] routes exist                                     61   (a world without trade is broken)
 [PASS] no unconnected towns                              0   (every town should reach the web of trade)
 [PASS] no template placeholders                          0   (no {P}/{S} may leak into chronicle text)
 [PASS] no empty event texts                              0   (every event tells its story)
-[PASS] settlement names unique              65 names / 65 towns   (the taken-set must hold)
-[PASS] events per year                                 7.7   (sweet 2–40 · hard 0.5–100)
-[PASS] no long silences                              20 mo   (≤36 months between chronicle entries)
-[PASS] strikes happened                                 34   (the age of prospectors must actually happen)
-[PASS] era advanced past Stone                the High Age   (≥ Age of Bronze by now)
-[PASS] arts accumulate                      62 arts / 4 peoples   (≥3 arts per people)
-[PASS] era reached Iron                       the High Age   (≥ Age of Iron by now)
+[PASS] settlement names unique              37 names / 37 towns   (the taken-set must hold)
+[PASS] events per year                                 5.1   (sweet 2–40 · hard 0.5–100)
+[PASS] no long silences                              21 mo   (≤36 months between chronicle entries)
 [PASS] numbers stay finite                             yes   (no NaN pops, wealth or prices)
-CHECKS: 16 pass · 0 warn · 0 fail
+CHECKS: 10 pass · 0 warn · 0 fail

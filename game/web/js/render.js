@@ -144,6 +144,10 @@ export class Renderer {
           b = (116 + warm * 32) * (1 - depth) + 40 * depth;
           const swell = (this._noise(x, y, 11) - 0.5) * 6 * (1 - depth * 0.75);
           r += swell; g += swell; b += swell;
+        } else if (flags[i] & 4) {
+          // dead seas: blinding mineral crusts with a faint aqua bloom
+          const n = (this._noise(x, y, 5) - 0.5) * 12;
+          r = 202 + n; g = 212 + n; b = 208 + n;
         } else if (flags[i] & 2) {
           const n = (this._noise(x, y, 5) - 0.5) * 7;
           r = 25 + n; g = 57 + n; b = 69 + n;
@@ -328,7 +332,7 @@ export class Renderer {
     this.cacheKey = key;
 
     const W = this.w, H = this.h;
-    const { height, tmean, precip, discharge, fertility, biomes, flags } = this.world.arrays;
+    const { height, tmean, precip, discharge, fertility, biomes, flags, strahler } = this.world.arrays;
     const img = this.octx.createImageData(W, H);
     const px = img.data;
     const shade = this.shade;
@@ -392,6 +396,8 @@ export class Renderer {
             const t = Math.min(1, -h / 0.75);
             const c = SEA_GRAD(t);
             r = c[0] * 0.9; g = c[1] * 0.95; b = c[2];
+          } else if (flags[i] & 4) {
+            r = 198; g = 202; b = 196;
           } else if (lake) {
             r = 74; g = 128; b = 168;
           } else {
@@ -428,13 +434,17 @@ export class Renderer {
           r *= s; g *= s; b *= s;
         }
 
-        // rivers overlay — natural water blue, weighted by discharge
+        // rivers overlay — weight follows Strahler order; wadis run pale
         if (overlays.rivers && (flags[i] & 1) && layer !== "hydro") {
+          const ord = strahler ? strahler[i] : 1;
+          const sw = 0.35 + 0.65 * Math.min(1, (ord - 1) / 6);
           const t = Math.log1p(discharge[i]) / dLogMax;
-          const a = Math.min(0.8, 0.38 + t * 0.5);
-          r = r * (1 - a) + 62 * a;
-          g = g * (1 - a) + 124 * a;
-          b = b * (1 - a) + 186 * a;
+          let a = Math.min(0.85, 0.3 + t * 0.4 + sw * 0.25);
+          let cr = 62, cg = 124, cb = 186;
+          if (flags[i] & 8) { a *= 0.55; cr = 122; cg = 152; cb = 178; }
+          r = r * (1 - a) + cr * a;
+          g = g * (1 - a) + cg * a;
+          b = b * (1 - a) + cb * a;
         }
 
         // snow & sea ice overlay

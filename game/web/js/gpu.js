@@ -16,10 +16,20 @@ const LAYER_ID = {
   precip: 4, hydro: 5, fertility: 6,
 };
 
-export async function createGpu(canvas) {
+export async function createGpu(canvas, { forceGl = false } = {}) {
   const { Orbital } = await loadEngine();
-  const orbital = await Orbital.create(canvas);
+  const orbital = forceGl ? await Orbital.create_gl(canvas) : await Orbital.create(canvas);
   return new GpuEngine(canvas, orbital);
+}
+
+// Some browsers hand out a WebGPU device that never presents a frame (broken
+// drivers, software rasterisers). The canvas is claimed by its webgpu context
+// forever, so recovery means a fresh canvas brought up straight on WebGL2.
+export async function recreateGpuOnGl(oldCanvas) {
+  const fresh = oldCanvas.cloneNode(false);
+  oldCanvas.replaceWith(fresh);
+  const gpu = await createGpu(fresh, { forceGl: true });
+  return { gpu, canvas: fresh };
 }
 
 class GpuEngine {
@@ -34,13 +44,18 @@ class GpuEngine {
     this._lastT = this._t0;
   }
 
+  backend() {
+    return this.orbital.backend();
+  }
+
   setWorld(world) {
     const W = world.header.width || world.header.size;
     const H = world.header.size;
-    const { height, tmean, tamp, precip, fertility, discharge, flags } = world.arrays;
+    const { height, tmean, tamp, precip, fertility, discharge, flags, strahler } = world.arrays;
     this.orbital.set_world(
       W, H, height, tmean, tamp, precip,
       fertility || new Float32Array(0), discharge, flags,
+      strahler || new Uint8Array(0),
     );
     this.hasWorld = true;
     this.hasTint = false;

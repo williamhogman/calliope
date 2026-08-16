@@ -12,6 +12,7 @@ pub mod climate;
 pub mod constants;
 pub mod culture;
 pub mod economy;
+pub mod erosion;
 pub mod geo;
 pub mod hydrology;
 pub mod naming;

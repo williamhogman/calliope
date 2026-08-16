@@ -47,13 +47,23 @@ pub fn month_temperature(tmean: f64, tamp_signed: f64, month: i64) -> f64 {
     tmean + tamp_signed * (2.0 * std::f64::consts::PI * month as f64 / 12.0).cos()
 }
 
-/// Wind-advected moisture -> annual precipitation in mm/yr.
+/// Monthly rainfall from the annual total and the signed seasonal
+/// share. Positive amplitude peaks in Gamelion (month 0, southern
+/// summer) to match the sign convention of `temperature_amplitude`.
+pub fn month_precip(p_annual: f64, pamp_signed: f64, month: i64) -> f64 {
+    let phase = (2.0 * std::f64::consts::PI * month as f64 / 12.0).cos();
+    (p_annual / 12.0 * (1.0 + pamp_signed * phase)).max(0.0)
+}
+
+/// Wind-advected moisture -> annual precipitation in mm/yr, plus the
+/// signed monsoon amplitude: how strongly the year's rain leans into
+/// the local summer as the ITCZ marches between the tropics.
 pub fn precipitation(
     height: &Array2<f64>,
     water: &Array2<bool>,
     tmean: &Array2<f64>,
     lat_deg: &Array2<f64>,
-) -> Array2<f64> {
+) -> (Array2<f64>, Array2<f64>) {
     let size = height.dim().0;
     let mut p = Array2::<f64>::zeros((size, size));
     let wraps = 3usize;
@@ -101,20 +111,45 @@ pub fn precipitation(
         }
     }
 
-    // ITCZ convective boost, subtropical subsidence suppression, cold-air factor
+    // The ITCZ is not a line but a march: it camps at ~10°S in the
+    // southern summer (month 0) and ~10°N half a year later. Each cell
+    // gets its convective boost from both camps; the *difference*
+    // between the two visits is the monsoon.
+    let cont = continentality(water);
+    let mut pamp = Array2::<f64>::zeros((size, size));
+    let n = size as f64;
     for y in 0..size {
         for x in 0..size {
             let lat = lat_deg[[y, x]];
+            // signed latitude: negative north (y=0), positive south —
+            // matching the sign convention of temperature_amplitude.
+            let lat_s = -90.0 + (y as f64) * 180.0 / (n - 1.0);
             let t = tmean[[y, x]];
             let mut v = p[[y, x]];
-            v *= 1.0 + 0.9 * (-(lat / 10.0).powi(2)).exp();
+            let c0 = 1.0 + 1.7 * (-((lat_s - 10.0) / 12.0).powi(2)).exp();
+            let c6 = 1.0 + 1.7 * (-((lat_s + 10.0) / 12.0).powi(2)).exp();
+            v *= 0.5 * (c0 + c6);
             v *= 1.0 - 0.30 * (-(((lat - 25.0) / 8.0).powi(2))).exp();
             v *= (0.25 + (t + 20.0) / 40.0).clamp(0.25, 1.0);
             p[[y, x]] = v;
+
+            // signed seasonal share: positive = wet when the south warms
+            let mut a = (c0 - c6) / (c0 + c6);
+            // continental summer convection: interiors pull their rain
+            // into the warm half of the year even outside the tropics
+            if t > 8.0 && !water[[y, x]] {
+                let hemi = if y >= size / 2 { 1.0 } else { -1.0 };
+                a += hemi
+                    * 0.22
+                    * ((cont[[y, x]] - 0.35) / 0.65).clamp(0.0, 1.0)
+                    * ((t - 8.0) / 20.0).clamp(0.0, 1.0);
+            }
+            pamp[[y, x]] = a.clamp(-0.85, 0.85);
         }
     }
 
     let mut p = ndimage::gaussian_filter(&p, 1.4);
+    let pamp = ndimage::gaussian_filter(&pamp, 1.4);
 
     // normalise to mm/yr: land mean ~900 mm
     let mut sum = 0.0;
@@ -130,5 +165,5 @@ pub fn precipitation(
     let mean_land = if cnt > 0 { sum / cnt as f64 } else { 1.0 };
     let k = 900.0 / mean_land.max(1e-9);
     p.mapv_inplace(|v| (v * k).clamp(0.0, 4500.0));
-    p
+    (p, pamp)
 }

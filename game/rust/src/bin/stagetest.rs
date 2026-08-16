@@ -11,19 +11,23 @@ fn main() {
     println!("stagetest seed {} size {}", seed, size);
 
     let t = Instant::now();
-    let height = geo::heightmap(seed, size);
+    let mut height = geo::heightmap(seed, size);
     println!("terrain    {:>6} ms", t.elapsed().as_millis());
+
+    let t = Instant::now();
+    calliope::erosion::erode(&mut height);
+    println!("erosion    {:>6} ms", t.elapsed().as_millis());
 
     let water = height.mapv(|h| h < 0.0);
     let t = Instant::now();
     let lat = climate::latitude_deg(size);
     let tmean = climate::temperature_mean(&height, &lat);
     let _tamp = climate::temperature_amplitude(&lat, &water);
-    let precip = climate::precipitation(&height, &water, &tmean, &lat);
+    let (precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat);
     println!("climate    {:>6} ms", t.elapsed().as_millis());
 
     let t = Instant::now();
-    let hydro = hydrology::hydrology(&height, &water, &precip);
+    let hydro = hydrology::hydrology(&height, &water, &precip, &pamp, &tmean);
     println!("hydrology  {:>6} ms", t.elapsed().as_millis());
 
     let t = Instant::now();

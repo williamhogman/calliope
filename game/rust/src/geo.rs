@@ -79,6 +79,13 @@ pub fn heightmap(seed: i64, size: usize) -> Array2<f64> {
         let r = ridge.ridged(fx * 1.6 + 31.0, fy * 1.6 + 17.0, 3.3, 4);
         let inland = smoothstep(hh, 0.05, 0.32);
         hh += 0.55 * (r - 0.62).max(0.0) * inland;
+
+        // Foothill belts: a finer, weaker ridged pass gives the great
+        // ranges their aprons and raises stand-alone hill country the
+        // primary orogeny never touched.
+        let r2 = ridge.ridged(fx * 3.4 + 77.7, fy * 3.4 + 5.5, 6.6, 3);
+        let hills = smoothstep(hh, 0.03, 0.20) * (1.0 - smoothstep(hh, 0.38, 0.55));
+        hh += 0.12 * (r2 - 0.72).max(0.0) * hills;
         hh
     });
 
