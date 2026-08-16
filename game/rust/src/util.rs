@@ -147,3 +147,97 @@ pub fn ser_f1<S: serde::Serializer>(v: &f64, s: S) -> Result<S::Ok, S::Error> {
 pub fn ser_round_i64<S: serde::Serializer>(v: &f64, s: S) -> Result<S::Ok, S::Error> {
     s.serialize_i64(v.round() as i64)
 }
+
+// ---------------------------------------------------------------- buckets
+
+/// E5.3 — a bucket grid over a fixed point set. Turns the monthly
+/// O(deposits × settlements) scans and the famine nearest-town search
+/// sub-quadratic. Cells are visited in fixed (cx, cy) order and each
+/// cell's indices sit in insertion (= index) order, so iteration order is
+/// a pure function of the inputs — HashMap order never reaches a caller.
+pub struct Buckets {
+    cell: f64,
+    map: std::collections::HashMap<(i64, i64), Vec<usize>>,
+    pts: Vec<(f64, f64)>,
+    bounds: (f64, f64, f64, f64), // minx, maxx, miny, maxy
+}
+
+impl Buckets {
+    pub fn build(pts: Vec<(f64, f64)>, cell: f64) -> Self {
+        let cell = cell.max(1.0);
+        let mut map: std::collections::HashMap<(i64, i64), Vec<usize>> =
+            std::collections::HashMap::new();
+        let mut bounds = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+        for (i, &(x, y)) in pts.iter().enumerate() {
+            map.entry(((x / cell).floor() as i64, (y / cell).floor() as i64))
+                .or_default()
+                .push(i);
+            bounds.0 = bounds.0.min(x);
+            bounds.1 = bounds.1.max(x);
+            bounds.2 = bounds.2.min(y);
+            bounds.3 = bounds.3.max(y);
+        }
+        Buckets { cell, map, pts, bounds }
+    }
+
+    /// Every stored index whose cell touches the disc's bounding box — a
+    /// superset of the disc; callers re-check distances exactly.
+    pub fn candidates(&self, x: f64, y: f64, r: f64, out: &mut Vec<usize>) {
+        out.clear();
+        if self.pts.is_empty() {
+            return;
+        }
+        let c = self.cell;
+        let x0 = ((x - r) / c).floor() as i64;
+        let x1 = ((x + r) / c).floor() as i64;
+        let y0 = ((y - r) / c).floor() as i64;
+        let y1 = ((y + r) / c).floor() as i64;
+        for cx in x0..=x1 {
+            for cy in y0..=y1 {
+                if let Some(v) = self.map.get(&(cx, cy)) {
+                    out.extend_from_slice(v);
+                }
+            }
+        }
+    }
+
+    /// Nearest stored point to (x, y) passing `keep`, decided by
+    /// (distance², index) — bit-identical to a full scan that updates on
+    /// strict `<` in index order. Expanding-ring search: once the best
+    /// hit lies within the scanned radius, nothing outside can beat it.
+    pub fn nearest(&self, x: f64, y: f64, keep: impl Fn(usize) -> bool) -> Option<(usize, f64)> {
+        if self.pts.is_empty() {
+            return None;
+        }
+        let (nx, xx, ny, xy) = self.bounds;
+        let far = [(nx, ny), (nx, xy), (xx, ny), (xx, xy)]
+            .iter()
+            .map(|&(px, py)| ((px - x).powi(2) + (py - y).powi(2)).sqrt())
+            .fold(0.0f64, f64::max);
+        let mut r = self.cell;
+        let mut best: Option<(f64, usize)> = None;
+        let mut cand = Vec::new();
+        loop {
+            self.candidates(x, y, r, &mut cand);
+            for &i in &cand {
+                let (px, py) = self.pts[i];
+                let d2 = (px - x).powi(2) + (py - y).powi(2);
+                if d2 <= r * r
+                    && best.map_or(true, |(bd, bj)| d2 < bd || (d2 == bd && i < bj))
+                    && keep(i)
+                {
+                    best = Some((d2, i));
+                }
+            }
+            if let Some((bd, bj)) = best {
+                if bd.sqrt() <= r {
+                    return Some((bj, bd));
+                }
+            }
+            if r >= far {
+                return best.map(|(d, j)| (j, d));
+            }
+            r *= 2.0;
+        }
+    }
+}
