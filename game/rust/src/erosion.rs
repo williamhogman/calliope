@@ -79,9 +79,12 @@ fn fluvial_pass(h: &mut Array2<f64>) {
     let filled = fill_depressions(h, &water);
     let dirs = flow_directions(&filled, &water);
 
-    // drainage area in cells, accumulated down the tree
+    // drainage area in cells, accumulated down the tree. E5.11 — the
+    // comparator is a total order (index tie-break), so the unstable sort
+    // returns the identical permutation without the stable sort's
+    // half-array scratch allocation.
     let mut order: Vec<usize> = (0..size * size).collect();
-    order.sort_by(|&a, &b| {
+    order.sort_unstable_by(|&a, &b| {
         let fa = filled[[a / size, a % size]];
         let fb = filled[[b / size, b % size]];
         fb.partial_cmp(&fa).unwrap().then(a.cmp(&b)) // high to low
@@ -127,10 +130,11 @@ fn fluvial_pass(h: &mut Array2<f64>) {
 
 /// Soil creep: a gentle land-only diffusion. Cells average with their
 /// land neighbours; the coastline itself never moves, so beaches stay
-/// where the tectonics put them.
-fn diffuse_pass(h: &mut Array2<f64>) {
+/// where the tectonics put them. E5.11 — the pre-pass snapshot lands in
+/// a caller-owned scratch grid instead of a fresh clone per pass.
+fn diffuse_pass(h: &mut Array2<f64>, src: &mut Array2<f64>) {
     let (rows, cols) = h.dim();
-    let src = h.clone();
+    src.assign(h);
     for y in 0..rows {
         for x in 0..cols {
             let hc = src[[y, x]];
