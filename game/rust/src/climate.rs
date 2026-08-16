@@ -13,15 +13,25 @@ pub fn latitude_deg(size: usize) -> Array2<f64> {
 }
 
 /// Annual-mean sea-level temperature by latitude, minus altitude lapse.
+/// E5.11 — the sea-level term depends only on the row, so the `powf`
+/// hoists out of the inner loop; per-cell arithmetic is unchanged.
 pub fn temperature_mean(height: &Array2<f64>, lat_deg: &Array2<f64>) -> Array2<f64> {
-    Array2::from_shape_fn(height.dim(), |(y, x)| {
-        let lat = lat_deg[[y, x]] / 90.0;
+    let (rows, cols) = height.dim();
+    let mut out = Array2::<f64>::zeros((rows, cols));
+    for y in 0..rows {
+        let lat = lat_deg[[y, 0]] / 90.0;
         let t_sea = 28.0 - 53.0 * lat.powf(1.7);
-        t_sea - 26.0 * height[[y, x]].max(0.0) // 6.5 C/km * 4 km per unit
-    })
+        for x in 0..cols {
+            out[[y, x]] = t_sea - 26.0 * height[[y, x]].max(0.0); // 6.5 C/km * 4 km per unit
+        }
+    }
+    out
 }
 
 /// 0.35 (maritime) .. 1.0 (deep continental interior).
+/// E5.11 — computed once per generation in world.rs and shared by
+/// `temperature_amplitude` and `precipitation`; the EDT is the expensive
+/// part and the two consumers used to run it twice on the same mask.
 pub fn continentality(water: &Array2<bool>) -> Array2<f64> {
     let land = water.mapv(|w| !w);
     let d = ndimage::distance_transform_edt(&land);
@@ -29,18 +39,18 @@ pub fn continentality(water: &Array2<bool>) -> Array2<f64> {
 }
 
 /// Signed seasonal swing: southern hemisphere positive (warm in Gamelion).
-pub fn temperature_amplitude(lat_deg: &Array2<f64>, water: &Array2<bool>) -> Array2<f64> {
-    let cont = continentality(water);
-    let size = lat_deg.dim().0;
-    Array2::from_shape_fn(lat_deg.dim(), |(y, x)| {
-        let lat = lat_deg[[y, x]] / 90.0;
-        let amp = (3.0 + 19.0 * lat.powf(1.2)) * cont[[y, x]];
-        if y >= size / 2 {
-            amp
-        } else {
-            -amp
+pub fn temperature_amplitude(lat_deg: &Array2<f64>, cont: &Array2<f64>) -> Array2<f64> {
+    let (rows, cols) = lat_deg.dim();
+    let mut out = Array2::<f64>::zeros((rows, cols));
+    for y in 0..rows {
+        let lat = lat_deg[[y, 0]] / 90.0;
+        let base = 3.0 + 19.0 * lat.powf(1.2);
+        let sign = if y >= rows / 2 { 1.0 } else { -1.0 };
+        for x in 0..cols {
+            out[[y, x]] = sign * (base * cont[[y, x]]);
         }
-    })
+    }
+    out
 }
 
 pub fn month_temperature(tmean: f64, tamp_signed: f64, month: i64) -> f64 {
