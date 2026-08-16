@@ -1520,19 +1520,38 @@ fn cmd_determinism(seed: i64, size: usize, months: i64) {
 // ================================================================ bench
 
 fn cmd_bench() {
-    header("BENCH", "native release");
+    let sub = if cfg!(feature = "alloc-count") {
+        "native release · alloc-count"
+    } else {
+        "native release"
+    };
+    header("BENCH", sub);
     let sizes = [320usize, 512, 640, 768];
     println!("{:>5} {:>9} {:>11} {:>9}  stage breakdown (ms)", "size", "gen ms", "pack bytes", "cells");
     let mut gen512 = 0.0f64;
     let mut bpc512 = 0.0f64;
+    let mut gen512_spread = (0.0f64, 0.0f64);
     for &s in &sizes {
-        let t = Instant::now();
-        let w = World::generate(4242, s);
-        let ms = t.elapsed().as_millis() as f64;
+        // E5.9 — the banded size gets criterion-style repetition: five
+        // samples, median reported, spread shown; flanking sizes stay
+        // single-shot (informational rows, not gates).
+        let samples = if s == 512 { 5 } else { 1 };
+        let mut ms_all: Vec<f64> = Vec::with_capacity(samples);
+        let mut world: Option<World> = None;
+        for _ in 0..samples {
+            let t = Instant::now();
+            let w = World::generate(4242, s);
+            ms_all.push(t.elapsed().as_secs_f64() * 1000.0);
+            world = Some(w);
+        }
+        ms_all.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let ms = ms_all[ms_all.len() / 2];
+        let w = world.unwrap();
         let packed = w.pack();
         if s == 512 {
             gen512 = ms;
             bpc512 = packed.len() as f64 / w.height.len() as f64;
+            gen512_spread = (ms_all[0], *ms_all.last().unwrap());
         }
         let stages: String = w
             .timings
@@ -1543,20 +1562,48 @@ fn cmd_bench() {
             .join(" · ");
         println!("{:>5} {:>9.0} {:>11} {:>9}  {}", s, ms, packed.len(), w.height.len(), stages);
     }
+    println!(
+        "512 generation: median of 5 samples · spread {:.0}–{:.0} ms (E5.9)",
+        gen512_spread.0, gen512_spread.1
+    );
 
-    // tick throughput at 512
+    // tick throughput at 512 — five 240-month windows on one aging world
+    // (E5.9): the median window kills timer noise, and later windows
+    // measure a heavier, more built-up world. Window 0 doubles as the
+    // allocation-budget window (E5.10) when the counting allocator is in.
     let mut w = World::generate(4242, 512);
-    let t = Instant::now();
-    let mut left = 240i64;
-    while left > 0 {
-        let step = left.min(240);
-        w.tick(step);
-        left -= step;
+    let towns0 = w.settlements.len();
+    let mut window_ms: Vec<f64> = Vec::with_capacity(5);
+    let mut alloc_window: Option<u64> = None;
+    for _i in 0..5 {
+        #[cfg(feature = "alloc-count")]
+        let a0 = alloc_count::count();
+        let t = Instant::now();
+        w.tick(240);
+        window_ms.push(t.elapsed().as_secs_f64() * 1000.0);
+        #[cfg(feature = "alloc-count")]
+        if _i == 0 {
+            alloc_window = Some(alloc_count::count() - a0);
+        }
     }
-    let tick_ms = t.elapsed().as_millis() as f64;
+    window_ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let tick_ms = window_ms[window_ms.len() / 2];
     let rate = 240.0 / (tick_ms / 1000.0);
     println!();
-    println!("tick throughput @512 with {} towns: 240 months in {:.0} ms = {:.0} months/s", w.settlements.len(), tick_ms, rate);
+    println!(
+        "tick throughput @512, towns {}→{}: median 240-month window {:.0} ms = {:.0} months/s (5 windows)",
+        towns0,
+        w.settlements.len(),
+        tick_ms,
+        rate
+    );
+    if let Some(a) = alloc_window {
+        println!(
+            "allocations: {} across window 0 = {:.0}/month (E5.10, counting allocator)",
+            a,
+            a as f64 / 240.0
+        );
+    }
 
     // E4 — tick payload budget: a century of single-month tick_json calls
     // on a fresh 512 world; the median is what a playing client pays. The
