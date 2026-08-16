@@ -1,0 +1,30 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · TERRAIN                      seed 777 · 640x512
+========================================================================
+world: "Malnor" · generated in 921 ms
+land: 104041 cells of 327680 (31.8%) · 1664656 km²
+hypsometry (land h): p5 0.018 · p25 0.105 · p50 0.229 · p75 0.368 · p95 0.534 · max 0.699
+bathymetry (sea h): p5 -0.593 · p50 -0.365 · p95 -0.035
+relief of land: hills(h>.35) 28.0% · mountains(h>.5) 7.8% · alpine(h>.65) 0.3%
+landmasses: 24 total · 2 continents(≥3000c) · 0 major isles(≥400c) · 9 islands(≥40c) · 13 islets
+largest landmass: 55158 cells = 53.0% of all land
+coastline: 2891 coastal cells · crenulation 0.028 (coast/land)
+land share by latitude band:
+    90°–  60°    9600  17.6%
+    60°–  30°   18749  34.5%
+    30°–   0°   22300  40.5%
+     0°–  30°   22470  41.3%
+    30°–  60°   21641  39.8%
+    60°–  90°    9281  16.9%
+named: 2 archipelagos · 1 islands · 5 mountain ranges
+
+---- checks ----------------------------------------------------------
+[PASS] land fraction                                 31.8%   (sweet 22–40% · hard 15–52%)
+[PASS] border land cells                                 0   (must be 0 — no clipped landmasses)
+[PASS] largest landmass share of land                53.0%   (sweet 25–85% · hard 10–93%)
+[PASS] landmass count                                   24   (sweet 15–400 · hard 6–2000)
+[PASS] small isles+islets                               22   (sweet 10–380 · hard 3–1900)
+[PASS] mountain share of land (h>0.5)                 7.8%   (sweet 2–14% · hard 0.5–22%)
+[PASS] coastline crenulation                         0.028   (sweet 0.02–0.30 at 4 km cells)
+[PASS] archipelagos named                                2   (≥1 — island clusters should get names)
+CHECKS: 8 pass · 0 warn · 0 fail

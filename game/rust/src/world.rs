@@ -384,7 +384,9 @@ impl World {
             let (y, x) = (s.y as usize, s.x as usize);
             let t_now =
                 climate::month_temperature(self.tmean[[y, x]], self.tamp[[y, x]], month);
-            let mut r = 0.014;
+            // ~6%/yr at best: the world should still be filling in at year
+            // 100, not saturated by year 45 with a century of flat plateau.
+            let mut r = 0.005;
             if t_now < -8.0 {
                 r *= 0.25;
             } else if t_now < 0.0 {
@@ -588,8 +590,11 @@ impl World {
         let mut founded = false;
         let mut pull: Option<Array2<f64>> = None;
         let initial = self.settlements.len();
+        // ore-led ventures may spill past the cap into a reserved band:
+        // the seams don't care that the census is full.
+        let hard_cap = self.max_settlements + self.max_settlements / 4;
         for pi in 0..initial {
-            if self.settlements.len() >= self.max_settlements {
+            if self.settlements.len() >= hard_cap {
                 break;
             }
             let (ppop, pcap, pname) = {
@@ -623,6 +628,10 @@ impl World {
             let Some((y, x)) = site else { continue };
             // an ore-led venture: the seams called louder than the soil
             let ore_led = pull.as_ref().unwrap()[[y, x]] > self.site_score[[y, x]].max(0.0);
+            // past the soft cap only miners still sail
+            if self.settlements.len() >= self.max_settlements && !ore_led {
+                continue;
+            }
             let migrants = ((ppop as f64 * self.rng.gen_range(0.08..0.14)) as i64).max(40);
             self.settlements[pi].pop = (ppop - migrants).max(60);
             let cid = self.settlements[pi].culture;

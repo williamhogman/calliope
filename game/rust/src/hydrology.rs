@@ -177,7 +177,9 @@ pub fn hydrology(height: &Array2<f64>, water: &Array2<bool>, precip: &Array2<f64
     let discharge = flow_accumulation(&filled, &dirs, precip, water);
 
     let size = height.dim().0;
-    let river_threshold = 28.0;
+    // 60.0 keeps the great rivers and their major tributaries (~4% of land)
+    // and prunes the minor-stream fuzz the 4 km cells can't honestly carry.
+    let river_threshold = 60.0;
     let mut lakes = Array2::<bool>::from_elem((size, size), false);
     let mut rivers = Array2::<bool>::from_elem((size, size), false);
     for y in 0..size {

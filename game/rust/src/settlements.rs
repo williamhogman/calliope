@@ -100,8 +100,10 @@ pub fn found_settlements(
     let sea = height.mapv(|h| h < 0.0);
 
     let sea_adj = ndimage::binary_dilation(&sea, 2);
-    let riv_adj = ndimage::binary_dilation(rivers, 2);
-    let lake_adj = ndimage::binary_dilation(lakes, 2);
+    // fresh water counts within one cell (4 km) — a real riverside claim,
+    // not the whole floodplain, so dry-coast harbours stay in the running.
+    let riv_adj = ndimage::binary_dilation(rivers, 1);
+    let lake_adj = ndimage::binary_dilation(lakes, 1);
     let coast = Array2::from_shape_fn((size, size), |(y, x)| land[[y, x]] && sea_adj[[y, x]]);
     let near_fresh = Array2::from_shape_fn((size, size), |(y, x)| {
         land[[y, x]] && (riv_adj[[y, x]] || lake_adj[[y, x]])
@@ -173,8 +175,10 @@ pub fn found_settlements(
             }
             let comfort = (-(((tmean[[y, x]] - 12.0) / 14.0).powi(2))).exp();
             let b = biomes[[y, x]];
-            score[[y, x]] = 2.2 * (near_fresh[[y, x]] as u8 as f64)
-                + 1.6 * (coast[[y, x]] as u8 as f64)
+            // fresh water pulls hard but no longer vetoes: a sheltered
+            // coast with good soil can found on wells and cisterns.
+            score[[y, x]] = 1.5 * (near_fresh[[y, x]] as u8 as f64)
+                + 1.8 * (coast[[y, x]] as u8 as f64)
                 + 2.8 * delta[[y, x]]
                 + food[[y, x]]
                 + 2.0 * comfort
@@ -246,7 +250,9 @@ pub fn found_settlements(
         food_grid: food,
         near_fresh,
         coast,
-        max_settlements: (n_target as f64 * 2.5) as usize,
+        // 4× the dawn towns: the map can hold it now that growth is paced,
+        // and a binding cap was silently vetoing late-run mining ventures.
+        max_settlements: n_target * 4,
     }
 }
 

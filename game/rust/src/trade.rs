@@ -472,7 +472,58 @@ pub fn build_routes(
         }
     }
     recount_connections(settlements, &routes);
+    rescue_unconnected(settlements, &mut routes, grid, height, rivers, discharge);
     routes
+}
+
+/// Any town the viability cap left stranded still gets one lifeline: the
+/// cheapest path to a near neighbour, taken at whatever price the terrain
+/// asks. Frontier mining camps in hungry country stay on the map of trade.
+pub fn rescue_unconnected(
+    settlements: &mut [Settlement],
+    routes: &mut Vec<Route>,
+    grid: &TradeGrid,
+    height: &Array2<f64>,
+    rivers: &Array2<bool>,
+    discharge: &Array2<f64>,
+) {
+    let f = grid.f;
+    let lonely: Vec<usize> = settlements
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.connections == 0)
+        .map(|(i, _)| i)
+        .collect();
+    if lonely.is_empty() {
+        return;
+    }
+    for idx in lonely {
+        let s = settlements[idx].clone();
+        let mut others: Vec<&Settlement> =
+            settlements.iter().filter(|o| o.id != s.id).collect();
+        others.sort_by(|a, b| {
+            let da = (a.x - s.x).pow(2) + (a.y - s.y).pow(2);
+            let db = (b.x - s.x).pow(2) + (b.y - s.y).pow(2);
+            da.cmp(&db)
+        });
+        let mut best: Option<(Route, f64)> = None;
+        for o in others.iter().take(6) {
+            let start = (s.y as usize / f, s.x as usize / f);
+            let goal = (o.y as usize / f, o.x as usize / f);
+            if let Some((path, cost)) = astar(grid, start, goal) {
+                if best.as_ref().map_or(true, |(_, c)| cost < *c) {
+                    best = Some((
+                        route_entry(&s, o, &path, f, cost, height, rivers, discharge),
+                        cost,
+                    ));
+                }
+            }
+        }
+        if let Some((r, _)) = best {
+            routes.push(r);
+        }
+    }
+    recount_connections(settlements, routes);
 }
 
 /// Link a newly founded settlement (at `idx`) into the route network.
@@ -506,5 +557,6 @@ pub fn connect_settlement(
     }
     routes.extend(new_routes);
     recount_connections(settlements, routes);
+    rescue_unconnected(settlements, routes, grid, height, rivers, discharge);
     mark_ports(settlements, routes);
 }
