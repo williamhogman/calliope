@@ -54,11 +54,12 @@ createGpu(glCanvas)
 let lastTs = 0;
 let frameEma = 16;
 let gpuLive = true;
+let governorOn = true;
 
 function frame(ts) {
   if (lastTs) {
     frameEma += (Math.min(ts - lastTs, 250) - frameEma) * 0.05;
-    if (gpuLive && ts > 6000 && frameEma > 70) {
+    if (governorOn && gpuLive && ts > 6000 && frameEma > 70) {
       gpuLive = false;
       dirty = true;
       console.info("calliope: slow rasteriser detected — GL renders on demand");
