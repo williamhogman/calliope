@@ -17,6 +17,8 @@ pub mod hydrology;
 pub mod naming;
 pub mod ndimage;
 pub mod noisegen;
+#[cfg(target_arch = "wasm32")]
+pub mod render;
 pub mod resources;
 pub mod settlements;
 pub mod society;

@@ -2,7 +2,7 @@
 
 import {
   TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, SEA_GRAD, HYDRO_GRAD, FERT_GRAD,
-  hash2, hexRgb, settlementColor,
+  gradient, hash2, hexRgb, settlementColor,
 } from "./palette.js";
 
 const TIER_RADIUS = { Camp: 3, Village: 4.5, Town: 6, City: 8 };
@@ -32,6 +32,23 @@ const LABEL_STYLE = {
 // fine-grain coastal detail only earns a label once you lean in
 const DETAIL_KINDS = new Set(["bay", "strait", "cape", "peak", "marsh", "delta", "pass", "ford"]);
 
+// ---- satellite base palette -----------------------------------------------
+// Land colour derives from continuous fields (moisture, warmth, soil, height)
+// rather than biome classes, so the terrain reads like imagery: dunes bleed
+// into steppe, steppe into savanna, forest darkens toward the snowline.
+const VEG_GRAD = gradient([
+  [0.0, [191, 168, 128]],   // bare sand and dune
+  [0.14, [167, 148, 103]],  // semi-desert scrub
+  [0.32, [128, 128, 74]],   // dry grassland
+  [0.5, [92, 106, 58]],     // savanna, open woods
+  [0.72, [55, 78, 44]],     // closed temperate forest
+  [1.0, [30, 54, 32]],      // deep rainforest canopy
+]);
+const ROCK = [118, 108, 98];
+const SNOW = [237, 240, 245];
+const TUNDRA = [127, 117, 99];
+const ICE_SHEET = [213, 218, 224];
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -55,6 +72,7 @@ export class Renderer {
     this.cacheKey = null;
     this.tmonthCache.clear();
     this.territoryCache = { version: -1, owner: null };
+    this._tintCache = null;
 
     // biome palette by id
     this.biomePal = [];
@@ -88,7 +106,82 @@ export class Renderer {
     for (let i = 0; i < d.length; i++) if (d[i] > max) max = d[i];
     this.dischargeLogMax = Math.log1p(max);
 
+    this._buildSatellite();
     this.setRoutes(world.header.routes || []);
+  }
+
+  // smooth value noise on the world grid — bilinear hash, for imagery texture
+  _noise(x, y, sc) {
+    const gx = x / sc, gy = y / sc;
+    const x0 = Math.floor(gx), y0 = Math.floor(gy);
+    const fx = gx - x0, fy = gy - y0;
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    const n00 = hash2(x0, y0), n10 = hash2(x0 + 1, y0);
+    const n01 = hash2(x0, y0 + 1), n11 = hash2(x0 + 1, y0 + 1);
+    return n00 + (n10 - n00) * sx + (n01 - n00) * sy + (n00 - n10 - n01 + n11) * sx * sy;
+  }
+
+  // True-colour composite: what a survey satellite would see in high summer.
+  // Computed once per world; seasonal snow rides on top as an overlay.
+  _buildSatellite() {
+    const W = this.w, H = this.h;
+    const { height, tmean, precip, fertility, flags } = this.world.arrays;
+    const sat = new Float32Array(W * H * 3);
+    const cl = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x, o = i * 3;
+        const h = height[i];
+        const t = tmean[i];
+        let r, g, b;
+        if (h < 0) {
+          // coastal shelf glows turquoise, the abyss falls to near-black navy
+          const depth = Math.pow(cl(-h / 0.85), 0.48);
+          const warm = cl((t + 2) / 24);
+          r = (26 + warm * 30) * (1 - depth) + 6 * depth;
+          g = (102 + warm * 36) * (1 - depth) + 16 * depth;
+          b = (116 + warm * 32) * (1 - depth) + 40 * depth;
+          const swell = (this._noise(x, y, 11) - 0.5) * 6 * (1 - depth * 0.75);
+          r += swell; g += swell; b += swell;
+        } else if (flags[i] & 2) {
+          const n = (this._noise(x, y, 5) - 0.5) * 7;
+          r = 25 + n; g = 57 + n; b = 69 + n;
+        } else {
+          const moist = cl((precip[i] - 130) / 1050);
+          const warm = cl((t + 9) / 27);
+          const soil = fertility ? fertility[i] : 0.4;
+          const veg = cl(cl(moist * (0.3 + 0.7 * warm)) * 0.8 + soil * 0.3);
+          const c = VEG_GRAD(veg);
+          r = c[0]; g = c[1]; b = c[2];
+          // cold lands grey toward tundra, then pale into the ice sheet
+          const chill = cl((4 - t) / 16) * 0.65;
+          r += (TUNDRA[0] - r) * chill;
+          g += (TUNDRA[1] - g) * chill;
+          b += (TUNDRA[2] - b) * chill;
+          const frozen = cl((-9 - t) / 9);
+          r += (ICE_SHEET[0] - r) * frozen;
+          g += (ICE_SHEET[1] - g) * frozen;
+          b += (ICE_SHEET[2] - b) * frozen;
+          // altitude: bare rock above the treeline, firn on the peaks
+          const rock = cl((h - 0.5) / 0.32) * 0.85;
+          r += (ROCK[0] - r) * rock;
+          g += (ROCK[1] - g) * rock;
+          b += (ROCK[2] - b) * rock;
+          const firn = cl((h - 0.7) / 0.22) * cl((8 - t) / 18 + 0.2);
+          r += (SNOW[0] - r) * firn;
+          g += (SNOW[1] - g) * firn;
+          b += (SNOW[2] - b) * firn;
+          // mottled canopy and field texture, stronger where growth is thick
+          const n1 = this._noise(x, y, 6.5) - 0.5;
+          const n2 = this._noise(x + 353, y + 127, 2.2) - 0.5;
+          const fine = hash2(x, y) - 0.5;
+          const m = (n1 * 0.55 + n2 * 0.3 + fine * 0.35) * (5 + veg * 13);
+          r += m; g += m * 1.1; b += m * 0.8;
+        }
+        sat[o] = r; sat[o + 1] = g; sat[o + 2] = b;
+      }
+    }
+    this.sat = sat;
   }
 
   setRoutes(routes) {
@@ -168,6 +261,49 @@ export class Renderer {
     return owner;
   }
 
+  // political tint as an RGBA texture for the GPU path: culture colour with
+  // alpha for interior/edge, and a bright opaque frontier between cultures
+  tintRgba(version) {
+    if (this._tintCache && this._tintCache.version === version) {
+      return this._tintCache.data;
+    }
+    const W = this.w, H = this.h;
+    const owner = this.territory(version);
+    const cultOf = this._cultureOf();
+    const cRgb = this.cultureRgb;
+    const data = new Uint8Array(W * H * 4);
+    const cidOf = (oo) => (oo >= 0 ? (cultOf[oo] ?? 0) : -1);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x, o = i * 4;
+        const ow = owner[i];
+        if (ow < 0) continue;
+        const cid = cultOf[ow] ?? 0;
+        const c = cRgb[cid] || [220, 200, 140];
+        const left = x > 0 ? owner[i - 1] : ow;
+        const up = y > 0 ? owner[i - W] : ow;
+        const right = x < W - 1 ? owner[i + 1] : ow;
+        const down = y < H - 1 ? owner[i + W] : ow;
+        const settBorder = left !== ow || up !== ow || right !== ow || down !== ow;
+        const cultBorder = settBorder && (
+          cidOf(left) !== cid || cidOf(up) !== cid ||
+          cidOf(right) !== cid || cidOf(down) !== cid);
+        if (cultBorder) {
+          data[o] = Math.min(255, c[0] * 1.18 + 30);
+          data[o + 1] = Math.min(255, c[1] * 1.18 + 30);
+          data[o + 2] = Math.min(255, c[2] * 1.18 + 30);
+          data[o + 3] = 255;
+        } else {
+          data[o] = c[0]; data[o + 1] = c[1]; data[o + 2] = c[2];
+          data[o + 3] = settBorder ? 128 : 82;
+        }
+      }
+    }
+    this._tintCache = { version, data };
+    return data;
+  }
+
+
   _cultureOf() {
     // settlement id -> culture id (settlements can be added by colonisation)
     const map = [];
@@ -199,6 +335,7 @@ export class Renderer {
     const tnow = monthDependent ? this.monthTemp(month) : null;
     const owner = layer === "political" ? this.territory(version) : null;
     const dLogMax = this.dischargeLogMax || 1;
+    const sat = this.sat;
 
     let cultOf = null;
     if (owner) cultOf = this._cultureOf();
@@ -215,22 +352,14 @@ export class Renderer {
         let r, g, b;
 
         if (layer === "biomes" || layer === "political") {
-          if (sea) {
-            const t = Math.min(1, -h / 0.75);
-            [r, g, b] = SEA_GRAD(t);
-          } else if (lake) {
-            r = 64; g = 118; b = 158;
-          } else {
-            const c = this.biomePal[biomes[i]] || [255, 0, 255];
-            const dth = (hash2(x, y) - 0.5) * 9;
-            r = c[0] + dth; g = c[1] + dth; b = c[2] + dth;
-          }
+          const o3 = i * 3;
+          r = sat[o3]; g = sat[o3 + 1]; b = sat[o3 + 2];
           if (layer === "political") {
-            // desaturate base
+            // mute the imagery so informational tints read like annotation
             const lum = 0.3 * r + 0.59 * g + 0.11 * b;
-            r = r * 0.35 + lum * 0.65;
-            g = g * 0.35 + lum * 0.65;
-            b = b * 0.35 + lum * 0.65;
+            r = (r * 0.52 + lum * 0.48) * 0.84;
+            g = (g * 0.52 + lum * 0.48) * 0.84;
+            b = (b * 0.52 + lum * 0.48) * 0.84;
             const ow = owner[i];
             if (ow >= 0) {
               const cid = cultOf[ow] ?? 0;
@@ -244,10 +373,17 @@ export class Renderer {
               const cultBorder = settBorder && (
                 cidOf(left) !== cid || cidOf(up) !== cid ||
                 cidOf(right) !== cid || cidOf(down) !== cid);
-              const a = cultBorder ? 0.92 : settBorder ? 0.58 : 0.42;
-              r = r * (1 - a) + c[0] * a;
-              g = g * (1 - a) + c[1] * a;
-              b = b * (1 - a) + c[2] * a;
+              if (cultBorder) {
+                // a crisp bright frontier, like a boundary drawn on imagery
+                r = Math.min(255, c[0] * 1.18 + 30);
+                g = Math.min(255, c[1] * 1.18 + 30);
+                b = Math.min(255, c[2] * 1.18 + 30);
+              } else {
+                const a = settBorder ? 0.5 : 0.32;
+                r = r * (1 - a) + c[0] * a;
+                g = g * (1 - a) + c[1] * a;
+                b = b * (1 - a) + c[2] * a;
+              }
             }
           }
         } else if (layer === "elevation") {
@@ -291,13 +427,13 @@ export class Renderer {
           r *= s; g *= s; b *= s;
         }
 
-        // rivers overlay
+        // rivers overlay — natural water blue, weighted by discharge
         if (overlays.rivers && (flags[i] & 1) && layer !== "hydro") {
           const t = Math.log1p(discharge[i]) / dLogMax;
-          const a = Math.min(0.85, 0.45 + t * 0.55);
-          r = r * (1 - a) + 92 * a;
-          g = g * (1 - a) + 158 * a;
-          b = b * (1 - a) + 216 * a;
+          const a = Math.min(0.8, 0.38 + t * 0.5);
+          r = r * (1 - a) + 62 * a;
+          g = g * (1 - a) + 124 * a;
+          b = b * (1 - a) + 186 * a;
         }
 
         // snow & sea ice overlay
@@ -332,18 +468,41 @@ export class Renderer {
       this.canvas.height = (hgt * dpr) | 0;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = "#0a0f18";
-    ctx.fillRect(0, 0, w, hgt);
+    const gpuOn = !!(this.gpu && this.gpu.hasWorld);
+    if (gpuOn) {
+      // the wgpu canvas beneath carries the imagery — keep this layer clear
+      ctx.clearRect(0, 0, w, hgt);
+    } else {
+      ctx.fillStyle = "#05080f";
+      ctx.fillRect(0, 0, w, hgt);
+    }
     if (!this.world) return;
 
-    this.composite(state);
+    if (!gpuOn) {
+      this.composite(state);
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.translate(view.tx, view.ty);
+      ctx.scale(view.scale, view.scale);
+      ctx.drawImage(this.off, 0, 0);
+      ctx.restore();
+    }
 
+    // a breath of atmosphere: a faint rim on the world, vignette in the void
     ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.translate(view.tx, view.ty);
-    ctx.scale(view.scale, view.scale);
-    ctx.drawImage(this.off, 0, 0);
+    ctx.shadowColor = "rgba(96, 150, 212, 0.22)";
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = "rgba(128, 172, 222, 0.22)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(view.tx - 0.5, view.ty - 0.5, this.w * view.scale + 1, this.h * view.scale + 1);
     ctx.restore();
+    const vg = ctx.createRadialGradient(
+      w / 2, hgt / 2, Math.min(w, hgt) * 0.42,
+      w / 2, hgt / 2, Math.hypot(w, hgt) * 0.62);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(2, 6, 13, 0.5)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, w, hgt);
 
     // vector overlays in screen space
     if (state.overlays.winds) this._drawWinds(ctx, view, state);
@@ -401,8 +560,8 @@ export class Renderer {
     ctx.lineCap = "round";
     for (const r of this.routes) {
       const wgt = r.w || 1;
-      const lw = Math.min(3.2, Math.max(0.9, s * 0.13 * wgt + 0.5));
-      const alpha = Math.min(0.75, 0.4 + wgt * 0.18);
+      const lw = Math.min(2.4, Math.max(0.8, s * 0.11 * wgt + 0.4));
+      const alpha = Math.min(0.68, 0.34 + wgt * 0.16);
       const m = r.m || [];
       const pts = r.pts;
       // draw runs of the same travel mode: road, sea lane, or river barge
@@ -530,23 +689,24 @@ export class Renderer {
       let font, size, spacing, text = f.name;
       const lg = Math.log2(Math.max(f.size, 2));
       if (f.t === "ocean" || f.t === "sea") {
-        size = Math.min(24, 9 + lg * 0.95);
-        font = `700 ${size.toFixed(1)}px Cinzel, serif`;
-        text = f.name.toUpperCase();
-        spacing = 3;
-      } else if (f.t === "continent") {
-        size = Math.min(22, 8 + lg * 0.9);
-        font = `700 ${size.toFixed(1)}px Cinzel, serif`;
+        size = Math.min(21, 8.5 + lg * 0.85);
+        font = `500 ${size.toFixed(1)}px Inter, sans-serif`;
         text = f.name.toUpperCase();
         spacing = 4;
+      } else if (f.t === "continent") {
+        size = Math.min(20, 8 + lg * 0.8);
+        font = `600 ${size.toFixed(1)}px Inter, sans-serif`;
+        text = f.name.toUpperCase();
+        spacing = 5;
       } else if (f.t === "range" || f.t === "desert" || f.t === "forest" || f.t === "highland") {
-        size = 12.5;
-        font = `italic 600 12.5px Georgia, serif`;
-        spacing = 1;
-      } else {
         size = 11;
-        font = `italic 500 11px Georgia, serif`;
-        spacing = 0.5;
+        font = `600 11px Inter, sans-serif`;
+        text = f.name.toUpperCase();
+        spacing = 1.8;
+      } else {
+        size = 10.5;
+        font = `italic 500 10.5px Inter, sans-serif`;
+        spacing = 0.6;
       }
       cands.push({ f, st, alpha, px, py, font, size, spacing, text });
     }
@@ -565,8 +725,8 @@ export class Renderer {
       }
       placed.push(box);
       ctx.globalAlpha = c.alpha;
-      ctx.strokeStyle = "rgba(6, 10, 18, 0.8)";
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(4, 8, 15, 0.7)";
+      ctx.lineWidth = 2.6;
       ctx.strokeText(c.text, c.px, c.py);
       ctx.fillStyle = c.st.color;
       ctx.fillText(c.text, c.px, c.py);
