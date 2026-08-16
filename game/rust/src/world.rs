@@ -2220,25 +2220,43 @@ impl World {
         // Beyond the home range there is a second, thinner channel — the far
         // venture: prospecting parties that push into wild country, so even
         // mountain gold no town can reach is found in the fullness of time.
+        //
+        // E5.3: the deposit bucket grid inverts the old O(deposits × towns)
+        // scan — each town only touches seams inside its own venture range.
+        // Beyond 3.5 ranges the chance is zero, so an uncovered deposit and
+        // a covered-but-too-far one are the same outcome (no rng drawn) and
+        // the random stream is untouched.
+        let deposit_buckets = crate::util::Buckets::build(
+            self.deposits.iter().map(|d| (d.x as f64, d.y as f64)).collect(),
+            32.0,
+        );
+        let mut best: Vec<Option<(f64, usize)>> = vec![None; self.deposits.len()];
+        let mut cand: Vec<usize> = Vec::new();
+        for (si, s) in self.settlements.iter().enumerate() {
+            let reach = settlements::territory_radius(s.pop)
+                * 2.4
+                * mods.get(s.culture.idx()).map(|m| m.prospecting).unwrap_or(1.0);
+            let reach = reach.max(1e-9);
+            deposit_buckets.candidates(s.x as f64, s.y as f64, 3.5 * reach + 1.0, &mut cand);
+            for &di in &cand {
+                let d = &self.deposits[di];
+                if d.known {
+                    continue;
+                }
+                let dx = (d.x - s.x) as f64;
+                let dy = (d.y - s.y) as f64;
+                let ratio = (dx * dx + dy * dy).sqrt() / reach;
+                if best[di].map_or(true, |(b, _)| ratio < b) {
+                    best[di] = Some((ratio, si));
+                }
+            }
+        }
         let mut found: Vec<(usize, usize)> = Vec::new();
         for (di, d) in self.deposits.iter().enumerate() {
             if d.known {
                 continue;
             }
-            // closest town, measured in multiples of its own ranging distance
-            let mut best: Option<(f64, usize)> = None;
-            for (si, s) in self.settlements.iter().enumerate() {
-                let reach = settlements::territory_radius(s.pop)
-                    * 2.4
-                    * mods.get(s.culture.idx()).map(|m| m.prospecting).unwrap_or(1.0);
-                let dx = (d.x - s.x) as f64;
-                let dy = (d.y - s.y) as f64;
-                let ratio = (dx * dx + dy * dy).sqrt() / reach.max(1e-9);
-                if best.map_or(true, |(b, _)| ratio < b) {
-                    best = Some((ratio, si));
-                }
-            }
-            let Some((ratio, si)) = best else { continue };
+            let Some((ratio, si)) = best[di] else { continue };
             let rarity = match d.r.abundance() {
                 resources::Abundance::Uncommon => 0.6,
                 resources::Abundance::Rare => 0.35,
