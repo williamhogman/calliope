@@ -42,12 +42,6 @@ function need(expect) {
 async function handle(data) {
   const { id, op, seed, size, months, kind, key, ent, expect } = data;
   try {
-    if (op === OP.INIT) {
-      resolveEngine(loadEngine(data.module ?? undefined));
-      await (await engineReady);
-      self.postMessage({ id, ok: true, json: "true" });
-      return;
-    }
     const { WasmWorldBuilder } = await (await engineReady);
     if (op === OP.GENERATE) {
       // The old world stays alive until the new one is real: an abandoned
@@ -115,14 +109,31 @@ async function handle(data) {
   }
 }
 
-// Strict arrival-order execution, abort excepted — the chain preserves the
+// Strict arrival-order execution for world ops — the chain preserves the
 // ordering the old blocking dispatch gave for free, now that generation
-// yields between stages.
+// yields between stages. Two ops bypass the line on purpose: `abort`,
+// whose whole job is to cut it, and `init`, which must resolve the engine
+// even when a generate posted earlier is already parked in the chain
+// awaiting it (the main thread compiles the module before sending init,
+// so init can genuinely arrive second).
 let chain = Promise.resolve();
 self.onmessage = (e) => {
-  if (e.data.op === OP.ABORT) {
+  const { id, op } = e.data;
+  if (op === OP.ABORT) {
     aborted.add(e.data.target);
-    self.postMessage({ id: e.data.id, ok: true, json: "true" });
+    self.postMessage({ id, ok: true, json: "true" });
+    return;
+  }
+  if (op === OP.INIT) {
+    resolveEngine(loadEngine(e.data.module ?? undefined));
+    (async () => {
+      try {
+        await (await engineReady);
+        self.postMessage({ id, ok: true, json: "true" });
+      } catch (err) {
+        self.postMessage({ id, ok: false, op, error: String((err && err.message) || err) });
+      }
+    })();
     return;
   }
   chain = chain.then(() => handle(e.data));
