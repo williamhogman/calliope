@@ -140,8 +140,8 @@ The audit found the quadratic and the wasteful; this track retires them.
 - [x] E5.6 `artifact::monthly` takes `&new_events[month_start..]`, not a full clone (`world.rs:1794`) (S)
 - [x] E5.7 Merchant pass stops cloning every good name per area per month (`economy.rs:751-752`) (S)
 - [x] E5.8 `tick_json` serializes into a reused `String` buffer via `to_writer` (S)
-- [ ] E5.9 Criterion benches: per-stage generation and a 1200-month tick, results written into `game/reports/bench.txt` by `report.sh` (M)
-- [ ] E5.10 Counting allocator behind a diagnose feature: allocations/tick becomes a banded metric — allocation regressions get an alarm (M)
+- [x] E5.9 Criterion benches: per-stage generation and a 1200-month tick, results written into `game/reports/bench.txt` by `report.sh` — done in-harness (5-sample medians with spread) instead of pulling the criterion dep: same statistical protection, one toolchain, text reports stay the gate (M)
+- [x] E5.10 Counting allocator behind a diagnose feature: allocations/tick becomes a banded metric — allocation regressions get an alarm (`--features alloc-count`, baseline 183/mo, band sweet ≤350 · hard ≤1500) (M)
 - [ ] E5.11 Pass-fusion profile pass over generation: fuse adjacent full-grid sweeps in `erosion.rs`/`climate.rs` where the profiler shows wins, guarded by the determinism hash (M)
 - [x] E5.12 `cultures_json` stops re-deriving ruler/era/tech-name arrays for unchanged societies every tick (`world.rs:2149-2191`) — done as a one-pass cold/hot build gated on the two half-hashes; the full block is only assembled on the rare cold-change tick (S)
 
