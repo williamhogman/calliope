@@ -21,12 +21,14 @@
   </script>
 </head>
 <body>
-  <canvas id="gl"></canvas>
-  <canvas id="map"></canvas>
+  <main aria-label="World map">
+    <canvas id="gl"></canvas>
+    <canvas id="map"></canvas>
+  </main>
 
-  <div id="hud-root"></div>
+  <div id="hud-root" role="region" aria-label="World controls"></div>
 
-  <div class="loading" id="loading">
+  <div class="loading" id="loading" role="region" aria-label="World generation">
     <div class="loading-card">
       <span class="muse">✶</span>
       <div class="loading-title">Calliope</div>

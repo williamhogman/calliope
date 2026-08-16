@@ -368,16 +368,18 @@ export function Outliner(a) {
       else if (!outlinerOpen()) cls += " closed";
       return cls;
     }}>
-      <div class="ol-tabs" role="tablist" aria-label="Almanac"
-        ref=${(el) => roveTabs(el)}>
-        ${TABS.map(([id, label, icon]) => html`<button
-          class=${() => "ol-tab" + (outlinerTab() === id ? " active" : "")}
-          role="tab" aria-selected=${() => String(outlinerTab() === id)}
-          title=${label} onClick=${() => pick(id)}>
-          ${icon()}<span>${label}</span>
-          ${() => (id === "chronicle" && unseen() > 0 && outlinerTab() !== "chronicle"
-            ? html`<span class="badge">+${unseen()}</span>` : "")}
-        </button>`)}
+      <div class="ol-tabs">
+        <div role="tablist" aria-label="Almanac" style="display:contents"
+          ref=${(el) => roveTabs(el)}>
+          ${TABS.map(([id, label, icon]) => html`<button
+            class=${() => "ol-tab" + (outlinerTab() === id ? " active" : "")}
+            role="tab" aria-selected=${() => String(outlinerTab() === id)}
+            title=${label} onClick=${() => pick(id)}>
+            ${icon()}<span>${label}</span>
+            ${() => (id === "chronicle" && unseen() > 0 && outlinerTab() !== "chronicle"
+              ? html`<span class="badge">+${unseen()}</span>` : "")}
+          </button>`)}
+        </div>
         <button class="ol-collapse desktop-only" title="Collapse"
           onClick=${() => { setOutlinerOpen(false); persistUi(); }}>${I.chevR()}</button>
       </div>

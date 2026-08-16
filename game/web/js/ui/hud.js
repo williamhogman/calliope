@@ -158,18 +158,22 @@ function OverlaysPop(a) {
 }
 
 function LensStrip(a) {
+  // the tablist wraps only the tabs (display:contents keeps the strip's
+  // flex layout); the divider and tool buttons live outside its semantics
   return html`<div class="lens-cluster pop-anchor">
-    <div class="lens-strip" role="tablist" aria-label="Map lens"
-      ref=${(el) => roveTabs(el)}>
-      ${LAYERS.map(
-        ([id, label, tip], i) => html`<button
-          class=${() => "lens" + (layer() === id ? " active" : "")}
-          role="tab" aria-selected=${() => String(layer() === id)}
-          title=${`${tip} (${i + 1})`}
-          onClick=${() => a.setLayer(id)}>
-          <span class="lens-key">${i + 1}</span><span class="lens-label">${label}</span>
-        </button>`
-      )}
+    <div class="lens-strip">
+      <div role="tablist" aria-label="Map lens" style="display:contents"
+        ref=${(el) => roveTabs(el)}>
+        ${LAYERS.map(
+          ([id, label, tip], i) => html`<button
+            class=${() => "lens" + (layer() === id ? " active" : "")}
+            role="tab" aria-selected=${() => String(layer() === id)}
+            title=${`${tip} (${i + 1})`}
+            onClick=${() => a.setLayer(id)}>
+            <span class="lens-key">${i + 1}</span><span class="lens-label">${label}</span>
+          </button>`
+        )}
+      </div>
       <span class="lens-sep"></span>
       <button class=${() => "lens lens-tool" + (overlaysOpen() ? " active" : "")}
         title="Overlays (o)" aria-pressed=${() => String(overlaysOpen())}
