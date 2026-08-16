@@ -24,7 +24,11 @@ const markDirty = () => { dirty = true; };
 const view = new View(canvas, markDirty);
 let hover = null;
 
-window.__calliope = { view, renderer, world, month, advance: (m) => advance(m) };
+window.__calliope = {
+  view, renderer, world, month, advance: (m) => advance(m),
+  gpuMode: () => (gpuLive ? "live" : "on-demand"),
+  gpuForceLive: () => { governorOn = false; gpuLive = true; },
+};
 
 // GPU imagery: bring up the Rust wgpu engine (WebGPU, else WebGL2).
 // If no adapter exists the CPU compositor stays in charge.
