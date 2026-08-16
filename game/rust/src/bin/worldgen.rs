@@ -17,9 +17,25 @@ fn main() {
 
     println!("world '{}' seed={} size={}x{}", w.world_name, seed, w.width, size);
     println!("land: {:.1}%  rivers: {} cells  lakes: {} cells", 100.0 * land / total, rivers, lakes);
+    // biome shares of land — the balance check for deserts and mountains
+    let mut bc: std::collections::BTreeMap<&str, usize> = Default::default();
+    for &b in w.biomes.iter() {
+        *bc.entry(calliope::constants::PRETTY_BIOMES[b as usize]).or_default() += 1;
+    }
+    let shares: Vec<String> = bc
+        .iter()
+        .filter(|(k, _)| **k != "Water")
+        .map(|(k, v)| format!("{} {:.1}%", k, 100.0 * *v as f64 / land))
+        .collect();
+    println!("biome shares of land: {}", shares.join(" \u{b7} "));
+    let high = w.height.iter().filter(|&&h| h > 0.5).count() as f64;
+    println!("mountainous (h>0.5): {:.1}% of land", 100.0 * high / land);
+    let known = w.deposits.iter().filter(|d| d.known).count();
     println!(
-        "deposits: {}  settlements: {}  cultures: {}  features: {}  routes: {}",
+        "deposits: {} ({} known at dawn / {} hidden)  settlements: {}  cultures: {}  features: {}  routes: {}",
         w.deposits.len(),
+        known,
+        w.deposits.len() - known,
         w.settlements.len(),
         w.cultures.len(),
         w.features.len(),
@@ -88,13 +104,22 @@ fn main() {
 
     if months > 0 {
         let mut all_events = 0usize;
+        let mut discoveries = 0usize;
+        let mut depletions = 0usize;
         let mut chunks = months;
         while chunks > 0 {
             let step = chunks.min(240);
-            let (evs, _founded) = w.tick(step);
+            let (evs, _founded, _dep) = w.tick(step);
             all_events += evs.len();
+            discoveries += evs.iter().filter(|e| e.k == "discovery").count();
+            depletions += evs.iter().filter(|e| e.k == "depletion").count();
             chunks -= step;
         }
+        let known_now = w.deposits.iter().filter(|d| d.known).count();
+        println!(
+            "prospecting: {} strikes \u{b7} {} seams exhausted \u{b7} {} of {} deposits known",
+            discoveries, depletions, known_now, w.deposits.len()
+        );
         let pop: i64 = w.settlements.iter().map(|s| s.pop).sum();
         let wealth: f64 = w.settlements.iter().map(|s| s.wealth).sum();
         println!(
