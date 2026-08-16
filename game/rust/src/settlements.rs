@@ -89,6 +89,7 @@ pub fn found_settlements(
     tmean: &Array2<f64>,
     rivers: &Array2<bool>,
     lakes: &Array2<bool>,
+    discharge: &Array2<f64>,
     deposits: &[Deposit],
     fert: &Array2<f64>,
     rng: &mut Pcg64Mcg,
@@ -106,6 +107,52 @@ pub fn found_settlements(
         land[[y, x]] && (riv_adj[[y, x]] || lake_adj[[y, x]])
     });
 
+    // River deltas: where a great river meets the tide, the silt piles
+    // deep and every keel and cart must meet. The bigger the river, the
+    // harder its mouth pulls settlement toward it.
+    let mut delta = Array2::<f64>::zeros((size, size));
+    for y in 0..size {
+        for x in 0..size {
+            if !rivers[[y, x]] || discharge[[y, x]] < 60.0 {
+                continue;
+            }
+            let mut mouth = false;
+            for dy in -1i64..=1 {
+                for dx in -1i64..=1 {
+                    let (ny, nx) = (y as i64 + dy, x as i64 + dx);
+                    if ny < 0 || nx < 0 || ny >= size as i64 || nx >= size as i64 {
+                        continue;
+                    }
+                    if height[[ny as usize, nx as usize]] < 0.0 {
+                        mouth = true;
+                    }
+                }
+            }
+            if !mouth {
+                continue;
+            }
+            let w = (discharge[[y, x]] / 300.0).sqrt().clamp(0.6, 1.8);
+            let rr = 6i64;
+            for dy in -rr..=rr {
+                for dx in -rr..=rr {
+                    let (ny, nx) = (y as i64 + dy, x as i64 + dx);
+                    if ny < 0 || nx < 0 || ny >= size as i64 || nx >= size as i64 {
+                        continue;
+                    }
+                    let d = ((dy * dy + dx * dx) as f64).sqrt();
+                    if d > rr as f64 {
+                        continue;
+                    }
+                    let v = w * (1.0 - d / (rr as f64 + 1.0));
+                    let cell = &mut delta[[ny as usize, nx as usize]];
+                    if v > *cell {
+                        *cell = v;
+                    }
+                }
+            }
+        }
+    }
+
     // food kernel from deposits whose ISA chain reaches "food"
     let mut food = Array2::<f64>::zeros((size, size));
     for d in deposits {
@@ -113,7 +160,9 @@ pub fn found_settlements(
             food[[d.y as usize, d.x as usize]] += d.rich;
         }
     }
-    let food = ndimage::gaussian_filter(&food, 5.0).mapv(|v| (v * 60.0).clamp(0.0, 3.0));
+    let mut food = ndimage::gaussian_filter(&food, 5.0).mapv(|v| (v * 60.0).clamp(0.0, 3.0));
+    // delta silt and estuary fisheries feed towns for free
+    food.zip_mut_with(&delta, |f, &d| *f += 0.9 * d);
 
     let mut score = Array2::<f64>::zeros((size, size));
     for y in 0..size {
@@ -126,6 +175,7 @@ pub fn found_settlements(
             let b = biomes[[y, x]];
             score[[y, x]] = 2.2 * (near_fresh[[y, x]] as u8 as f64)
                 + 1.6 * (coast[[y, x]] as u8 as f64)
+                + 2.8 * delta[[y, x]]
                 + food[[y, x]]
                 + 2.0 * comfort
                 + 2.6 * fert[[y, x]]

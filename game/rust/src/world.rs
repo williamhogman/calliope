@@ -132,6 +132,7 @@ impl World {
             &tmean,
             &hydro.rivers,
             &hydro.lakes,
+            &hydro.discharge,
             &deposits,
             &fertility,
             &mut rng9000,
