@@ -2,37 +2,4 @@
  CALLIOPE DIAGNOSTIC · BENCH                        native release · alloc-count
 ========================================================================
  size    gen ms  pack bytes     cells  stage breakdown (ms)
-  320       515     2564312    128000  terrain 125 · erosion 67 · climate 16 · hydrology 34 · biomes 0 · fertility 13 · naming 39 · resources 167 · settlements 45
-  512      1059     6559176    327680  terrain 289 · erosion 192 · climate 32 · hydrology 95 · biomes 1 · fertility 27 · naming 71 · resources 278 · settlements 64
-  640      1669    10246500    512000  terrain 396 · erosion 294 · climate 56 · hydrology 142 · biomes 2 · fertility 44 · naming 131 · resources 484 · settlements 105
-  768      2247    14753076    737280  terrain 546 · erosion 421 · climate 80 · hydrology 223 · biomes 3 · fertility 66 · naming 158 · resources 577 · settlements 153
-512 generation: median of 5 samples · spread 986–1121 ms (E5.9)
-
-tick throughput @512, towns 16→101: median 240-month window 89 ms = 2705 months/s (5 windows)
-allocations: 43929 across window 0 = 183/month (E5.10, counting allocator)
-tick payload @512 over 100 y: median 3976 B · p90 19485 B · max 65569 B
-  routes               104 ships ·   2293118 B total ·  22049 B/ship
-  territory            114 ships ·   1387778 B total ·  12173 B/ship
-  s_hot               1200 ships ·   1281137 B total ·   1067 B/ship
-  areas               1188 ships ·    888162 B total ·    747 B/ship
-  settlements          670 ships ·    695166 B total ·   1037 B/ship
-  m_hot               1057 ships ·    409507 B total ·    387 B/ship
-  deposits              38 ships ·    337924 B total ·   8892 B/ship
-  c_hot               1110 ships ·    266181 B total ·    239 B/ship
-  cultures              90 ships ·    212052 B total ·   2356 B/ship
-  merchants            445 ships ·    192453 B total ·    432 B/ship
-  features              17 ships ·    136986 B total ·   8058 B/ship
-  market               142 ships ·    108030 B total ·    760 B/ship
-  wars                 123 ships ·     11985 B total ·     97 B/ship
-  ev                  1200 ships ·     11352 B total ·      9 B/ship
-  month               1200 ships ·      3693 B total ·      3 B/ship
-  headlines            656 ships ·      3276 B total ·      4 B/ship
-  deposits_hidden       38 ships ·        65 B total ·      1 B/ship
-
----- checks ----------------------------------------------------------
-[PASS] 512 generation time                         1059 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
-[PASS] tick rate                                 2705 mo/s   (sweet ≥100 mo/s · hard ≥25)
-[PASS] pack bytes per cell                     20.0 B/cell   (sweet ≤21 · hard ≤24 (8×u16 + 4×u8 = 20 B/cell + header))
-[PASS] median tick payload                          3976 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
-[PASS] allocations per month                        183/mo   (sweet ≤350 · hard ≤1500 (baseline 183/mo — deterministic per seed, E5.10))
-CHECKS: 5 pass · 0 warn · 0 fail
+  320       525     2564312    128000  terrain 125 · erosion 68 · climate 18 · hydrology 41 · biomes 1 · fertility 21 · naming 43 · resources 150 · settlements 51
