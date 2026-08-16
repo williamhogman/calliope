@@ -53,6 +53,63 @@ pub struct WasmWorld {
     inner: world::World,
 }
 
+/// E7.4/E7.5 — staged generation for the worker. `step()` runs exactly one
+/// stage and returns `{"stage","i","n","done"}` JSON, so the worker can post
+/// progress and honour an abort between stages; `finish()` yields the world.
+/// Dropping the builder mid-ladder frees every intermediate — an abandoned
+/// world costs nothing.
+#[wasm_bindgen]
+pub struct WasmWorldBuilder {
+    inner: Option<world::GenBuilder>,
+}
+
+#[wasm_bindgen]
+impl WasmWorldBuilder {
+    #[wasm_bindgen(constructor)]
+    pub fn new(seed: u32, size: u32) -> Result<WasmWorldBuilder, JsValue> {
+        let size = size as usize;
+        if !matches!(size, 256 | 384 | 512 | 640 | 768) {
+            return Err(JsValue::from_str("size must be 256, 384, 512, 640 or 768"));
+        }
+        Ok(WasmWorldBuilder {
+            inner: Some(world::GenBuilder::new(seed as i64, size, 1.0)),
+        })
+    }
+
+    /// Run the next stage. Returns the stage just run, progress counters and
+    /// whether the ladder is complete.
+    pub fn step(&mut self) -> Result<String, JsValue> {
+        let b = self
+            .inner
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("builder already finished"))?;
+        if b.done() {
+            return Err(JsValue::from_str("generation already complete"));
+        }
+        let name = b.step();
+        Ok(format!(
+            "{{\"stage\":\"{}\",\"i\":{},\"n\":{},\"done\":{}}}",
+            name,
+            b.stage_index(),
+            world::GenBuilder::STAGES.len(),
+            b.done()
+        ))
+    }
+
+    /// Hand the finished world over. Errors unless every stage has run.
+    pub fn finish(&mut self) -> Result<WasmWorld, JsValue> {
+        let mut b = self
+            .inner
+            .take()
+            .ok_or_else(|| JsValue::from_str("builder already finished"))?;
+        if !b.done() {
+            return Err(JsValue::from_str("generation not complete"));
+        }
+        Ok(WasmWorld { inner: b.finish() })
+    }
+}
+
+
 #[wasm_bindgen]
 impl WasmWorld {
     #[wasm_bindgen(constructor)]
