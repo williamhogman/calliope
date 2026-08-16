@@ -1,15 +1,15 @@
 // Simulation worker: hosts the WASM world off the main thread so the map
 // stays responsive while a world generates or years tick by.
 
-import init, { WasmWorld } from "./wasm/calliope.js";
+import { loadEngine } from "./wasm-load.js";
 
-const ready = init();
+const ready = loadEngine();
 let world = null;
 
 self.onmessage = async (e) => {
   const { id, op, seed, size, months } = e.data;
   try {
-    await ready;
+    const { WasmWorld } = await ready;
     if (op === "generate") {
       if (world) {
         world.free();

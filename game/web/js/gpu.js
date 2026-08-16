@@ -9,7 +9,7 @@
 //
 // If no adapter exists at all the caller keeps the CPU compositor.
 
-import init, { Orbital } from "./wasm/calliope.js";
+import { loadEngine } from "./wasm-load.js";
 
 const LAYER_ID = {
   biomes: 0, political: 1, elevation: 2, temperature: 3,
@@ -17,7 +17,7 @@ const LAYER_ID = {
 };
 
 export async function createGpu(canvas) {
-  await init();
+  const { Orbital } = await loadEngine();
   const orbital = await Orbital.create(canvas);
   return new GpuEngine(canvas, orbital);
 }
