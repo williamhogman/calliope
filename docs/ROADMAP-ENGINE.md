@@ -112,7 +112,7 @@ month (`world.rs:2193-2227`), unconditionally.
 - [x] E4.3 Cultures, market, areas, merchants gated by dirty flags like routes/ruins/features already are (`world.rs:2205-2225`) (M)
 - [x] E4.4 Event cursor: tick returns the new event count; the client pulls ranges through the existing `events_range` (`lib.rs:79-85`) — event arrays leave the tick payload (S-M)
 - [x] E4.5 One `DirtyMap` replacing the five ad-hoc `*_dirty` bools (`world.rs:109,125,128,146` …) — new payload sections get change-tracking for free (S)
-- [ ] E4.6 Binary tick payload: one transferable buffer (columnar deltas + string-table additions), replacing the JSON string that is stringified in Rust, copied through `postMessage`, and parsed again (`worker.js:23`, `net.js:60-63`) (M)
+- [x] E4.6 Binary tick payload — **rejected on measurement** (ADR-0017), see Rejected: main-thread parse is 0.080 ms median per tick, 0.15 % of tick wall time at year 100
 - [ ] E4.7 Grid dirty-tiles (32×32): mid-run field changes (territory today, erosion later) ship as tile patches, feeding partial texture updates in E9 (L)
 - [x] E4.8 Merchant/war/ruler headline extraction server-side: the UI's per-tick scan for toast-worthy events moves behind the event-table declaration (E2.3) (S)
 
@@ -180,7 +180,7 @@ boundary stops being the naive part of the system.
 - [x] E7.3 Tick coalescing: one in-flight tick, queued months merge into a single follow-up call — spamming 12× playback can no longer queue unbounded work (`net.js::tickWorld`) (S)
 - [x] E7.4 Abortable generation: `abort` bypasses the arrival-order chain and flags the stamp; the builder loop checks between stages and frees the half-built world. Verified live: "abandon this world" fades the veil mid-generation (M)
 - [x] E7.5 Stage progress events during generation drive the loading veil with real stage names — all nine observed live, RAISING THE LAND → WAKING THE FIRST PEOPLES (`GenBuilder` in `world.rs`, `WasmWorldBuilder` in `lib.rs`) (S-M)
-- [ ] E7.6 Binary tick lane: tick responses ride transferable buffers (with E4.6); JSON remains only for low-frequency ops (`explain`, `stories`) (S)
+- [x] E7.6 Binary tick lane — **rejected with E4.6** (ADR-0017), see Rejected: the lane's savings are sub-millisecond per tick
 - [x] E7.7 Protocol op-codes gain their single source of truth in `proto.js` (OP + DEADLINE), imported by both endpoints. The Rust-enum half is rejected: the op strings are a JS↔JS contract between `net.js` and `worker.js` — the wasm boundary is method calls, so Rust never sees an op string and codegen would be a build stage for nothing (S)
 - [x] E7.8 COOP/COEP headers in `scripts/serve.py`; `crossOriginIsolated === true` verified live. The production-host half is moot by ADR-0015 — nothing depends on SAB, so prod needs no header change (S)
 - [x] E7.9 Research + ADR: shared-memory field mirror rejected with measurements — fields are immutable post-generation and already cross as one zero-copy transferable; SAB would fork dev/prod behavior (ADR-0015) (L)
