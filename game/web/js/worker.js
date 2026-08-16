@@ -1,9 +1,15 @@
 // Simulation worker: hosts the WASM world off the main thread so the map
 // stays responsive while a world generates or years tick by.
+//
+// E6.7 — the first message is always `init`, carrying the compiled
+// `WebAssembly.Module` from the main thread (or nothing, if that compile
+// failed — then this worker compiles for itself). Every later op awaits
+// the engine, so early ops simply queue until init lands.
 
 import { loadEngine } from "./wasm-load.js";
 
-const ready = loadEngine();
+let resolveEngine;
+const engineReady = new Promise((r) => (resolveEngine = r));
 let world = null;
 // E4.4 — chronicle cursor: ticks carry [from, to) instead of event arrays;
 // the worker pulls the new slice through events_range and ships it beside
@@ -13,7 +19,13 @@ let evCursor = 0;
 self.onmessage = async (e) => {
   const { id, op, seed, size, months, kind, key, ent } = e.data;
   try {
-    const { WasmWorld } = await ready;
+    if (op === "init") {
+      resolveEngine(loadEngine(e.data.module ?? undefined));
+      await (await engineReady);
+      self.postMessage({ id, ok: true, json: "true" });
+      return;
+    }
+    const { WasmWorld } = await (await engineReady);
     if (op === "generate") {
       if (world) {
         world.free();
