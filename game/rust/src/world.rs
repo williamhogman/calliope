@@ -537,9 +537,56 @@ impl World {
     }
 
     /// Crowded settlements send out settlers to found colonies.
+    /// The pull of unworked riches: known seams nobody yet mines project a
+    /// price-weighted attraction for colonists. When the market runs hot a
+    /// vein can outweigh thin soil, and the mining camps follow.
+    fn resource_pull(&self) -> Array2<f64> {
+        let (h, w) = self.site_score.dim();
+        let mut pull = Array2::<f64>::zeros((h, w));
+        const R: i64 = 5;
+        for d in &self.deposits {
+            if !d.known || d.left == 0.0 {
+                continue;
+            }
+            // renewables draw no rush; it is metal, coal and stone that call
+            if !matches!(
+                d.r.as_str(),
+                "stone" | "coal" | "copper" | "iron" | "silver" | "gold" | "mithril"
+            ) {
+                continue;
+            }
+            let claimed = self.settlements.iter().any(|s| {
+                let r = settlements::territory_radius(s.pop) * 1.8;
+                let dx = (d.x - s.x) as f64;
+                let dy = (d.y - s.y) as f64;
+                dx * dx + dy * dy <= r * r
+            });
+            if claimed {
+                continue;
+            }
+            let worth = self.market.price(&d.r) * d.rich * 0.9;
+            for yy in (d.y - R).max(0)..=(d.y + R).min(h as i64 - 1) {
+                for xx in (d.x - R).max(0)..=(d.x + R).min(w as i64 - 1) {
+                    if self.height[[yy as usize, xx as usize]] < 0.0 {
+                        continue; // no camps on the water
+                    }
+                    let dist = (((yy - d.y).pow(2) + (xx - d.x).pow(2)) as f64).sqrt();
+                    if dist > R as f64 {
+                        continue;
+                    }
+                    let v = worth * (1.0 - dist / (R as f64 + 1.0));
+                    let c = &mut pull[[yy as usize, xx as usize]];
+                    *c = (*c + v).min(6.0);
+                }
+            }
+        }
+        pull
+    }
+
     fn try_colonize(&mut self, month_abs: i64) -> (Vec<Event>, bool) {
         let mut events = Vec::new();
         let mut founded = false;
+        let mut pull: Option<Array2<f64>> = None;
         let initial = self.settlements.len();
         for pi in 0..initial {
             if self.settlements.len() >= self.max_settlements {
@@ -555,6 +602,9 @@ impl World {
             if self.rng.gen::<f64>() > 0.02 {
                 continue;
             }
+            if pull.is_none() {
+                pull = Some(self.resource_pull());
+            }
             let site = {
                 let parent = self.settlements[pi].clone();
                 let range = self
@@ -564,12 +614,15 @@ impl World {
                     .unwrap_or(1.0);
                 settlements::colony_site(
                     &self.site_score,
+                    pull.as_ref().unwrap(),
                     &self.settlements,
                     &parent,
                     3600.0 * range * range,
                 )
             };
             let Some((y, x)) = site else { continue };
+            // an ore-led venture: the seams called louder than the soil
+            let ore_led = pull.as_ref().unwrap()[[y, x]] > self.site_score[[y, x]].max(0.0);
             let migrants = ((ppop as f64 * self.rng.gen_range(0.08..0.14)) as i64).max(40);
             self.settlements[pi].pop = (ppop - migrants).max(60);
             let cid = self.settlements[pi].culture;
@@ -619,18 +672,26 @@ impl World {
             founded = true;
             let coastal = self.settlements[idx].coastal;
             let river = self.settlements[idx].river;
-            let place = if coastal {
-                " by the sea."
-            } else if river {
-                " on fresh water."
+            let text = if ore_led {
+                format!(
+                    "Settlers out of {} drive the mining camp of {} into hungry country — the seams there outweigh the thin soil.",
+                    pname, name
+                )
             } else {
-                " in the wilds."
+                let place = if coastal {
+                    " by the sea."
+                } else if river {
+                    " on fresh water."
+                } else {
+                    " in the wilds."
+                };
+                format!("Settlers out of {} raise {}{}", pname, name, place)
             };
             events.push(Event {
                 m: month_abs,
                 s: name.clone(),
                 k: "found".to_string(),
-                text: format!("Settlers out of {} raise {}{}", pname, name, place),
+                text,
             });
         }
         (events, founded)

@@ -11,7 +11,7 @@ import {
   month, setMonth, playing, setPlaying, speed, setSpeed,
   worldSize, setWorldSize, setBusy, layer, setLayer, overlays, setOverlays,
   selected, setSelected, setHoverInfo, popHistory, setPopHistory, setSeenEvents,
-  setMarket,
+  setMarket, setDepositsTick,
 } from "./ui/state.js";
 
 const $ = (id) => document.getElementById(id);
@@ -184,6 +184,13 @@ async function advance(months) {
     }
     if (res.wars) setWars(res.wars);
     if (res.market) setMarket(res.market);
+    if (res.deposits) {
+      // discoveries or dead mines: refresh the map's mineral ledger
+      w.header.deposits = res.deposits;
+      if (res.deposits_hidden !== undefined) w.header.deposits_hidden = res.deposits_hidden;
+      buildDepositIndex(w);
+      setDepositsTick((t) => t + 1);
+    }
     if (res.events?.length) {
       setEvents([...events(), ...res.events].slice(-200));
     }

@@ -9,7 +9,7 @@ import {
   world, settlements, cultures, wars, events, month, playing, speed,
   worldSize, setWorldSize, busy, layer, overlays, selected, hoverInfo,
   popHistory, open, toggleOpen, seenEvents, setSeenEvents,
-  isMobile, sheet, setSheet, market,
+  isMobile, sheet, setSheet, market, depositsTick,
 } from "./state.js";
 import {
   TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, HYDRO_GRAD, FERT_GRAD,
@@ -47,6 +47,7 @@ const EVENT_COLORS = {
   myth: "#c9b458", found: "#d4a94a", growth: "#8fb6dd", disaster: "#e07a6a",
   war: "#e05555", ruler: "#c9a0e8", omen: "#a8d4b8", festival: "#f0d090",
   wonder: "#ffd766", trade: "#9fd0c8", tech: "#7fc4e8", society: "#e0b0d0",
+  discovery: "#f2c14e", depletion: "#b09a86",
 };
 const eventColor = (e) => EVENT_COLORS[e.k] || "#8a8fa0";
 
@@ -151,7 +152,7 @@ function WorldSection(a) {
       </div>
       <div class="row">
         <div class="seg">
-          ${[256, 384, 512].map(
+          ${[384, 512, 640, 768].map(
             (sz) => html`<button class=${() => (worldSize() === sz ? "active" : "")}
               onClick=${() => setWorldSize(sz)}>${sz}</button>`
           )}
@@ -331,24 +332,37 @@ function LegendSection() {
 }
 
 function ResourcesSection() {
-  const list = () => {
+  const rows = () => {
+    depositsTick();
     const w = world();
-    if (!w) return [];
+    if (!w) return { list: [], spent: 0 };
     const res = w.header.resources || {};
     const counts = new Map();
+    let spent = 0;
     for (const d of w.header.deposits || []) {
+      if (d.left === 0) { spent += 1; continue; }
       counts.set(d.r, (counts.get(d.r) || 0) + 1);
     }
-    return Object.keys(res)
+    const list = Object.keys(res)
       .filter((n) => !res[n].virtual)
       .sort((x, y) => (res[x].category + x).localeCompare(res[y].category + y))
       .map((n) => ({ name: n, meta: res[n], n: counts.get(n) || 0 }));
+    return { list, spent };
+  };
+  const summary = () => {
+    const { list, spent } = rows();
+    const total = list.reduce((a, r) => a + r.n, 0);
+    const hidden = world()?.header.deposits_hidden || 0;
+    let s = `${total} deposits`;
+    if (hidden) s += ` \u00b7 ${hidden} unfound`;
+    if (spent) s += ` \u00b7 ${spent} spent`;
+    return s;
   };
   return Section({
     id: "resources", title: "Resources",
-    summary: () => `${list().reduce((a, r) => a + r.n, 0)} deposits`,
+    summary,
     children: html`<div class="legend legend-res">
-      ${() => list().map(
+      ${() => rows().list.map(
         (r) => html`<div class="legend-item"
           title=${`${r.meta.category} \u00b7 ${r.meta.abundance}` + (r.meta.requires ? ` \u00b7 requires ${r.meta.requires}` : "")}>
           <span class="swatch" style=${`background:${r.meta.color}`}></span>
