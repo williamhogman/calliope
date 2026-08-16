@@ -97,6 +97,8 @@ function setLoadingProgress(p) {
 // Everything the UI must do when a whole world arrives — used by generate
 // and by crash recovery (E7.10), which restores in place without refitting.
 function applyWorld(w, { fit = true } = {}) {
+  popHistById = new Map();
+  priceHist = new Map();
   batch(() => {
     setWorld(w);
     setMonth(w.header.month || 0);
@@ -120,8 +122,6 @@ function applyWorld(w, { fit = true } = {}) {
   ctx.renderer.gpu?.setWorld(w);
   if (fit) ctx.view.fit(w.header.width || w.header.size, w.header.size);
   buildDepositIndex(w);
-  popHistById = new Map();
-  priceHist = new Map();
   legendsAt = -1000;
   refreshLegends(true); // the dawn already has a cast worth browsing
   history.replaceState(null, "", `?seed=${w.header.seed}&size=${w.header.size}`);
