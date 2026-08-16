@@ -45,6 +45,8 @@ pub struct Settlement {
     pub goods: Vec<String>,
     pub exports: Option<String>,
     pub wealth: f64,
+    /// true when this town's trade takes to the sea at its own quays
+    pub port: bool,
 }
 
 pub fn capacity(s: &Settlement) -> f64 {
