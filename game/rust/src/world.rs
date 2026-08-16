@@ -119,7 +119,7 @@ impl World {
         timings.push(("naming", now_ms() - t5));
 
         let t6 = now_ms();
-        let deposits =
+        let mut deposits =
             resources::place_resources(&biome_map, &height, &hydro.rivers, &hydro.lakes, seed);
         timings.push(("resources", now_ms() - t6));
 
@@ -139,6 +139,26 @@ impl World {
             &mut taken,
         );
         let mut setts = founded.settlements;
+        // The first peoples know the ground they chose: seams close to a
+        // founding site begin the story already discovered.
+        {
+            use rand::Rng;
+            let mut rng6 = crate::util::rng(seed + 6600);
+            for d in deposits.iter_mut() {
+                if d.known {
+                    continue;
+                }
+                for s in &setts {
+                    let r = settlements::territory_radius(s.pop) * 1.8;
+                    let dx = (d.x - s.x) as f64;
+                    let dy = (d.y - s.y) as f64;
+                    if dx * dx + dy * dy <= r * r && rng6.gen::<f64>() < 0.6 {
+                        d.known = true;
+                        break;
+                    }
+                }
+            }
+        }
         let cultures = culture::assign_cultures(&biome_map, &mut setts, &mut taken, seed);
         trade::assign_goods(&mut setts, &deposits, &fertility);
 
@@ -517,9 +537,56 @@ impl World {
     }
 
     /// Crowded settlements send out settlers to found colonies.
+    /// The pull of unworked riches: known seams nobody yet mines project a
+    /// price-weighted attraction for colonists. When the market runs hot a
+    /// vein can outweigh thin soil, and the mining camps follow.
+    fn resource_pull(&self) -> Array2<f64> {
+        let (h, w) = self.site_score.dim();
+        let mut pull = Array2::<f64>::zeros((h, w));
+        const R: i64 = 5;
+        for d in &self.deposits {
+            if !d.known || d.left == 0.0 {
+                continue;
+            }
+            // renewables draw no rush; it is metal, coal and stone that call
+            if !matches!(
+                d.r.as_str(),
+                "stone" | "coal" | "copper" | "iron" | "silver" | "gold" | "mithril"
+            ) {
+                continue;
+            }
+            let claimed = self.settlements.iter().any(|s| {
+                let r = settlements::territory_radius(s.pop) * 1.8;
+                let dx = (d.x - s.x) as f64;
+                let dy = (d.y - s.y) as f64;
+                dx * dx + dy * dy <= r * r
+            });
+            if claimed {
+                continue;
+            }
+            let worth = self.market.price(&d.r) * d.rich * 1.6;
+            for yy in (d.y - R).max(0)..=(d.y + R).min(h as i64 - 1) {
+                for xx in (d.x - R).max(0)..=(d.x + R).min(w as i64 - 1) {
+                    if self.height[[yy as usize, xx as usize]] < 0.0 {
+                        continue; // no camps on the water
+                    }
+                    let dist = (((yy - d.y).pow(2) + (xx - d.x).pow(2)) as f64).sqrt();
+                    if dist > R as f64 {
+                        continue;
+                    }
+                    let v = worth * (1.0 - dist / (R as f64 + 1.0));
+                    let c = &mut pull[[yy as usize, xx as usize]];
+                    *c = (*c + v).min(7.0);
+                }
+            }
+        }
+        pull
+    }
+
     fn try_colonize(&mut self, month_abs: i64) -> (Vec<Event>, bool) {
         let mut events = Vec::new();
         let mut founded = false;
+        let mut pull: Option<Array2<f64>> = None;
         let initial = self.settlements.len();
         for pi in 0..initial {
             if self.settlements.len() >= self.max_settlements {
@@ -535,6 +602,9 @@ impl World {
             if self.rng.gen::<f64>() > 0.02 {
                 continue;
             }
+            if pull.is_none() {
+                pull = Some(self.resource_pull());
+            }
             let site = {
                 let parent = self.settlements[pi].clone();
                 let range = self
@@ -544,12 +614,15 @@ impl World {
                     .unwrap_or(1.0);
                 settlements::colony_site(
                     &self.site_score,
+                    pull.as_ref().unwrap(),
                     &self.settlements,
                     &parent,
                     3600.0 * range * range,
                 )
             };
             let Some((y, x)) = site else { continue };
+            // an ore-led venture: the seams called louder than the soil
+            let ore_led = pull.as_ref().unwrap()[[y, x]] > self.site_score[[y, x]].max(0.0);
             let migrants = ((ppop as f64 * self.rng.gen_range(0.08..0.14)) as i64).max(40);
             self.settlements[pi].pop = (ppop - migrants).max(60);
             let cid = self.settlements[pi].culture;
@@ -599,27 +672,36 @@ impl World {
             founded = true;
             let coastal = self.settlements[idx].coastal;
             let river = self.settlements[idx].river;
-            let place = if coastal {
-                " by the sea."
-            } else if river {
-                " on fresh water."
+            let text = if ore_led {
+                format!(
+                    "Settlers out of {} drive the mining camp of {} into hungry country — the seams there outweigh the thin soil.",
+                    pname, name
+                )
             } else {
-                " in the wilds."
+                let place = if coastal {
+                    " by the sea."
+                } else if river {
+                    " on fresh water."
+                } else {
+                    " in the wilds."
+                };
+                format!("Settlers out of {} raise {}{}", pname, name, place)
             };
             events.push(Event {
                 m: month_abs,
                 s: name.clone(),
                 k: "found".to_string(),
-                text: format!("Settlers out of {} raise {}{}", pname, name, place),
+                text,
             });
         }
         (events, founded)
     }
 
-    pub fn tick(&mut self, months: i64) -> (Vec<Event>, bool) {
+    pub fn tick(&mut self, months: i64) -> (Vec<Event>, bool, bool) {
         let months = months.clamp(1, 240).max(1);
         let mut new_events: Vec<Event> = Vec::new();
         let mut founded = false;
+        let mut deposits_changed = false;
         for _ in 0..months {
             self.month += 1;
             let evs = self.tick_month(self.month);
@@ -629,6 +711,11 @@ impl World {
                 founded = true;
                 new_events.extend(col_evs);
             }
+            let (pr_evs, dep_changed) = self.prospect_and_deplete(self.month);
+            if dep_changed {
+                deposits_changed = true;
+            }
+            new_events.extend(pr_evs);
             let soc_evs = society::monthly(
                 &mut self.societies,
                 &self.settlements,
@@ -663,7 +750,171 @@ impl World {
         self.events.extend(new_events.iter().cloned());
         let keep = self.events.len().saturating_sub(200);
         self.events.drain(..keep);
-        (new_events, founded)
+        (new_events, founded, deposits_changed)
+    }
+
+    /// Prospectors comb the hinterlands for hidden seams; worked mines thin
+    /// toward exhaustion. Returns events and whether the deposit list changed.
+    fn prospect_and_deplete(&mut self, month_abs: i64) -> (Vec<Event>, bool) {
+        use rand::Rng;
+        let mut events = Vec::new();
+        let mut changed = false;
+        let mods: Vec<society::Mods> = self.societies.iter().map(society::mods_for).collect();
+
+        // --- discovery: hidden seams within a town's ranging distance may
+        // come to light; rarer metals hide longer, better arts search wider.
+        // Beyond the home range there is a second, thinner channel — the far
+        // venture: prospecting parties that push into wild country, so even
+        // mountain gold no town can reach is found in the fullness of time.
+        let mut found: Vec<(usize, usize)> = Vec::new();
+        for (di, d) in self.deposits.iter().enumerate() {
+            if d.known {
+                continue;
+            }
+            // closest town, measured in multiples of its own ranging distance
+            let mut best: Option<(f64, usize)> = None;
+            for (si, s) in self.settlements.iter().enumerate() {
+                let reach = settlements::territory_radius(s.pop)
+                    * 2.4
+                    * mods.get(s.culture).map(|m| m.prospecting).unwrap_or(1.0);
+                let dx = (d.x - s.x) as f64;
+                let dy = (d.y - s.y) as f64;
+                let ratio = (dx * dx + dy * dy).sqrt() / reach.max(1e-9);
+                if best.map_or(true, |(b, _)| ratio < b) {
+                    best = Some((ratio, si));
+                }
+            }
+            let Some((ratio, si)) = best else { continue };
+            let rarity = match resources::abundance(&d.r) {
+                "uncommon" => 0.6,
+                "rare" => 0.35,
+                "legendary" => 0.12,
+                _ => 1.0,
+            };
+            let p = if ratio <= 1.0 {
+                0.012 * rarity * (1.0 - 0.65 * ratio) // combing the home range
+            } else if ratio <= 3.5 {
+                0.0018 * rarity // a far venture into unclaimed country
+            } else {
+                0.0
+            };
+            if p > 0.0 && self.rng.gen::<f64>() < p {
+                found.push((di, si));
+            }
+        }
+        for (di, si) in found {
+            self.deposits[di].known = true;
+            changed = true;
+            let kind = self.deposits[di].r.clone();
+            let rich = self.deposits[di].rich;
+            let precious = matches!(kind.as_str(), "silver" | "gold" | "mithril");
+            // the market feels the strike before the first cart arrives
+            self.market.shock(&kind, if precious { 0.88 } else { 0.84 });
+            let sname = self.settlements[si].name.clone();
+            let strike = 12.0 + 45.0 * rich * economy::base_value(&kind);
+            self.settlements[si].wealth = round2(self.settlements[si].wealth + strike);
+            if precious {
+                // a rush: prospectors, chancers and mule-trains pour in
+                let influx = ((self.settlements[si].pop as f64 * 0.05) as i64).max(10);
+                self.settlements[si].pop += influx;
+            }
+            let text = match kind.as_str() {
+                "gold" => format!(
+                    "Gold! Panners out of {} lift bright dust from the gravels — word runs faster than horses.",
+                    sname
+                ),
+                "silver" => format!(
+                    "A silver seam glitters by torchlight in the diggings above {}.",
+                    sname
+                ),
+                "mithril" => format!(
+                    "Beneath the mountain-roots, miners of {} strike mithril — truesilver, the dream of every smith.",
+                    sname
+                ),
+                _ => format!(
+                    "Prospectors out of {} strike {} in the hills; the seam runs deep and true.",
+                    sname, kind
+                ),
+            };
+            events.push(Event {
+                m: month_abs,
+                s: sname,
+                k: "discovery".to_string(),
+                text,
+            });
+            self.refresh_goods_near(di);
+        }
+
+        // --- depletion: a worked seam only lasts so many carts
+        let mut spent: Vec<usize> = Vec::new();
+        for di in 0..self.deposits.len() {
+            let d = &self.deposits[di];
+            if !d.known || d.left <= 0.0 {
+                continue;
+            }
+            let mut crews = 0.0;
+            for s in &self.settlements {
+                if !s.goods.iter().any(|g| *g == d.r) {
+                    continue;
+                }
+                let r = settlements::territory_radius(s.pop) * 1.8;
+                let dx = (d.x - s.x) as f64;
+                let dy = (d.y - s.y) as f64;
+                if dx * dx + dy * dy <= r * r {
+                    crews += 1.0 + (s.pop as f64 / 9000.0).min(1.0);
+                }
+            }
+            if crews == 0.0 {
+                continue;
+            }
+            let d = &mut self.deposits[di];
+            d.left = round2((d.left - crews).max(0.0));
+            if d.left == 0.0 {
+                spent.push(di);
+            }
+        }
+        for di in spent {
+            changed = true;
+            let kind = self.deposits[di].r.clone();
+            let (dx0, dy0) = (self.deposits[di].x, self.deposits[di].y);
+            let near = self
+                .settlements
+                .iter()
+                .min_by_key(|s| (s.x - dx0).pow(2) + (s.y - dy0).pow(2))
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| "the wilds".to_string());
+            self.market.shock(&kind, 1.22);
+            events.push(Event {
+                m: month_abs,
+                s: near.clone(),
+                k: "depletion".to_string(),
+                text: format!(
+                    "The last good ore comes up from the {} pits near {}; the galleries fall silent.",
+                    kind, near
+                ),
+            });
+            self.refresh_goods_near(di);
+        }
+        (events, changed)
+    }
+
+    /// Re-list goods for every settlement whose hinterland covers deposit `di`.
+    fn refresh_goods_near(&mut self, di: usize) {
+        let (dx0, dy0) = (self.deposits[di].x, self.deposits[di].y);
+        for i in 0..self.settlements.len() {
+            let s = &self.settlements[i];
+            let r = settlements::territory_radius(s.pop) * 1.8;
+            let ddx = (dx0 - s.x) as f64;
+            let ddy = (dy0 - s.y) as f64;
+            if ddx * ddx + ddy * ddy <= r * r {
+                trade::goods_for(&mut self.settlements[i], &self.deposits, &self.fertility);
+            }
+        }
+    }
+
+    /// Deposits the world has actually found — all the client ever sees.
+    fn known_deposits(&self) -> Vec<&Deposit> {
+        self.deposits.iter().filter(|d| d.known).collect()
     }
 
     /// Cultures with ruler, era, polity, arts and treasury attached.
@@ -700,7 +951,7 @@ impl World {
     }
 
     pub fn tick_json(&mut self, months: i64) -> String {
-        let (events, founded) = self.tick(months);
+        let (events, founded, deposits_changed) = self.tick(months);
         let mut out = json!({
             "month": self.month,
             "settlements": self.settlements,
@@ -711,6 +962,11 @@ impl World {
         });
         if founded {
             out["routes"] = json!(self.routes);
+        }
+        if deposits_changed {
+            out["deposits"] = json!(self.known_deposits());
+            out["deposits_hidden"] =
+                json!(self.deposits.iter().filter(|d| !d.known).count());
         }
         serde_json::to_string(&out).unwrap()
     }
@@ -731,10 +987,12 @@ impl World {
             "months": constants::MONTHS,
             "sea_level": 0.0,
             "metres_per_unit": constants::METRES_PER_UNIT,
+            "km_per_cell": constants::KM_PER_CELL,
             "world_name": self.world_name,
             "biomes": constants::biome_meta(),
             "resources": resources::resource_meta(),
-            "deposits": self.deposits,
+            "deposits": self.known_deposits(),
+            "deposits_hidden": self.deposits.iter().filter(|d| !d.known).count(),
             "settlements": self.settlements,
             "cultures": self.cultures_json(),
             "features": self.features,

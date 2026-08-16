@@ -75,6 +75,15 @@ impl Market {
                 .collect(),
         )
     }
+
+    /// A sudden strike or a dead mine jolts the price at once, before the
+    /// slow-moving supply average has time to catch up.
+    pub fn shock(&mut self, good: &str, factor: f64) {
+        let p = self.price(good);
+        let b = base_value(good);
+        self.prices
+            .insert(good.to_string(), round2((p * factor).clamp(0.3 * b, 5.0 * b)));
+    }
 }
 
 /// Recompute world prices from who makes what and who wants what.

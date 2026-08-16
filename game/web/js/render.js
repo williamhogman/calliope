@@ -15,6 +15,7 @@ const LABEL_STYLE = {
   range:     { color: "#dcd8d0", pri: 3 },
   desert:    { color: "#e0c98f", pri: 4 },
   forest:    { color: "#a3c893", pri: 5 },
+  archipelago: { color: "#d8d2c2", pri: 5.5 },
   island:    { color: "#d5cfc0", pri: 6 },
   river:     { color: "#93bfe6", pri: 7 },
   lake:      { color: "#93bfe6", pri: 8 },
@@ -510,6 +511,7 @@ export class Renderer {
     if (state.overlays.resources) this._drawDeposits(ctx, view);
     if (state.overlays.labels) this._drawLabels(ctx, view);
     if (state.overlays.settlements) this._drawSettlements(ctx, view, state);
+    this._drawScaleBar(ctx, view);
     if (hover && view.scale > 4) this._drawHover(ctx, view, hover);
   }
 
@@ -634,19 +636,28 @@ export class Renderer {
       const sx = view.tx + (d.x + 0.5) * s;
       const sy = view.ty + (d.y + 0.5) * s;
       if (sx < -10 || sy < -10 || sx > this.canvas.clientWidth + 10 || sy > this.canvas.clientHeight + 10) continue;
+      const dead = d.left === 0; // a spent mine: hollow, grey, remembered
       ctx.beginPath();
       ctx.moveTo(sx, sy - rad);
       ctx.lineTo(sx + rad, sy);
       ctx.lineTo(sx, sy + rad);
       ctx.lineTo(sx - rad, sy);
       ctx.closePath();
-      ctx.fillStyle = meta[d.r]?.color || "#ccc";
-      ctx.globalAlpha = 0.95;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgba(0,0,0,0.55)";
-      ctx.stroke();
+      if (dead) {
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1.1;
+        ctx.strokeStyle = meta[d.r]?.color || "#999";
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = meta[d.r]?.color || "#ccc";
+        ctx.globalAlpha = 0.95;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(0,0,0,0.55)";
+        ctx.stroke();
+      }
     }
   }
 
@@ -654,7 +665,8 @@ export class Renderer {
     if (kind === "ocean" || kind === "sea" || kind === "continent") {
       return Math.max(0, Math.min(0.95, 1.5 - s * 0.17));
     }
-    if (kind === "range" || kind === "desert" || kind === "forest" || kind === "highland") {
+    if (kind === "range" || kind === "desert" || kind === "forest" ||
+        kind === "highland" || kind === "archipelago") {
       return Math.max(0, Math.min(0.88, (s - 0.95) * 0.9)) *
              Math.max(0, Math.min(1, 2.6 - s * 0.11));
     }
@@ -698,7 +710,8 @@ export class Renderer {
         font = `600 ${size.toFixed(1)}px Inter, sans-serif`;
         text = f.name.toUpperCase();
         spacing = 5;
-      } else if (f.t === "range" || f.t === "desert" || f.t === "forest" || f.t === "highland") {
+      } else if (f.t === "range" || f.t === "desert" || f.t === "forest" ||
+                 f.t === "highland" || f.t === "archipelago") {
         size = 11;
         font = `600 11px Inter, sans-serif`;
         text = f.name.toUpperCase();
@@ -799,5 +812,44 @@ export class Renderer {
     ctx.strokeStyle = "rgba(255,255,255,0.7)";
     ctx.lineWidth = 1.2;
     ctx.strokeRect(view.tx + hover.x * s, view.ty + hover.y * s, s, s);
+  }
+
+  // A quiet GIS-style scale bar, bottom centre — the one strip of map the
+  // side panels never cover, on any screen.
+  _drawScaleBar(ctx, view) {
+    if (!this.world) return;
+    const kmPer = this.world.header.km_per_cell || 4;
+    const nice = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+    let km = 0;
+    for (const n of nice) {
+      if ((n / kmPer) * view.scale <= 150) km = n;
+    }
+    if (!km) return;
+    const px = (km / kmPer) * view.scale;
+    const mobile = window.matchMedia("(max-width: 760px)").matches;
+    const x = (this.canvas.clientWidth - px) / 2;
+    const y = this.canvas.clientHeight - (mobile ? 92 : 16);
+    ctx.save();
+    ctx.strokeStyle = "rgba(222, 231, 244, 0.85)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x, y - 5);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x + px, y);
+    ctx.lineTo(x + px, y - 5);
+    ctx.moveTo(x + px / 2, y);
+    ctx.lineTo(x + px / 2, y - 3.5);
+    ctx.stroke();
+    const label = `${km.toLocaleString("en-US")} km`;
+    ctx.font = "500 10px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(5, 9, 16, 0.75)";
+    ctx.strokeText(label, x + px / 2, y - 9);
+    ctx.fillStyle = "rgba(222, 231, 244, 0.9)";
+    ctx.fillText(label, x + px / 2, y - 9);
+    ctx.restore();
   }
 }

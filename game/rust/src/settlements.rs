@@ -252,19 +252,24 @@ pub fn found_settlements(
 
 /// Best colony site in the ring around a parent, clear of others. The outer
 /// edge of the ring widens as a people masters sail and star-charts.
+///
+/// `pull` is the market's voice: unworked seams project a price-weighted
+/// attraction, so a rich vein can carry a hungry site past the food gate —
+/// the colony goes for the ore, not the soil.
 pub fn colony_site(
     site_score: &Array2<f64>,
+    pull: &Array2<f64>,
     settlements: &[Settlement],
     parent: &Settlement,
     max_d2: f64,
 ) -> Option<(usize, usize)> {
-    let size = site_score.dim().0;
-    let min_d2 = (size as f64 / 22.0).powi(2);
+    let (rows, cols) = site_score.dim();
+    let min_d2 = (rows as f64 / 22.0).powi(2);
     let mut best = f64::NEG_INFINITY;
     let mut found: Option<(usize, usize)> = None;
-    for y in 0..size {
-        for x in 0..size {
-            let s = site_score[[y, x]];
+    for y in 0..rows {
+        for x in 0..cols {
+            let s = site_score[[y, x]] + pull[[y, x]];
             if s <= 2.2 || s <= best {
                 continue;
             }

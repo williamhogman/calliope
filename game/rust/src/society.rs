@@ -153,6 +153,7 @@ pub struct Mods {
     pub health: f64,       // multiplier on plague / winter losses
     pub colony_range: f64, // multiplier on how far settlers dare to go
     pub production: f64,   // multiplier on goods output value
+    pub prospecting: f64,  // multiplier on the odds of finding hidden seams
 }
 
 impl Default for Mods {
@@ -167,6 +168,7 @@ impl Default for Mods {
             health: 1.0,
             colony_range: 1.0,
             production: 1.0,
+            prospecting: 1.0,
         }
     }
 }
@@ -178,22 +180,22 @@ pub fn mods_for(soc: &Society) -> Mods {
             "pottery" => { m.capacity *= 1.10; m.production *= 1.05; }
             "loom" => { m.production *= 1.10; }
             "herb_lore" => { m.health *= 0.80; }
-            "stonecraft" => { m.production *= 1.05; }
+            "stonecraft" => { m.production *= 1.05; m.prospecting *= 1.25; }
             "bow" => { m.war *= 1.15; }
-            "bronze" => { m.war *= 1.30; m.production *= 1.10; }
+            "bronze" => { m.war *= 1.30; m.production *= 1.10; m.prospecting *= 1.15; }
             "plough" => { m.growth *= 1.12; m.capacity *= 1.15; }
             "wheel" => { m.trade *= 1.25; }
             "sail" => { m.trade *= 1.20; m.colony_range *= 1.35; }
             "script" => { m.research *= 1.35; m.trade *= 1.10; }
             "masonry" => { m.defense *= 0.65; }
-            "iron" => { m.war *= 1.40; m.production *= 1.12; }
+            "iron" => { m.war *= 1.40; m.production *= 1.12; m.prospecting *= 1.30; }
             "coin" => { m.trade *= 1.50; m.production *= 1.08; }
             "law" => { m.defense *= 0.90; m.research *= 1.10; m.growth *= 1.05; }
             "aqueduct" => { m.capacity *= 1.30; m.health *= 0.85; }
             "star_charts" => { m.colony_range *= 1.40; m.research *= 1.15; }
             "medicine" => { m.health *= 0.55; }
             "philosophy" => { m.research *= 1.40; }
-            "engineering" => { m.trade *= 1.20; m.capacity *= 1.15; }
+            "engineering" => { m.trade *= 1.20; m.capacity *= 1.15; m.prospecting *= 1.45; }
             "steel" => { m.war *= 1.50; }
             "mithril_craft" => { m.production *= 1.20; m.trade *= 1.15; }
             _ => {}
@@ -211,6 +213,9 @@ fn reachable_kinds(cid: usize, settlements: &[Settlement], deposits: &[Deposit])
         let r = territory_radius(s.pop) * 2.2;
         let r2 = r * r;
         for d in deposits {
+            if !d.known || d.left == 0.0 {
+                continue; // no bronze from a seam nobody has found
+            }
             let dx = (d.x - s.x) as f64;
             let dy = (d.y - s.y) as f64;
             if dx * dx + dy * dy <= r2 && !kinds.contains(&d.r) {

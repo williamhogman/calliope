@@ -15,9 +15,11 @@ export const [events, setEvents] = createSignal([]);
 export const [month, setMonth] = createSignal(0);
 export const [playing, setPlaying] = createSignal(false);
 export const [speed, setSpeed] = createSignal(1);
-export const [worldSize, setWorldSize] = createSignal(512);
+export const [worldSize, setWorldSize] = createSignal(640);
 export const [busy, setBusy] = createSignal(false);
 export const [popHistory, setPopHistory] = createSignal([]);
+// bumped whenever the deposit list changes mid-run (discoveries, dead mines)
+export const [depositsTick, setDepositsTick] = createSignal(0);
 
 // ---------- view state ----------
 
