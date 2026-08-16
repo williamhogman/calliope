@@ -45,6 +45,9 @@ pub const BIOME_COLORS: [[u8; 3]; 11] = [
 /// Height unit: 1.0 == 4000 m (from geo.hy)
 pub const METRES_PER_UNIT: f64 = 4000.0;
 
+/// Horizontal scale: one grid cell spans this many kilometres.
+pub const KM_PER_CELL: f64 = 4.0;
+
 /// Attic calendar, index 0 ~ January
 pub const MONTHS: [&str; 12] = [
     "Gamelion",

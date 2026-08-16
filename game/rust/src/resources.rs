@@ -173,6 +173,37 @@ pub struct Deposit {
     pub x: i64,
     pub y: i64,
     pub rich: f64,
+    /// surface goods start known; buried seams wait for prospectors
+    pub known: bool,
+    /// months of working left before exhaustion; -1 = renews forever
+    pub left: f64,
+}
+
+/// Chance a deposit starts the story already found. Everything that walks,
+/// grows or swims is plain to see; buried seams mostly are not.
+fn initial_known_p(name: &str) -> f64 {
+    match name {
+        "stone" => 0.85,
+        "coal" | "copper" => 0.50,
+        "iron" => 0.45,
+        "silver" => 0.18,
+        "gold" => 0.10,
+        "mithril" => 0.0,
+        _ => 1.0,
+    }
+}
+
+/// Reserve in months-of-working; -1 for goods the land renews.
+fn reserve_months(name: &str, rich: f64, roll: f64) -> f64 {
+    let (base, spread) = match name {
+        "coal" => (480.0, 960.0),
+        "copper" | "iron" => (520.0, 980.0),
+        "silver" => (320.0, 640.0),
+        "gold" => (260.0, 520.0),
+        "mithril" => (1400.0, 1200.0),
+        _ => return -1.0,
+    };
+    ((base + spread * rich) * (0.85 + 0.30 * roll)).round()
 }
 
 /// Coastal water cells (sea adjacent to land).
@@ -319,11 +350,14 @@ pub fn place_resources(
             for x in 0..size {
                 if mask[[y, x]] && field[[y, x]] >= thresh && fj[[y, x]] == maxima[[y, x]] {
                     let rich = (field[[y, x]] - lo) / (hi - lo).max(1e-9);
+                    let richv = crate::util::round2(0.35 + 0.65 * rich);
                     deposits.push(Deposit {
                         r: name.to_string(),
                         x: x as i64,
                         y: y as i64,
-                        rich: crate::util::round2(0.35 + 0.65 * rich),
+                        rich: richv,
+                        known: rng.gen::<f64>() < initial_known_p(name),
+                        left: reserve_months(name, richv, rng.gen::<f64>()),
                     });
                 }
             }

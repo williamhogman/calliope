@@ -120,6 +120,7 @@ fn templates(kind: &str) -> &'static [&'static str] {
         "sea" => &["Sea of {w}", "The {w} Sea", "Gulf of {w}", "The {w} Expanse"],
         "continent" => &["{w}"],
         "island" => &["Isle of {w}", "{w} Isle"],
+        "archipelago" => &["The {w} Isles", "The {w} Archipelago", "The Scatter of {w}"],
         "range" => &[
             "The {w} Mountains",
             "The {w} Range",
@@ -219,18 +220,84 @@ pub fn name_features(
     // continents & islands
     let land = sea.mapv(|s| !s);
     let lab = ndimage::label(&land, true);
-    let comps = ndimage::top_components(&lab, 60.0 * sc, 12);
+    let comps = ndimage::top_components(&lab, 18.0 * sc, 26);
     let continents: Vec<(usize, f64)> = comps
         .iter()
         .filter(|c| c.1 >= 9000.0 * sc)
         .take(3)
         .cloned()
         .collect();
-    let islands: Vec<(usize, f64)> = comps
+    let isles: Vec<(usize, f64)> = comps
         .iter()
         .filter(|c| c.1 < 9000.0 * sc)
-        .take(8)
         .cloned()
+        .collect();
+
+    // Archipelagos: constellations of neighbouring isles share one sweeping
+    // name, and their members go unlabelled so the chart stays clean.
+    fn uf_root(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    }
+    let anchors: Vec<(f64, f64)> = isles
+        .iter()
+        .map(|&(idx, _)| {
+            let (y, x) = ndimage::interior_anchor(&lab, idx);
+            (y as f64, x as f64)
+        })
+        .collect();
+    let link = size as f64 * 0.085;
+    let mut parent: Vec<usize> = (0..isles.len()).collect();
+    for i in 0..isles.len() {
+        for j in (i + 1)..isles.len() {
+            let dy = anchors[i].0 - anchors[j].0;
+            let dx = anchors[i].1 - anchors[j].1;
+            if dy * dy + dx * dx < link * link {
+                let (ri, rj) = (uf_root(&mut parent, i), uf_root(&mut parent, j));
+                if ri != rj {
+                    parent[ri] = rj;
+                }
+            }
+        }
+    }
+    let mut groups: std::collections::BTreeMap<usize, Vec<usize>> = Default::default();
+    for i in 0..isles.len() {
+        let r = uf_root(&mut parent, i);
+        groups.entry(r).or_default().push(i);
+    }
+    let mut in_arch: HashSet<usize> = HashSet::new();
+    for members in groups.values() {
+        if members.len() < 3 {
+            continue;
+        }
+        let total: f64 = members.iter().map(|&i| isles[i].1).sum();
+        if total < 80.0 * sc {
+            continue;
+        }
+        let cy = members.iter().map(|&i| anchors[i].0).sum::<f64>() / members.len() as f64;
+        let cx = members.iter().map(|&i| anchors[i].1).sum::<f64>() / members.len() as f64;
+        let word = make_word(&mut rng, "old", &mut taken);
+        let name = phrase(&mut rng, "archipelago", &word);
+        features.push(Feature {
+            t: "archipelago".into(),
+            name,
+            x: cx as i64,
+            y: cy as i64,
+            size: total as i64,
+        });
+        for &i in members {
+            in_arch.insert(i);
+        }
+    }
+    let islands: Vec<(usize, f64)> = isles
+        .iter()
+        .enumerate()
+        .filter(|(i, c)| !in_arch.contains(i) && c.1 >= 60.0 * sc)
+        .map(|(_, c)| *c)
+        .take(8)
         .collect();
     add_features(&mut features, &mut rng, &mut taken, "continent", &lab, &continents, Anchor::Interior);
     add_features(&mut features, &mut rng, &mut taken, "island", &lab, &islands, Anchor::Interior);

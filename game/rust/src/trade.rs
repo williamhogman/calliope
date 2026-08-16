@@ -62,6 +62,9 @@ pub fn goods_for(s: &mut Settlement, deposits: &[Deposit], fertility: &Array2<f6
     let mut near: Vec<&Deposit> = deposits
         .iter()
         .filter(|d| {
+            if !d.known || d.left == 0.0 {
+                return false; // unfound seams and dead pits yield nothing
+            }
             let dx = (d.x - s.x) as f64;
             let dy = (d.y - s.y) as f64;
             dx * dx + dy * dy <= r2
