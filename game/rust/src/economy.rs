@@ -86,7 +86,11 @@ impl Market {
     }
 }
 
-/// Recompute world prices from who makes what and who wants what.
+/// Recompute world prices from *relative* scarcity. Demand pressure per
+/// good is measured against the whole market's geometric mean, so a growing
+/// world doesn't inflate every price toward the clamp at once: goods scarcer
+/// than the market average rise above their base worth, plentiful staples
+/// sink below it, and the clamps only catch the true extremes.
 pub fn update_prices(market: &mut Market, settlements: &[Settlement]) {
     let mut supply: BTreeMap<String, f64> = BTreeMap::new();
     let total_pop: i64 = settlements.iter().map(|s| s.pop).sum();
@@ -98,15 +102,21 @@ pub fn update_prices(market: &mut Market, settlements: &[Settlement]) {
         }
     }
     let luxury = (total_wealth / (total_pop.max(1) as f64) / 4.0).min(0.5);
-    let p_scale = total_pop.max(1) as f64 / 1000.0;
 
     market.prev = market.prices.clone();
-    let mut next: BTreeMap<String, f64> = BTreeMap::new();
+    let mut pressure: BTreeMap<String, f64> = BTreeMap::new();
     for (g, s) in &supply {
+        pressure.insert(g.clone(), (demand_weight(g, luxury) + 0.02) / (s + 0.02));
+    }
+    if pressure.is_empty() {
+        market.prices.clear();
+        return;
+    }
+    let gm = (pressure.values().map(|p| p.ln()).sum::<f64>() / pressure.len() as f64).exp();
+    let mut next: BTreeMap<String, f64> = BTreeMap::new();
+    for (g, p) in &pressure {
         let base = base_value(g);
-        let d = demand_weight(g, luxury) * p_scale;
-        let target = (base * ((d + 0.05) / (s + 0.05)).powf(0.55))
-            .clamp(0.3 * base, 5.0 * base);
+        let target = (base * (p / gm).powf(0.55)).clamp(0.3 * base, 5.0 * base);
         let old = market.price(g);
         next.insert(g.clone(), round2(0.75 * old + 0.25 * target));
     }

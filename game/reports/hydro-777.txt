@@ -1,0 +1,20 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · HYDROLOGY                    seed 777 · 640x512
+========================================================================
+river cells: 4482 (4.3% of land) · lake cells: 1638 (1.6% of land)
+river systems (≥12 cells): 119 · longest network 169 cells ≈ 676 km
+discharge on rivers: p50 135.0 · p90 564.5 · p99 1799.0 · max 2306.3
+named: 3 deltas · 4 marshes
+  delta: The Vorthas Delta @(135,283)
+  delta: The Peluys Delta @(505,206)
+  delta: The Mouths of the Itheth @(516,276)
+river towns: 16 of 16
+
+---- checks ----------------------------------------------------------
+[PASS] river share of land                            4.3%   (sweet 0.8–5% · hard 0.3–10%)
+[PASS] lake share of land                             1.6%   (sweet 0–3% · hard 0–8%)
+[PASS] river systems                                   119   (sweet 8–400 · hard 3–2000)
+[PASS] named deltas                                      3   (≥1 — great river mouths get names)
+[PASS] discharge finite                                yes   (no NaN/inf in flow accumulation)
+[WARN] river-town share                             100.0%   (sweet 20–95% — fresh water pulls towns)
+CHECKS: 5 pass · 1 warn · 0 fail

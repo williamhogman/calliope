@@ -1,0 +1,30 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · TERRAIN                      seed 12345 · 640x512
+========================================================================
+world: "Sermar" · generated in 874 ms
+land: 112023 cells of 327680 (34.2%) · 1792368 km²
+hypsometry (land h): p5 0.020 · p25 0.113 · p50 0.271 · p75 0.420 · p95 0.562 · max 0.684
+bathymetry (sea h): p5 -0.593 · p50 -0.402 · p95 -0.039
+relief of land: hills(h>.35) 36.5% · mountains(h>.5) 13.6% · alpine(h>.65) 0.1%
+landmasses: 15 total · 2 continents(≥3000c) · 0 major isles(≥400c) · 10 islands(≥40c) · 3 islets
+largest landmass: 55820 cells = 49.8% of all land
+coastline: 2924 coastal cells · crenulation 0.026 (coast/land)
+land share by latitude band:
+    90°–  60°   12835  23.6%
+    60°–  30°   21697  39.9%
+    30°–   0°   22236  40.4%
+     0°–  30°   21262  39.1%
+    30°–  60°   20802  38.2%
+    60°–  90°   13191  24.0%
+named: 2 archipelagos · 0 islands · 5 mountain ranges
+
+---- checks ----------------------------------------------------------
+[PASS] land fraction                                 34.2%   (sweet 22–40% · hard 15–52%)
+[PASS] border land cells                                 0   (must be 0 — no clipped landmasses)
+[PASS] largest landmass share of land                49.8%   (sweet 25–85% · hard 10–93%)
+[PASS] landmass count                                   15   (sweet 15–400 · hard 6–2000)
+[PASS] small isles+islets                               13   (sweet 10–380 · hard 3–1900)
+[PASS] mountain share of land (h>0.5)                13.6%   (sweet 2–14% · hard 0.5–22%)
+[PASS] coastline crenulation                         0.026   (sweet 0.02–0.30 at 4 km cells)
+[PASS] archipelagos named                                2   (≥1 — island clusters should get names)
+CHECKS: 8 pass · 0 warn · 0 fail

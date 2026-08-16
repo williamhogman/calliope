@@ -1,0 +1,59 @@
+CALLIOPE DIAGNOSTIC SUMMARY
+mode: full · size: 512 · generated: 2026-08-16 09:10 UTC
+
+totals: 128 pass · 4 warn · 0 fail
+
+-- bench.txt
+   all checks pass
+
+-- civ-12345.txt
+   all checks pass
+
+-- civ-777.txt
+   all checks pass
+
+-- climate-12345.txt
+   all checks pass
+
+-- climate-777.txt
+[WARN] forest share of land                          23.9%   (sweet 25–60% · hard 15–75%)
+
+-- climate-90210.txt
+   all checks pass
+
+-- determinism.txt
+   all checks pass
+
+-- economy-12345.txt
+   all checks pass
+
+-- hydro-12345.txt
+[WARN] river-town share                             100.0%   (sweet 20–95% — fresh water pulls towns)
+
+-- hydro-777.txt
+[WARN] river-town share                             100.0%   (sweet 20–95% — fresh water pulls towns)
+
+-- hydro-90210.txt
+[WARN] river-town share                             100.0%   (sweet 20–95% — fresh water pulls towns)
+
+-- resources-12345.txt
+   all checks pass
+
+-- resources-777.txt
+   all checks pass
+
+-- resources-90210.txt
+   all checks pass
+
+-- sweep.txt
+   all checks pass
+
+-- terrain-12345.txt
+   all checks pass
+
+-- terrain-777.txt
+   all checks pass
+
+-- terrain-90210.txt
+   all checks pass
+

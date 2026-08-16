@@ -1,0 +1,80 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · CIVILIZATION                 seed 12345 · 640x512 · 150y
+========================================================================
+world "Sermar" · 4 cultures · 16 settlements at dawn
+
+  yr      pop  towns  routes     wealth  treasury   arts  seams  ev/y
+   6     2017     16      23        797       120      6     92     4
+  12     2920     16      23       1273       146     13     95     7
+  18     4336     16      23       1927       183     17     99     3
+  24     6484     16      23       2578       236     19     99     1
+  30     9698     16      23       3548       302     23    102     7
+  36    14388     16      23       4653       376     27    105     4
+  42    20193     16      23       5639       455     29    105     0
+  48    27584     19      29       7028       545     34    106     2
+  54    36127     32      55       8776       618     38    107     7
+  60    47708     39      64      10665       730     44    109     8
+  66    63235     53      88      14713       951     48    113    14
+  72    87089     62     102      21562      1431     55    116     9
+  78   116387     64     106      29797      2072     59    119    14
+  84   147965     64     106      38175      2760     61    120     8
+  90   177524     64     106      46750      3479     62    120     8
+  96   204224     64     106      55551      4230     62    120     4
+ 102   225130     64     106      64601      5012     62    120     8
+ 108   238623     64     106      73506      5943     62    120     7
+ 114   252062     64     106      83327      6765     62    120     6
+ 120   262210     64     106      88670      7580     62    120     6
+ 126   268215     64     106      97147      8402     62    120     8
+ 132   272165     64     106     103748      9226     62    120     8
+ 138   272900     64     106     108309     10869     62    120    14
+ 144   276492     64     106     109241     12972     62    120    14
+ 150   280732     64     106     118047     13820     62    120     6
+
+event census: depletion:5 · disaster:256 · discovery:33 · festival:116 · found:48 · growth:336 · omen:10 · ruler:22 · society:21 · tech:62 · trade:70 · war:30 · wonder:72
+strikes 33 · depletions 5 · mining camps 0 · wars 30
+longest silence between events: 20 months
+
+the arc of the ages (tech & society events):
+  y1    The Mossthornkin learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y2    The Kaldenstadfolk learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y2    The Kalsyikosians learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y2    The Saraganaks learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y4    Weavers among the Mossthornkin string the first tall looms; good cloth becomes as good as coin.
+  y4    The scattered camps of the Mossthornkin bind themselves under one chief.
+  y5    The Kaldenstadfolk shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y6    Weavers among the Saraganaks string the first tall looms; good cloth becomes as good as coin.
+  y6    The Kalsyikosians shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y6    The Mossthornkin shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y9    The scattered camps of the Kaldenstadfolk bind themselves under one chief.
+  y9    Weavers among the Kaldenstadfolk string the first tall looms; good cloth becomes as good as coin.
+  y10   The wise-women of the Mossthornkin set down which roots cure and which kill.
+  y10   The Saraganaks shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y11   Weavers among the Kalsyikosians string the first tall looms; good cloth becomes as good as coin.
+  y13   The wise-women of the Kaldenstadfolk set down which roots cure and which kill.
+  y15   Wainwrights of the Mossthornkin set carts on true-turning wheels; the roads grow short.
+  y15   The Mossthornkin pass into an age of bronze — the old stone tools are laid in barrows.
+  … and 65 more
+
+societies at year 150:
+  Mossthornkin           empire     the High Age   20 arts · treasury     9423 · lore 252394
+  Kalsyikosians          kingdom    the High Age   15 arts · treasury      716 · lore  38694
+  Saraganaks             kingdom    the High Age   12 arts · treasury     1376 · lore  50211
+  Kaldenstadfolk         kingdom    the High Age   15 arts · treasury     2304 · lore 128854
+
+---- checks ----------------------------------------------------------
+[PASS] population growth ×                         206.27×   (sweet 2–500× — dawn towns are tiny)
+[PASS] still growing at half-run              36% of final   (pop at half-run ≤92% of final)
+[PASS] settlements grew                              16→64   (colonies should outnumber the dawn towns)
+[PASS] routes exist                                    106   (a world without trade is broken)
+[PASS] no unconnected towns                              0   (every town should reach the web of trade)
+[PASS] no template placeholders                          0   (no {P}/{S} may leak into chronicle text)
+[PASS] no empty event texts                              0   (every event tells its story)
+[PASS] settlement names unique              64 names / 64 towns   (the taken-set must hold)
+[PASS] events per year                                 7.2   (sweet 2–40 · hard 0.5–100)
+[PASS] no long silences                              20 mo   (≤36 months between chronicle entries)
+[PASS] strikes happened                                 33   (the age of prospectors must actually happen)
+[PASS] era advanced past Stone                the High Age   (≥ Age of Bronze by now)
+[PASS] arts accumulate                      62 arts / 4 peoples   (≥3 arts per people)
+[PASS] era reached Iron                       the High Age   (≥ Age of Iron by now)
+[PASS] numbers stay finite                             yes   (no NaN pops, wealth or prices)
+CHECKS: 15 pass · 0 warn · 0 fail

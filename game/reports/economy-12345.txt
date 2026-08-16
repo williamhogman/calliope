@@ -1,0 +1,45 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · ECONOMY                      seed 12345 · 640x512 · 100y
+========================================================================
+good        base    mean     min     max mean/base   pinned
+coal        1.00    0.94    0.85    1.52      0.94       0%
+copper      1.00    0.80    0.63    1.52      0.80       0%
+fish        0.85    0.48    0.27    0.78      0.56       0%
+grain       1.00    0.79    0.32    1.25      0.79       0%
+iron        1.00    1.07    0.93    1.83      1.07       0%
+silver      1.80    2.92    2.12    3.06      1.62       0%
+stone       1.00    1.16    1.12    1.55      1.16       0%
+timber      1.00    1.09    0.79    2.55      1.09       0%
+(pinned = months at the 0.3×/5× clamp — a pinned price is a mis-tuned market)
+
+market shocks: 33 strikes · 0 depletions · 33 trade chronicle entries
+wealth: total 61540 · gini 0.57
+richest towns:
+  Hawmere              pop   6777 · wealth     4794 · exports bananas · harbour
+  Elshade              pop   4460 · wealth     4384 · exports cattle · harbour
+  Ashrun               pop   5296 · wealth     3161 · exports blackberries · harbour
+  Fenawick             pop   1887 · wealth     2821 · exports silver 
+  Ashorthorn           pop   3255 · wealth     2778 · exports blueberries · harbour
+poorest towns:
+  Altasarai            pop   3821 · wealth        0
+  Melaia               pop   4026 · wealth        0
+  Dzuntau              pop   4653 · wealth        0
+
+routes: 106 (71 sea / 3 mixed / 32 land) · mean cost 56.8 · mean length 52 km
+harbours: 41 · unconnected towns: 0
+treasuries:
+  Mossthornkin                3452
+  Kalsyikosians                231
+  Saraganaks                   337
+  Kaldenstadfolk               728
+
+---- checks ----------------------------------------------------------
+[PASS] max pinned price share                         0.0%   (sweet ≤25% · hard ≤55%)
+[PASS] wealth gini                                    0.57   (sweet 0.20–0.80 — some inequality, no monopoly)
+[PASS] routes exist                                    106   (the web of trade must hold)
+[PASS] no unconnected towns                              0   (every town trades)
+[PASS] harbours exist                                   41   (coastal trade should produce ports)
+[PASS] prices finite                                   yes   (no NaN in the market)
+[PASS] treasuries sane                                 yes   (≥0 and finite)
+[PASS] strikes moved markets                            33   (discovery shocks should fire)
+CHECKS: 8 pass · 0 warn · 0 fail

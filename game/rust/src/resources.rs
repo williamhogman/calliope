@@ -364,6 +364,71 @@ pub fn place_resources(
             }
         }
     }
+
+    // ---- the floor of fate: some seams the world simply must hold.
+    // Noise alone can starve a 512-world of gold entirely — and with it
+    // coinage, rushes and the whole late-game arc — so every mineral is
+    // guaranteed a minimum number of seams, set into the highest fitting
+    // ground the map offers. Deterministic in the seed.
+    let minima: [(&str, usize, f64); 7] = [
+        ("stone", 4, 0.45),
+        ("coal", 4, 0.28),
+        ("copper", 4, 0.40),
+        ("iron", 4, 0.40),
+        ("silver", 2, 0.48),
+        ("gold", 2, 0.42),
+        ("mithril", 1, 0.55),
+    ];
+    let (rows, cols) = height.dim();
+    for (mi, &(name, min_n, h_lo)) in minima.iter().enumerate() {
+        let have = deposits.iter().filter(|d| d.r == name).count();
+        if have >= min_n {
+            continue;
+        }
+        let mut rng = crate::util::rng(seed * 47 + 4700 + mi as i64);
+        // highest fitting ground first; lower the floor if the world is flat
+        let mut floor = h_lo;
+        let mut cands: Vec<(i64, usize, usize)> = Vec::new();
+        loop {
+            cands.clear();
+            for y in 0..rows {
+                for x in 0..cols {
+                    if height[[y, x]] >= floor {
+                        cands.push(((height[[y, x]] * 1e6) as i64, y, x));
+                    }
+                }
+            }
+            if cands.len() >= 40 || floor <= 0.05 {
+                break;
+            }
+            floor -= 0.08;
+        }
+        cands.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+        let mut need = min_n - have;
+        for &(_, y, x) in cands.iter() {
+            if need == 0 {
+                break;
+            }
+            let clear = deposits.iter().filter(|d| d.r == name).all(|d| {
+                let dx = d.x - x as i64;
+                let dy = d.y - y as i64;
+                dx * dx + dy * dy >= 12 * 12
+            });
+            if !clear {
+                continue;
+            }
+            let richv = crate::util::round2(0.55 + 0.40 * rng.gen::<f64>());
+            deposits.push(Deposit {
+                r: name.to_string(),
+                x: x as i64,
+                y: y as i64,
+                rich: richv,
+                known: rng.gen::<f64>() < initial_known_p(name),
+                left: reserve_months(name, richv, rng.gen::<f64>()),
+            });
+            need -= 1;
+        }
+    }
     deposits
 }
 
