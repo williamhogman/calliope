@@ -2,7 +2,7 @@
 // popovers (top-center), alerts (top-right), time cluster (bottom-center),
 // toast stack. Everything floats over the map; the map owns the screen.
 
-import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+import { createEffect, createMemo, onCleanup } from "solid-js";
 import html from "solid-js/html";
 
 import {
@@ -11,10 +11,12 @@ import {
   worldMenuOpen, setWorldMenuOpen, overlaysOpen, setOverlaysOpen,
   legendOpen, setLegendOpen, setSearchOpen, notifOpen, setNotifOpen,
   notif, setNotif, persistUi, closePopovers, isMobile, sheet, setSheet,
-  selection, popHistory,
+  selection, popRev, popSeries,
 } from "./state.js";
 import { LAYERS, OVERLAYS, EVENT_FAMILIES, FALLBACK_MONTHS, fmt, dateOf } from "./config.js";
 import { I } from "./icons.js";
+import { each } from "./list.js";
+import { trapFocus, roveTabs } from "./focus.js";
 import {
   TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, HYDRO_GRAD, FERT_GRAD,
 } from "../palette.js";
@@ -39,7 +41,8 @@ function WorldMenu(a) {
     if (w && input) input.value = String(w.header.seed);
   });
   const go = () => { a.generate(input.value); setWorldMenuOpen(false); };
-  return html`<div class="pop pop-world" role="dialog" aria-label="World">
+  return html`<div class="pop pop-world" role="dialog" aria-label="World"
+    ref=${(el) => trapFocus(el)}>
     <div class="pop-title">World</div>
     <div class="row">
       <input id="seed" type="text" inputmode="numeric" autocomplete="off"
@@ -55,6 +58,7 @@ function WorldMenu(a) {
       <div class="seg">
         ${[384, 512, 640, 768].map(
           (sz) => html`<button class=${() => (worldSize() === sz ? "active" : "")}
+            aria-pressed=${() => String(worldSize() === sz)}
             onClick=${() => setWorldSize(sz)}>${sz}</button>`
         )}
       </div>
@@ -128,23 +132,26 @@ function LegendPop() {
     if (l === "fertility") return gradLegend(FERT_GRAD, 0, 1, "barren", "black earth");
     return "";
   };
-  return html`<div class="pop pop-legend" role="dialog" aria-label="Legend">
+  return html`<div class="pop pop-legend" role="dialog" aria-label="Legend"
+    ref=${(el) => trapFocus(el)}>
     <div class="pop-title">${() => LAYERS.find(([id]) => id === layer())?.[1] || ""}</div>
     ${body}
   </div>`;
 }
 
 function OverlaysPop(a) {
-  return html`<div class="pop pop-overlays" role="dialog" aria-label="Overlays">
+  return html`<div class="pop pop-overlays" role="dialog" aria-label="Overlays"
+    ref=${(el) => trapFocus(el)}>
     <div class="pop-title">Overlays</div>
     <div class="option-list">
       ${OVERLAYS.map(
-        ([id, label]) => html`<div
+        ([id, label]) => html`<button
           class=${() => "option" + (overlays[id] ? " active" : "")}
+          aria-pressed=${() => String(!!overlays[id])}
           onClick=${() => a.toggleOverlay(id)}>
           <span class="check"><svg viewBox="0 0 24 24" width="10" height="10"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#191307" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span>${label}</span>
-        </div>`
+        </button>`
       )}
     </div>
   </div>`;
@@ -152,7 +159,8 @@ function OverlaysPop(a) {
 
 function LensStrip(a) {
   return html`<div class="lens-cluster pop-anchor">
-    <div class="lens-strip" role="tablist" aria-label="Map lens">
+    <div class="lens-strip" role="tablist" aria-label="Map lens"
+      ref=${(el) => roveTabs(el)}>
       ${LAYERS.map(
         ([id, label, tip], i) => html`<button
           class=${() => "lens" + (layer() === id ? " active" : "")}
@@ -164,12 +172,12 @@ function LensStrip(a) {
       )}
       <span class="lens-sep"></span>
       <button class=${() => "lens lens-tool" + (overlaysOpen() ? " active" : "")}
-        title="Overlays (o)"
+        title="Overlays (o)" aria-pressed=${() => String(overlaysOpen())}
         onClick=${() => { const v = !overlaysOpen(); closePopovers(); setOverlaysOpen(v); }}>
         ${I.layers()}
       </button>
       <button class=${() => "lens lens-tool" + (legendOpen() ? " active" : "")}
-        title="Legend (l)"
+        title="Legend (l)" aria-pressed=${() => String(legendOpen())}
         onClick=${() => { const v = !legendOpen(); closePopovers(); setLegendOpen(v); }}>
         ${I.legend()}
       </button>
@@ -183,16 +191,18 @@ function LensStrip(a) {
 
 function NotifPop() {
   const flip = (f) => { setNotif(f, !notif[f]); persistUi(); };
-  return html`<div class="pop pop-notif" role="dialog" aria-label="Alerts">
+  return html`<div class="pop pop-notif" role="dialog" aria-label="Alerts"
+    ref=${(el) => trapFocus(el)}>
     <div class="pop-title">Alerts</div>
     <div class="option-list">
       ${EVENT_FAMILIES.map(
-        ([id, label]) => html`<div
+        ([id, label]) => html`<button
           class=${() => "option" + (notif[id] ? " active" : "")}
+          aria-pressed=${() => String(!!notif[id])}
           onClick=${() => flip(id)}>
           <span class="check"><svg viewBox="0 0 24 24" width="10" height="10"><path d="M4 12.5l5 5L20 6.5" fill="none" stroke="#191307" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span>${label}</span>
-        </div>`
+        </button>`
       )}
     </div>
     <div class="pop-note">Chosen families surface as notices while time flows.</div>
@@ -200,17 +210,18 @@ function NotifPop() {
 }
 
 function TopRight(a) {
-  const warList = () => wars() || [];
   return html`<div class="topright pop-anchor">
-    ${() => warList().map((w) => {
-      const cs = cultures() || [];
-      return html`<button class="sit-chip" title=${`${w.name} \u2014 ${cs[w.a]?.people || "?"} against ${cs[w.b]?.people || "?"}`}
+    ${each(() => wars() || [], (w) => {
+      const side = (id) => (cultures() || [])[id]?.people || "?";
+      return html`<button class="sit-chip"
+        title=${() => `${w.name} \u2014 ${side(w.a)} against ${side(w.b)}`}
         onClick=${() => a.select({ kind: "war", id: w.name })}>
         <span class="sit-ic">${I.war()}</span>
         <span class="sit-txt">${w.name}</span>
       </button>`;
     })}
     <button class=${() => "hud-btn" + (notifOpen() ? " open" : "")} title="Alerts"
+      aria-pressed=${() => String(notifOpen())}
       onClick=${() => { const v = !notifOpen(); closePopovers(); setNotifOpen(v); }}>
       ${I.bell()}
     </button>
@@ -225,8 +236,8 @@ function TopRight(a) {
 // ---------------------------------------------------------------- toasts
 
 function ToastStack(a) {
-  return html`<div class="toast-stack" aria-live="polite">
-    ${() => toasts().map((t) => html`<div
+  return html`<div class="toast-stack" aria-live="polite" role="log">
+    ${each(toasts, (t) => html`<div
       class=${"toastc" + (t.kind ? ` t-${t.kind}` : "") + (t.x != null ? " clickable" : "")}
       onClick=${() => {
         if (t.x != null) a.flyTo(t.x, t.y, 8);
@@ -249,8 +260,10 @@ function TimeCluster(a) {
   const dateText = () => (world() ? dateOf(month(), monthsOf()) : "\u2014");
   const totalPop = createMemo(() => settlements().reduce((acc, s) => acc + s.pop, 0));
   let spark;
+  // E8.5 — the sparkline walks the ring buffer in place: zero allocation
+  // per frame, keyed on popRev().
   createEffect(() => {
-    const hist = popHistory();
+    popRev();
     if (!spark) return;
     const ctx = spark.getContext("2d");
     const dpr = window.devicePixelRatio || 1;
@@ -258,16 +271,21 @@ function TimeCluster(a) {
     if (spark.width !== W * dpr) { spark.width = W * dpr; spark.height = H * dpr; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    if (hist.length > 1) {
-      const min = Math.min(...hist.map((p) => p.pop));
-      const max = Math.max(...hist.map((p) => p.pop));
+    const n = popSeries.len();
+    if (n > 1) {
+      let min = Infinity, max = -Infinity;
+      for (let i = 0; i < n; i++) {
+        const v = popSeries.at(i);
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
       const span = Math.max(max - min, 1);
       ctx.beginPath();
-      hist.forEach((p, i) => {
-        const x = (i / (hist.length - 1)) * (W - 4) + 2;
-        const y = H - 3 - ((p.pop - min) / span) * (H - 7);
+      for (let i = 0; i < n; i++) {
+        const x = (i / (n - 1)) * (W - 4) + 2;
+        const y = H - 3 - ((popSeries.at(i) - min) / span) * (H - 7);
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      });
+      }
       ctx.strokeStyle = "rgba(212,169,74,0.9)";
       ctx.lineWidth = 1.4;
       ctx.lineJoin = "round";
@@ -283,12 +301,14 @@ function TimeCluster(a) {
       title="Population over time"></canvas>
     <button class="icon-btn" title="Step one month (n)" onClick=${() => a.step()}>${I.step()}</button>
     <button class=${() => "time-play" + (playing() ? " on" : "")}
-      aria-label="Play / pause (space)" onClick=${() => a.playPause()}>
+      aria-label="Play / pause (space)" aria-pressed=${() => String(playing())}
+      onClick=${() => a.playPause()}>
       ${() => (playing() ? I.pause() : I.play())}
     </button>
     <div class="seg time-speed">
       ${[[1, "1\u00d7"], [3, "3\u00d7"], [12, "12\u00d7"]].map(
         ([v, label]) => html`<button class=${() => (speed() === v ? "active" : "")}
+          aria-pressed=${() => String(speed() === v)}
           onClick=${() => a.setSpeed(v)}>${label}</button>`
       )}
     </div>
