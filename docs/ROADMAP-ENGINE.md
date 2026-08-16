@@ -142,7 +142,7 @@ The audit found the quadratic and the wasteful; this track retires them.
 - [x] E5.8 `tick_json` serializes into a reused `String` buffer via `to_writer` (S)
 - [x] E5.9 Criterion benches: per-stage generation and a 1200-month tick, results written into `game/reports/bench.txt` by `report.sh` — done in-harness (5-sample medians with spread) instead of pulling the criterion dep: same statistical protection, one toolchain, text reports stay the gate (M)
 - [x] E5.10 Counting allocator behind a diagnose feature: allocations/tick becomes a banded metric — allocation regressions get an alarm (`--features alloc-count`, baseline 183/mo, band sweet ≤350 · hard ≤1500) (M)
-- [ ] E5.11 Pass-fusion profile pass over generation: fuse adjacent full-grid sweeps in `erosion.rs`/`climate.rs` where the profiler shows wins, guarded by the determinism hash (M)
+- [x] E5.11 Pass-fusion profile pass over generation: fuse adjacent full-grid sweeps in `erosion.rs`/`climate.rs` where the profiler shows wins, guarded by the determinism hash — continentality EDT deduped (one per generation, shared by amplitude + monsoon), row-constant `powf` hoisted out of the climate inner loops, drainage sort made unstable (identical total order, no scratch alloc), diffusion snapshot reuses one scratch grid; erosion 193→175 ms, climate 57→42 ms @512, state hash unchanged (`90d82b4c9c06fdb5`) (M)
 - [x] E5.12 `cultures_json` stops re-deriving ruler/era/tech-name arrays for unchanged societies every tick (`world.rs:2149-2191`) — done as a one-pass cold/hot build gated on the two half-hashes; the full block is only assembled on the rare cold-change tick (S)
 
 Gates: native tick rate band in `diagnose perf` (≥ 2,000 months/min at
