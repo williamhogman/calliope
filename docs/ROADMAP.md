@@ -222,6 +222,59 @@ successor states inherit their peoples (zero people-minting on
 collapse); no runaway single-civilization ending on > 80 % of seeds;
 polity count oscillates across the run; suite green.
 
+## M14 — Wool and Wine (the full catalogue of goods)
+
+The resource milestone: from 19 raw deposits + grain + 3 crafts to a
+complete goods economy where every classic world-trade good exists for a
+mechanical reason — bulk goods hug home, luxuries cross the world, and
+the land itself remembers being harvested. Sequenced so the data model
+lands first and everything after is table rows.
+
+- [ ] M14.1 Ontology as data: one declarative GOODS table in `resources.rs` (ISA/REQUIRES/ABUNDANCE/FOUNDIN + placement rule, transport class, perishability, color) replacing the scattered match arms; `resource_meta()` derives from it so engine and client cannot drift. ADR on landing (M)
+- [ ] M14.2 Salt: coastal salt-pan and rock-salt seam placement; PRESERVES relation — salted fish/meat gain trade range; salt towns and salt roads emerge (M)
+- [ ] M14.3 Animal secondaries: wool (sheep country), hides→leather (cattle/game), furs (boreal/tundra trapping — a luxury pull that colonizes the cold the way ore colonizes the dry) (M)
+- [ ] M14.4 Cultivated luxuries: wine (warm-temperate belt), spices (tropical coasts), dyes (coastal murex / madder belts) — tight biome bands so they concentrate and long routes have a reason to exist (M)
+- [ ] M14.5 Earth and workshop goods: clay→pottery/brick; marble as luxury stone; gem seams (jewelry input beside gold/silver) (S-M)
+- [ ] M14.6 Secondary recipes on the M5.1 engine: wool→cloth, hides→leather, clay→pottery, grapes→wine — processing towns distinct from extraction camps, workforce- and tech-gated (M)
+- [ ] M14.7 Transport classes: value-density tiers (bulk/ordinary/precious) + perishable flag priced into route viability — bulk moves short or by water, precious crosses the map; von Thünen rings become emergent, not painted (M)
+- [ ] M14.8 Renewable stocks with memory: timber/game/fish regenerate logistically and thin under overharvest; deforestation marks the biome map; collapse events feed chronicle and M9 ruins (M-L)
+- [ ] M14.9 Per-culture tastes: small data-driven demand modifiers (steppe prizes horses, coasts prize amber-class luxuries) folded into `demand_weight` (S-M)
+
+Gates: every catalogued good is reachable end-to-end across the sweep —
+placed or produced, priced in ≥ 1 area book, carried on ≥ 1 route, named
+in ≥ 1 chronicle event; median haul distance precious ≥ 3× bulk; salt
+towns on suitable coasts ≥ 1 per seed; renewable collapse fires under
+press-harvest sweeps but stays < band in normal runs; M2.7 price-ratio
+check extended with wool/wine/salt rows from the Hodges/Goucher lists;
+determinism hash stable; native gen budget holds. Runner: extended
+`diagnose resources` + `diagnose economy` sections in `report.sh`.
+
+## M15 — The Assay (property-proofs for the resource economy)
+
+Property-based testing over the whole resource path: pure-function
+properties via `proptest`, world-scale invariants in the harness. The
+assay is what lets M14's catalogue grow without fear.
+
+- [ ] M15.1 `proptest` dev-dependency + `cargo test` property lane wired into `report.sh` (S)
+- [ ] M15.2 Ontology properties: ISA graph is an acyclic forest rooted in {food, material, fuel, craft}; every good has category, abundance, color, `base_value` > 0; every recipe input/output exists in the ontology; every REQUIRES names a real tech in `society.rs` (S)
+- [ ] M15.3 Placement properties: every deposit sits on its own suitability mask; per-resource minimum spacing holds; `rich` ∈ [0.35, 1]; reserves positive for minerals and −1 for renewables; hidden-start only for buried seams; ADR-0013 floors met on arbitrary seeds (M)
+- [ ] M15.4 Market properties: all prices within [0.3, 5.0]×base; no NaN/inf in any book; `shock` respects clamps; geometric-mean renormalization keeps mean log-price drift-free over 500 y (S-M)
+- [ ] M15.5 Metamorphic economy checks: more supply of g ⇒ p(g) not↑; exhausting g everywhere ⇒ p(g)↑; opening a route between two areas ⇒ their spread on shared goods not↑ (M)
+- [ ] M15.6 Conservation ledger: per-area stock/flow accounting — nothing consumed that was not produced or imported; ledger printed by `diagnose economy`, balances within rounding over 200 y (M)
+- [ ] M15.7 Hostile unpack: extend the M8.1 round-trip gate — truncated/corrupt pack buffers must error, never panic (fuzz lane) (S)
+
+Gates: property lanes green in `report.sh` across the sweep; new
+`diagnose resources` sections (mask, spacing, floors) PASS; metamorphic
+trio green on 3 seeds; ledger zero-balance within rounding; full
+existing suite stays green throughout.
+
+## Ready (calibration queue)
+
+Near-band findings from the M3 closure run, staged for the next tuning
+pass (each is a WARN, not a gate failure):
+
+- Zipf rank-size slope hugs the shallow edge (−0.79 vs gate −1.3…−0.8);
+
 ## Ready (calibration queue)
 
 Near-band findings from the M3 closure run, staged for the next tuning
