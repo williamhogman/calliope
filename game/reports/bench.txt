@@ -2,14 +2,14 @@
  CALLIOPE DIAGNOSTIC · BENCH                            native release
 ========================================================================
  size    gen ms  pack bytes     cells  stage breakdown (ms)
-  320       458     4896616    128000  
-  512      1091    12489368    327680  
-  640      1599    19498704    512000  
-  768      2508    28061028    737280  
+  320       463     4896616    128000  
+  512      1074    12489368    327680  
+  640      1628    19498704    512000  
+  768      2494    28061024    737280  
 
-tick throughput @512 with 17 towns: 240 months in 49 ms = 4898 months/s
+tick throughput @512 with 17 towns: 240 months in 39 ms = 6154 months/s
 
 ---- checks ----------------------------------------------------------
-[PASS] 512 generation time                         1091 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
-[PASS] tick rate                                 4898 mo/s   (sweet ≥100 mo/s · hard ≥25)
+[PASS] 512 generation time                         1074 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
+[PASS] tick rate                                 6154 mo/s   (sweet ≥100 mo/s · hard ≥25)
 CHECKS: 2 pass · 0 warn · 0 fail
