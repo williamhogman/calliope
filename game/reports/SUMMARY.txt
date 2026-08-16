@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-16 15:19 UTC
+mode: full · size: 512 · generated: 2026-08-16 15:34 UTC
 
-totals: 265 pass · 2 warn · 1 fail
+totals: 266 pass · 2 warn · 0 fail
 
 -- bench.txt
    all checks pass
@@ -58,7 +58,7 @@ totals: 265 pass · 2 warn · 1 fail
    all checks pass
 
 -- telling-12345.txt
-[FAIL] every event carries an id                     99.9%   (M6.1 gate: ids = 100%)
+   all checks pass
 
 -- terrain-12345.txt
    all checks pass
