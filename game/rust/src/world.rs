@@ -3308,4 +3308,5 @@ pub const BANDS: &[Band] = &[
     Band { name: "tick rate", sweet: (100.0, f64::INFINITY), hard: (25.0, f64::INFINITY), target: "sweet ≥100 mo/s · hard ≥25" },
     Band { name: "pack bytes per cell", sweet: (0.0, 21.0), hard: (0.0, 24.0), target: "sweet ≤21 · hard ≤24 (8×u16 + 4×u8 = 20 B/cell + header)" },
     Band { name: "median tick payload", sweet: (0.0, 4096.0), hard: (0.0, 16384.0), target: "sweet ≤4 KB · hard ≤16 KB (E4: ship what changed)" },
+    Band { name: "allocations per month", sweet: (0.0, 1.0e9), hard: (0.0, 1.0e12), target: "provisional — baseline pending (E5.10)" },
 ];

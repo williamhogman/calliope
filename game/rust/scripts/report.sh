@@ -16,9 +16,9 @@ mkdir -p "$OUT"
 
 echo "== building diagnose (release) =="
 if command -v cargo >/dev/null 2>&1; then
-  cargo build --release --bin diagnose --quiet
+  cargo build --release --bin diagnose --features alloc-count --quiet
 else
-  nix shell nixpkgs#rustc nixpkgs#cargo -c cargo build --release --bin diagnose --quiet
+  nix shell nixpkgs#rustc nixpkgs#cargo -c cargo build --release --bin diagnose --features alloc-count --quiet
 fi
 BIN="./target/release/diagnose"
 
