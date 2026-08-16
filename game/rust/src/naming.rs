@@ -137,6 +137,8 @@ fn templates(kind: &str) -> &'static [&'static str] {
         "highland" => &["The {w} Highlands", "The {w} Plateau", "The {w} Tablelands"],
         "marsh" => &["The {w} Fen", "The {w} Marshes", "The {w} Mire"],
         "delta" => &["The {w} Delta", "The Mouths of the {w}"],
+        "pass" => &["The {w} Pass", "{w} Gap", "The Gates of {w}"],
+        "ford" => &["{w} Ford", "The {w} Crossing", "The Fords of {w}"],
         _ => &["{w}"],
     }
 }

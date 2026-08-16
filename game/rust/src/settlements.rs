@@ -177,6 +177,7 @@ pub fn found_settlements(
             goods: Vec::new(),
             exports: None,
             wealth: crate::util::round2(pop as f64 * 0.2),
+            port: false,
         });
         for y in 0..size {
             for x in 0..size {
