@@ -172,7 +172,8 @@ pub fn erode(h: &mut Array2<f64>) {
     for _ in 0..SPI_PASSES {
         fluvial_pass(h);
     }
+    let mut src = Array2::<f64>::zeros(h.dim());
     for _ in 0..DIFF_PASSES {
-        diffuse_pass(h);
+        diffuse_pass(h, &mut src);
     }
 }
