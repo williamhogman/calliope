@@ -564,7 +564,7 @@ impl World {
             if claimed {
                 continue;
             }
-            let worth = self.market.price(&d.r) * d.rich * 0.9;
+            let worth = self.market.price(&d.r) * d.rich * 1.6;
             for yy in (d.y - R).max(0)..=(d.y + R).min(h as i64 - 1) {
                 for xx in (d.x - R).max(0)..=(d.x + R).min(w as i64 - 1) {
                     if self.height[[yy as usize, xx as usize]] < 0.0 {
@@ -576,7 +576,7 @@ impl World {
                     }
                     let v = worth * (1.0 - dist / (R as f64 + 1.0));
                     let c = &mut pull[[yy as usize, xx as usize]];
-                    *c = (*c + v).min(6.0);
+                    *c = (*c + v).min(7.0);
                 }
             }
         }
