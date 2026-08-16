@@ -21,9 +21,10 @@ fn main() {
     let water = height.mapv(|h| h < 0.0);
     let t = Instant::now();
     let lat = climate::latitude_deg(size);
+    let cont = climate::continentality(&water);
     let tmean = climate::temperature_mean(&height, &lat);
-    let _tamp = climate::temperature_amplitude(&lat, &water);
-    let (precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat);
+    let _tamp = climate::temperature_amplitude(&lat, &cont);
+    let (precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat, &cont);
     println!("climate    {:>6} ms", t.elapsed().as_millis());
 
     let t = Instant::now();

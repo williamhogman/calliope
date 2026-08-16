@@ -73,6 +73,7 @@ pub fn precipitation(
     water: &Array2<bool>,
     tmean: &Array2<f64>,
     lat_deg: &Array2<f64>,
+    cont: &Array2<f64>,
 ) -> (Array2<f64>, Array2<f64>) {
     let size = height.dim().0;
     let mut p = Array2::<f64>::zeros((size, size));
@@ -124,8 +125,8 @@ pub fn precipitation(
     // The ITCZ is not a line but a march: it camps at ~10°S in the
     // southern summer (month 0) and ~10°N half a year later. Each cell
     // gets its convective boost from both camps; the *difference*
-    // between the two visits is the monsoon.
-    let cont = continentality(water);
+    // between the two visits is the monsoon. Continentality arrives
+    // precomputed (E5.11) — same values, one EDT per generation.
     let mut pamp = Array2::<f64>::zeros((size, size));
     let n = size as f64;
     for y in 0..size {

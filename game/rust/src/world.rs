@@ -369,9 +369,11 @@ impl World {
 
         let t1 = now_ms();
         let lat = climate::latitude_deg(size);
+        // E5.11 — one continentality (EDT) shared by amplitude + monsoon.
+        let cont = climate::continentality(&water);
         let tmean = climate::temperature_mean(&height, &lat);
-        let tamp = climate::temperature_amplitude(&lat, &water);
-        let (mut precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat);
+        let tamp = climate::temperature_amplitude(&lat, &cont);
+        let (mut precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat, &cont);
         if precip_scale != 1.0 {
             precip.mapv_inplace(|p| p * precip_scale);
         }
