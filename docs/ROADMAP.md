@@ -7,6 +7,10 @@ Items are checkboxes; `scripts/roadmap-check.sh` is the stopping
 criterion — it exits non-zero while any milestone item is unchecked.
 "Later / research" and "Rejected" are out of scope for the check.
 
+The platform track (engine optimization, boundary data formats, macro
+discipline, UI/render surfaces) lives in `ROADMAP-ENGINE.md` with its own
+gate, `scripts/roadmap-engine-check.sh`.
+
 Legend: cost S/M/L · gate = harness acceptance check.
 
 ## M1 — The Carved Land (terrain & water depth)

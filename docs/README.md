@@ -11,6 +11,7 @@ Solid.js UI.
 | Document | What it is |
 |---|---|
 | [`ROADMAP.md`](ROADMAP.md) | The forward plan: milestones, ready queue, acceptance gates |
+| [`ROADMAP-ENGINE.md`](ROADMAP-ENGINE.md) | The platform track: engine optimization, data formats, macro/codegen discipline, UI/render surface polish |
 | [`GAP-ANALYSIS.md`](GAP-ANALYSIS.md) | Every Calliope system measured against the literature |
 | [`adr/`](adr/) | Architecture Decision Records — why the system is shaped the way it is |
 | [`research/`](research/) | The research corpus: per-domain digests of ~250 primary sources, plus a cross-cutting synthesis |
