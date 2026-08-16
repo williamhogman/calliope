@@ -232,10 +232,73 @@ impl Ord for AItem {
     }
 }
 
+/// A* scratch space, pooled across calls (E5.4). `seen` carries a
+/// generation stamp per cell: bumping `stamp` invalidates the whole grid
+/// in O(1), so the O(N²) route builds stop allocating a fresh `Array2` +
+/// `HashMap` per pair. Contents never outlive their stamp, so pooling is
+/// invisible to the search — same expansions, same paths.
+#[derive(Default)]
+struct AstarScratch {
+    stamp: u32,
+    seen: Vec<u32>,
+    best: Vec<f64>,
+    /// packed predecessor cell index; u32::MAX = path start
+    came: Vec<u32>,
+    heap: BinaryHeap<AItem>,
+}
+
+impl AstarScratch {
+    fn reset(&mut self, n: usize) {
+        if self.seen.len() != n {
+            self.seen = vec![0; n];
+            self.best = vec![f64::INFINITY; n];
+            self.came = vec![u32::MAX; n];
+            self.stamp = 1;
+        } else {
+            self.stamp = self.stamp.wrapping_add(1);
+            if self.stamp == 0 {
+                self.seen.fill(0);
+                self.stamp = 1;
+            }
+        }
+        self.heap.clear();
+    }
+
+    #[inline]
+    fn best(&self, i: usize) -> f64 {
+        if self.seen[i] == self.stamp {
+            self.best[i]
+        } else {
+            f64::INFINITY
+        }
+    }
+
+    #[inline]
+    fn relax(&mut self, i: usize, g: f64, from: u32) {
+        self.seen[i] = self.stamp;
+        self.best[i] = g;
+        self.came[i] = from;
+    }
+}
+
+thread_local! {
+    static ASTAR_SCRATCH: std::cell::RefCell<AstarScratch> =
+        std::cell::RefCell::new(AstarScratch::default());
+}
+
 /// A* over the trade grid. Crossing the shoreline pays the harbour fee,
 /// so short hops stay ashore and long hauls take ship. Returns the path
 /// and its total cost.
 pub fn astar(
+    grid: &TradeGrid,
+    start: (usize, usize),
+    goal: (usize, usize),
+) -> Option<(Vec<(usize, usize)>, f64)> {
+    ASTAR_SCRATCH.with(|sc| astar_with(&mut sc.borrow_mut(), grid, start, goal))
+}
+
+fn astar_with(
+    sc: &mut AstarScratch,
     grid: &TradeGrid,
     start: (usize, usize),
     goal: (usize, usize),
@@ -246,25 +309,22 @@ pub fn astar(
     let (gy, gx) = goal;
     let min_cost = 0.3;
     let max_expand = 200_000usize;
-    let mut best = Array2::<f64>::from_elem((hh, ww), f64::INFINITY);
-    best[[sy, sx]] = 0.0;
-    let mut came: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
+    sc.reset(hh * ww);
+    sc.relax(sy * ww + sx, 0.0, u32::MAX);
     let h0 = min_cost * ((gy as f64 - sy as f64).hypot(gx as f64 - sx as f64));
-    let mut heap: BinaryHeap<AItem> = BinaryHeap::new();
-    heap.push(AItem(h0, 0.0, sy, sx));
+    sc.heap.push(AItem(h0, 0.0, sy, sx));
     let mut expanded = 0usize;
 
-    while let Some(AItem(_, g, y, x)) = heap.pop() {
-        if g > best[[y, x]] {
+    while let Some(AItem(_, g, y, x)) = sc.heap.pop() {
+        if g > sc.best(y * ww + x) {
             continue;
         }
         if y == gy && x == gx {
             let mut path = vec![(y, x)];
-            let (mut cy, mut cx) = (y, x);
-            while let Some(&(py, px)) = came.get(&(cy, cx)) {
-                cy = py;
-                cx = px;
-                path.push((cy, cx));
+            let mut ci = y * ww + x;
+            while sc.came[ci] != u32::MAX {
+                ci = sc.came[ci] as usize;
+                path.push((ci / ww, ci % ww));
             }
             path.reverse();
             return Some((path, g));
@@ -284,11 +344,11 @@ pub fn astar(
             if grid.sea[[y, x]] != grid.sea[[ny, nx]] {
                 ng += EMBARK_COST; // cargo changes from wheel to keel
             }
-            if ng < best[[ny, nx]] {
-                best[[ny, nx]] = ng;
-                came.insert((ny, nx), (y, x));
+            let ni = ny * ww + nx;
+            if ng < sc.best(ni) {
+                sc.relax(ni, ng, (y * ww + x) as u32);
                 let f = ng + min_cost * ((gy as f64 - ny as f64).hypot(gx as f64 - nx as f64));
-                heap.push(AItem(f, ng, ny, nx));
+                sc.heap.push(AItem(f, ng, ny, nx));
             }
         }
     }
