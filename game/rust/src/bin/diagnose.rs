@@ -596,6 +596,12 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         c.want("still growing at half-run", pace <= 0.92, format!("{:.0}% of final", 100.0 * pace), "pop at half-run ≤92% of final");
     }
     c.want("settlements grew", w.settlements.len() >= setts0, format!("{}→{}", setts0, w.settlements.len()), "colonies should outnumber the dawn towns");
+    if years >= 100 {
+        // by the century mark the colonies should have broken the river
+        // monoculture: dry-coast harbours, cistern towns, mining camps.
+        let dry = w.settlements.iter().filter(|s| !s.river).count();
+        c.want("dry-country towns exist", dry >= 1, format!("{} of {}", dry, w.settlements.len()), "≥1 town beyond fresh water by the century mark");
+    }
     c.must("routes exist", !w.routes.is_empty(), format!("{}", w.routes.len()), "a world without trade is broken");
     c.want("no unconnected towns", unconnected == 0, format!("{}", unconnected), "every town should reach the web of trade");
     c.must("no template placeholders", log.placeholders == 0, format!("{}", log.placeholders), "no {P}/{S} may leak into chronicle text");
