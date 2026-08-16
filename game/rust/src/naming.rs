@@ -491,3 +491,109 @@ pub fn name_features(
     let world_name = make_word(&mut rng, "old", &mut taken);
     (features, world_name)
 }
+
+// --- named by the roads themselves -----------------------------------------
+
+/// Greedy placement of route-born landmarks, mightiest first.
+fn place_route_marks(
+    features: &mut Vec<Feature>,
+    rng: &mut Pcg64Mcg,
+    taken: &mut HashSet<String>,
+    mut cands: Vec<(f64, i64, i64)>,
+    kind: &str,
+    cap: usize,
+    min_d: f64,
+) {
+    cands.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    let mut placed: Vec<(i64, i64)> = features
+        .iter()
+        .filter(|f| f.t == kind)
+        .map(|f| (f.x, f.y))
+        .collect();
+    for (_, x, y) in cands {
+        if placed.len() >= cap {
+            break;
+        }
+        if placed
+            .iter()
+            .any(|&(px, py)| (((px - x) as f64).hypot((py - y) as f64)) < min_d)
+        {
+            continue;
+        }
+        let word = make_word(rng, "old", taken);
+        let name = phrase(rng, kind, &word);
+        features.push(Feature {
+            t: kind.to_string(),
+            name,
+            x,
+            y,
+            size: 10,
+        });
+        placed.push((x, y));
+    }
+}
+
+/// The trade roads name the land they must conquer: the high saddle a
+/// caravan climbs becomes a Pass, the place it wades a great river
+/// becomes a Ford. Landmarks are born from use, not decree.
+pub fn name_route_features(
+    features: &mut Vec<Feature>,
+    rng: &mut Pcg64Mcg,
+    taken: &mut HashSet<String>,
+    routes: &[crate::trade::Route],
+    height: &Array2<f64>,
+    rivers: &Array2<bool>,
+    discharge: &Array2<f64>,
+) {
+    let (hh, ww) = height.dim();
+    let mut pass_cands: Vec<(f64, i64, i64)> = Vec::new();
+    let mut ford_cands: Vec<(f64, i64, i64)> = Vec::new();
+    for r in routes {
+        let n = r.path.len();
+        if n < 5 {
+            continue;
+        }
+        let mut best_pass: Option<(f64, i64, i64)> = None;
+        let mut best_ford: Option<(f64, i64, i64)> = None;
+        for (i, pt) in r.path.iter().enumerate() {
+            if i < 2 || i + 2 >= n {
+                continue; // never at the town gates themselves
+            }
+            if r.m.get(i).copied().unwrap_or(0) != crate::trade::MODE_LAND {
+                continue;
+            }
+            let (x, y) = (pt[0], pt[1]);
+            if x < 0 || y < 0 || x >= ww as i64 || y >= hh as i64 {
+                continue;
+            }
+            let h = height[[y as usize, x as usize]];
+            if h > 0.45 && best_pass.map_or(true, |(bh, _, _)| h > bh) {
+                best_pass = Some((h, x, y));
+            }
+            let mut dmax = 0.0f64;
+            for dy in -1i64..=1 {
+                for dx in -1i64..=1 {
+                    let (nx, ny) = (x + dx, y + dy);
+                    if nx < 0 || ny < 0 || nx >= ww as i64 || ny >= hh as i64 {
+                        continue;
+                    }
+                    let (nxu, nyu) = (nx as usize, ny as usize);
+                    if rivers[[nyu, nxu]] {
+                        dmax = dmax.max(discharge[[nyu, nxu]]);
+                    }
+                }
+            }
+            if dmax > 60.0 && best_ford.map_or(true, |(bd, _, _)| dmax > bd) {
+                best_ford = Some((dmax, x, y));
+            }
+        }
+        if let Some(c) = best_pass {
+            pass_cands.push(c);
+        }
+        if let Some(c) = best_ford {
+            ford_cands.push(c);
+        }
+    }
+    place_route_marks(features, rng, taken, pass_cands, "pass", 5, 18.0);
+    place_route_marks(features, rng, taken, ford_cands, "ford", 6, 14.0);
+}
