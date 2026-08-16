@@ -347,94 +347,272 @@ pub struct World {
     pub timings: Vec<(&'static str, f64)>,
 }
 
-impl World {
-    pub fn generate(seed: i64, size: usize) -> World {
-        World::generate_scaled(seed, size, 1.0)
+/// E7.4/E7.5 — world generation as a resumable ladder of stages. Each
+/// `step()` runs exactly one stage and returns, so the wasm worker can post
+/// progress and honour an abort between stages without threads or unwinding.
+/// `World::generate_scaled` drives the same ladder start to finish: one code
+/// path for native and staged generation, so determinism holds by
+/// construction rather than by parallel maintenance.
+pub struct GenBuilder {
+    seed: i64,
+    size: usize,
+    precip_scale: f64,
+    stage: usize,
+    t0: f64,
+    timings: Vec<(&'static str, f64)>,
+    // f64 physics intermediates (dropped as soon as their stage is done)
+    height64: Option<Array2<f64>>,
+    water: Option<Array2<bool>>,
+    tmean64: Option<Array2<f64>>,
+    tamp64: Option<Array2<f64>>,
+    precip64: Option<Array2<f64>>,
+    pamp64: Option<Array2<f64>>,
+    hydro: Option<hydrology::Hydrology>,
+    biome_map: Option<Array2<u8>>,
+    crops: Option<Array2<u8>>,
+    // resting-width f32 fields (after the E3.2 drop)
+    height: Option<Array2<f32>>,
+    tmean: Option<Array2<f32>>,
+    tamp: Option<Array2<f32>>,
+    precip: Option<Array2<f32>>,
+    pamp: Option<Array2<f32>>,
+    discharge: Option<Array2<f32>>,
+    flow_amp: Option<Array2<f32>>,
+    fertility: Option<Array2<f32>>,
+    // human intermediates
+    features: Option<Vec<Feature>>,
+    world_name: Option<String>,
+    deposits: Option<Vec<Deposit>>,
+    world: Option<World>,
+}
+
+impl GenBuilder {
+    /// The ladder, in running order. Names double as progress labels.
+    pub const STAGES: [&'static str; 9] = [
+        "terrain",
+        "erosion",
+        "climate",
+        "hydrology",
+        "biomes",
+        "fertility",
+        "naming",
+        "resources",
+        "dawn",
+    ];
+
+    pub fn new(seed: i64, size: usize, precip_scale: f64) -> GenBuilder {
+        GenBuilder {
+            seed,
+            size,
+            precip_scale,
+            stage: 0,
+            t0: now_ms(),
+            timings: Vec::new(),
+            height64: None,
+            water: None,
+            tmean64: None,
+            tamp64: None,
+            precip64: None,
+            pamp64: None,
+            hydro: None,
+            biome_map: None,
+            crops: None,
+            height: None,
+            tmean: None,
+            tamp: None,
+            precip: None,
+            pamp: None,
+            discharge: None,
+            flow_amp: None,
+            fertility: None,
+            features: None,
+            world_name: None,
+            deposits: None,
+            world: None,
+        }
     }
 
-    /// `generate` with a rainfall multiplier — the metamorphic-testing knob
-    /// (M8.2): the harness generates the same seed wetter and asserts the
-    /// rivers do not shrink. 1.0 is the game; nothing else ships.
-    pub fn generate_scaled(seed: i64, size: usize, precip_scale: f64) -> World {
-        let t0 = now_ms();
-        let mut timings: Vec<(&'static str, f64)> = Vec::new();
+    pub fn done(&self) -> bool {
+        self.world.is_some()
+    }
 
-        let mut height = geo::heightmap(seed, size);
-        timings.push(("terrain", now_ms() - t0));
+    /// Stages completed so far.
+    pub fn stage_index(&self) -> usize {
+        self.stage
+    }
 
-        let te = now_ms();
-        erosion::erode(&mut height);
-        let water = height.mapv(|h| h < 0.0);
-        timings.push(("erosion", now_ms() - te));
-
-        let t1 = now_ms();
-        let lat = climate::latitude_deg(size);
-        // E5.11 — one continentality (EDT) shared by amplitude + monsoon.
-        let cont = climate::continentality(&water);
-        let tmean = climate::temperature_mean(&height, &lat);
-        let tamp = climate::temperature_amplitude(&lat, &cont);
-        let (mut precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat, &cont);
-        if precip_scale != 1.0 {
-            precip.mapv_inplace(|p| p * precip_scale);
+    /// Run the next stage; returns its name. Panics if generation is done.
+    pub fn step(&mut self) -> &'static str {
+        let name = Self::STAGES[self.stage];
+        match self.stage {
+            0 => self.stage_terrain(),
+            1 => self.stage_erosion(),
+            2 => self.stage_climate(),
+            3 => self.stage_hydrology(),
+            4 => self.stage_biomes(),
+            5 => self.stage_fertility(),
+            6 => self.stage_naming(),
+            7 => self.stage_resources(),
+            8 => self.stage_dawn(),
+            _ => panic!("generation already complete"),
         }
-        timings.push(("climate", now_ms() - t1));
+        self.stage += 1;
+        name
+    }
 
+    /// Hand over the finished world. Panics unless `done()`.
+    pub fn finish(&mut self) -> World {
+        self.world.take().expect("generation not complete")
+    }
+
+    fn stage_terrain(&mut self) {
+        let t = now_ms();
+        self.height64 = Some(geo::heightmap(self.seed, self.size));
+        self.timings.push(("terrain", now_ms() - t));
+    }
+
+    fn stage_erosion(&mut self) {
+        let te = now_ms();
+        let height = self.height64.as_mut().unwrap();
+        erosion::erode(height);
+        let water = height.mapv(|h| h < 0.0);
+        self.water = Some(water);
+        self.timings.push(("erosion", now_ms() - te));
+    }
+
+    fn stage_climate(&mut self) {
+        let t1 = now_ms();
+        let height = self.height64.as_ref().unwrap();
+        let water = self.water.as_ref().unwrap();
+        let lat = climate::latitude_deg(self.size);
+        // E5.11 — one continentality (EDT) shared by amplitude + monsoon.
+        let cont = climate::continentality(water);
+        let tmean = climate::temperature_mean(height, &lat);
+        let tamp = climate::temperature_amplitude(&lat, &cont);
+        let (mut precip, pamp) = climate::precipitation(height, water, &tmean, &lat, &cont);
+        if self.precip_scale != 1.0 {
+            let s = self.precip_scale;
+            precip.mapv_inplace(|p| p * s);
+        }
+        self.tmean64 = Some(tmean);
+        self.tamp64 = Some(tamp);
+        self.precip64 = Some(precip);
+        self.pamp64 = Some(pamp);
+        self.timings.push(("climate", now_ms() - t1));
+    }
+
+    fn stage_hydrology(&mut self) {
         let t2 = now_ms();
-        let hydro = hydrology::hydrology(&height, &water, &precip, &pamp, &tmean);
-        timings.push(("hydrology", now_ms() - t2));
+        let hydro = hydrology::hydrology(
+            self.height64.as_ref().unwrap(),
+            self.water.as_ref().unwrap(),
+            self.precip64.as_ref().unwrap(),
+            self.pamp64.as_ref().unwrap(),
+            self.tmean64.as_ref().unwrap(),
+        );
+        self.hydro = Some(hydro);
+        self.timings.push(("hydrology", now_ms() - t2));
+    }
 
+    fn stage_biomes(&mut self) {
         let t3 = now_ms();
-        let biome_map = biomes_mod::classify(&height, &tmean, &precip, &hydro.lakes);
-        timings.push(("biomes", now_ms() - t3));
+        let biome_map = biomes_mod::classify(
+            self.height64.as_ref().unwrap(),
+            self.tmean64.as_ref().unwrap(),
+            self.precip64.as_ref().unwrap(),
+            &self.hydro.as_ref().unwrap().lakes,
+        );
+        self.biome_map = Some(biome_map);
+        self.timings.push(("biomes", now_ms() - t3));
+    }
 
+    fn stage_fertility(&mut self) {
         let t4 = now_ms();
-        let fertility = agriculture::fertility(
-            &height,
-            &tmean,
-            &precip,
-            &hydro.rivers,
-            &hydro.lakes,
-            &hydro.discharge,
-        );
-        let crops = agriculture::crop_packages(
-            &height,
-            &tmean,
-            &precip,
-            &hydro.rivers,
-            &hydro.lakes,
-        );
-        timings.push(("fertility", now_ms() - t4));
+        {
+            let height = self.height64.as_ref().unwrap();
+            let tmean = self.tmean64.as_ref().unwrap();
+            let precip = self.precip64.as_ref().unwrap();
+            let hydro = self.hydro.as_ref().unwrap();
+            let fert = agriculture::fertility(
+                height,
+                tmean,
+                precip,
+                &hydro.rivers,
+                &hydro.lakes,
+                &hydro.discharge,
+            );
+            let crops =
+                agriculture::crop_packages(height, tmean, precip, &hydro.rivers, &hydro.lakes);
+            self.fertility = Some(fert.mapv(|x| x as f32));
+            self.crops = Some(crops);
+        }
+        self.timings.push(("fertility", now_ms() - t4));
 
         // E3.2 — the physical stages are done; the world's float grids
         // drop to their resting f32 width here, and every human stage
         // below (naming, resources, settlements, trade, economy) reads
         // the same f32 the ticks will read.
-        let height = height.mapv(|x| x as f32);
-        let tmean = tmean.mapv(|x| x as f32);
-        let tamp = tamp.mapv(|x| x as f32);
-        let precip = precip.mapv(|x| x as f32);
-        let pamp = pamp.mapv(|x| x as f32);
-        let discharge = hydro.discharge.mapv(|x| x as f32);
-        let flow_amp = hydro.flow_amp.mapv(|x| x as f32);
-        let fertility = fertility.mapv(|x| x as f32);
+        self.height = Some(self.height64.take().unwrap().mapv(|x| x as f32));
+        self.tmean = Some(self.tmean64.take().unwrap().mapv(|x| x as f32));
+        self.tamp = Some(self.tamp64.take().unwrap().mapv(|x| x as f32));
+        self.precip = Some(self.precip64.take().unwrap().mapv(|x| x as f32));
+        self.pamp = Some(self.pamp64.take().unwrap().mapv(|x| x as f32));
+        let discharge = self.hydro.as_ref().unwrap().discharge.mapv(|x| x as f32);
+        let flow_amp = self.hydro.as_ref().unwrap().flow_amp.mapv(|x| x as f32);
+        self.discharge = Some(discharge);
+        self.flow_amp = Some(flow_amp);
+        self.water = None;
+    }
 
+    fn stage_naming(&mut self) {
         let t5 = now_ms();
-        let (mut features, world_name) = naming::name_features(
-            &height,
-            &biome_map,
-            &hydro.rivers,
-            &hydro.lakes,
-            &discharge,
-            &tmean,
-            &precip,
-            seed,
+        let (features, world_name) = naming::name_features(
+            self.height.as_ref().unwrap(),
+            self.biome_map.as_ref().unwrap(),
+            &self.hydro.as_ref().unwrap().rivers,
+            &self.hydro.as_ref().unwrap().lakes,
+            self.discharge.as_ref().unwrap(),
+            self.tmean.as_ref().unwrap(),
+            self.precip.as_ref().unwrap(),
+            self.seed,
         );
-        timings.push(("naming", now_ms() - t5));
+        self.features = Some(features);
+        self.world_name = Some(world_name);
+        self.timings.push(("naming", now_ms() - t5));
+    }
 
+    fn stage_resources(&mut self) {
         let t6 = now_ms();
-        let mut deposits =
-            resources::place_resources(&biome_map, &height, &hydro.rivers, &hydro.lakes, seed);
-        timings.push(("resources", now_ms() - t6));
+        let deposits = resources::place_resources(
+            self.biome_map.as_ref().unwrap(),
+            self.height.as_ref().unwrap(),
+            &self.hydro.as_ref().unwrap().rivers,
+            &self.hydro.as_ref().unwrap().lakes,
+            self.seed,
+        );
+        self.deposits = Some(deposits);
+        self.timings.push(("resources", now_ms() - t6));
+    }
+
+    fn stage_dawn(&mut self) {
+        let seed = self.seed;
+        let size = self.size;
+        let t0 = self.t0;
+        let mut timings = std::mem::take(&mut self.timings);
+        let height = self.height.take().unwrap();
+        let tmean = self.tmean.take().unwrap();
+        let tamp = self.tamp.take().unwrap();
+        let precip = self.precip.take().unwrap();
+        let pamp = self.pamp.take().unwrap();
+        let discharge = self.discharge.take().unwrap();
+        let flow_amp = self.flow_amp.take().unwrap();
+        let fertility = self.fertility.take().unwrap();
+        let biome_map = self.biome_map.take().unwrap();
+        let crops = self.crops.take().unwrap();
+        let hydro = self.hydro.take().unwrap();
+        let mut features = self.features.take().unwrap();
+        let world_name = self.world_name.take().unwrap();
+        let mut deposits = self.deposits.take().unwrap();
 
         let t7 = now_ms();
         let mut taken: HashSet<String> = HashSet::new();
@@ -631,7 +809,7 @@ impl World {
             settlements: setts,
             cultures,
             features,
-            
+
             routes,
             events,
             world_name,
@@ -675,7 +853,26 @@ impl World {
         world.dirty.clear(Dirty::TERRITORY); // ships with the pack, not the first tick
         // Seed the delta baseline (E4.2/E4.3) to what bootstrap() ships.
         world.prime_sent();
-        world
+        self.world = Some(world);
+    }
+}
+
+impl World {
+    pub fn generate(seed: i64, size: usize) -> World {
+        World::generate_scaled(seed, size, 1.0)
+    }
+
+    /// `generate` with a rainfall multiplier — the metamorphic-testing knob
+    /// (M8.2): the harness generates the same seed wetter and asserts the
+    /// rivers do not shrink. 1.0 is the game; nothing else ships.
+    /// Drives the `GenBuilder` ladder start to finish — the exact code path
+    /// the staged wasm build runs, one stage per `step()`.
+    pub fn generate_scaled(seed: i64, size: usize, precip_scale: f64) -> World {
+        let mut b = GenBuilder::new(seed, size, precip_scale);
+        while !b.done() {
+            b.step();
+        }
+        b.finish()
     }
 
     /// M4.1 — redraw the influence map after borders move or towns grow.
