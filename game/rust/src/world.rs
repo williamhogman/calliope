@@ -2127,6 +2127,12 @@ impl World {
         };
         let mut migrations: Vec<(usize, i64)> = Vec::new();
         let mut worst = 0.0f64;
+        // settlement bucket grid for the kin-town search (E5.3) — positions
+        // are fixed for the whole pass, only populations move
+        let town_buckets = crate::util::Buckets::build(
+            self.settlements.iter().map(|s| (s.x as f64, s.y as f64)).collect(),
+            32.0,
+        );
         for i in 0..self.settlements.len() {
             let (y, x, pop, culture, river, name) = {
                 let s = &self.settlements[i];
@@ -2162,22 +2168,13 @@ impl World {
             let dead = (hit as f64 * 0.55) as i64;
             let walked = hit - dead;
             self.settlements[i].pop = (pop - hit).max(30);
-            // the hungry walk to the nearest kin-town outside the blight
-            let mut target: Option<(usize, f64)> = None;
-            for (j, o) in self.settlements.iter().enumerate() {
-                if j == i || o.culture != culture {
-                    continue;
-                }
-                if dry(o.x, o.y) < -0.30 {
-                    continue; // starving too
-                }
-                let dy = (o.y - y) as f64;
-                let dx = (o.x - x) as f64;
-                let d2 = dy * dy + dx * dx;
-                if target.map_or(true, |(_, b)| d2 < b) {
-                    target = Some((j, d2));
-                }
-            }
+            // the hungry walk to the nearest kin-town outside the blight —
+            // ring search over the bucket grid (E5.3), same winner as the
+            // old full scan: nearest by (distance², index)
+            let target = town_buckets.nearest(x as f64, y as f64, |j| {
+                let o = &self.settlements[j];
+                j != i && o.culture == culture && !(dry(o.x, o.y) < -0.30)
+            });
             let text = if let Some((j, _)) = target {
                 migrations.push((j, walked));
                 format!(
