@@ -31,4 +31,5 @@ export const I = {
   why: svg(`<circle cx="12" cy="12" r="9"/><path d="M9.4 9.2a2.7 2.7 0 0 1 5.3.8c0 1.8-2.7 2.2-2.7 4"/><circle cx="12" cy="17.3" r="0.6" fill="currentColor" stroke="none"/>`),
   gem: svg(`<path d="M7 3h10l4 6-9 12L3 9l4-6z"/><path d="M3 9h18M12 21L8.5 9l2-6M12 21L15.5 9l-2-6"/>`, { sw: 1.3 }),
   ship: svg(`<path d="M4 17c1 1.6 2.5 1.6 3.5 0 1 1.6 2.5 1.6 3.5 0 1 1.6 2.5 1.6 3.5 0 1 1.6 2.5 1.6 3.5 0"/><path d="M5.5 14l1-6h4M12 14l6-5-2.5 5"/><path d="M10.5 5v9"/>`, { sw: 1.5 }),
+  quill: svg(`<path d="M20 4c-5.5.3-10.5 3.5-12.5 8L4 20l8-3.5C16.5 14.5 19.7 9.5 20 4z"/><path d="M6.5 17.5L16 8"/>`, { sw: 1.5 }),
 };

@@ -6,8 +6,9 @@ import html from "solid-js/html";
 
 import {
   world, settlements, cultures, market, searchOpen, setSearchOpen, playing,
+  stories, entities,
 } from "./state.js";
-import { LAYERS, fmt } from "./config.js";
+import { LAYERS, fmt, patternMeta, entityKind } from "./config.js";
 import { I } from "./icons.js";
 
 function score(name, q) {
@@ -67,6 +68,19 @@ export function Search(a) {
       push("Goods", r.g, `${r.p.toFixed(2)} coin`, score(r.g, query),
         () => a.select({ kind: "good", id: r.g }),
         world()?.header.resources?.[r.g]?.color);
+    }
+    // the telling: sagas and the cast — persons, relics, wars, ruins (M6.6)
+    for (const s of stories() || []) {
+      push("Sagas", s.title, `${patternMeta(s.pattern).label} \u00b7 Y${s.y0}\u2013${s.y1}`,
+        score(s.title, query),
+        () => a.select({ kind: "story", story: s }), patternMeta(s.pattern).color);
+    }
+    for (const en of entities() || []) {
+      if (!["person", "artifact", "war", "ruin"].includes(en.kind)) continue;
+      push("The cast", en.name,
+        `${en.role || entityKind(en.kind).label}${en.until != null ? " \u00b7 \u2020" : ""}`,
+        score(en.name, query),
+        () => a.select({ kind: "entity", id: en.id, fly: true }), entityKind(en.kind).color);
     }
     for (const [id, label] of LAYERS) {
       push("Lenses", `Lens: ${label}`, "", score(label, query), () => a.setLayer(id));

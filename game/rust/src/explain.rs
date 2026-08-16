@@ -59,7 +59,9 @@ fn explain_settlement(world: &World, id: i64) -> Option<Value> {
     };
     let trade = 1.0 + 0.04 * (s.connections.min(4) as f64);
     let coin = 1.0 + 0.04 * (s.wealth / (pop + 1.0)).min(1.0);
-    let k = 900.0 * s.food.max(0.3) * md.capacity;
+    // M2.2: K lives in settlements::capacity_at, stored on s.k each month —
+    // the ledger reads the stored value so there is no second formula copy.
+    let k = s.k.max(180.0);
     let crowd = 1.0 - pop / k;
 
     let g0 = pop * r0;

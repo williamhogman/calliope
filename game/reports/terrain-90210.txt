@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 90210 · 640x512
 ========================================================================
-world: "Dorithas" · generated in 1427 ms
+world: "Karwyn" · generated in 1260 ms
 land: 115663 cells of 327680 (35.3%) · 1850608 km²
 hypsometry (land h): p5 0.019 · p25 0.096 · p50 0.230 · p75 0.397 · p95 0.573 · max 0.799
 bathymetry (sea h): p5 -0.593 · p50 -0.393 · p95 -0.035

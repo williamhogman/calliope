@@ -1,0 +1,47 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · PROPERTIES                   size 512 · 60 y · 3 seeds
+========================================================================
+seam-invariant properties (M8.1) and metamorphic checks (M8.2)
+
+seed  12345: 4553 river cells · 0 uphill · 0 cycles · 0 dry terminals
+seed  12345: 19 towns · 26 routes · 0 isolated · 1 components
+seed  12345: rain ×1.25 ⇒ river cells 4553 → 5464 · discharge 1710344 → 2189050
+
+seed    777: 4281 river cells · 0 uphill · 0 cycles · 0 dry terminals
+seed    777: 16 towns · 25 routes · 0 isolated · 1 components
+seed    777: rain ×1.25 ⇒ river cells 4281 → 5191 · discharge 1672190 → 2113752
+
+seed  90210: 4657 river cells · 0 uphill · 0 cycles · 0 dry terminals
+seed  90210: 18 towns · 27 routes · 0 isolated · 1 components
+seed  90210: rain ×1.25 ⇒ river cells 4657 → 5632 · discharge 1809945 → 2390435
+
+
+---- checks ----------------------------------------------------------
+[PASS] rivers descend filled (12345)          0 up · 0 cyc   (M8.1: water only runs downhill)
+[PASS] rivers reach an outlet (12345)                0 dry   (M8.1: sea, lake or salt basin)
+[PASS] no isolated settlement (12345)            0 cut off   (M8.1: every town trades)
+[PASS] route graph connected (12345)               1 comps   (M8.1: one world, one web)
+[PASS] pack is stable (12345)                   12501512 B   (M8.1: same world ⇒ same bytes)
+[PASS] unpack layout sound (12345)               13 arrays   (M8.1: offsets contiguous, sizes exact)
+[PASS] unpack = world (12345)                    bit-equal   (M8.1: arrays survive the wire)
+[PASS] rain↑ ⇒ rivers not↓ (12345)             4553 → 5464   (M8.2: metamorphic monotonicity)
+[PASS] rain↑ ⇒ discharge↑ (12345)                    ×1.28   (M8.2: more water flows)
+[PASS] rivers descend filled (777)            0 up · 0 cyc   (M8.1: water only runs downhill)
+[PASS] rivers reach an outlet (777)                  0 dry   (M8.1: sea, lake or salt basin)
+[PASS] no isolated settlement (777)              0 cut off   (M8.1: every town trades)
+[PASS] route graph connected (777)                 1 comps   (M8.1: one world, one web)
+[PASS] pack is stable (777)                     12494104 B   (M8.1: same world ⇒ same bytes)
+[PASS] unpack layout sound (777)                 13 arrays   (M8.1: offsets contiguous, sizes exact)
+[PASS] unpack = world (777)                      bit-equal   (M8.1: arrays survive the wire)
+[PASS] rain↑ ⇒ rivers not↓ (777)               4281 → 5191   (M8.2: metamorphic monotonicity)
+[PASS] rain↑ ⇒ discharge↑ (777)                      ×1.26   (M8.2: more water flows)
+[PASS] rivers descend filled (90210)          0 up · 0 cyc   (M8.1: water only runs downhill)
+[PASS] rivers reach an outlet (90210)                0 dry   (M8.1: sea, lake or salt basin)
+[PASS] no isolated settlement (90210)            0 cut off   (M8.1: every town trades)
+[PASS] route graph connected (90210)               1 comps   (M8.1: one world, one web)
+[PASS] pack is stable (90210)                   12497052 B   (M8.1: same world ⇒ same bytes)
+[PASS] unpack layout sound (90210)               13 arrays   (M8.1: offsets contiguous, sizes exact)
+[PASS] unpack = world (90210)                    bit-equal   (M8.1: arrays survive the wire)
+[PASS] rain↑ ⇒ rivers not↓ (90210)             4657 → 5632   (M8.2: metamorphic monotonicity)
+[PASS] rain↑ ⇒ discharge↑ (90210)                    ×1.32   (M8.2: more water flows)
+CHECKS: 27 pass · 0 warn · 0 fail

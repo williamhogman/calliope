@@ -154,6 +154,9 @@ pub struct Mods {
     pub colony_range: f64, // multiplier on how far settlers dare to go
     pub production: f64,   // multiplier on goods output value
     pub prospecting: f64,  // multiplier on the odds of finding hidden seams
+    /// Kaplan (2017): land per soul ∝ T^−0.5, so carrying capacity rises
+    /// as √(arts mastered). Generic — on top of specific arts like plough.
+    pub kaplan: f64,
 }
 
 impl Default for Mods {
@@ -169,12 +172,14 @@ impl Default for Mods {
             colony_range: 1.0,
             production: 1.0,
             prospecting: 1.0,
+            kaplan: 1.0,
         }
     }
 }
 
 pub fn mods_for(soc: &Society) -> Mods {
     let mut m = Mods::default();
+    m.kaplan = (1.0 + 0.16 * soc.techs.len() as f64).sqrt();
     for id in &soc.techs {
         match id.as_str() {
             "pottery" => { m.capacity *= 1.10; m.production *= 1.05; }
@@ -287,6 +292,7 @@ pub fn monthly(
                 s: people.clone(),
                 k: "tech".to_string(),
                 text: t.flavor.replace("{P}", &people),
+                ..Default::default()
             });
             if t.era > socs[si].era {
                 socs[si].era = t.era;
@@ -295,6 +301,7 @@ pub fn monthly(
                     s: people.clone(),
                     k: "society".to_string(),
                     text: ERA_DAWNS[t.era].replace("{P}", &people),
+                    ..Default::default()
                 });
             }
         }
@@ -317,6 +324,7 @@ pub fn monthly(
                 s: people.clone(),
                 k: "society".to_string(),
                 text: ASCENSIONS[next].replace("{P}", &people),
+                ..Default::default()
             });
         }
     }

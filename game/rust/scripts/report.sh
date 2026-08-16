@@ -27,14 +27,22 @@ if [ "$MODE" = "quick" ]; then
   SEEDS=(12345)
   CIV_YEARS=60
   ECO_YEARS=40
+  TELL_YEARS=80
   SWEEP="512 60 12345 777 31337"
   DET_MONTHS=60
+  PROPS="512 40 12345"
+  ERA="256 40 8 12345"
+  PATINA="512 200 12345"
 else
   SEEDS=(12345 777 90210)
   CIV_YEARS=150
   ECO_YEARS=100
+  TELL_YEARS=150
   SWEEP="512 100 12345 777 31337 90210 555"
   DET_MONTHS=120
+  PROPS="512 60 12345 777 90210"
+  ERA="256 60 16 12345"
+  PATINA="512 300 12345 777 90210"
 fi
 
 run() { # run <outfile> <diagnose args...>
@@ -54,9 +62,13 @@ if [ "${#SEEDS[@]}" -gt 1 ]; then
   run "civ-${SEEDS[1]}.txt" civ "${SEEDS[1]}" "$SIZE" "$CIV_YEARS"
 fi
 run "economy-${SEEDS[0]}.txt" economy "${SEEDS[0]}" "$SIZE" "$ECO_YEARS"
+run "telling-${SEEDS[0]}.txt" telling "${SEEDS[0]}" "$SIZE" "$TELL_YEARS"
 run "determinism.txt" determinism "${SEEDS[0]}" "$SIZE" "$DET_MONTHS"
 run "bench.txt" bench
 run "sweep.txt" sweep $SWEEP
+run "properties.txt" properties $PROPS
+run "era.txt" era $ERA
+run "patina.txt" patina $PATINA
 
 # ---- summary --------------------------------------------------------------
 SUM="$OUT/SUMMARY.txt"

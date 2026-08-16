@@ -5,9 +5,9 @@ river cells: 4553 (4.1% of land) · lake cells: 1996 (1.8% of land)
 river systems (≥12 cells): 117 · longest network 163 cells ≈ 652 km
 discharge on rivers: p50 136.4 · p90 536.9 · p99 1460.4 · max 2585.4
 named: 3 deltas · 4 marshes
-  delta: The Talanum Delta @(266,239)
-  delta: The Loria Delta @(493,259)
-  delta: The Kareth Delta @(496,242)
+  delta: The Galnor Delta @(266,239)
+  delta: The Aurmar Delta @(493,259)
+  delta: The Zaruath Delta @(496,242)
 river towns: 16 of 16
 strahler orders: 1:91 2:454 3:913 4:1671 5:1219 6:205 · top 6
 wadis: 726 cells · salt basins: 15 (473 cells) · river |flow amp| mean 0.18

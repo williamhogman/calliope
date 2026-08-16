@@ -69,3 +69,29 @@ export async function explainWorld(kind, key) {
   const parsed = JSON.parse(json);
   return parsed && parsed.terms ? parsed : null;
 }
+
+// ---------- the telling (M6) ----------
+
+// Ranked microstories the sifter lifted from the chronicle (M6.5/M6.7).
+export async function storiesWorld() {
+  const { json } = await call({ op: "stories" });
+  return JSON.parse(json);
+}
+
+// The chronicle's cast — every named entity, alive and dead (M6.1).
+export async function entitiesWorld() {
+  const { json } = await call({ op: "entities" });
+  return JSON.parse(json);
+}
+
+// Every chronicle entry that speaks of one entity, oldest first (M6.6).
+export async function entityLogWorld(entId) {
+  const { json } = await call({ op: "entityLog", ent: String(entId) });
+  return JSON.parse(json);
+}
+
+// The relics and their provenance (M6.3).
+export async function artifactsWorld() {
+  const { json } = await call({ op: "artifacts" });
+  return JSON.parse(json);
+}

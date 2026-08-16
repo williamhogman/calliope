@@ -137,6 +137,81 @@ export class WasmWorld {
         wasm.__wbg_wasmworld_free(ptr, 0);
     }
     /**
+     * The relics and their provenance (M6.3).
+     * @returns {string}
+     */
+    artifacts() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmworld_artifacts(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * The chronicle's cast — every named entity, alive and dead (M6.1).
+     * @returns {string}
+     */
+    entities() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmworld_entities(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Every chronicle entry that speaks of one entity, oldest first (M6.6).
+     * @param {bigint} id
+     * @returns {string}
+     */
+    entity_log(id) {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmworld_entity_log(this.__wbg_ptr, id);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * How many entries the full chronicle holds (M6).
+     * @returns {number}
+     */
+    events_len() {
+        const ret = wasm.wasmworld_events_len(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * One page of the full chronicle, `[from, to)`, as a JSON array (M6).
+     * @param {number} from
+     * @param {number} to
+     * @returns {string}
+     */
+    events_range(from, to) {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmworld_events_range(this.__wbg_ptr, from, to);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * Term ledger for a derived quantity ("why is this so?") as JSON.
      * kind: "settlement" (key = id) | "good" (key = good name).
      * @param {string} kind
@@ -181,6 +256,23 @@ export class WasmWorld {
         var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
         wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
         return v1;
+    }
+    /**
+     * The story sifter (M6.5/M6.7): ranked microstories lifted from the
+     * full log — rises and falls, rivalries, curses, relic roads.
+     * @returns {string}
+     */
+    stories() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmworld_stories(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
     }
     /**
      * Advance the simulation; returns {month, settlements, events, routes?} JSON.
@@ -1951,12 +2043,12 @@ function __wbg_get_imports() {
             arg0.writeTexture(arg1, arg2, arg3, arg4);
         }, arguments); },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1694, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1695, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__hcd906056e493c802);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 47, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 48, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h96b666bf41a67151);
             return ret;
         },

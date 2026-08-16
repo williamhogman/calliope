@@ -5,9 +5,9 @@ river cells: 4657 (4.0% of land) · lake cells: 2619 (2.3% of land)
 river systems (≥12 cells): 107 · longest network 156 cells ≈ 624 km
 discharge on rivers: p50 139.5 · p90 579.3 · p99 1538.5 · max 2225.1
 named: 3 deltas · 4 marshes
-  delta: The Umeth Delta @(513,274)
-  delta: The Dormar Delta @(256,216)
-  delta: The Mouths of the Loros @(395,217)
+  delta: The Mouths of the Calaeath @(513,274)
+  delta: The Mouths of the Belador @(256,216)
+  delta: The Belthas Delta @(395,217)
 river towns: 16 of 16
 strahler orders: 1:106 2:490 3:834 4:1831 5:1248 6:148 · top 6
 wadis: 677 cells · salt basins: 23 (899 cells) · river |flow amp| mean 0.18

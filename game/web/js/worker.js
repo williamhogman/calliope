@@ -7,7 +7,7 @@ const ready = loadEngine();
 let world = null;
 
 self.onmessage = async (e) => {
-  const { id, op, seed, size, months, kind, key } = e.data;
+  const { id, op, seed, size, months, kind, key, ent } = e.data;
   try {
     const { WasmWorld } = await ready;
     if (op === "generate") {
@@ -25,6 +25,18 @@ self.onmessage = async (e) => {
       if (!world) throw new Error("no world — generate one first");
       if (typeof world.explain !== "function") throw new Error("engine has no explain");
       self.postMessage({ id, ok: true, json: world.explain(kind, key) });
+    } else if (op === "stories") {
+      if (!world) throw new Error("no world — generate one first");
+      self.postMessage({ id, ok: true, json: world.stories() });
+    } else if (op === "entities") {
+      if (!world) throw new Error("no world — generate one first");
+      self.postMessage({ id, ok: true, json: world.entities() });
+    } else if (op === "entityLog") {
+      if (!world) throw new Error("no world — generate one first");
+      self.postMessage({ id, ok: true, json: world.entity_log(BigInt(ent)) });
+    } else if (op === "artifacts") {
+      if (!world) throw new Error("no world — generate one first");
+      self.postMessage({ id, ok: true, json: world.artifacts() });
     } else {
       throw new Error(`unknown op: ${op}`);
     }

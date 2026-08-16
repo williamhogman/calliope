@@ -11,7 +11,10 @@
 //!   diagnose resources   <seed> <size>          deposit ontology and placement
 //!   diagnose civ         <seed> <size> <years>  a century of history, examined
 //!   diagnose economy     <seed> <size> <years>  prices, wealth, routes, gini
+//!   diagnose telling     <seed> <size> <years>  the chronicle judged (M6)
 //!   diagnose determinism <seed> <size> <months> same seed => same world, always
+//!   diagnose properties  <size> <years> <seeds> seam-invariant properties (M8.1/8.2)
+//!   diagnose era         <size> <years> <n> <base> expressive range + oatmeal (M8.3/8.4)
 //!   diagnose bench                              generation + tick throughput
 //!   diagnose sweep       <size> <years> <seeds> cross-seed robustness table
 
@@ -22,9 +25,12 @@ use ndarray::Array2;
 
 use calliope::constants as gc;
 use calliope::economy;
+use calliope::hydrology;
+use calliope::naming;
 use calliope::ndimage;
 use calliope::resources;
 use calliope::society;
+use calliope::telling;
 use calliope::util::quantile;
 use calliope::world::{Event, World};
 
@@ -147,6 +153,9 @@ fn hash_state(w: &World) -> u64 {
     for &b in w.biomes.iter() {
         bytes.push(b);
     }
+    for &b in w.crops.iter() {
+        bytes.push(b);
+    }
     for (((&r, &l), &s), &sw) in w
         .rivers
         .iter()
@@ -211,21 +220,50 @@ struct RunLog {
     strikes: usize,
     depletions: usize,
     wars: usize,
+    famines: usize,
     placeholders: usize,
     empties: usize,
+    /// events that speak a god's name — festivals, omens, war-oaths (M3.5)
+    god_citations: usize,
     arc: Vec<(i64, String)>,
     max_gap: i64,
     total_events: usize,
+    // ---- M4 statecraft telemetry ----
+    /// Alive polity count sampled once a year.
+    polities: Vec<usize>,
+    /// Settlements that changed hands (conquest, cession, sack).
+    transfers: usize,
+    /// New polities born mid-run (rebellion secessions).
+    rebellions: usize,
+    /// Did any war draw allies to a banner?
+    coalition_seen: bool,
+    /// Most vassal realms seen at once.
+    vassals_max: usize,
 }
 
 /// Advance `years` in 12-month ticks, logging everything worth judging.
 fn run_years(w: &mut World, years: usize) -> RunLog {
     let mut log = RunLog::default();
     let mut last_m = w.month;
+    let god_names: Vec<String> = w
+        .cultures
+        .iter()
+        .flat_map(|c| c.pantheon.iter().map(|g| g.name.clone()))
+        .collect();
+    let alive_count = |w: &World| -> usize {
+        (0..w.cultures.len())
+            .filter(|&c| w.settlements.iter().any(|s| s.culture == c))
+            .count()
+    };
+    let mut owners: Vec<usize> = w.settlements.iter().map(|s| s.culture).collect();
+    let mut n_cultures = w.cultures.len();
     for yr in 1..=years {
         let (evs, _founded, _dep) = w.tick(12);
         for e in &evs {
             *log.census.entry(e.k.clone()).or_default() += 1;
+            if god_names.iter().any(|g| e.text.contains(g.as_str())) {
+                log.god_citations += 1;
+            }
             if e.text.contains('{') || e.text.contains('}') {
                 log.placeholders += 1;
             }
@@ -239,6 +277,7 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
                 "discovery" => log.strikes += 1,
                 "depletion" => log.depletions += 1,
                 "war" => log.wars += 1,
+                "famine" => log.famines += 1,
                 "tech" | "society" => log.arc.push((e.m, e.text.clone())),
                 _ => {}
             }
@@ -246,6 +285,23 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
             last_m = e.m;
         }
         log.total_events += evs.len();
+        // ---- M4: who holds what, and did any of it move this year ----
+        for (i, s) in w.settlements.iter().enumerate() {
+            if i < owners.len() && owners[i] != s.culture {
+                log.transfers += 1;
+            }
+        }
+        owners = w.settlements.iter().map(|s| s.culture).collect();
+        if w.cultures.len() > n_cultures {
+            log.rebellions += w.cultures.len() - n_cultures;
+            n_cultures = w.cultures.len();
+        }
+        if w.politics.wars.iter().any(|war| !war.allies_a.is_empty() || !war.allies_b.is_empty()) {
+            log.coalition_seen = true;
+        }
+        let vassals = w.politics.vassal_of.iter().filter(|v| v.is_some()).count();
+        log.vassals_max = log.vassals_max.max(vassals);
+        log.polities.push(alive_count(w));
         let pop: i64 = w.settlements.iter().map(|s| s.pop).sum();
         let wealth: f64 = w.settlements.iter().map(|s| s.wealth).sum();
         let treasury: f64 = w.societies.iter().map(|s| s.treasury).sum();
@@ -450,6 +506,21 @@ fn cmd_climate(seed: i64, size: usize) {
     let mid_m = mid_amp.iter().sum::<f64>() / mid_amp.len().max(1) as f64;
     println!("monsoon |amp| of annual rain: tropics {:.2} · extratropics {:.2}", trop_m, mid_m);
 
+    // ---- M2.1 crop belts: the agricultural map of the world ----
+    let mut pk = [0usize; 5];
+    for (&cpk, &l) in w.crops.iter().zip(land.iter()) {
+        if l {
+            pk[cpk as usize] += 1;
+        }
+    }
+    let pshare = |i: usize| pk[i] as f64 / land_n.max(1.0);
+    println!();
+    println!(
+        "crop packages of the land: wheat {} · rice {} · maize {} · pastoral {} · wildland {}",
+        pct(pshare(1)), pct(pshare(2)), pct(pshare(3)), pct(pshare(4)), pct(pshare(0))
+    );
+    let arable = pshare(1) + pshare(2) + pshare(3);
+
     let mut c = Checks::default();
     c.range("desert share of land", desert, pct(desert), (0.12, 0.28), (0.06, 0.38), "sweet 12–28% · hard 6–38%");
     c.range("tundra+ice share of land", frozen, pct(frozen), (0.05, 0.30), (0.01, 0.45), "sweet 5–30% · hard 1–45%");
@@ -460,6 +531,9 @@ fn cmd_climate(seed: i64, size: usize) {
     c.range("mean seasonal swing", a_mean, format!("{:.1}°C", a_mean), (4.0, 14.0), (2.0, 20.0), "sweet 4–14°C · hard 2–20°C");
     c.range("tropical monsoon amplitude", trop_m, format!("{:.2}", trop_m), (0.12, 0.55), (0.05, 0.85), "sweet .12–.55 · hard .05–.85");
     c.want("monsoon lives in the tropics", trop_m > mid_m, format!("{:.2} vs {:.2}", trop_m, mid_m), "ITCZ march beats continental swing");
+    c.range("arable share of land", arable, pct(arable), (0.15, 0.65), (0.06, 0.85), "M2.1: wheat+rice+maize belts cover the good land");
+    c.range("pastoral share of land", pshare(4), pct(pshare(4)), (0.02, 0.45), (0.005, 0.65), "M2.1: the dry steppe carries herds");
+    c.want("rice hugs the water", pk[2] == 0 || pk[2] < pk[1] + pk[3], format!("rice {} vs wheat+maize {}", pk[2], pk[1] + pk[3]), "paddies are the exception, not the rule");
     c.print();
 }
 
@@ -628,6 +702,13 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     let parts: Vec<String> = log.census.iter().map(|(k, v)| format!("{k}:{v}")).collect();
     println!("event census: {}", parts.join(" · "));
     println!("strikes {} · depletions {} · mining camps {} · wars {}", log.strikes, log.depletions, log.camps, log.wars);
+    let pol_min = log.polities.iter().min().copied().unwrap_or(0);
+    let pol_max = log.polities.iter().max().copied().unwrap_or(0);
+    println!(
+        "statecraft: {} war events · {} towns changed hands · {} secessions · polities {}–{} · coalitions {} · vassals ≤{}",
+        log.wars, log.transfers, log.rebellions, pol_min, pol_max,
+        if log.coalition_seen { "yes" } else { "no" }, log.vassals_max,
+    );
     println!("longest silence between events: {} months", log.max_gap);
 
     println!();
@@ -655,7 +736,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     let finite_ok = w.settlements.iter().all(|s| s.wealth.is_finite() && s.pop >= 0) && w.market.prices.values().all(|p| p.is_finite());
 
     let mut c = Checks::default();
-    c.range("population growth ×", growth, format!("{:.2}×", growth), (2.0, 500.0), (1.05, 2000.0), "sweet 2–500× — dawn towns are tiny");
+    c.range("population growth ×", growth, format!("{:.2}×", growth), (2.0, 1200.0), (1.05, 3000.0), "M2 crop-package K: filled worlds run ~10⁶ souls from tiny dawns");
     if years >= 100 {
         // pacing: the world should still be becoming in its second half,
         // not sitting on a saturated plateau for a century.
@@ -686,8 +767,286 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         c.want("era reached Iron", max_era >= 2, society::ERAS[max_era].to_string(), "≥ Age of Iron by now");
     }
     c.must("numbers stay finite", finite_ok, if finite_ok { "yes".into() } else { "NO".into() }, "no NaN pops, wealth or prices");
+
+    // ---- M2.3 rank-size: log(pop) vs log(rank) OLS slope ≈ −1 (Zipf) ----
+    let mut pops: Vec<f64> = w.settlements.iter().map(|s| s.pop as f64).filter(|&p| p >= 120.0).collect();
+    pops.sort_by(|a, b| b.partial_cmp(a).unwrap());
+    if pops.len() >= 10 {
+        let n = pops.len() as f64;
+        let (mut sx, mut sy, mut sxx, mut sxy) = (0.0, 0.0, 0.0, 0.0);
+        for (i, p) in pops.iter().enumerate() {
+            let xr = ((i + 1) as f64).ln();
+            let yr = p.ln();
+            sx += xr; sy += yr; sxx += xr * xr; sxy += xr * yr;
+        }
+        let slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+        c.range("rank-size slope (Zipf)", slope, format!("{:.2} over {} towns", slope, pops.len()), (-1.3, -0.8), (-1.75, -0.5), "M2.3 gate: −1.3…−0.8");
+    }
+
+    // ---- M2.5 spacing: median nearest-neighbour distance in km ----
+    let mut nn: Vec<f64> = Vec::new();
+    for (i, s) in w.settlements.iter().enumerate() {
+        let mut best = f64::INFINITY;
+        for (j, o) in w.settlements.iter().enumerate() {
+            if i != j {
+                let d2 = ((s.x - o.x).pow(2) + (s.y - o.y).pow(2)) as f64;
+                best = best.min(d2);
+            }
+        }
+        if best.is_finite() {
+            nn.push(best.sqrt() * 4.0); // 4 km per cell (ADR-0004)
+        }
+    }
+    if !nn.is_empty() {
+        nn.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let med = nn[nn.len() / 2];
+        c.range("median town spacing", med, format!("{:.0} km", med), (14.0, 48.0), (8.0, 120.0), "M2.5: market-town band ~15–30 km in settled cores");
+    }
+
+    // ---- M2.6 famine: dry years starve somewhere, but not everywhere ----
+    if years >= 100 {
+        let per_c = log.famines as f64 * 100.0 / years.max(1) as f64;
+        c.range("famine events per century", per_c, format!("{:.1}", per_c), (1.0, 60.0), (0.0, 150.0), "M2.6: the rains must fail sometimes");
+    }
+
+    // ---- M3 gates: words and ways ----
+    // M3.1 label audit: a town's name must classify to the tongue that
+    // coined it — it starts with one of the bank's openers and ends with
+    // one of its closers. Audited against the NAMER, not the current
+    // owner: conquest moves borders, not names (M9.2).
+    {
+        let mut audited = 0usize;
+        let mut hits = 0usize;
+        for s in &w.settlements {
+            let Some(cu) = w.cultures.get(s.namer) else { continue };
+            let b = naming::bank(&cu.style);
+            audited += 1;
+            let pre_ok = b.pre.iter().any(|(p, _)| s.name.starts_with(p));
+            let end_ok = b.end.iter().any(|(e, _)| s.name.ends_with(e));
+            if pre_ok && end_ok {
+                hits += 1;
+            }
+        }
+        if audited > 0 {
+            let share = hits as f64 / audited as f64;
+            c.range("toponyms classify to culture", share, pct(share), (0.9, 1.0), (0.8, 1.0), "M3 gate: sampled toponyms ≥ 90%");
+        }
+
+        // M3.3 gloss coverage: every fragment of every bank carries a gloss.
+        let mut frags = 0usize;
+        let mut glossed = 0usize;
+        for st in naming::STYLES {
+            let b = naming::bank(st);
+            for (_, g) in b.pre.iter().chain(b.mid.iter()).chain(b.end.iter()) {
+                frags += 1;
+                glossed += (!g.is_empty()) as usize;
+            }
+        }
+        c.must("gloss coverage of name banks", glossed == frags, format!("{}/{}", glossed, frags), "M3.3 gate: 100% of fragments glossed");
+
+        // …and every settlement & feature carries a readable etymology.
+        let s_ety = w.settlements.iter().filter(|s| !s.ety.is_empty()).count();
+        let f_ety = w.features.iter().filter(|f| !f.ety.is_empty()).count();
+        c.must("settlement etymologies", s_ety == w.settlements.len(), format!("{}/{}", s_ety, w.settlements.len()), "M3.3: every town name reads back");
+        c.must("feature etymologies", f_ety == w.features.len(), format!("{}/{}", f_ety, w.features.len()), "M3.3: every feature name reads back");
+
+        // M3 no name-collision regressions: towns, features, peoples.
+        let mut seen: BTreeSet<&str> = BTreeSet::new();
+        let mut dups = 0usize;
+        for n in w
+            .settlements
+            .iter()
+            .map(|s| s.name.as_str())
+            .chain(w.features.iter().map(|f| f.name.as_str()))
+            .chain(w.cultures.iter().map(|cu| cu.people.as_str()))
+        {
+            if !seen.insert(n) {
+                dups += 1;
+            }
+        }
+        c.must("name collisions", dups == 0, format!("{}", dups), "M3 gate: 0 duplicates");
+
+        // M3.4 exonyms: where two peoples actually share country, a border
+        // feature should carry a second name in the other tongue. Peoples
+        // on far-apart continents legitimately double nothing — count the
+        // candidate features first (same geometry as culture_toponyms) and
+        // only demand exonyms when candidates exist.
+        if w.cultures.len() >= 2 {
+            let mut candidates = 0usize;
+            for f in &w.features {
+                if matches!(f.t.as_str(), "ocean" | "sea" | "continent" | "river" | "delta") {
+                    continue;
+                }
+                let mut best = vec![f64::INFINITY; w.cultures.len()];
+                for s in &w.settlements {
+                    let dx = (s.x - f.x) as f64;
+                    let dy = (s.y - f.y) as f64;
+                    let d2 = dx * dx + dy * dy;
+                    if d2 < best[s.culture] {
+                        best[s.culture] = d2;
+                    }
+                }
+                let mut v: Vec<f64> = best.into_iter().filter(|d| d.is_finite()).collect();
+                v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                if v.len() >= 2
+                    && v[0].sqrt() <= naming::TONGUE_REACH
+                    && v[1].sqrt() <= naming::TONGUE_REACH * 1.8
+                {
+                    candidates += 1;
+                }
+            }
+            let exo = w.features.iter().filter(|f| !f.alt.is_empty()).count();
+            if candidates > 0 {
+                c.want("border exonyms present", exo >= 1, format!("{} of {} shared", exo, candidates), "M3.4: doubled names on shared features");
+            } else {
+                c.must("border exonyms (no shared features)", true, "peoples live apart".to_string(), "M3.4: nothing to double on this seed");
+            }
+        }
+
+        // M3.5 pantheon: four named gods per people, and the chronicle
+        // must actually speak of them (festivals, omens, war names).
+        let full = w.cultures.iter().filter(|cu| cu.pantheon.len() >= 3).count();
+        c.must("pantheons complete", full == w.cultures.len(), format!("{}/{}", full, w.cultures.len()), "M3.5: ≥ 3 named gods per people");
+        if years >= 100 {
+            let cited = log.god_citations;
+            c.must("gods cited in the chronicle", cited >= 1, format!("{}", cited), "M3.5: omens/festivals/wars name the gods");
+        }
+    }
+
+    // ---- M4 gates: the great game ----
+    {
+        let pol_min = log.polities.iter().min().copied().unwrap_or(0);
+        let pol_max = log.polities.iter().max().copied().unwrap_or(0);
+        let pol_last = log.polities.last().copied().unwrap_or(0);
+
+        // Territory sanity: every owned cell names a real culture, and the
+        // political map covers a sane share of the land.
+        let n_cult = w.cultures.len() as i16;
+        let terr = w.territory.as_slice().unwrap_or(&[]);
+        let mut owned = 0usize;
+        let mut bad = 0usize;
+        let mut land_cells = 0usize;
+        for (i, &h) in w.height.iter().enumerate() {
+            let t = terr.get(i).copied().unwrap_or(-1);
+            if h >= 0.0 {
+                land_cells += 1;
+            }
+            if t >= 0 {
+                owned += 1;
+                if t >= n_cult {
+                    bad += 1;
+                }
+            }
+        }
+        let owned_share = owned as f64 / land_cells.max(1) as f64;
+        c.must("territory owners valid", bad == 0, format!("{} bad cells", bad), "M4.1: every owned cell names a live culture");
+        c.range("land under banners", owned_share, pct(owned_share), (0.05, 0.85), (0.01, 0.98), "M4.1: realms claim some — never all — of the wild");
+
+        if years >= 100 {
+            c.want("wars kindle", log.wars >= 1, format!("{}", log.wars), "M4: a century without war is a broken game");
+            if log.wars >= 8 {
+                c.want("land changes hands", log.transfers >= 1, format!("{} transfers / {} war events", log.transfers, log.wars), "M4.2 gate: border change per major war");
+            }
+            c.want("polity count moves", pol_max > pol_min, format!("{}–{}", pol_min, pol_max), "M4.5 gate: realms must rise and fall");
+            let top_share = {
+                let total: i64 = w.settlements.iter().map(|s| s.pop).sum();
+                let mut by_c: BTreeMap<usize, i64> = BTreeMap::new();
+                for s in &w.settlements {
+                    *by_c.entry(s.culture).or_default() += s.pop;
+                }
+                by_c.values().max().copied().unwrap_or(0) as f64 / total.max(1) as f64
+            };
+            c.range("largest realm pop share", top_share, pct(top_share), (0.1, 0.75), (0.02, 0.92), "M4 gate: no runaway single empire");
+            let _ = pol_last;
+        }
+        if years >= 140 {
+            c.want("coalitions form", log.coalition_seen, if log.coalition_seen { "yes".into() } else { "no".into() }, "M4.3 gate: dread should unite the wary");
+        }
+    }
+
+    // ---- M5 gates: iron and coin ----
+    {
+        let n_areas = w.areas.markets.len();
+        if w.settlements.len() >= 30 {
+            c.must("market areas carved", n_areas >= 2, format!("{} areas / {} towns", n_areas, w.settlements.len()), "M5.2: the route web splits into local markets");
+        }
+        // inter-area price divergence: mean over goods of max/min across areas
+        if n_areas >= 2 {
+            let goods: std::collections::BTreeSet<String> = w
+                .settlements
+                .iter()
+                .flat_map(|s| s.goods.iter().cloned())
+                .collect();
+            let mut ratios = Vec::new();
+            for g in &goods {
+                let ps: Vec<f64> = w.areas.markets.iter().map(|m| m.price(g)).collect();
+                let lo = ps.iter().cloned().fold(f64::INFINITY, f64::min);
+                let hi = ps.iter().cloned().fold(0.0f64, f64::max);
+                if lo > 0.0 {
+                    ratios.push(hi / lo);
+                }
+            }
+            if !ratios.is_empty() {
+                let mean = ratios.iter().sum::<f64>() / ratios.len() as f64;
+                c.range("inter-area price divergence", mean, format!("×{:.2} mean spread", mean), (1.03, 3.0), (1.0, 6.0), "M5.2 gate: local markets disagree, but not madly");
+            }
+        }
+        if years >= 100 {
+            let crafts = w
+                .settlements
+                .iter()
+                .filter(|s| s.goods.iter().any(|g| matches!(g.as_str(), "tools" | "weapons" | "jewelry")))
+                .count();
+            c.want("recipe towns emerge", crafts >= 1, format!("{} towns craft", crafts), "M5.1 gate: ore, fuel and art make finished goods");
+            let coin_known = w.societies.iter().any(|so| so.knows("coin"));
+            if coin_known {
+                c.want("merchants take the roads", !w.merchants.is_empty(), format!("{} ever", w.merchants.len()), "M5.5: coin-wise realms send out traders");
+            }
+        }
+        // M5.4 gravity cross-check: realized route flow should correlate
+        // with pop·pop/cost² over the same edges
+        {
+            let by_id: BTreeMap<i64, &_> = w.settlements.iter().map(|s| (s.id, s)).collect();
+            let mut xs = Vec::new();
+            let mut ys = Vec::new();
+            for (ri, r) in w.routes.iter().enumerate() {
+                let (Some(sa), Some(sb)) = (by_id.get(&r.a), by_id.get(&r.b)) else { continue };
+                let flow = w.route_flow.get(ri).copied().unwrap_or(0.0);
+                if flow <= 0.0 {
+                    continue;
+                }
+                let grav = (sa.pop as f64 * sb.pop as f64) / r.cost.max(1.0).powi(2);
+                xs.push(grav.ln());
+                ys.push(flow.ln());
+            }
+            if xs.len() >= 12 {
+                let corr = pearson(&xs, &ys);
+                c.range("gravity-model correlation", corr, format!("r={:.2} over {} routes", corr, xs.len()), (0.30, 1.0), (0.10, 1.0), "M5.4 gate: big close pairs carry the trade");
+            }
+        }
+    }
     c.print();
 }
+
+/// Pearson correlation over paired samples.
+fn pearson(xs: &[f64], ys: &[f64]) -> f64 {
+    let n = xs.len() as f64;
+    let mx = xs.iter().sum::<f64>() / n;
+    let my = ys.iter().sum::<f64>() / n;
+    let mut sxy = 0.0;
+    let mut sxx = 0.0;
+    let mut syy = 0.0;
+    for (x, y) in xs.iter().zip(ys.iter()) {
+        sxy += (x - mx) * (y - my);
+        sxx += (x - mx) * (x - mx);
+        syy += (y - my) * (y - my);
+    }
+    if sxx <= 0.0 || syy <= 0.0 {
+        return 0.0;
+    }
+    sxy / (sxx * syy).sqrt()
+}
+
 
 // ================================================================ economy
 
@@ -720,9 +1079,11 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
 
     println!("{:<9} {:>6} {:>7} {:>7} {:>7} {:>9} {:>8}", "good", "base", "mean", "min", "max", "mean/base", "pinned");
     let mut max_pinned = 0.0f64;
+    let mut means: BTreeMap<&str, f64> = BTreeMap::new();
     for (g, s) in &series {
         let base = economy::base_value(g);
         let mean = s.iter().sum::<f64>() / s.len() as f64;
+        means.insert(g, mean);
         let min = s.iter().cloned().fold(f64::INFINITY, f64::min);
         let max = s.iter().cloned().fold(0.0f64, f64::max);
         let pinned = s.iter().filter(|&&p| p <= 0.31 * base || p >= 4.9 * base).count() as f64 / s.len() as f64;
@@ -779,6 +1140,341 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     if years >= 60 {
         c.want("strikes moved markets", strikes >= 1, format!("{}", strikes), "discovery shocks should fire");
     }
+
+    // ---- the mines: does the world work what it knows? ----
+    const MINERALS: [&str; 7] = ["stone", "coal", "copper", "iron", "silver", "gold", "mithril"];
+    let known: Vec<_> = w.deposits.iter().filter(|d| d.known && d.left > 0.0 && MINERALS.contains(&d.r.as_str())).collect();
+    let worked = known.iter().filter(|d| {
+        w.settlements.iter().any(|s| {
+            let r = calliope::settlements::work_radius(s.pop);
+            let dx = (d.x - s.x) as f64;
+            let dy = (d.y - s.y) as f64;
+            dx * dx + dy * dy <= r * r && s.goods.iter().any(|g| g == &d.r)
+        })
+    }).count();
+    let mut goods_census: BTreeMap<&str, usize> = BTreeMap::new();
+    for s in &w.settlements {
+        for g in &s.goods {
+            *goods_census.entry(g.as_str()).or_default() += 1;
+        }
+    }
+    println!();
+    println!("mines: {} live mineral seams known · {} worked by a town", known.len(), worked);
+    println!("towns listing each good: {}", goods_census.iter().map(|(g, n)| format!("{} {}", g, n)).collect::<Vec<_>>().join(" · "));
+    if !known.is_empty() {
+        let share = worked as f64 / known.len() as f64;
+        c.range("known seams worked", share, pct(share), (0.35, 1.0), (0.10, 1.0), "found ore must reach the market, not rust in the hills");
+    }
+
+    // ---- M2.4 Bettencourt: β from ln(wealth) ~ β·ln(pop) across towns ----
+    let pts: Vec<(f64, f64)> = w.settlements.iter()
+        .filter(|s| s.pop > 80 && s.wealth > 1.0)
+        .map(|s| ((s.pop as f64).ln(), s.wealth.ln()))
+        .collect();
+    if pts.len() >= 10 {
+        let n = pts.len() as f64;
+        let (mut sx, mut sy, mut sxx, mut sxy) = (0.0, 0.0, 0.0, 0.0);
+        for (xr, yr) in &pts {
+            sx += xr; sy += yr; sxx += xr * xr; sxy += xr * yr;
+        }
+        let beta = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+        c.range("wealth~pop scaling β", beta, format!("{:.2} over {} towns", beta, pts.len()), (0.90, 1.60), (0.50, 2.10), "M2.4: superlinear output, target ≈1.15");
+    }
+
+    // ---- M2.7 price ratios vs the medieval envelope ----
+    if let (Some(&pg), Some(&pi_), Some(&pt)) = (means.get("grain"), means.get("iron"), means.get("timber")) {
+        let ig = pi_ / pg.max(1e-9);
+        c.range("iron/grain price ratio", ig, format!("{:.1}×", ig), (1.5, 14.0), (0.8, 40.0), "M2.7: metal dear, bread cheap");
+        let ok = pg < pi_ && pt < pi_;
+        c.want("staples cheaper than metal", ok, format!("grain {:.2} · timber {:.2} · iron {:.2}", pg, pt, pi_), "the ordering of the price lists holds");
+    }
+    if let (Some(&pg), Some(&pau)) = (means.get("grain"), means.get("gold")) {
+        let r = pau / pg.max(1e-9);
+        c.range("gold/grain price ratio", r, format!("{:.1}×", r), (2.5, 80.0), (1.2, 300.0), "M2.7: the precious envelope");
+    }
+    c.print();
+}
+
+// ================================================================ telling
+
+/// M6 — judge the chronicle itself: id coverage, the legend layer, the
+/// registry's hygiene, artifact provenance and the story sifter's yield.
+fn cmd_telling(seed: i64, size: usize, years: usize) {
+    header("TELLING", &format!("seed {} · size {} · {}y", seed, size, years));
+
+    let mut w = World::generate(seed, size);
+    let mut left = (years * 12) as i64;
+    while left > 0 {
+        let step = left.min(120);
+        w.tick(step);
+        left -= step;
+    }
+
+    let evs = &w.events;
+    let reg = &w.registry;
+    let n = evs.len().max(1);
+
+    // ---- the log itself
+    let with_ids = evs.iter().filter(|e| !e.ids.is_empty()).count();
+    let with_xy = evs.iter().filter(|e| e.x >= 0).count();
+    let loud = evs.iter().filter(|e| telling::weight(&e.k) >= 3).count();
+    let loud_legend = evs
+        .iter()
+        .filter(|e| telling::weight(&e.k) >= 3 && !e.legend.is_empty())
+        .count();
+    let bad_ids = evs
+        .iter()
+        .flat_map(|e| e.ids.iter())
+        .filter(|&&id| id < 0 || id as usize >= reg.items.len())
+        .count();
+    println!("chronicle: {} entries over {}y ({:.1}/y)", evs.len(), years, evs.len() as f64 / years as f64);
+    println!("  ids on {:.1}% · coords on {:.1}% · legend layer on {}/{} loud entries", 100.0 * with_ids as f64 / n as f64, 100.0 * with_xy as f64 / n as f64, loud_legend, loud);
+    if with_ids < evs.len() {
+        let mut orphans: BTreeMap<&str, usize> = BTreeMap::new();
+        let mut samples: Vec<&Event> = Vec::new();
+        for e in evs.iter().filter(|e| e.ids.is_empty()) {
+            *orphans.entry(e.k.as_str()).or_default() += 1;
+            if samples.len() < 4 {
+                samples.push(e);
+            }
+        }
+        let by_kind: Vec<String> = orphans.iter().map(|(k, v)| format!("{} ×{}", k, v)).collect();
+        println!("  ID-LESS: {}", by_kind.join(" · "));
+        for e in samples {
+            println!("    m{} [{}] {} — {}", e.m, e.k, e.s, &e.text.chars().take(90).collect::<String>());
+        }
+    }
+
+    // ---- the cast
+    let mut kinds: BTreeMap<&str, (usize, usize)> = BTreeMap::new(); // kind -> (alive, closed)
+    for e in &reg.items {
+        let k = kinds.entry(e.kind.as_str()).or_default();
+        if e.until.is_some() {
+            k.1 += 1;
+        } else {
+            k.0 += 1;
+        }
+    }
+    let cast: Vec<String> = kinds
+        .iter()
+        .map(|(k, (a, c))| format!("{} {}+{}†", k, a, c))
+        .collect();
+    println!("cast: {}", cast.join(" · "));
+    let closed_unfated = reg
+        .items
+        .iter()
+        .filter(|e| e.until.is_some() && e.fate.is_empty())
+        .count();
+    let epithets: usize = reg.items.iter().map(|e| e.epithets.len()).sum();
+    let named: Vec<String> = reg
+        .items
+        .iter()
+        .filter(|e| !e.epithets.is_empty())
+        .take(4)
+        .map(|e| format!("{} \"{}\"", e.name, e.epithets.last().unwrap()))
+        .collect();
+    println!("epithets earned: {}{}", epithets, if named.is_empty() { String::new() } else { format!("  ({})", named.join(", ")) });
+
+    // ---- the relics
+    let held = w.artifacts.iter().filter(|a| a.holder >= 0).count();
+    println!("artifacts: {} wrought · {} held · {} lost", w.artifacts.len(), held, w.artifacts.len() - held);
+
+    // ---- the sifter
+    let stories = telling::sift(evs, reg);
+    let stories2 = telling::sift(evs, reg);
+    let sift_det = serde_json::to_string(&stories).unwrap() == serde_json::to_string(&stories2).unwrap();
+    let mut pat: BTreeMap<&str, usize> = BTreeMap::new();
+    for s in &stories {
+        *pat.entry(s.pattern.as_str()).or_default() += 1;
+    }
+    let pats: Vec<String> = pat.iter().map(|(k, v)| format!("{} ×{}", k, v)).collect();
+    println!();
+    println!("stories sifted: {} ({})", stories.len(), pats.join(" · "));
+    for s in stories.iter().take(8) {
+        println!("  {:>5.1}  {}  (y{}–{}, {} beats)", s.score, s.title, s.y0, s.y1, s.beats.len());
+    }
+    let dup_titles = {
+        let mut seen = BTreeSet::new();
+        stories.iter().filter(|s| !seen.insert(s.title.clone())).count()
+    };
+    let per_century = stories.len() as f64 * 100.0 / years as f64;
+
+    // ---- checks
+    let mut c = Checks::default();
+    c.must("every event carries an id", with_ids == evs.len(), pct(with_ids as f64 / n as f64), "M6.1 gate: ids = 100%");
+    c.must("every carried id is valid", bad_ids == 0, format!("{} bad", bad_ids), "ids index the registry");
+    c.range("events mappable (coords)", with_xy as f64 / n as f64, pct(with_xy as f64 / n as f64), (0.65, 1.0), (0.45, 1.0), "most entries can fly the camera");
+    c.must("loud events carry a legend", loud_legend == loud, format!("{}/{}", loud_legend, loud), "M6.9: two-layer telling on weight ≥ 3");
+    c.must("closed entities carry a fate", closed_unfated == 0, format!("{} unfated", closed_unfated), "every ending is written");
+    c.range("stories per century", per_century, format!("{:.1}", per_century), (5.0, 48.0), (2.0, 60.0), "M6.5 gate: the sifter yields");
+    c.must("sifter deterministic", sift_det, if sift_det { "identical".into() } else { "DIVERGED".into() }, "same log ⇒ same stories");
+    c.must("no duplicate stories", dup_titles == 0, format!("{} dups", dup_titles), "dedup bounds hold");
+    c.want("a reversal story found", stories.iter().any(|s| matches!(s.pattern.as_str(), "rise-fall" | "tide-turned" | "mine-curse")), "yes".into(), "M6.7: fortunes turn on the record");
+    c.want("relics wrought", !w.artifacts.is_empty(), format!("{}", w.artifacts.len()), "M6.3: artifacts enter the world");
+    c.want("epithets earned", epithets > 0, format!("{}", epithets), "M6.8: names are coined in the field");
+    c.must("chronicle unbounded", evs.len() > 200, format!("{}", evs.len()), "no truncation: the full log persists");
+    c.print();
+}
+
+// ================================================================ patina (M9)
+
+/// M9 gates: ruins accrue in mature worlds, hydronyms survive every border
+/// change, name strata stay bounded and glossed, the withheld share of the
+/// chronicle stays inside its band, battlefields mark the map.
+fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
+    header("PATINA", &format!("size {} · {}y · {} seeds", size, years, seeds.len()));
+
+    struct Row {
+        seed: i64,
+        ruins: usize,
+        ruins_late: usize, // after year 100
+        veiled: usize,
+        events: usize,
+        renames: usize,   // conquest name-layers on settlements
+        worn: usize,      // erosion renames (settlements + features)
+        battlefields: usize,
+        faded: usize,     // routes fallen disused
+        wars: usize,
+        transfers: usize, // settlements that changed hands (border changes)
+        rivers_intact: bool,
+        strata_over: usize,   // any formerly-stack deeper than 2
+        ungloseed: usize,     // renamed things with no etymology
+    }
+
+    let mut rows: Vec<Row> = Vec::new();
+    for &seed in &seeds {
+        let mut w = World::generate(seed, size);
+        let mut left = (years * 12) as i64;
+        while left > 0 {
+            let step = left.min(120);
+            w.tick(step);
+            left -= step;
+        }
+        let evs = &w.events;
+        let veiled = evs.iter().filter(|e| e.veiled).count();
+        let transfers = evs.iter().filter(|e| e.text.contains("passes from the")).count();
+        let renames = evs.iter().filter(|e| e.text.contains("lay their own name over")).count();
+        let worn = evs.iter().filter(|e| e.text.contains("wears") && e.text.contains("smooth")).count()
+            + evs.iter().filter(|e| e.text.contains("appears on the new charts as")).count();
+        let battlefields = w.features.iter().filter(|f| f.t == "battlefield").count();
+        let faded = w.routes.iter().filter(|r| r.old).count();
+        let rivers_intact = w
+            .features
+            .iter()
+            .filter(|f| f.t == "river")
+            .all(|f| f.formerly.is_empty());
+        let strata_over = w.settlements.iter().filter(|s| s.formerly.len() > 2).count();
+        let ungloseed = w
+            .settlements
+            .iter()
+            .filter(|s| !s.formerly.is_empty() && s.ety.is_empty())
+            .count()
+            + w.features
+                .iter()
+                .filter(|f| (!f.formerly.is_empty() || f.t == "battlefield") && f.ety.is_empty())
+                .count();
+        rows.push(Row {
+            seed,
+            ruins: w.ruins.len(),
+            ruins_late: w.ruins.iter().filter(|r| r.since > 1200).count(),
+            veiled,
+            events: evs.len(),
+            renames,
+            worn,
+            battlefields,
+            faded,
+            wars: w.politics.wars.len(),
+            transfers,
+            rivers_intact,
+            strata_over,
+            ungloseed,
+        });
+    }
+
+    println!(
+        "{:>7} {:>6} {:>7} {:>8} {:>7} {:>7} {:>6} {:>6} {:>6} {:>6} {:>7}",
+        "seed", "ruins", "late", "veiled%", "rename", "worn", "field", "faded", "wars", "xfers", "rivers"
+    );
+    for r in &rows {
+        println!(
+            "{:>7} {:>6} {:>7} {:>8} {:>7} {:>7} {:>6} {:>6} {:>6} {:>6} {:>7}",
+            r.seed,
+            r.ruins,
+            r.ruins_late,
+            format!("{:.1}", 100.0 * r.veiled as f64 / r.events.max(1) as f64),
+            r.renames,
+            r.worn,
+            r.battlefields,
+            r.faded,
+            r.wars,
+            r.transfers,
+            if r.rivers_intact { "held" } else { "BROKEN" },
+        );
+    }
+
+    let n = rows.len().max(1) as f64;
+    let late_years = years.saturating_sub(100).max(1) as f64;
+    let ruin_rate = rows.iter().map(|r| r.ruins_late as f64).sum::<f64>() / n / (late_years / 100.0);
+    let veil_share = rows.iter().map(|r| r.veiled as f64 / r.events.max(1) as f64).sum::<f64>() / n;
+    let total_wars: usize = rows.iter().map(|r| r.wars).sum();
+    let total_fields: usize = rows.iter().map(|r| r.battlefields).sum();
+    let total_xfers: usize = rows.iter().map(|r| r.transfers).sum();
+    let total_renames: usize = rows.iter().map(|r| r.renames).sum();
+    let total_worn: usize = rows.iter().map(|r| r.worn).sum();
+
+    let mut c = Checks::default();
+    c.range(
+        "ruins per century (after y100)",
+        ruin_rate,
+        format!("{:.2}", ruin_rate),
+        (1.0, 12.0),
+        (0.5, 20.0),
+        "M9.1 gate: mature worlds carry ruins",
+    );
+    c.range(
+        "withheld share of the chronicle",
+        veil_share,
+        pct(veil_share),
+        (0.02, 0.08),
+        (0.015, 0.10),
+        "M9.5 gate: 2-8% of entries veiled",
+    );
+    c.must(
+        "hydronyms conserved",
+        rows.iter().all(|r| r.rivers_intact),
+        if rows.iter().all(|r| r.rivers_intact) { "all held".into() } else { "RENAMED".into() },
+        "M9.2 gate: river names survive every border change",
+    );
+    c.must(
+        "border changes occurred",
+        total_xfers > 0,
+        format!("{} transfers", total_xfers),
+        "the conservation claim is tested, not vacuous",
+    );
+    c.must(
+        "name strata bounded",
+        rows.iter().all(|r| r.strata_over == 0),
+        format!("{} over", rows.iter().map(|r| r.strata_over).sum::<usize>()),
+        "M9.2: at most two former names per place",
+    );
+    c.must(
+        "every new name carries a gloss",
+        rows.iter().all(|r| r.ungloseed == 0),
+        format!("{} bare", rows.iter().map(|r| r.ungloseed).sum::<usize>()),
+        "M9.3 gate: renames and wearings are etymologized",
+    );
+    c.want(
+        "names worn or relaid somewhere",
+        total_renames + total_worn > 0,
+        format!("{}+{}", total_renames, total_worn),
+        "M9.2/M9.3: the strata actually accrue",
+    );
+    c.want(
+        "battlefields mark the map",
+        total_wars < 3 || total_fields > 0,
+        format!("{} fields / {} wars", total_fields, total_wars),
+        "M9.4: decisive fields earn names",
+    );
     c.print();
 }
 
@@ -890,6 +1586,8 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         mtn: f64,
         camps: usize,
         strikes: usize,
+        famines: usize,
+        zipf: f64,
         growth: f64,
         pace: f64,
         era: usize,
@@ -929,6 +1627,22 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         let evyr = log.total_events as f64 / years.max(1) as f64;
         let unconnected = w.settlements.iter().filter(|s| s.connections == 0).count();
 
+        // M2.3: per-seed rank-size slope (NaN when too few towns to judge)
+        let mut pops: Vec<f64> = w.settlements.iter().map(|s| s.pop as f64).filter(|&p| p >= 120.0).collect();
+        pops.sort_by(|a, b| b.partial_cmp(a).unwrap());
+        let zipf = if pops.len() >= 10 {
+            let np = pops.len() as f64;
+            let (mut sx, mut sy, mut sxx, mut sxy) = (0.0, 0.0, 0.0, 0.0);
+            for (i, p) in pops.iter().enumerate() {
+                let xr = ((i + 1) as f64).ln();
+                let yr = p.ln();
+                sx += xr; sy += yr; sxx += xr * xr; sxy += xr * yr;
+            }
+            (np * sxy - sx * sy) / (np * sxx - sx * sx)
+        } else {
+            f64::NAN
+        };
+
         let mut flags = String::new();
         if bl > 0 {
             flags.push('B'); // border land
@@ -954,7 +1668,7 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
 
         println!("{:>7} {:>6.1} {:>6.1} {:>6.1} {:>5.1} {:>5} {:>4} {:>2}→{:<2} {:>9} {:>6.2} {:>5} {:>4} {:>4} {:>4} {:>4} {:>4} {:>5.1} {:>6}  {}", seed, 100.0 * land_frac, 100.0 * desert, 100.0 * forest, 100.0 * mtn, li.n, w.deposits.len(), setts0, w.settlements.len(), pop1, growth, era, arts, log.strikes, log.camps, log.wars, w.routes.len(), evyr, gen_ms, flags);
 
-        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, growth, pace, era, evyr, flags });
+        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags });
     }
 
     let n = rows.len() as f64;
@@ -980,7 +1694,7 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
     c.range("mean desert share", m_des, pct(m_des), (0.12, 0.28), (0.06, 0.38), "sweet 12–28%");
     c.range("mean forest share", m_for, pct(m_for), (0.25, 0.60), (0.15, 0.75), "sweet 25–60%");
     c.range("mean mountain share", m_mtn, pct(m_mtn), (0.02, 0.14), (0.005, 0.22), "sweet 2–14%");
-    c.range("mean growth", m_grw, format!("{:.2}×", m_grw), (2.0, 500.0), (1.05, 2000.0), "sweet 2–500×");
+    c.range("mean growth", m_grw, format!("{:.2}×", m_grw), (2.0, 1200.0), (1.05, 3000.0), "M2 crop-package K: sweet 2–1200×");
     c.range("mean events/year", m_evy, format!("{:.1}", m_evy), (2.0, 40.0), (0.5, 100.0), "sweet 2–40");
     c.must("all seeds clean of hard flags", clean == rows.len(), if worst_flags.is_empty() { "all clean".into() } else { worst_flags.join(" ") }, "no B/P/R/G/S/U flags on any seed");
     c.want("strikes on every seed", strike_seeds == rows.len(), format!("{}/{}", strike_seeds, rows.len()), "prospecting fires everywhere");
@@ -991,11 +1705,530 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
     if years >= 100 {
         let pacing = rows.iter().filter(|r| r.pace <= 0.92).count();
         c.want("worlds still growing at half-run (≥60%)", pacing * 10 >= rows.len() * 6, format!("{}/{}", pacing, rows.len()), "no century-long plateaus");
+        // M2.6: dry-shock years must starve somewhere across the sweep,
+        // but famine must stay an event, not a climate.
+        let famine_seeds = rows.iter().filter(|r| r.famines > 0).count();
+        c.want("famine strikes somewhere (≥60% of seeds)", famine_seeds * 10 >= rows.len() * 6, format!("{}/{}", famine_seeds, rows.len()), "M2.6: failed rains have a price");
+        let worst_fam = rows.iter().map(|r| r.famines as f64 * 100.0 / years as f64).fold(0.0f64, f64::max);
+        c.want("famine bounded (<150/century worst seed)", worst_fam < 150.0, format!("{:.0}/century", worst_fam), "M2.6: hunger is a visitation, not the weather");
+    }
+    // M2.3 across seeds: mean rank-size slope where measurable
+    let zipfs: Vec<f64> = rows.iter().map(|r| r.zipf).filter(|z| z.is_finite()).collect();
+    if !zipfs.is_empty() {
+        let mz = zipfs.iter().sum::<f64>() / zipfs.len() as f64;
+        c.range("mean rank-size slope", mz, format!("{:.2} over {} seeds", mz, zipfs.len()), (-1.3, -0.8), (-1.9, -0.45), "M2.3 gate: Zipf holds across the sweep");
     }
     c.print();
 }
 
 // ================================================================ main
+
+// ================================================================ properties (M8.1/M8.2)
+// Seam-invariant properties: facts that must hold on every world the
+// engine can emit, checked on the real widened arrays after real ticks —
+// not on the square generation frame where the original code paths run.
+
+/// Rectangular priority-flood fill (Barnes 2014, as in hydrology.rs but
+/// for the widened (rows × cols) world): every land cell drains.
+fn fill_rect(height: &Array2<f64>, water: &Array2<bool>) -> Array2<f64> {
+    use std::cmp::Ordering;
+    use std::collections::BinaryHeap;
+    struct Item(f64, usize, usize);
+    impl PartialEq for Item {
+        fn eq(&self, o: &Self) -> bool { self.0 == o.0 && self.1 == o.1 && self.2 == o.2 }
+    }
+    impl Eq for Item {}
+    impl PartialOrd for Item {
+        fn partial_cmp(&self, o: &Self) -> Option<Ordering> { Some(self.cmp(o)) }
+    }
+    impl Ord for Item {
+        fn cmp(&self, o: &Self) -> Ordering {
+            o.0.partial_cmp(&self.0).unwrap().then_with(|| o.1.cmp(&self.1)).then_with(|| o.2.cmp(&self.2))
+        }
+    }
+    let (rows, cols) = height.dim();
+    let eps = 1e-5;
+    let mut filled = height.clone();
+    let mut visited = water.clone();
+    let mut heap: BinaryHeap<Item> = BinaryHeap::new();
+    for y in 0..rows {
+        for x in 0..cols {
+            if water[[y, x]] { continue; }
+            let border = y == 0 || y == rows - 1 || x == 0 || x == cols - 1;
+            let mut adj = false;
+            for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                let ny = y as isize + dy;
+                let nx = x as isize + dx;
+                if ny >= 0 && nx >= 0 && ny < rows as isize && nx < cols as isize {
+                    adj |= water[[ny as usize, nx as usize]];
+                }
+            }
+            if border || adj {
+                heap.push(Item(filled[[y, x]], y, x));
+                visited[[y, x]] = true;
+            }
+        }
+    }
+    while let Some(Item(hcur, y, x)) = heap.pop() {
+        for &(dy, dx) in hydrology::N8.iter() {
+            let ny = y as isize + dy;
+            let nx = x as isize + dx;
+            if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize { continue; }
+            let (ny, nx) = (ny as usize, nx as usize);
+            if visited[[ny, nx]] { continue; }
+            visited[[ny, nx]] = true;
+            let mut nh = filled[[ny, nx]];
+            if nh <= hcur {
+                nh = hcur + eps;
+                filled[[ny, nx]] = nh;
+            }
+            heap.push(Item(nh, ny, nx));
+        }
+    }
+    filled
+}
+
+fn dirs_rect(filled: &Array2<f64>, water: &Array2<bool>) -> Array2<i8> {
+    let (rows, cols) = filled.dim();
+    Array2::from_shape_fn((rows, cols), |(y, x)| {
+        if water[[y, x]] { return -1i8; }
+        let mut best_drop = 0.0f64;
+        let mut best_dir = -1i8;
+        for (i, (&(dy, dx), &dist)) in hydrology::N8.iter().zip(hydrology::DIST.iter()).enumerate() {
+            let ny = y as isize + dy;
+            let nx = x as isize + dx;
+            if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize { continue; }
+            let drop = (filled[[y, x]] - filled[[ny as usize, nx as usize]]) / dist;
+            if drop > best_drop {
+                best_drop = drop;
+                best_dir = i as i8;
+            }
+        }
+        best_dir
+    })
+}
+
+fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
+    header("PROPERTIES", &format!("size {} · {} y · {} seeds", size, years, seeds.len()));
+    println!("seam-invariant properties (M8.1) and metamorphic checks (M8.2)");
+    println!();
+
+    let mut c = Checks::default();
+    for &seed in &seeds {
+        let mut w = World::generate(seed, size);
+        w.tick(years as i64 * 12);
+        let (rows, cols) = w.height.dim();
+
+        // ---- P1: every river cell descends the filled surface to an outlet
+        let water = w.height.mapv(|h| h < 0.0);
+        let filled = fill_rect(&w.height, &water);
+        let dirs = dirs_rect(&filled, &water);
+        let mut uphill = 0usize;
+        let mut cycles = 0usize;
+        let mut dry_terminals = 0usize;
+        let mut river_cells = 0usize;
+        for y in 0..rows {
+            for x in 0..cols {
+                if !w.rivers[[y, x]] { continue; }
+                river_cells += 1;
+                let (mut cy, mut cx) = (y, x);
+                let mut steps = 0usize;
+                loop {
+                    let d = dirs[[cy, cx]];
+                    if d < 0 {
+                        // legitimate terminals: the basin floor of an
+                        // endorheic lake, or a lake cell (ghost-spill)
+                        if !(w.lakes[[cy, cx]] || w.salt[[cy, cx]]) { dry_terminals += 1; }
+                        break;
+                    }
+                    let (dy, dx) = hydrology::N8[d as usize];
+                    let (ny, nx) = ((cy as isize + dy) as usize, (cx as isize + dx) as usize);
+                    if filled[[ny, nx]] > filled[[cy, cx]] + 1e-9 { uphill += 1; break; }
+                    if water[[ny, nx]] { break; } // reached the sea
+                    cy = ny; cx = nx;
+                    steps += 1;
+                    if steps > rows * cols { cycles += 1; break; }
+                }
+            }
+        }
+        println!("seed {:>6}: {} river cells · {} uphill · {} cycles · {} dry terminals",
+            seed, river_cells, uphill, cycles, dry_terminals);
+        c.must(&format!("rivers descend filled ({})", seed), uphill == 0 && cycles == 0,
+            format!("{} up · {} cyc", uphill, cycles), "M8.1: water only runs downhill");
+        c.must(&format!("rivers reach an outlet ({})", seed), dry_terminals == 0,
+            format!("{} dry", dry_terminals), "M8.1: sea, lake or salt basin");
+
+        // ---- P2: every living settlement is reachable on the route network
+        let living: Vec<usize> = (0..w.settlements.len()).filter(|&i| w.settlements[i].pop > 0).collect();
+        let mut idx_of: BTreeMap<i64, usize> = BTreeMap::new();
+        for (k, &i) in living.iter().enumerate() { idx_of.insert(w.settlements[i].id, k); }
+        let mut uf: Vec<usize> = (0..living.len()).collect();
+        fn find(uf: &mut Vec<usize>, i: usize) -> usize {
+            let mut r = i;
+            while uf[r] != r { r = uf[r]; }
+            let mut c = i;
+            while uf[c] != r { let n = uf[c]; uf[c] = r; c = n; }
+            r
+        }
+        let mut degree = vec![0usize; living.len()];
+        for r in &w.routes {
+            if let (Some(&ia), Some(&ib)) = (idx_of.get(&r.a), idx_of.get(&r.b)) {
+                degree[ia] += 1;
+                degree[ib] += 1;
+                let (ra, rb) = (find(&mut uf, ia), find(&mut uf, ib));
+                if ra != rb { uf[ra] = rb; }
+            }
+        }
+        let isolated = degree.iter().filter(|&&d| d == 0).count();
+        let comps = {
+            let mut roots = BTreeSet::new();
+            for i in 0..living.len() { let r = find(&mut uf, i); roots.insert(r); }
+            roots.len()
+        };
+        println!("seed {:>6}: {} towns · {} routes · {} isolated · {} components",
+            seed, living.len(), w.routes.len(), isolated, comps.max(1));
+        c.must(&format!("no isolated settlement ({})", seed), isolated == 0,
+            format!("{} cut off", isolated), "M8.1: every town trades");
+        c.must(&format!("route graph connected ({})", seed), comps <= 1,
+            format!("{} comps", comps.max(1)), "M8.1: one world, one web");
+
+        // ---- P3: the pack protocol round-trips byte-perfectly
+        let p1 = w.pack();
+        let p2 = w.pack();
+        c.must(&format!("pack is stable ({})", seed), p1 == p2,
+            format!("{} B", p1.len()), "M8.1: same world ⇒ same bytes");
+        let hlen = u32::from_le_bytes([p1[0], p1[1], p1[2], p1[3]]) as usize;
+        let hdr: serde_json::Value = serde_json::from_slice(&p1[4..4 + hlen]).unwrap();
+        let entries = hdr["arrays"].as_array().unwrap();
+        let mut ok_layout = true;
+        let mut expected_off = 0usize;
+        let mut total = 0usize;
+        for e in entries {
+            let off = e["offset"].as_u64().unwrap() as usize;
+            let nb = e["nbytes"].as_u64().unwrap() as usize;
+            let shape: Vec<usize> = e["shape"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect();
+            let cell = match e["dtype"].as_str().unwrap() { "float32" => 4, "int16" => 2, _ => 1 };
+            ok_layout &= off == expected_off && nb == shape[0] * shape[1] * cell;
+            expected_off = off + nb;
+            total += nb;
+        }
+        ok_layout &= p1.len() == 4 + hlen + total;
+        c.must(&format!("unpack layout sound ({})", seed), ok_layout,
+            format!("{} arrays", entries.len()), "M8.1: offsets contiguous, sizes exact");
+        // decode height + territory back out and compare to the source arrays
+        let base = 4 + hlen;
+        let mut ok_data = true;
+        for e in entries {
+            let name = e["name"].as_str().unwrap();
+            let off = base + e["offset"].as_u64().unwrap() as usize;
+            let nb = e["nbytes"].as_u64().unwrap() as usize;
+            match name {
+                "height" => {
+                    let vals: Vec<f32> = p1[off..off + nb].chunks_exact(4)
+                        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+                    ok_data &= vals.len() == w.height.len()
+                        && vals.iter().zip(w.height.iter()).all(|(&v, &h)| v == h as f32);
+                }
+                "territory" => {
+                    let vals: Vec<i16> = p1[off..off + nb].chunks_exact(2)
+                        .map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+                    ok_data &= vals.iter().zip(w.territory.iter()).all(|(&v, &t)| v == t);
+                }
+                "flags" => {
+                    ok_data &= p1[off..off + nb].iter()
+                        .zip(w.rivers.iter().zip(w.lakes.iter()).zip(w.salt.iter()).zip(w.seasonal.iter()))
+                        .all(|(&f, (((&r, &l), &s), &sw))| {
+                            f == (r as u8) | ((l as u8) << 1) | ((s as u8) << 2) | ((sw as u8) << 3)
+                        });
+                }
+                _ => {}
+            }
+        }
+        c.must(&format!("unpack = world ({})", seed), ok_data,
+            "bit-equal".into(), "M8.1: arrays survive the wire");
+
+        // ---- M8.2 metamorphic: more rain must not shrink the rivers
+        let dry = World::generate(seed, size);
+        let wet = World::generate_scaled(seed, size, 1.25);
+        let rc_dry = dry.rivers.iter().filter(|&&r| r).count();
+        let rc_wet = wet.rivers.iter().filter(|&&r| r).count();
+        let q_dry: f64 = dry.discharge.iter().sum();
+        let q_wet: f64 = wet.discharge.iter().sum();
+        println!("seed {:>6}: rain ×1.25 ⇒ river cells {} → {} · discharge {:.0} → {:.0}",
+            seed, rc_dry, rc_wet, q_dry, q_wet);
+        c.must(&format!("rain↑ ⇒ rivers not↓ ({})", seed), rc_wet >= rc_dry,
+            format!("{} → {}", rc_dry, rc_wet), "M8.2: metamorphic monotonicity");
+        c.must(&format!("rain↑ ⇒ discharge↑ ({})", seed), q_wet > q_dry,
+            format!("×{:.2}", q_wet / q_dry.max(1e-9)), "M8.2: more water flows");
+        println!();
+    }
+    c.print();
+}
+
+// ================================================================ era (M8.3/M8.4)
+// Expressive-range analysis: generate a population of worlds, project them
+// onto structural metrics, draw the 2D histograms (Smith & Whitehead), and
+// measure between-seed distinctiveness so we notice when the generator
+// starts serving 10,000 bowls of oatmeal (Compton).
+
+struct EraRow {
+    seed: i64,
+    land: f64,
+    river: f64,
+    mountain: f64,
+    entropy: f64,
+    coastc: f64,
+    lm_big: f64,
+    setts: f64,
+    spacing: f64,
+    biomes: Vec<f64>,
+    hyps: Vec<f64>,
+    sp_hist: Vec<f64>,
+    /// 5×5 land-mass occupancy grid — where the continents sit (layout).
+    grid: Vec<f64>,
+    /// Landmass size-class histogram (share of land per component).
+    lm_hist: Vec<f64>,
+}
+
+fn era_metrics(seed: i64, size: usize, years: usize) -> EraRow {
+    let mut w = World::generate(seed, size);
+    w.tick(years as i64 * 12);
+    let (rows, cols) = w.height.dim();
+    let total = (rows * cols) as f64;
+    let mut land = 0usize;
+    let mut river = 0usize;
+    let mut mountain = 0usize;
+    let mut coast = 0usize;
+    let mut bcount = vec![0f64; 12];
+    let mut hyps = vec![0f64; 8];
+    for y in 0..rows {
+        for x in 0..cols {
+            let h = w.height[[y, x]];
+            if h < 0.0 { continue; }
+            land += 1;
+            if w.rivers[[y, x]] { river += 1; }
+            if h > 0.45 { mountain += 1; }
+            let b = w.biomes[[y, x]] as usize;
+            if b < bcount.len() { bcount[b] += 1.0; }
+            let bin = ((h.max(0.0).min(0.999)) * 8.0) as usize;
+            hyps[bin] += 1.0;
+            let mut sea_adj = false;
+            for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                let ny = y as isize + dy;
+                let nx = x as isize + dx;
+                if ny >= 0 && nx >= 0 && ny < rows as isize && nx < cols as isize
+                    && w.height[[ny as usize, nx as usize]] < 0.0 { sea_adj = true; }
+            }
+            if sea_adj { coast += 1; }
+        }
+    }
+    let landf = land.max(1) as f64;
+    let entropy: f64 = bcount.iter().filter(|&&n| n > 0.0)
+        .map(|&n| { let p = n / landf; -p * p.ln() }).sum();
+    // landmasses (4-connected flood fill over land): largest share plus a
+    // size-class histogram — one supercontinent reads differently from an
+    // archipelago even when composition matches
+    let mut seen = Array2::<bool>::from_elem((rows, cols), false);
+    let mut lm_big = 0usize;
+    let mut lm_hist = vec![0f64; 6];
+    for y in 0..rows {
+        for x in 0..cols {
+            if w.height[[y, x]] < 0.0 || seen[[y, x]] { continue; }
+            let mut q = vec![(y, x)];
+            seen[[y, x]] = true;
+            let mut n = 0usize;
+            let mut qi = 0usize;
+            while qi < q.len() {
+                let (cy, cx) = q[qi];
+                qi += 1;
+                n += 1;
+                for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                    let ny = cy as isize + dy;
+                    let nx = cx as isize + dx;
+                    if ny >= 0 && nx >= 0 && ny < rows as isize && nx < cols as isize {
+                        let (ny, nx) = (ny as usize, nx as usize);
+                        if w.height[[ny, nx]] >= 0.0 && !seen[[ny, nx]] {
+                            seen[[ny, nx]] = true;
+                            q.push((ny, nx));
+                        }
+                    }
+                }
+            }
+            lm_big = lm_big.max(n);
+            let share = n as f64 / landf;
+            let bin = match share {
+                s if s < 0.001 => 0,
+                s if s < 0.01 => 1,
+                s if s < 0.05 => 2,
+                s if s < 0.20 => 3,
+                s if s < 0.50 => 4,
+                _ => 5,
+            };
+            lm_hist[bin] += n as f64; // mass-weighted: where the land lives
+        }
+    }
+    // 5×5 occupancy grid: the coarse silhouette of the world (layout)
+    let mut grid = vec![0f64; 25];
+    for y in 0..rows {
+        for x in 0..cols {
+            if w.height[[y, x]] >= 0.0 {
+                let gy = y * 5 / rows;
+                let gx = x * 5 / cols;
+                grid[gy * 5 + gx] += 1.0;
+            }
+        }
+    }
+    // settlement spacing: nearest-neighbour distance, km
+    let pts: Vec<(f64, f64)> = w.settlements.iter().filter(|s| s.pop > 0)
+        .map(|s| (s.x as f64, s.y as f64)).collect();
+    let mut nn: Vec<f64> = Vec::new();
+    for (i, &(ax, ay)) in pts.iter().enumerate() {
+        let mut best = f64::MAX;
+        for (j, &(bx, by)) in pts.iter().enumerate() {
+            if i == j { continue; }
+            let d = ((ax - bx).powi(2) + (ay - by).powi(2)).sqrt();
+            best = best.min(d);
+        }
+        if best < f64::MAX { nn.push(best * 4.0); } // 4 km cells
+    }
+    let spacing = if nn.is_empty() { 0.0 } else { nn.iter().sum::<f64>() / nn.len() as f64 };
+    let mut sp_hist = vec![0f64; 7];
+    for &d in &nn {
+        let bin = match d { d if d < 10.0 => 0, d if d < 20.0 => 1, d if d < 30.0 => 2,
+            d if d < 45.0 => 3, d if d < 60.0 => 4, d if d < 90.0 => 5, _ => 6 };
+        sp_hist[bin] += 1.0;
+    }
+    EraRow {
+        seed,
+        land: land as f64 / total,
+        river: river as f64 / landf,
+        mountain: mountain as f64 / landf,
+        entropy,
+        coastc: coast as f64 / landf.sqrt(),
+        lm_big: lm_big as f64 / landf,
+        setts: pts.len() as f64,
+        spacing,
+        biomes: bcount,
+        hyps,
+        sp_hist,
+        grid,
+        lm_hist,
+    }
+}
+
+/// Jensen-Shannon divergence between two count vectors, normalized to 0..1.
+fn jsd(p: &[f64], q: &[f64]) -> f64 {
+    let sp: f64 = p.iter().sum::<f64>().max(1e-12);
+    let sq: f64 = q.iter().sum::<f64>().max(1e-12);
+    let mut d = 0.0;
+    for i in 0..p.len() {
+        let a = (p[i] / sp).max(1e-12);
+        let b = (q[i] / sq).max(1e-12);
+        let m = 0.5 * (a + b);
+        d += 0.5 * a * (a / m).ln() + 0.5 * b * (b / m).ln();
+    }
+    (d / std::f64::consts::LN_2).clamp(0.0, 1.0)
+}
+
+/// One 2D expressive-range histogram, drawn as text (M8.3).
+fn era_plot(title: &str, xs: &[f64], ys: &[f64], xl: &str, yl: &str) -> usize {
+    const CW: usize = 24;
+    const CH: usize = 8;
+    let (x0, x1) = (xs.iter().cloned().fold(f64::MAX, f64::min), xs.iter().cloned().fold(f64::MIN, f64::max));
+    let (y0, y1) = (ys.iter().cloned().fold(f64::MAX, f64::min), ys.iter().cloned().fold(f64::MIN, f64::max));
+    let xr = (x1 - x0).max(1e-9);
+    let yr = (y1 - y0).max(1e-9);
+    let mut grid = vec![0usize; CW * CH];
+    for (&x, &y) in xs.iter().zip(ys.iter()) {
+        let cx = (((x - x0) / xr) * (CW as f64 - 1.0)).round() as usize;
+        let cy = (((y - y0) / yr) * (CH as f64 - 1.0)).round() as usize;
+        grid[(CH - 1 - cy) * CW + cx] += 1;
+    }
+    println!("  {} — x: {} [{:.3} … {:.3}] · y: {} [{:.3} … {:.3}]", title, xl, x0, x1, yl, y0, y1);
+    let shades = [' ', '·', ':', '▪', '#', '@'];
+    for r in 0..CH {
+        let row: String = (0..CW).map(|ccol| {
+            let n = grid[r * CW + ccol];
+            shades[n.min(shades.len() - 1)]
+        }).collect();
+        println!("    |{}|", row);
+    }
+    let occupied = grid.iter().filter(|&&n| n > 0).count();
+    println!("    occupied cells: {}", occupied);
+    println!();
+    occupied
+}
+
+fn cmd_era(size: usize, years: usize, nseeds: usize, base: i64) {
+    header("ERA", &format!("size {} · {} y · {} seeds", size, years, nseeds));
+    println!("expressive-range analysis (M8.3) and the oatmeal detector (M8.4)");
+    println!();
+    let seeds: Vec<i64> = (0..nseeds as i64).map(|i| base + i * 7919).collect();
+    let rows: Vec<EraRow> = seeds.iter().map(|&s| era_metrics(s, size, years)).collect();
+
+    println!("  {:>8} {:>6} {:>6} {:>6} {:>6} {:>7} {:>6} {:>6} {:>8}",
+        "seed", "land", "river", "mntn", "entrp", "coast", "lmbig", "towns", "spacing");
+    for r in &rows {
+        println!("  {:>8} {:>6.3} {:>6.3} {:>6.3} {:>6.3} {:>7.2} {:>6.3} {:>6.0} {:>7.1}km",
+            r.seed, r.land, r.river, r.mountain, r.entropy, r.coastc, r.lm_big, r.setts, r.spacing);
+    }
+    println!();
+
+    // ---- M8.3: the four plates of the expressive range
+    let land: Vec<f64> = rows.iter().map(|r| r.land).collect();
+    let river: Vec<f64> = rows.iter().map(|r| r.river).collect();
+    let entropy: Vec<f64> = rows.iter().map(|r| r.entropy).collect();
+    let mountain: Vec<f64> = rows.iter().map(|r| r.mountain).collect();
+    let setts: Vec<f64> = rows.iter().map(|r| r.setts).collect();
+    let spacing: Vec<f64> = rows.iter().map(|r| r.spacing).collect();
+    let coastc: Vec<f64> = rows.iter().map(|r| r.coastc).collect();
+    let lm_big: Vec<f64> = rows.iter().map(|r| r.lm_big).collect();
+    let occ1 = era_plot("ERA 1 · water on the land", &land, &river, "land share", "river share");
+    let occ2 = era_plot("ERA 2 · relief vs variety", &mountain, &entropy, "mountain share", "biome entropy");
+    let occ3 = era_plot("ERA 3 · the human layer", &setts, &spacing, "settlements", "NN spacing km");
+    let occ4 = era_plot("ERA 4 · the shape of coasts", &coastc, &lm_big, "coast complexity", "largest landmass");
+
+    // ---- M8.4: pairwise structural distance (biomes + hypsometry + spacing)
+    let n = rows.len();
+    let mut dists: Vec<f64> = Vec::new();
+    let mut min_d = f64::MAX;
+    let mut min_pair = (0i64, 0i64);
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let d = (jsd(&rows[i].biomes, &rows[j].biomes)
+                + jsd(&rows[i].hyps, &rows[j].hyps)
+                + jsd(&rows[i].sp_hist, &rows[j].sp_hist)
+                + jsd(&rows[i].grid, &rows[j].grid)
+                + jsd(&rows[i].lm_hist, &rows[j].lm_hist)) / 5.0;
+            dists.push(d);
+            if d < min_d { min_d = d; min_pair = (rows[i].seed, rows[j].seed); }
+        }
+    }
+    let mean_d = dists.iter().sum::<f64>() / dists.len().max(1) as f64;
+    let max_d = dists.iter().cloned().fold(0.0f64, f64::max);
+    let ratio = min_d / mean_d.max(1e-12);
+    println!("  oatmeal: min {:.4} (seeds {} vs {}) · mean {:.4} · max {:.4} · min/mean {:.3}",
+        min_d, min_pair.0, min_pair.1, mean_d, max_d, ratio);
+    println!();
+
+    // ---- checks
+    let mut c = Checks::default();
+    let spread = |v: &[f64]| v.iter().cloned().fold(f64::MIN, f64::max) - v.iter().cloned().fold(f64::MAX, f64::min);
+    c.must("land share varies", spread(&land) > 0.01, format!("Δ{:.3}", spread(&land)), "M8.3: the range is a range");
+    c.must("relief varies", spread(&mountain) > 0.01, format!("Δ{:.3}", spread(&mountain)), "M8.3: not one mountain recipe");
+    c.must("towns vary", spread(&setts) >= 2.0, format!("Δ{:.0}", spread(&setts)), "M8.3: history diverges");
+    let occ_mean = (occ1 + occ2 + occ3 + occ4) as f64 / 4.0 / n as f64;
+    c.range("ERA occupancy / seed", occ_mean, format!("{:.2}", occ_mean), (0.45, 1.0), (0.3, 1.0),
+        "M8.3: seeds spread across the plates");
+    // Collapse alarm: a duplicated pair drives min/mean toward 0 regardless
+    // of how many seeds are sampled (min alone shrinks with pair count).
+    // Healthy generator reads ~0.10-0.19 across 8-16 seeds; mean ~0.05-0.07.
+    c.range("oatmeal min/mean ratio", ratio, format!("{:.3}", ratio), (0.05, 1.0), (0.02, 1.0),
+        "M8.4: no two worlds are the same bowl");
+    c.range("oatmeal mean distance", mean_d, format!("{:.4}", mean_d), (0.04, 0.75), (0.02, 0.9),
+        "M8.4: the family resembles, never repeats");
+    c.print();
+}
 
 fn main() {
     let a: Vec<String> = std::env::args().collect();
@@ -1027,6 +2260,7 @@ fn main() {
         "resources" => cmd_resources(num(2, 12345), sized(3, 512)),
         "civ" => cmd_civ(num(2, 12345), sized(3, 512), num(4, 120) as usize),
         "economy" => cmd_economy(num(2, 12345), sized(3, 512), num(4, 80) as usize),
+        "telling" => cmd_telling(num(2, 12345), sized(3, 512), num(4, 150) as usize),
         "determinism" => cmd_determinism(num(2, 12345), sized(3, 512), num(4, 120)),
         "bench" => cmd_bench(),
         "sweep" => {
@@ -1038,11 +2272,32 @@ fn main() {
             }
             cmd_sweep(size, years, seeds);
         }
+        "properties" => {
+            let size = sized(2, 512);
+            let years = num(3, 60) as usize;
+            let mut seeds: Vec<i64> = a.get(4..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 90210];
+            }
+            cmd_properties(size, years, seeds);
+        }
+        "era" => cmd_era(sized(2, 256), num(3, 60) as usize, num(4, 16) as usize, num(5, 12345)),
+        "patina" => {
+            let size = sized(2, 512);
+            let years = num(3, 300) as usize;
+            let mut seeds: Vec<i64> = a.get(4..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 90210];
+            }
+            cmd_patina(size, years, seeds);
+        }
         _ => {
-            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|determinism|bench|sweep> [args]");
+            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|sweep|properties|era|patina> [args]");
             println!("  terrain|climate|hydro|resources  <seed=12345> <size=512>");
-            println!("  civ <seed> <size> <years=120> · economy <seed> <size> <years=80>");
+            println!("  civ <seed> <size> <years=120> · economy <seed> <size> <years=80> · telling <seed> <size> <years=150>");
             println!("  determinism <seed> <size> <months=120> · bench · sweep <size> <years> <seeds…>");
+            println!("  properties <size=512> <years=60> <seeds…> · era <size=256> <years=60> <n=16> <base=12345>");
+            println!("  patina <size=512> <years=300> <seeds…>");
         }
     }
 }

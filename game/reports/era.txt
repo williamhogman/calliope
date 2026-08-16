@@ -1,0 +1,78 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · ERA                          size 256 · 60 y · 16 seeds
+========================================================================
+expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
+
+      seed   land  river   mntn  entrp   coast  lmbig  towns  spacing
+     12345  0.340  0.029  0.213  2.165    8.34  0.498     11   154.7km
+     20264  0.342  0.029  0.177  2.169    7.98  0.515     10   149.3km
+     28183  0.326  0.028  0.213  2.114    8.58  0.506     11   162.3km
+     36102  0.340  0.034  0.151  2.109    8.49  0.514      9   208.1km
+     44021  0.342  0.027  0.184  2.135    7.99  0.519     12   130.0km
+     51940  0.320  0.028  0.169  2.049    9.39  0.505      8   180.9km
+     59859  0.345  0.031  0.158  2.161    9.11  0.499      9   110.4km
+     67778  0.328  0.029  0.091  2.132    8.86  0.541     10   143.4km
+     75697  0.337  0.032  0.164  2.114    8.71  0.500      9   159.7km
+     83616  0.338  0.031  0.173  2.138    9.30  0.500      9   132.1km
+     91535  0.354  0.027  0.164  2.141    8.95  0.526     11   188.3km
+     99454  0.329  0.027  0.181  2.111    9.07  0.499     10   129.4km
+    107373  0.326  0.032  0.152  2.139    8.80  0.520     11   136.4km
+    115292  0.346  0.027  0.143  2.151    8.25  0.523      9   174.8km
+    123211  0.340  0.032  0.166  2.132    9.08  0.506     10   165.3km
+    131130  0.331  0.028  0.156  2.126    7.74  0.513      8   153.7km
+
+  ERA 1 · water on the land — x: land share [0.320 … 0.354] · y: river share [0.027 … 0.034]
+    |              ·         |
+    |                        |
+    |    ·       ···         |
+    |                 ·      |
+    |     ·                  |
+    |       ·      ··        |
+    |·   · ·           ·    ·|
+    |               ·        |
+    occupied cells: 16
+
+  ERA 2 · relief vs variety — x: mountain share [0.091 … 0.213] · y: biome entropy [2.049 … 2.169]
+    |             ·  ·      ·|
+    |          ·             |
+    |·          ·· : · ·     |
+    |           ·  ·  ·     ·|
+    |                        |
+    |                        |
+    |                        |
+    |               ·        |
+    occupied cells: 15
+
+  ERA 3 · the human layer — x: settlements [8.000 … 12.000] · y: NN spacing km [110.396 … 208.131]
+    |      ·                 |
+    |                 ·      |
+    |·     ·                 |
+    |      ·     ·    ·      |
+    |·           ·    ·      |
+    |      ·     ·    ·      |
+    |            ·          ·|
+    |      ·                 |
+    occupied cells: 16
+
+  ERA 4 · the shape of coasts — x: coast complexity [7.741 … 9.391] · y: largest landmass [0.498 … 0.541]
+    |                ·       |
+    |                        |
+    |                        |
+    |       ·       · ·      |
+    |   :      ·             |
+    |·                       |
+    |            ·      ·   ·|
+    |        ·    ·    ··  · |
+    occupied cells: 15
+
+  oatmeal: min 0.0035 (seeds 83616 vs 123211) · mean 0.0505 · max 0.1654 · min/mean 0.070
+
+
+---- checks ----------------------------------------------------------
+[PASS] land share varies                            Δ0.034   (M8.3: the range is a range)
+[PASS] relief varies                                Δ0.122   (M8.3: not one mountain recipe)
+[PASS] towns vary                                       Δ4   (M8.3: history diverges)
+[PASS] ERA occupancy / seed                           0.97   (M8.3: seeds spread across the plates)
+[PASS] oatmeal min/mean ratio                        0.070   (M8.4: no two worlds are the same bowl)
+[PASS] oatmeal mean distance                        0.0505   (M8.4: the family resembles, never repeats)
+CHECKS: 6 pass · 0 warn · 0 fail

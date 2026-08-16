@@ -11,8 +11,9 @@ use crate::constants as gc;
 use crate::naming;
 use crate::settlements::Settlement;
 
-pub const CULTURE_COLORS: [&str; 6] = [
+pub const CULTURE_COLORS: [&str; 12] = [
     "#d4a94a", "#6f9ceb", "#c86b6b", "#7fb069", "#a06fd4", "#5bc0be",
+    "#e08d5a", "#8fa3d4", "#c95f8e", "#9db55c", "#7d6fd4", "#4fb08d",
 ];
 
 fn style_by_biome(b: u8) -> &'static str {
@@ -44,6 +45,19 @@ fn demonym(style: &str) -> &'static str {
 
 const ALL_STYLES: [&str; 5] = ["hellenic", "steppe", "nordic", "sylvan", "arid"];
 
+/// M3.5 — a named god with a domain; cited in omens, festivals and wars.
+#[derive(Serialize, Clone)]
+pub struct God {
+    pub name: String,
+    pub domain: String,
+}
+
+/// Domains a pantheon may hold; each culture draws four, distinct.
+pub const DOMAINS: [&str; 10] = [
+    "the sea", "the harvest", "war", "storms", "the dead",
+    "the hearth", "fate", "the wild", "craft", "the moon",
+];
+
 #[derive(Serialize, Clone)]
 pub struct Culture {
     pub id: usize,
@@ -51,6 +65,31 @@ pub struct Culture {
     pub people: String,
     pub style: String,
     pub color: String,
+    /// The culture's gods (M3.5); index 0 is the chief god.
+    pub pantheon: Vec<God>,
+}
+
+/// Draw a four-god pantheon in the culture's tongue. Deterministic:
+/// domain picks and names both come off the shared rng stream.
+fn make_pantheon(
+    rng: &mut Pcg64Mcg,
+    style: &str,
+    taken: &mut HashSet<String>,
+) -> Vec<God> {
+    let mut picked: Vec<usize> = Vec::new();
+    while picked.len() < 4 {
+        let d = rng.gen_range(0..DOMAINS.len());
+        if !picked.contains(&d) {
+            picked.push(d);
+        }
+    }
+    picked
+        .into_iter()
+        .map(|d| God {
+            name: naming::make_word(rng, style, taken),
+            domain: DOMAINS[d].to_string(),
+        })
+        .collect()
 }
 
 /// Deterministic k-means with greedy max-min init.
@@ -165,14 +204,39 @@ pub fn assign_cultures(
             name: root,
             style: style.to_string(),
             color: CULTURE_COLORS[cid % CULTURE_COLORS.len()].to_string(),
+            pantheon: make_pantheon(&mut rng, style, taken),
         });
     }
 
-    // rename settlements in their culture's tongue
+    // rename settlements in their culture's tongue, keeping the reading
+    // of each name's parts (M3.3)
     for (s, &l) in settlements.iter_mut().zip(lab.iter()) {
         s.culture = l;
-        s.name = naming::make_word(&mut rng, &cultures[l].style, taken);
+        s.namer = l;
+        let c = naming::coin(&mut rng, &cultures[l].style, taken);
+        s.name = c.word;
+        s.ety = c.ety;
     }
 
     cultures
+}
+
+/// M4.5 — a rising carves a new realm out of an old one. The rebels keep
+/// their parent's tongue and gods (it is a political break, not a new
+/// people) but take a new name and a new colour on the map.
+pub fn secede(
+    parent: &Culture,
+    new_id: usize,
+    rng: &mut Pcg64Mcg,
+    taken: &mut HashSet<String>,
+) -> Culture {
+    let root = naming::make_word(rng, &parent.style, taken);
+    Culture {
+        id: new_id,
+        people: format!("{}{}", root, demonym(&parent.style)),
+        name: root,
+        style: parent.style.clone(),
+        color: CULTURE_COLORS[new_id % CULTURE_COLORS.len()].to_string(),
+        pantheon: parent.pantheon.clone(),
+    }
 }

@@ -51,6 +51,8 @@ fn isa_parent(name: &str) -> Option<&'static str> {
         "coal" => "fuel",
         "copper" | "silver" | "gold" | "iron" | "mithril" => "metal",
         "metal" => "material",
+        // M5.1 — finished goods: what the smiths make of the ore
+        "tools" | "weapons" | "jewelry" => "craft",
         _ => return None,
     })
 }
@@ -69,8 +71,8 @@ fn requires_direct(name: &str) -> Option<&'static str> {
 fn abundance_direct(name: &str) -> Option<&'static str> {
     Some(match name {
         "coal" | "copper" | "iron" | "stone" | "timber" => "common",
-        "silver" | "cattle" | "horse" => "uncommon",
-        "gold" => "rare",
+        "silver" | "cattle" | "horse" | "tools" => "uncommon",
+        "gold" | "weapons" | "jewelry" => "rare",
         "mithril" => "legendary",
         _ => return None,
     })

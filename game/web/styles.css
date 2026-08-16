@@ -858,6 +858,28 @@ input { font: inherit; color: inherit; }
   flex: 0 0 auto;
 }
 
+/* market tab: area spreads and merchants (M5) */
+.ol-sect {
+  padding: 8px 12px 3px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ol-row.gap { flex-wrap: wrap; }
+.ol-row.gap .gap-route { flex-basis: 100%; padding-left: 18px; font-size: 10px; }
+.ol-row.gone { opacity: 0.55; }
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--gold, #d4a94a);
+  cursor: pointer;
+  text-decoration: underline dotted rgba(212, 169, 74, 0.5);
+}
+.link-btn:hover { text-decoration-style: solid; }
+
 /* ---------- chronicle ---------- */
 
 .chron-filters { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -1160,3 +1182,106 @@ input { font: inherit; color: inherit; }
 @media (max-width: 380px) {
   .time-spark { display: none; }
 }
+
+/* ---- M3: etymology & pantheon ---- */
+.insp-sub.ety { font-style: italic; color: var(--dim); margin-top: 2px; }
+.pantheon { margin-top: 8px; }
+.god-row { display: flex; justify-content: space-between; align-items: baseline; padding: 2px 0; font-size: 12px; }
+.god-name { font-weight: 600; }
+.god-domain { font-size: 11px; }
+
+/* ---------------------------------------------------------------- telling
+   M6.6 — the legends browser: saga rows in the rail, beat lists in the
+   inspector, cast chips, and the "as it was / as sung" switch. */
+
+.ol-sect.cast-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cast-search {
+  flex: 1;
+  max-width: 150px;
+  font-size: 10.5px;
+  padding: 3px 8px;
+}
+.ol-row.saga .c-name { line-height: 1.25; }
+
+.telling-seg { align-self: flex-start; }
+
+.story-beats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 34vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.beat {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.beat .e-dot { flex: 0 0 auto; align-self: center; }
+.beat .e-when { flex: 0 0 auto; }
+.beat.clickable { cursor: pointer; }
+.beat.clickable:hover { background: var(--hover); }
+.e-text.sung { font-style: italic; color: var(--text-soft, inherit); }
+
+.ent-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.ent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 6px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--text);
+  background: transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+.ent-chip:hover { background: var(--hover); border-color: var(--ec, var(--accent)); }
+
+.chip.fireside.on {
+  background: rgba(201, 180, 88, 0.14);
+  color: #c9b458;
+  border-color: rgba(201, 180, 88, 0.35);
+}
+
+@media (max-width: 760px) {
+  .story-beats { max-height: 30vh; }
+}
+.ent-links { display: contents; }
+
+/* ---------- M9 — the patina ---------- */
+
+/* name strata: what a place was called before wear or conquest */
+.insp-strata {
+  font-size: 11px;
+  font-style: italic;
+  color: #a9a292;
+  line-height: 1.45;
+  border-left: 2px solid rgba(169, 162, 146, 0.35);
+  padding-left: 8px;
+}
+
+/* a town in its emigration spiral */
+.insp-note.fail { color: #d9a05a; }
+
+/* the inspector kicker for ruins */
+.insp-kicker.ruin-k { color: #b7b1a2; }
+
+/* veiled chronicle entries: the telling admits it does not know */
+.e-text.veiled { font-style: italic; opacity: 0.72; }

@@ -73,6 +73,13 @@ export const ELEV_LAND_GRAD = gradient([
   [0.62, "#98918a"], [0.8, "#c9c9c9"], [1.0, "#f4f4f4"],
 ]);
 
+// M7.4 — the dry-country hypsometric ladder: ochre lowlands through
+// rust-brown uplands to pale desert-varnish summits.
+export const ELEV_ARID_GRAD = gradient([
+  [0.0, "#a39163"], [0.15, "#b99f68"], [0.3, "#c7a86e"], [0.45, "#b28b61"],
+  [0.62, "#98765c"], [0.8, "#cec5bc"], [1.0, "#f6f4f0"],
+]);
+
 export const SEA_GRAD = gradient([
   [0, "#3a77b8"], [0.25, "#2b5c96"], [0.6, "#1c3f6e"], [1, "#122a4d"],
 ]);
