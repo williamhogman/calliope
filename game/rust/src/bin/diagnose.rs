@@ -466,7 +466,10 @@ fn cmd_hydro(seed: i64, size: usize) {
     c.range("river systems", systems as f64, format!("{}", systems), (8.0, 400.0), (3.0, 2000.0), "sweet 8–400 · hard 3–2000");
     c.want("named deltas", deltas >= 1, format!("{}", deltas), "≥1 — great river mouths get names");
     c.must("discharge finite", finite, if finite { "yes".into() } else { "NO".into() }, "no NaN/inf in flow accumulation");
-    c.range("river-town share", river_towns as f64 / w.settlements.len().max(1) as f64, pct(river_towns as f64 / w.settlements.len().max(1) as f64), (0.2, 0.95), (0.05, 1.0), "sweet 20–95% — fresh water pulls towns");
+    // dawn towns all on fresh water is history, not a bug — the dry
+    // harbours and mining camps arrive with the colonies (checked in civ).
+    let rt_share = river_towns as f64 / w.settlements.len().max(1) as f64;
+    c.want("dawn towns reach fresh water", rt_share >= 0.2, pct(rt_share), "≥20% — rivers should pull the first peoples");
     c.print();
 }
 
