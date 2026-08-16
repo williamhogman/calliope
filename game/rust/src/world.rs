@@ -2500,32 +2500,58 @@ impl World {
     }
 
 
-    /// E4.2 hot/cold split, culture side: (full string, cold string, hot
-    /// patch rows). treasury/asab/legit are the heartbeat; the cold form
-    /// strips them, the hot rows carry them keyed by array index.
-    fn cultures_split(&self) -> (String, String, String) {
-        let full = self.cultures_json();
-        let mut cold = full.clone();
+    /// E4.2 hot/cold split, culture side, built in one pass (E5.12):
+    /// (cold string, hot patch rows). treasury/asab/legit are the
+    /// heartbeat; the cold rows carry everything else. The full block is
+    /// only assembled (`cultures_json`) on the rare tick the cold half
+    /// actually moved — succession, era, polity, tech, vassalage — instead
+    /// of being built, cloned and stripped every single month.
+    /// serde_json maps are BTreeMaps, so key order (and thus every byte
+    /// and hash) is identical to the old build-then-strip path.
+    fn cultures_cold_hot(&self) -> (String, String) {
+        let mut cold: Vec<Value> = Vec::with_capacity(self.cultures.len());
         let mut rows: Vec<Value> = Vec::new();
-        if let Value::Array(items) = &mut cold {
-            for (i, cv) in items.iter_mut().enumerate() {
-                if let Value::Object(o) = cv {
-                    let mut row = serde_json::Map::new();
-                    row.insert("i".into(), json!(i));
-                    for kf in ["treasury", "asab", "legit"] {
-                        if let Some(v) = o.remove(kf) {
-                            row.insert(kf.into(), v);
-                        }
-                    }
-                    if row.len() > 1 {
-                        rows.push(Value::Object(row));
-                    }
-                }
+        for (i, c) in self.cultures.iter().enumerate() {
+            let mut v = serde_json::to_value(c).unwrap();
+            let polity = self.societies.get(c.id.0).map(|s| s.polity).unwrap_or(0);
+            if let Some(r) = self.chron.rulers.iter().find(|r| r.culture == c.id) {
+                let title = society::RULER_TITLES[polity];
+                v["ruler"] = if title.is_empty() {
+                    json!(r.title())
+                } else {
+                    json!(format!("{} {}", title, r.title()))
+                };
             }
+            let mut row = serde_json::Map::new();
+            row.insert("i".into(), json!(i));
+            if let Some(soc) = self.societies.get(c.id.0) {
+                v["era"] = json!(society::ERAS[soc.era]);
+                v["polity"] = json!(society::POLITIES[soc.polity]);
+                row.insert("treasury".into(), json!(round2(soc.treasury)));
+                let names: Vec<&'static str> = soc
+                    .techs
+                    .iter()
+                    .map(|&id| society::tech(id).name)
+                    .collect();
+                v["techs"] = json!(names);
+            }
+            if let Some(a) = self.politics.asab.get(c.id.0) {
+                row.insert("asab".into(), json!(round2(*a)));
+            }
+            if let Some(l) = self.politics.legit.get(c.id.0) {
+                row.insert("legit".into(), json!(round2(*l)));
+            }
+            if let Some(Some(suz)) = self.politics.vassal_of.get(c.id.0) {
+                v["vassal_of"] = json!(self.cultures[suz.0].people.clone());
+            }
+            v["alive"] = json!(politics::alive(&self.settlements, c.id));
+            if row.len() > 1 {
+                rows.push(Value::Object(row));
+            }
+            cold.push(v);
         }
         (
-            full.to_string(),
-            cold.to_string(),
+            Value::Array(cold).to_string(),
             serde_json::to_string(&rows).unwrap(),
         )
     }
