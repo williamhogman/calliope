@@ -2326,25 +2326,30 @@ impl World {
             self.refresh_goods_near(di);
         }
 
-        // --- depletion: a worked seam only lasts so many carts
-        let mut spent: Vec<usize> = Vec::new();
-        for di in 0..self.deposits.len() {
-            let d = &self.deposits[di];
-            if !d.known || d.left <= 0.0 {
-                continue;
-            }
-            let mut crews = 0.0;
-            for s in &self.settlements {
-                if !s.goods.iter().any(|g| *g == d.r) {
+        // --- depletion: a worked seam only lasts so many carts.
+        // E5.3 inverted: each town spreads its crews over the seams inside
+        // its own work radius. The outer loop stays in settlement order, so
+        // every seam's crew sum accumulates in the same order as the old
+        // per-deposit scan — float-identical totals.
+        let mut crews_by: Vec<f64> = vec![0.0; self.deposits.len()];
+        for s in &self.settlements {
+            let r = settlements::work_radius(s.pop);
+            deposit_buckets.candidates(s.x as f64, s.y as f64, r + 1.0, &mut cand);
+            for &di in &cand {
+                let d = &self.deposits[di];
+                if !d.known || d.left <= 0.0 || !s.goods.iter().any(|g| *g == d.r) {
                     continue;
                 }
-                let r = settlements::work_radius(s.pop);
                 let dx = (d.x - s.x) as f64;
                 let dy = (d.y - s.y) as f64;
                 if dx * dx + dy * dy <= r * r {
-                    crews += 1.0 + (s.pop as f64 / 9000.0).min(1.0);
+                    crews_by[di] += 1.0 + (s.pop as f64 / 9000.0).min(1.0);
                 }
             }
+        }
+        let mut spent: Vec<usize> = Vec::new();
+        for di in 0..self.deposits.len() {
+            let crews = crews_by[di];
             if crews == 0.0 {
                 continue;
             }
