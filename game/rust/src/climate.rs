@@ -74,10 +74,12 @@ pub fn precipitation(
             let xprev = (xcur as isize - d).rem_euclid(size as isize) as usize;
             let wat = water[[y, xcur]];
             let t = tmean[[y, xcur]];
+            // Land evapotranspiration recycles a real share of moisture —
+            // without it every continental interior turns to bone-dry waste.
             let evap = if wat {
                 0.018 + 0.030 * t.clamp(0.0, 30.0) / 30.0
             } else {
-                0.0035
+                0.009 + 0.004 * t.clamp(0.0, 30.0) / 30.0
             };
             w += evap;
             let hcur = height[[y, xcur]].max(0.0);
@@ -86,7 +88,7 @@ pub fn precipitation(
             let rate = if wat {
                 0.012
             } else {
-                (0.030 + 0.40 * uplift).clamp(0.0, 0.65)
+                (0.023 + 0.40 * uplift).clamp(0.0, 0.65)
             };
             let cap = (1.0 + t / 22.0).clamp(0.15, 2.3); // warm air holds more
             let mut rain = w * rate;
@@ -106,7 +108,7 @@ pub fn precipitation(
             let t = tmean[[y, x]];
             let mut v = p[[y, x]];
             v *= 1.0 + 0.9 * (-(lat / 10.0).powi(2)).exp();
-            v *= 1.0 - 0.38 * (-(((lat - 25.0) / 8.0).powi(2))).exp();
+            v *= 1.0 - 0.30 * (-(((lat - 25.0) / 8.0).powi(2))).exp();
             v *= (0.25 + (t + 20.0) / 40.0).clamp(0.25, 1.0);
             p[[y, x]] = v;
         }
