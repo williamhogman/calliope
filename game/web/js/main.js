@@ -43,6 +43,8 @@ window.__calliope = {
   gpuForceLive: () => { governorOn = false; gpuLive = true; },
   // M7 gate evidence: label placement stats from the last drawn frame
   labelStats: () => renderer.labelStats(),
+  // E7.10 chaos hook: kill the sim worker, watch recovery replay the world
+  crashWorker: () => crashWorkerForDebug(),
 };
 
 // GPU imagery: bring up the Rust wgpu engine (WebGPU, else WebGL2).

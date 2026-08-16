@@ -279,6 +279,13 @@ export function abortGenerate() {
   return true;
 }
 
+// E7.10 — chaos hook: kill the worker on purpose and watch the understudy
+// take the stage. Wired to window.__calliope for console use; harmless to
+// ship, priceless to verify.
+export function crashWorkerForDebug() {
+  workerDown(new Error("debug crash"));
+}
+
 // Tick v2 (E4): the payload carries only what changed — absent key means
 // "you already hold the truth". Events ride a separate cursor pull done by
 // the worker (E4.4); headlines arrive as indices into that fresh slice
