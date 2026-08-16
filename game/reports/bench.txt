@@ -2,12 +2,12 @@
  CALLIOPE DIAGNOSTIC · BENCH                            native release
 ========================================================================
  size    gen ms  pack bytes     cells  stage breakdown (ms)
-  320       454     2564312    128000  terrain 122 · erosion 66 · climate 27 · hydrology 35 · biomes 0 · fertility 15 · naming 36 · resources 113 · settlements 35
-  512      1180     6559176    327680  terrain 282 · erosion 193 · climate 57 · hydrology 89 · biomes 1 · fertility 36 · naming 88 · resources 339 · settlements 84
-  640      1901    10246500    512000  terrain 459 · erosion 275 · climate 85 · hydrology 154 · biomes 2 · fertility 56 · naming 133 · resources 558 · settlements 154
-  768      2337    14753076    737280  terrain 621 · erosion 409 · climate 120 · hydrology 203 · biomes 2 · fertility 74 · naming 159 · resources 562 · settlements 165
+  320       540     2564312    128000  terrain 178 · erosion 66 · climate 22 · hydrology 39 · biomes 0 · fertility 13 · naming 34 · resources 150 · settlements 34
+  512      1114     6559176    327680  terrain 267 · erosion 178 · climate 53 · hydrology 88 · biomes 1 · fertility 34 · naming 78 · resources 331 · settlements 74
+  640      1672    10246500    512000  terrain 386 · erosion 266 · climate 75 · hydrology 153 · biomes 2 · fertility 46 · naming 111 · resources 510 · settlements 108
+  768      2219    14753076    737280  terrain 548 · erosion 393 · climate 108 · hydrology 202 · biomes 2 · fertility 63 · naming 195 · resources 539 · settlements 152
 
-tick throughput @512 with 17 towns: 240 months in 25 ms = 9600 months/s
+tick throughput @512 with 17 towns: 240 months in 22 ms = 10909 months/s
 tick payload @512 over 100 y: median 3976 B · p90 19485 B · max 65569 B
   routes               104 ships ·   2293118 B total ·  22049 B/ship
   territory            114 ships ·   1387778 B total ·  12173 B/ship
@@ -28,8 +28,8 @@ tick payload @512 over 100 y: median 3976 B · p90 19485 B · max 65569 B
   deposits_hidden       38 ships ·        65 B total ·      1 B/ship
 
 ---- checks ----------------------------------------------------------
-[PASS] 512 generation time                         1180 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
-[PASS] tick rate                                 9600 mo/s   (sweet ≥100 mo/s · hard ≥25)
+[PASS] 512 generation time                         1114 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
+[PASS] tick rate                                10909 mo/s   (sweet ≥100 mo/s · hard ≥25)
 [PASS] pack bytes per cell                     20.0 B/cell   (sweet ≤21 · hard ≤24 (8×u16 + 4×u8 = 20 B/cell + header))
 [PASS] median tick payload                          3976 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 CHECKS: 4 pass · 0 warn · 0 fail
