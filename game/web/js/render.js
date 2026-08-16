@@ -814,7 +814,8 @@ export class Renderer {
     ctx.strokeRect(view.tx + hover.x * s, view.ty + hover.y * s, s, s);
   }
 
-  // A quiet GIS-style scale bar, bottom left: distance the map can be read by.
+  // A quiet GIS-style scale bar, bottom centre — the one strip of map the
+  // side panels never cover, on any screen.
   _drawScaleBar(ctx, view) {
     if (!this.world) return;
     const kmPer = this.world.header.km_per_cell || 4;
@@ -826,8 +827,8 @@ export class Renderer {
     if (!km) return;
     const px = (km / kmPer) * view.scale;
     const mobile = window.matchMedia("(max-width: 760px)").matches;
-    const x = 16;
-    const y = this.canvas.clientHeight - (mobile ? 92 : 22);
+    const x = (this.canvas.clientWidth - px) / 2;
+    const y = this.canvas.clientHeight - (mobile ? 92 : 16);
     ctx.save();
     ctx.strokeStyle = "rgba(222, 231, 244, 0.85)";
     ctx.lineWidth = 1.2;
