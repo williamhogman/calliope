@@ -26,7 +26,34 @@ export const [playing, setPlaying] = createSignal(false);
 export const [speed, setSpeed] = createSignal(1);
 export const [worldSize, setWorldSize] = createSignal(640);
 export const [busy, setBusy] = createSignal(false);
-export const [popHistory, setPopHistory] = createSignal([]);
+
+// E8.5 — world population history rides a preallocated ring buffer: one
+// write per tick, no array copy. Consumers key on popRev() and read
+// through popSeries without allocating.
+const POP_CAP = 600;
+const popBuf = new Float64Array(POP_CAP);
+let popStart = 0;
+let popLen = 0;
+export const [popRev, setPopRev] = createSignal(0);
+export function pushPopSample(total) {
+  if (popLen < POP_CAP) {
+    popBuf[(popStart + popLen) % POP_CAP] = total;
+    popLen++;
+  } else {
+    popBuf[popStart] = total;
+    popStart = (popStart + 1) % POP_CAP;
+  }
+  setPopRev((r) => r + 1);
+}
+export function resetPopHistory() {
+  popStart = 0;
+  popLen = 0;
+  setPopRev((r) => r + 1);
+}
+export const popSeries = {
+  len: () => popLen,
+  at: (i) => popBuf[(popStart + i) % POP_CAP],
+};
 // bumped whenever the deposit list changes mid-run (discoveries, dead mines)
 export const [depositsTick, setDepositsTick] = createSignal(0);
 // bumped whenever per-good price history gains a point
@@ -44,11 +71,19 @@ export const [overlays, setOverlays] = createStore({
 // {kind: "settlement"|"culture"|"cell"|"deposit"|"feature"|"war"|"good", ...}
 export const [selection, setSelection] = createSignal(null);
 
+// E8.8 — O(1) settlement lookup, shared by every consumer that used to
+// run find() per recompute.
+export const settlementsById = createMemo(() => {
+  const m = new Map();
+  for (const s of settlements()) m.set(s.id, s);
+  return m;
+});
+
 // The selected settlement object, kept fresh across ticks.
 export const selectedSettlement = createMemo(() => {
   const sel = selection();
   if (!sel || sel.kind !== "settlement") return null;
-  return settlements().find((s) => s.id === sel.id) || null;
+  return settlementsById().get(sel.id) || null;
 });
 
 // Transient hover tooltip (desktop): {px, py, ...payload} | null
