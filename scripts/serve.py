@@ -27,6 +27,12 @@ class Handler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
+        # E7.8 — cross-origin isolation: every asset is same-origin, so the
+        # strict pair costs nothing and unlocks SharedArrayBuffer +
+        # high-resolution timers for dev profiling. Production hosting sets
+        # its own headers; nothing shipped depends on isolation (ADR-0015).
+        self.send_header("Cross-Origin-Opener-Policy", "same-origin")
+        self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         super().end_headers()
 
     def _brotli_path(self):
