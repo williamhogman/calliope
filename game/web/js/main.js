@@ -5,7 +5,7 @@
 import {
   generateWorld, tickWorld, explainWorld, timingsWorld,
   storiesWorld, entitiesWorld, entityLogWorld, artifactsWorld,
-  abortGenerate, onWorkerLost, onWorkerRestored,
+  abortGenerate, onWorkerLost, onWorkerRestored, crashWorkerForDebug,
 } from "./net.js";
 import { Renderer } from "./render.js";
 import { createGpu, recreateGpuOnGl } from "./gpu.js";

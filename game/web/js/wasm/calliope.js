@@ -130,6 +130,12 @@ export class Orbital {
 if (Symbol.dispose) Orbital.prototype[Symbol.dispose] = Orbital.prototype.free;
 
 export class WasmWorld {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmWorld.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmWorldFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
@@ -332,6 +338,74 @@ export class WasmWorld {
     }
 }
 if (Symbol.dispose) WasmWorld.prototype[Symbol.dispose] = WasmWorld.prototype.free;
+
+/**
+ * E7.4/E7.5 — staged generation for the worker. `step()` runs exactly one
+ * stage and returns `{"stage","i","n","done"}` JSON, so the worker can post
+ * progress and honour an abort between stages; `finish()` yields the world.
+ * Dropping the builder mid-ladder frees every intermediate — an abandoned
+ * world costs nothing.
+ */
+export class WasmWorldBuilder {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmWorldBuilderFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmworldbuilder_free(ptr, 0);
+    }
+    /**
+     * Hand the finished world over. Errors unless every stage has run.
+     * @returns {WasmWorld}
+     */
+    finish() {
+        const ret = wasm.wasmworldbuilder_finish(this.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmWorld.__wrap(ret[0]);
+    }
+    /**
+     * @param {number} seed
+     * @param {number} size
+     */
+    constructor(seed, size) {
+        const ret = wasm.wasmworldbuilder_new(seed, size);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0];
+        WasmWorldBuilderFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Run the next stage. Returns the stage just run, progress counters and
+     * whether the ladder is complete.
+     * @returns {string}
+     */
+    step() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.wasmworldbuilder_step(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) WasmWorldBuilder.prototype[Symbol.dispose] = WasmWorldBuilder.prototype.free;
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
@@ -2087,7 +2161,7 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 58, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 59, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h6c9ea3abc93e4d4a);
             return ret;
         },
@@ -2238,6 +2312,9 @@ const OrbitalFinalization = (typeof FinalizationRegistry === 'undefined')
 const WasmWorldFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmworld_free(ptr, 1));
+const WasmWorldBuilderFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmworldbuilder_free(ptr, 1));
 
 function addToExternrefTable0(obj) {
     const idx = wasm.__externref_table_alloc();

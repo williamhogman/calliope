@@ -1,9 +1,12 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-16 23:01 UTC
+mode: full · size: 512 · generated: 2026-08-16 23:25 UTC
 
-totals: 283 pass · 2 warn · 0 fail
+totals: 284 pass · 2 warn · 0 fail
 
 -- bench.txt
+   all checks pass
+
+-- build.txt
    all checks pass
 
 -- civ-12345.txt
@@ -67,5 +70,8 @@ totals: 283 pass · 2 warn · 0 fail
    all checks pass
 
 -- terrain-90210.txt
+   all checks pass
+
+-- wasm-audit.txt
    all checks pass
 
