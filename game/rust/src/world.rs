@@ -2690,22 +2690,22 @@ impl World {
 
         // E4.3 — whole blocks gated by content hash: serialized once for
         // the gate, reused verbatim as the wire bytes when they moved.
-        // Cultures get the hot/cold split: when only the heartbeat moved,
-        // the tiny c_hot rows cross instead of the whole block (E4.2).
-        let (cul_full, cul_cold, cul_hot) = self.cultures_split();
-        let cul_full_h = crate::util::fnv1a64(cul_full.as_bytes());
+        // Cultures get the hot/cold split (E4.2), gated on the two halves
+        // directly (E5.12): full block moved ⟺ cold moved ∨ hot moved, so
+        // the full string is only built on the rare cold-change tick.
+        // blocks[0] carries the hot-rows hash; cultures_cold the cold hash.
+        let (cul_cold, cul_hot) = self.cultures_cold_hot();
         let cul_cold_h = crate::util::fnv1a64(cul_cold.as_bytes());
+        let cul_hot_h = crate::util::fnv1a64(cul_hot.as_bytes());
         let mut cultures = None;
         let mut c_hot = None;
-        if self.sent.blocks[0] != cul_full_h {
-            if self.sent.cultures_cold != cul_cold_h {
-                cultures = raw(cul_full);
-            } else {
-                c_hot = raw(cul_hot);
-            }
-            self.sent.blocks[0] = cul_full_h;
-            self.sent.cultures_cold = cul_cold_h;
+        if self.sent.cultures_cold != cul_cold_h {
+            cultures = raw(self.cultures_json().to_string());
+        } else if self.sent.blocks[0] != cul_hot_h {
+            c_hot = raw(cul_hot);
         }
+        self.sent.blocks[0] = cul_hot_h;
+        self.sent.cultures_cold = cul_cold_h;
 
         let block_strings = [
             serde_json::to_string(&self.politics.wars).unwrap(),
