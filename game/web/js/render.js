@@ -605,6 +605,14 @@ export class Renderer {
       ctx.lineWidth = 0.75;
       ctx.strokeStyle = "rgba(0,0,0,0.6)";
       ctx.stroke();
+      if (st.port) {
+        // a harbour ring: this town's trade goes under sail
+        ctx.beginPath();
+        ctx.arc(sx, sy, r + 2.6, 0, Math.PI * 2);
+        ctx.lineWidth = 1.3;
+        ctx.strokeStyle = "rgba(126, 178, 226, 0.85)";
+        ctx.stroke();
+      }
 
       const isBig = st.tier === "Town" || st.tier === "City";
       if (showAllLabels || isBig) {
