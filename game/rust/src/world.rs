@@ -2878,7 +2878,11 @@ impl World {
                 None
             },
         };
-        serde_json::to_string(&payload).unwrap()
+        // E5.8 — serialize into the reused scratch (high-water capacity,
+        // zero growth reallocations), then hand back one exact-size copy.
+        self.wire_buf.clear();
+        serde_json::to_writer(&mut self.wire_buf, &payload).unwrap();
+        std::str::from_utf8(&self.wire_buf).unwrap().to_owned()
     }
 
     /// E4.2/E4.3 — seed the delta baseline to the freshly generated world,
@@ -2901,10 +2905,10 @@ impl World {
                 )
             })
             .collect();
-        let (cul_full, cul_cold, _) = self.cultures_split();
+        let (cul_cold, cul_hot) = self.cultures_cold_hot();
         self.sent.cultures_cold = crate::util::fnv1a64(cul_cold.as_bytes());
         self.sent.blocks = [
-            crate::util::fnv1a64(cul_full.as_bytes()),
+            crate::util::fnv1a64(cul_hot.as_bytes()),
             crate::util::fnv1a64(serde_json::to_string(&self.politics.wars).unwrap().as_bytes()),
             crate::util::fnv1a64(serde_json::to_string(&self.merchants).unwrap().as_bytes()),
         ];
