@@ -7,6 +7,7 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 use serde_json::{json, Value};
+use smallvec::{smallvec, SmallVec};
 
 use strum::IntoEnumIterator;
 
@@ -147,8 +148,10 @@ pub struct Event {
     pub k: EventKind,
     pub text: String,
     /// Entities this event speaks of (M6.1); the first id is the subject.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub ids: Vec<EntityId>,
+    /// E5.5 — SmallVec: most events name 0–2 entities, so the ids ride
+    /// inline in the Event with no heap allocation; wire format unchanged.
+    #[serde(skip_serializing_if = "SmallVec::is_empty")]
+    pub ids: EventIds,
     /// Map anchor for fly-to, in grid cells; -1 = nowhere in particular.
     #[serde(skip_serializing_if = "neg")]
     pub x: i64,
