@@ -43,11 +43,26 @@ createGpu(glCanvas)
 
 // ---------- render loop ----------
 
-function frame() {
+// Frame governor: on hardware GL the fullscreen pass is ~free, so it runs
+// every frame (living water, gliding seasons). Software rasterisers can't
+// afford that — when the frame time stays heavy, fall back to on-demand
+// GL rendering: everything still works, the water just holds still.
+let lastTs = 0;
+let frameEma = 16;
+let gpuLive = true;
+
+function frame(ts) {
+  if (lastTs) {
+    frameEma += (Math.min(ts - lastTs, 250) - frameEma) * 0.05;
+    if (gpuLive && ts > 6000 && frameEma > 70) {
+      gpuLive = false;
+      dirty = true;
+      console.info("calliope: slow rasteriser detected — GL renders on demand");
+    }
+  }
+  lastTs = ts;
   const gpu = renderer.gpu;
-  if (gpu && gpu.hasWorld && renderer.world) {
-    // the GL pass is one fullscreen draw — run it every frame so the water
-    // moves and seasons glide; the 2D annotation layer redraws when dirty
+  if (gpu && gpu.hasWorld && renderer.world && (gpuLive || dirty)) {
     if (layer() === "political") gpu.setTint(renderer.tintRgba(version), version);
     gpu.render(
       { layer: layer(), overlays, month: month() },
