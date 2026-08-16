@@ -154,7 +154,7 @@ pub fn heightmap(seed: i64, size: usize) -> Array2<f64> {
             let peak = (0.34 * (1.0 - 0.78 * age) + rng.gen_range(-0.03..0.03)).max(-0.06);
             let sigma = (n * 0.0055 + n * 0.0045 * (1.0 - age)).max(2.0);
             splat_island(&mut h, px, py, peak, sigma);
-            let turn = rng.gen_range(-0.35..0.35);
+            let turn: f64 = rng.gen_range(-0.35..0.35);
             let (c, s) = (turn.cos(), turn.sin());
             let (ndx, ndy) = (dx * c - dy * s, dx * s + dy * c);
             dx = ndx;
