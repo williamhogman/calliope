@@ -62,6 +62,18 @@ fn main() {
         border_land += (w.height[[y, 0]] >= 0.0) as usize + (w.height[[y, bw - 1]] >= 0.0) as usize;
     }
     println!("border land cells: {} (must be 0)", border_land);
+    let delta_towns: Vec<&str> = w
+        .settlements
+        .iter()
+        .filter(|s| {
+            w.features.iter().any(|f| {
+                f.t == "delta"
+                    && (((f.x - s.x).pow(2) + (f.y - s.y).pow(2)) as f64).sqrt() < 10.0
+            })
+        })
+        .map(|s| s.name.as_str())
+        .collect();
+    println!("delta towns: {} {:?}", delta_towns.len(), delta_towns);
     for s in w.settlements.iter().take(5) {
         println!(
             "  {} ({}) pop={} food={} goods={:?}",
