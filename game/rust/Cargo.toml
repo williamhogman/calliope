@@ -44,4 +44,4 @@ panic = "abort"
 # scripts/build.sh's nix path provides it). -O3 measured against -Oz on the
 # real binary; producers/target-features metadata stripped (E6.6).
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-O3", "--strip-producers", "--strip-target-features"]
+wasm-opt = ["-Oz", "--strip-producers", "--strip-target-features"]
