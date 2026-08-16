@@ -35,10 +35,45 @@ fn main() {
         println!("  feature[{}] {} @({},{})", f.t, f.name, f.x, f.y);
     }
     for f in &w.features {
-        if matches!(f.t.as_str(), "bay" | "strait" | "cape" | "peak" | "highland" | "marsh" | "delta") {
+        if matches!(f.t.as_str(), "bay" | "strait" | "cape" | "peak" | "highland" | "marsh" | "delta" | "pass" | "ford") {
             println!("  geo[{}] {} @({},{})", f.t, f.name, f.x, f.y);
         }
     }
+    let sea_r = w.routes.iter().filter(|r| r.sea > 0.5).count();
+    let mixed_r = w.routes.iter().filter(|r| r.sea > 0.05 && r.sea <= 0.5).count();
+    let land_r = w.routes.len() - sea_r - mixed_r;
+    let ports = w.settlements.iter().filter(|s| s.port).count();
+    let lonely = w.settlements.iter().filter(|s| s.connections == 0).count();
+    let avg_cost = if w.routes.is_empty() {
+        0.0
+    } else {
+        w.routes.iter().map(|r| r.cost).sum::<f64>() / w.routes.len() as f64
+    };
+    println!(
+        "trade: {} sea / {} mixed / {} land routes \u{b7} avg cost {:.1} \u{b7} {} harbours \u{b7} {} unconnected towns",
+        sea_r, mixed_r, land_r, avg_cost, ports, lonely
+    );
+    let (bh, bw) = w.height.dim();
+    let mut border_land = 0usize;
+    for x in 0..bw {
+        border_land += (w.height[[0, x]] >= 0.0) as usize + (w.height[[bh - 1, x]] >= 0.0) as usize;
+    }
+    for y in 0..bh {
+        border_land += (w.height[[y, 0]] >= 0.0) as usize + (w.height[[y, bw - 1]] >= 0.0) as usize;
+    }
+    println!("border land cells: {} (must be 0)", border_land);
+    let delta_towns: Vec<&str> = w
+        .settlements
+        .iter()
+        .filter(|s| {
+            w.features.iter().any(|f| {
+                f.t == "delta"
+                    && (((f.x - s.x).pow(2) + (f.y - s.y).pow(2)) as f64).sqrt() < 10.0
+            })
+        })
+        .map(|s| s.name.as_str())
+        .collect();
+    println!("delta towns: {} {:?}", delta_towns.len(), delta_towns);
     for s in w.settlements.iter().take(5) {
         println!(
             "  {} ({}) pop={} food={} goods={:?}",

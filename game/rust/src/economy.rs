@@ -144,8 +144,11 @@ pub fn monthly(
             * (sa.pop.min(sb.pop) as f64 / 600.0).min(1.0);
         let ta = mods.get(sa.culture).map(|m| m.trade).unwrap_or(1.0);
         let tb = mods.get(sb.culture).map(|m| m.trade).unwrap_or(1.0);
-        trade_income[ia] += flow * ta;
-        trade_income[ib] += flow * tb;
+        // a harbour works the cranes: more cargo through, more dues taken
+        let ha = if sa.port { 1.25 } else { 1.0 };
+        let hb = if sb.port { 1.25 } else { 1.0 };
+        trade_income[ia] += flow * ta * ha;
+        trade_income[ib] += flow * tb * hb;
     }
 
     // --- production, upkeep, tithe

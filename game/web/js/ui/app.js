@@ -514,7 +514,7 @@ function DetailPanel(a) {
         g === s.exports ? html`<span class="d-star" title="chief export">\u2605</span>` : ""
       }</span>`;
     });
-    const tags = [s.coastal ? "coastal" : null, s.river ? "fresh water" : null]
+    const tags = [s.port ? "harbour" : null, s.coastal ? "coastal" : null, s.river ? "fresh water" : null]
       .filter(Boolean);
     return html`
       <div class="d-head">

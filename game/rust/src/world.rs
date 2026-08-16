@@ -66,8 +66,7 @@ pub struct World {
     near_fresh: Array2<bool>,
     coast: Array2<bool>,
     max_settlements: usize,
-    trade_cost: Array2<f64>,
-    trade_f: usize,
+    trade: trade::TradeGrid,
     timings: Vec<(&'static str, f64)>,
 }
 
@@ -107,7 +106,7 @@ impl World {
         timings.push(("fertility", now_ms() - t4));
 
         let t5 = now_ms();
-        let (features, world_name) = naming::name_features(
+        let (mut features, world_name) = naming::name_features(
             &height,
             &biome_map,
             &hydro.rivers,
@@ -133,6 +132,7 @@ impl World {
             &tmean,
             &hydro.rivers,
             &hydro.lakes,
+            &hydro.discharge,
             &deposits,
             &fertility,
             &mut rng9000,
@@ -142,10 +142,33 @@ impl World {
         let cultures = culture::assign_cultures(&biome_map, &mut setts, &mut taken, seed);
         trade::assign_goods(&mut setts, &deposits, &fertility);
 
-        let trade_f = (size / 128).max(1);
-        let cost_full = trade::cost_grid(&height, &hydro.rivers, &hydro.lakes, &biome_map);
-        let trade_cost = trade::downsample(&cost_full, trade_f);
-        let routes = trade::build_routes(&trade_cost, trade_f, &mut setts);
+        let trade_grid = trade::TradeGrid::build(
+            &height,
+            &hydro.rivers,
+            &hydro.lakes,
+            &biome_map,
+            &hydro.discharge,
+            (size / 128).max(1),
+        );
+        let routes = trade::build_routes(
+            &trade_grid,
+            &mut setts,
+            &height,
+            &hydro.rivers,
+            &hydro.discharge,
+        );
+        trade::mark_ports(&mut setts, &routes);
+        // The roads themselves name the land: passes where they climb,
+        // fords where they cross the great rivers.
+        naming::name_route_features(
+            &mut features,
+            &mut rng9000,
+            &mut taken,
+            &routes,
+            &height,
+            &hydro.rivers,
+            &hydro.discharge,
+        );
         let societies = society::init(&cultures);
         let mut market = Market::default();
         economy::update_prices(&mut market, &setts);
@@ -210,8 +233,7 @@ impl World {
             near_fresh: founded.near_fresh,
             coast: founded.coast,
             max_settlements: founded.max_settlements,
-            trade_cost,
-            trade_f,
+            trade: trade_grid,
             timings,
         };
         // Open-ocean margins east and west: the world breathes a little wider.
@@ -289,17 +311,26 @@ impl World {
         self.near_fresh = grow_bool(&self.near_fresh, pad);
         self.coast = grow_bool(&self.coast, pad);
 
-        // Downsampled trade grid: margins are open sea lanes (cost 0.8).
-        let dpad = pad / self.trade_f;
-        let (dh, dw) = self.trade_cost.dim();
+        // Downsampled trade grid: margins are open blue-water lanes.
+        let dpad = pad / self.trade.f;
+        let (dh, dw) = self.trade.cost.dim();
         let dp = dpad as isize;
-        let tc = self.trade_cost.clone();
-        self.trade_cost = Array2::from_shape_fn((dh, dw + 2 * dpad), |(y, x)| {
+        let tc = self.trade.cost.clone();
+        self.trade.cost = Array2::from_shape_fn((dh, dw + 2 * dpad), |(y, x)| {
             let xi = x as isize - dp;
             if xi >= 0 && (xi as usize) < dw {
                 tc[[y, xi as usize]]
             } else {
-                0.8
+                trade::OPEN_SEA_COST
+            }
+        });
+        let ts = self.trade.sea.clone();
+        self.trade.sea = Array2::from_shape_fn((dh, dw + 2 * dpad), |(y, x)| {
+            let xi = x as isize - dp;
+            if xi >= 0 && (xi as usize) < dw {
+                ts[[y, xi as usize]]
+            } else {
+                true
             }
         });
 
@@ -441,6 +472,10 @@ impl World {
                 });
                 growth += pop as f64 * 0.004;
             }
+            // a harbour draws trade, sailors and coin
+            if s.port {
+                growth += pop as f64 * 0.0012;
+            }
             pop = ((pop as f64 + growth).round() as i64).max(20);
             let old_tier = s.tier.clone();
             s.pop = pop;
@@ -547,6 +582,7 @@ impl World {
                 goods: Vec::new(),
                 exports: None,
                 wealth: round2(migrants as f64 * 0.2),
+                port: false,
             };
             trade::goods_for(&mut s, &self.deposits, &self.fertility);
             self.settlements.push(s);
@@ -555,8 +591,10 @@ impl World {
                 idx,
                 &mut self.settlements,
                 &mut self.routes,
-                &self.trade_cost,
-                self.trade_f,
+                &self.trade,
+                &self.height,
+                &self.rivers,
+                &self.discharge,
             );
             founded = true;
             let coastal = self.settlements[idx].coastal;

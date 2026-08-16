@@ -43,6 +43,13 @@ pub fn heightmap(seed: i64, size: usize) -> Array2<f64> {
         let inland = smoothstep(h, 0.05, 0.32);
         h += 0.55 * (r - 0.62).max(0.0) * inland;
 
+        // Ocean frame: sink the height toward deep water near every edge so
+        // no landmass is ever clipped by the border of the map.
+        let ex = x.min(size - 1 - x) as f64 / n;
+        let ey = y.min(size - 1 - y) as f64 / n;
+        let frame = smoothstep(ex.min(ey), 0.012, 0.10);
+        h = h * frame - (1.0 - frame) * 0.45;
+
         h.clamp(-1.0, 1.0)
     })
 }
