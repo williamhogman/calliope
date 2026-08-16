@@ -5,6 +5,7 @@
 //!
 //! Deterministic: one rng stream (the world's), fixed iteration order.
 
+use smallvec::smallvec;
 use std::collections::HashSet;
 
 use rand::Rng;
@@ -116,7 +117,7 @@ pub fn monthly(
                     "In {} the smiths of the {} finish {} — {}. Men come far to look on it.",
                     home.name, cu.people, name, made
                 ),
-                ids: vec![ent],
+                ids: smallvec![ent],
                 x: home.x,
                 y: home.y,
                 ..Default::default()
@@ -155,7 +156,7 @@ pub fn monthly(
                         "A trader in {} unwraps {} from oil-cloth, asking a king's price — the relic returns to the light.",
                         s.name, name
                     ),
-                    ids: vec![arts[ai].ent],
+                    ids: smallvec![arts[ai].ent],
                     x: s.x,
                     y: s.y,
                     ..Default::default()
@@ -188,7 +189,7 @@ pub fn monthly(
                     "With {} fallen, {} passes from the {} into the hands of the {} — spoils worth more than the walls.",
                     town.name, arts[ai].name, old_people, people
                 ),
-                ids: vec![arts[ai].ent],
+                ids: smallvec![arts[ai].ent],
                 x: town.x,
                 y: town.y,
                 ..Default::default()
@@ -211,7 +212,7 @@ pub fn monthly(
                     "In the burning of {}, {} vanishes from its shrine. Every survivor tells a different thief.",
                     town.name, arts[ai].name
                 ),
-                ids: vec![arts[ai].ent],
+                ids: smallvec![arts[ai].ent],
                 x: town.x,
                 y: town.y,
                 ..Default::default()
@@ -231,7 +232,7 @@ pub fn monthly(
                     "{} is missed from the treasury of {}; none will say how, and two stewards hang for it.",
                     arts[ai].name, town.name
                 ),
-                ids: vec![arts[ai].ent],
+                ids: smallvec![arts[ai].ent],
                 x: town.x,
                 y: town.y,
                 ..Default::default()

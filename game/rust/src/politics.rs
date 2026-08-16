@@ -8,6 +8,7 @@
 //! fixed iteration order, no wall-clock. The chronicle narrates; this
 //! module decides.
 
+use smallvec::smallvec;
 use std::collections::HashSet;
 
 use ndarray::Array2;
@@ -759,7 +760,7 @@ fn kindle_war(
             cultures[a.0].people, cultures[b.0].people, name,
             cultures[a.0].people, gen_a_name, cultures[b.0].people, gen_b_name
         ),
-        ids: vec![war_ent, ca_ent, cb_ent, gen_a, gen_b],
+        ids: smallvec![war_ent, ca_ent, cb_ent, gen_a, gen_b],
         ..Default::default()
     });
     pol.wars.push(War {
@@ -912,7 +913,7 @@ fn conduct_wars(
                         "The hosts meet under the walls of {} — the {} carry the day, and the {} leave their dead on the field.{}",
                         settlements[fi].name, cultures[winner.0].people, cultures[loser.0].people, coda
                     ),
-                    ids: vec![pol.wars[wi].ent, gen],
+                    ids: smallvec![pol.wars[wi].ent, gen],
                     x: settlements[fi].x,
                     y: settlements[fi].y,
                     ..Default::default()
@@ -982,7 +983,7 @@ fn conduct_wars(
                     s: settlements[vi].name.clone(),
                     k: EventKind::War,
                     text,
-                    ids: vec![pol.wars[wi].ent],
+                    ids: smallvec![pol.wars[wi].ent],
                     x: settlements[vi].x,
                     y: settlements[vi].y,
                     ..Default::default()
@@ -1025,7 +1026,7 @@ fn conduct_wars(
                         "The host of the {} sits down before {} — the siege begins.",
                         cultures[att.0].people, settlements[ti].name
                     ),
-                    ids: vec![pol.wars[wi].ent],
+                    ids: smallvec![pol.wars[wi].ent],
                     x: settlements[ti].x,
                     y: settlements[ti].y,
                     ..Default::default()
@@ -1055,7 +1056,7 @@ fn conduct_wars(
                                 "A relief host of the {} scatters the besiegers — {} breathes again.",
                                 cultures[def.0].people, settlements[ti].name
                             ),
-                            ids: vec![pol.wars[wi].ent],
+                            ids: smallvec![pol.wars[wi].ent],
                             x: settlements[ti].x,
                             y: settlements[ti].y,
                             ..Default::default()
@@ -1173,7 +1174,7 @@ fn make_peace(
                 "{} gutters out — of the {} nothing remains to make peace with.",
                 war.name, cultures[loser.0].people
             ),
-            ids: vec![war.ent],
+            ids: smallvec![war.ent],
             ..Default::default()
         });
         return (events, false);
@@ -1188,7 +1189,7 @@ fn make_peace(
                 "Peace is sworn between the {} and the {}; {} is over, and neither side gained more than graves.",
                 cultures[war.a.0].people, cultures[war.b.0].people, war.name
             ),
-            ids: vec![war.ent],
+            ids: smallvec![war.ent],
             ..Default::default()
         });
         return (events, false);
@@ -1268,7 +1269,7 @@ fn make_peace(
                 "{} ends in ruin for the {}: their last towns pass to the {}, and their realm is struck from the rolls.",
                 war.name, cultures[loser.0].people, cultures[winner.0].people
             ),
-            ids: vec![war.ent],
+            ids: smallvec![war.ent],
             ..Default::default()
         });
         // the people leave the rolls of the living realms (M6.1)
@@ -1409,7 +1410,7 @@ fn rebellion_pass(
                 "The far towns rise against the {}: {} settlements follow {} out of the old realm, and men begin to speak of the {}.",
                 parent_people, rebels.len(), ruler_name, people
             ),
-            ids: vec![culture_ent, ruler_ent],
+            ids: smallvec![culture_ent, ruler_ent],
             x: settlements[seed_town].x,
             y: settlements[seed_town].y,
             ..Default::default()

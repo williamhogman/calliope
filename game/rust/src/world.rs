@@ -590,7 +590,7 @@ impl World {
                 s: s.name.clone(),
                 k: EventKind::Found,
                 text: format!("{} founded by the {}{}", s.name, people, suffix),
-                ids: vec![sett_ents[si]],
+                ids: smallvec![sett_ents[si]],
                 x: s.x,
                 y: s.y,
                 ..Default::default()
@@ -1489,7 +1489,7 @@ impl World {
                     "The dead are buried and the ground remembered: the country folk speak now of the {}.",
                     name
                 ),
-                ids: vec![eid],
+                ids: smallvec![eid],
                 x,
                 y,
                 ..Default::default()
@@ -1686,7 +1686,7 @@ impl World {
                 "The last hearth goes cold in {} — {}. Within ten years the roofs are fallen and the road grows grass; travellers call the place the {}.",
                 dead.name, why, ruin_name
             ),
-            ids: vec![rid],
+            ids: smallvec![rid],
             x: dead.x,
             y: dead.y,
             ..Default::default()

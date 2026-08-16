@@ -2,6 +2,7 @@
 //! festivals, founding myths. Everything here only *narrates and nudges* —
 //! the hard simulation (growth, food, trade) lives in world.rs.
 
+use smallvec::smallvec;
 use std::collections::HashSet;
 
 use rand::Rng;
@@ -259,7 +260,7 @@ pub fn monthly(
                 .filter(|s| s.culture == cid)
                 .max_by_key(|s| s.pop);
             let culture_ent = reg.find_kind(EntityKind::Culture, &culture.people);
-            let mut ids = vec![old_ent, heir.ent];
+            let mut ids: crate::world::EventIds = smallvec![old_ent, heir.ent];
             if let Some(ce) = culture_ent {
                 ids.insert(0, ce);
             }

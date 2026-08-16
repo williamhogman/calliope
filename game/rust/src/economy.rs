@@ -15,6 +15,7 @@
 //! order — the exact order the old `BTreeMap<String, _>` gave. No strings,
 //! no wall-clock.
 
+use smallvec::smallvec;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use enum_map::EnumMap;
@@ -736,7 +737,7 @@ pub fn merchant_pass(
                         "{} of {} takes to the roads with a mule-train and a ledger.",
                         name, home.name
                     ),
-                    ids: vec![ent],
+                    ids: smallvec![ent],
                     x: home.x,
                     y: home.y,
                     ..Default::default()
@@ -825,7 +826,7 @@ pub fn merchant_pass(
                             hub_name(cheap),
                             hub_name(dear)
                         ),
-                        ids: vec![merchants[mi].ent],
+                        ids: smallvec![merchants[mi].ent],
                         x: settlements[hi].x,
                         y: settlements[hi].y,
                         ..Default::default()
@@ -853,7 +854,7 @@ pub fn merchant_pass(
                     "{} hangs up the ledger after thirty years on the roads; {} inherits the fortune.",
                     merchants[mi].name, settlements[hi].name
                 ),
-                ids: vec![merchants[mi].ent],
+                ids: smallvec![merchants[mi].ent],
                 x: settlements[hi].x,
                 y: settlements[hi].y,
                 ..Default::default()
@@ -870,7 +871,7 @@ pub fn merchant_pass(
                     "Word comes that {}'s caravan never reached the pass. The road keeps what it takes.",
                     merchants[mi].name
                 ),
-                ids: vec![merchants[mi].ent],
+                ids: smallvec![merchants[mi].ent],
                 ..Default::default()
             });
         }
