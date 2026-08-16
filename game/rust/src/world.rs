@@ -141,6 +141,9 @@ event_table! {
     Wonder    => family realm,   weight 2, fortune 1;
 }
 
+/// E5.5 — inline storage for the common 0–2 entity ids per event.
+pub type EventIds = SmallVec<[EntityId; 2]>;
+
 #[derive(Serialize, Clone)]
 pub struct Event {
     pub m: i64,
@@ -251,7 +254,7 @@ impl Default for Event {
             // (audited — 26 `..Default::default()` sites, all override it)
             k: EventKind::Growth,
             text: String::new(),
-            ids: Vec::new(),
+            ids: SmallVec::new(),
             x: -1,
             y: -1,
             legend: String::new(),
