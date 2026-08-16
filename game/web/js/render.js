@@ -25,10 +25,12 @@ const LABEL_STYLE = {
   peak:      { color: "#e6dfd2", pri: 13 },
   marsh:     { color: "#a8c8a4", pri: 14 },
   delta:     { color: "#93bfe6", pri: 15 },
+  pass:      { color: "#d9c9a6", pri: 16 },
+  ford:      { color: "#a6c6e6", pri: 17 },
 };
 
 // fine-grain coastal detail only earns a label once you lean in
-const DETAIL_KINDS = new Set(["bay", "strait", "cape", "peak", "marsh", "delta"]);
+const DETAIL_KINDS = new Set(["bay", "strait", "cape", "peak", "marsh", "delta", "pass", "ford"]);
 
 export class Renderer {
   constructor(canvas) {
@@ -115,9 +117,11 @@ export class Renderer {
     const i = Math.max(1, lo);
     const seg = cum[i] - cum[i - 1] || 1;
     const f = (target - cum[i - 1]) / seg;
+    const mode = route.m ? (route.m[i] ?? 0) : 0;
     return [
       pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f,
       pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f,
+      mode,
     ];
   }
 
@@ -395,36 +399,69 @@ export class Renderer {
     ctx.save();
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
-    ctx.setLineDash([6, 5]);
     for (const r of this.routes) {
       const wgt = r.w || 1;
-      ctx.strokeStyle = `rgba(224, 196, 140, ${Math.min(0.75, 0.4 + wgt * 0.18)})`;
-      ctx.lineWidth = Math.min(3.2, Math.max(0.9, s * 0.13 * wgt + 0.5));
-      ctx.beginPath();
-      for (let i = 0; i < r.pts.length; i++) {
-        const px = view.tx + (r.pts[i][0] + 0.5) * s;
-        const py = view.ty + (r.pts[i][1] + 0.5) * s;
-        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      const lw = Math.min(3.2, Math.max(0.9, s * 0.13 * wgt + 0.5));
+      const alpha = Math.min(0.75, 0.4 + wgt * 0.18);
+      const m = r.m || [];
+      const pts = r.pts;
+      // draw runs of the same travel mode: road, sea lane, or river barge
+      let i = 1;
+      while (i < pts.length) {
+        const mode = m[i] ?? 0;
+        let j = i;
+        while (j + 1 < pts.length && (m[j + 1] ?? 0) === mode) j++;
+        if (mode === 1) {
+          ctx.setLineDash([7, 6]);
+          ctx.strokeStyle = `rgba(126, 178, 226, ${alpha})`;
+        } else if (mode === 2) {
+          ctx.setLineDash([2, 4]);
+          ctx.strokeStyle = `rgba(118, 204, 214, ${alpha})`;
+        } else {
+          ctx.setLineDash([]);
+          ctx.strokeStyle = `rgba(224, 196, 140, ${alpha})`;
+        }
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        for (let k = i - 1; k <= j; k++) {
+          const px = view.tx + (pts[k][0] + 0.5) * s;
+          const py = view.ty + (pts[k][1] + 0.5) * s;
+          if (k === i - 1) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        i = j + 1;
       }
-      ctx.stroke();
     }
     ctx.setLineDash([]);
-    // caravans while time flows
+    // caravans on the roads, sails on the lanes, while time flows
     if (state.playing) {
       const now = performance.now() / 1000;
       for (const r of this.routes) {
         const t = ((now / 14 + r.phase) % 1);
         const tt = t < 0.5 ? t * 2 : (1 - t) * 2; // there and back again
-        const [wx, wy] = this.routePoint(r, tt);
+        const [wx, wy, mode] = this.routePoint(r, tt);
         const px = view.tx + (wx + 0.5) * s;
         const py = view.ty + (wy + 0.5) * s;
-        ctx.beginPath();
-        ctx.arc(px, py, 2.6, 0, Math.PI * 2);
-        ctx.fillStyle = "#f2d9a0";
-        ctx.fill();
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = "rgba(0,0,0,0.65)";
-        ctx.stroke();
+        if (mode === 1) {
+          ctx.beginPath();
+          ctx.moveTo(px, py - 3.8);
+          ctx.lineTo(px + 2.9, py + 2.5);
+          ctx.lineTo(px - 2.9, py + 2.5);
+          ctx.closePath();
+          ctx.fillStyle = "#dceaf7";
+          ctx.fill();
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = "rgba(18, 38, 60, 0.7)";
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.arc(px, py, 2.6, 0, Math.PI * 2);
+          ctx.fillStyle = "#f2d9a0";
+          ctx.fill();
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = "rgba(0,0,0,0.65)";
+          ctx.stroke();
+        }
       }
     }
     ctx.restore();
