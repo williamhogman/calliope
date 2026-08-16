@@ -101,9 +101,29 @@ export function unpack(buf) {
   return { header, arrays };
 }
 
+import { loadModule } from "./wasm-load.js";
+
 const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
 let seq = 0;
 const pending = new Map();
+
+// E6.7 — compile the binary once here, hand the Module to the worker as
+// its first message. Every later op queues behind this send, so the worker
+// can rely on init arriving first. If the main-thread compile fails the
+// init ships empty and the worker compiles for itself.
+const initSent = (async () => {
+  let module = null;
+  try {
+    module = await loadModule();
+  } catch {
+    /* worker falls back to its own compile */
+  }
+  const id = ++seq;
+  return new Promise((resolve) => {
+    pending.set(id, { resolve, reject: resolve }); // init failure ≠ fatal here
+    worker.postMessage(module ? { id, op: "init", module } : { id, op: "init" });
+  });
+})();
 
 worker.onmessage = (e) => {
   const { id, ok, buf, json, events, error } = e.data;
