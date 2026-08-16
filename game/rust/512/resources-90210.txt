@@ -1,0 +1,34 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · RESOURCES                    seed 90210 · 640x512
+========================================================================
+kind           count dawn-known    rich   finite reserve mo  min dist
+bananas            5       5 100%    0.86        0     renews       93c
+blueberries        9       9 100%    0.92        0     renews       68c
+strawberries      11      11 100%    0.86        0     renews       58c
+blackberries      10      10 100%    0.86        0     renews       59c
+cattle             3       3 100%    0.94        0     renews       87c
+sheep             21      21 100%    0.93        0     renews       48c
+horse              3       3 100%    0.96        0     renews      110c
+pig                7       7 100%    0.86        0     renews       54c
+deer               8       8 100%    0.91        0     renews       35c
+elk                6       6 100%    0.94        0     renews       98c
+fish               3       3 100%    0.83        0     renews       80c
+timber            12      12 100%    0.91        0     renews       49c
+stone              8       4 50%    0.83        0     renews       59c
+coal              17       4 24%    0.89       17       1359       55c
+copper             7       0  0%    0.88        7       1330       69c
+iron               7       0  0%    0.88        7       1364       54c
+silver             2       0  0%    0.80        2        792       77c
+gold               2       0  0%    0.79        2        653       77c
+mithril            1       0  0%    0.87        1       2346       77c
+
+total deposits: 142 · 1.23 per 1000 land cells
+mineral seams hidden at dawn: 36 of 44 (81.8%)
+
+---- checks ----------------------------------------------------------
+[PASS] deposits per 1000 land cells                   1.23   (sweet 1–6 · hard 0.5–12)
+[PASS] mineral hidden share at dawn                  81.8%   (sweet 45–85% — leave an age of prospectors)
+[PASS] essential kinds all present               0 missing   (everything except mithril/bananas should place)
+[PASS] gold placed                                     yes   (a world without gold has a dull late game)
+[PASS] mithril placed                                  yes   (the legendary seam should exist somewhere)
+CHECKS: 5 pass · 0 warn · 0 fail

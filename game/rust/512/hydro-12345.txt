@@ -1,0 +1,20 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · HYDROLOGY                    seed 12345 · 640x512
+========================================================================
+river cells: 4737 (4.2% of land) · lake cells: 2382 (2.1% of land)
+river systems (≥12 cells): 112 · longest network 140 cells ≈ 560 km
+discharge on rivers: p50 138.9 · p90 577.7 · p99 1447.3 · max 1958.0
+named: 3 deltas · 4 marshes
+  delta: The Mouths of the Zarinor @(496,243)
+  delta: The Mouths of the Belion @(493,259)
+  delta: The Mouths of the Auranwyn @(267,238)
+river towns: 16 of 16
+
+---- checks ----------------------------------------------------------
+[PASS] river share of land                            4.2%   (sweet 0.8–5% · hard 0.3–10%)
+[PASS] lake share of land                             2.1%   (sweet 0–3% · hard 0–8%)
+[PASS] river systems                                   112   (sweet 8–400 · hard 3–2000)
+[PASS] named deltas                                      3   (≥1 — great river mouths get names)
+[PASS] discharge finite                                yes   (no NaN/inf in flow accumulation)
+[PASS] dawn towns reach fresh water                 100.0%   (≥20% — rivers should pull the first peoples)
+CHECKS: 6 pass · 0 warn · 0 fail

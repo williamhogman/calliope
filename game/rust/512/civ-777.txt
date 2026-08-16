@@ -1,0 +1,81 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · CIVILIZATION                 seed 777 · 640x512 · 150y
+========================================================================
+world "Malnor" · 4 cultures · 16 settlements at dawn
+
+  yr      pop  towns  routes     wealth  treasury   arts  seams  ev/y
+   6     1872     16      22        453       111      6     87     3
+  12     2643     16      22        730       124     11     89     5
+  18     3917     16      22        995       141     15     90     4
+  24     5866     16      22       1452       162     19     91     2
+  30     8919     16      22       1867       182     21     94     3
+  36    13034     16      22       2150       202     26     95     5
+  42    18583     16      22       2357       222     29     96     2
+  48    25116     18      26       2680       242     31     97     3
+  54    32224     27      43       4147       309     35     98     5
+  60    42452     36      56       7144       491     42    100     7
+  66    58019     53      86      11098       741     46    101     8
+  72    77577     62      99      16950      1140     50    105    11
+  78   103761     64     102      22205      1607     52    105     7
+  84   130553     64     102      23481      2154     54    105     8
+  90   158310     64     102      30144      2725     57    105     6
+  96   183486     65     103      37793      3450     59    106     5
+ 102   203918     65     103      46395      4325     59    107     8
+ 108   219516     65     103      53773      5374     61    109    10
+ 114   230371     65     103      65795      6495     61    109    12
+ 120   240577     65     103      75970      7649     62    109     8
+ 126   245396     65     103      80528      8825     62    109    16
+ 132   251090     65     103      85731     10017     62    109     6
+ 138   253417     65     103     100496     11211     62    109    12
+ 144   255691     65     103      92942     12390     62    109    10
+ 150   256739     65     103      96357     15588     62    109    11
+
+event census: depletion:4 · disaster:240 · discovery:23 · festival:119 · found:49 · growth:365 · omen:6 · ruler:21 · society:22 · tech:62 · trade:70 · war:11 · wonder:95
+strikes 23 · depletions 4 · mining camps 4 · wars 11
+longest silence between events: 25 months
+
+the arc of the ages (tech & society events):
+  y1    The Orpolisians learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y2    The scattered camps of the Orpolisians bind themselves under one chief.
+  y2    The Aelwickkin learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y3    The Altagegolaks learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y3    The Orpolisians shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y3    The Brynarstadfolk learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y5    Weavers among the Orpolisians string the first tall looms; good cloth becomes as good as coin.
+  y6    The Aelwickkin shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y7    The Altagegolaks shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y8    The wise-women of the Orpolisians set down which roots cure and which kill.
+  y8    The Brynarstadfolk shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y11   Weavers among the Aelwickkin string the first tall looms; good cloth becomes as good as coin.
+  y13   Weavers among the Altagegolaks string the first tall looms; good cloth becomes as good as coin.
+  y13   The Orpolisians raise woven sails above their hulls, and the wind carries trade beyond the horizon.
+  y13   The Orpolisians pass into an age of bronze — the old stone tools are laid in barrows.
+  y13   The scattered camps of the Brynarstadfolk bind themselves under one chief.
+  y13   Weavers among the Brynarstadfolk string the first tall looms; good cloth becomes as good as coin.
+  y14   The scattered camps of the Aelwickkin bind themselves under one chief.
+  … and 66 more
+
+societies at year 150:
+  Aelwickkin             empire     the High Age   21 arts · treasury    11899 · lore  63003
+  Orpolisians            empire     the High Age   16 arts · treasury     2364 · lore 273070
+  Altagegolaks           kingdom    the High Age   12 arts · treasury      230 · lore   5374
+  Brynarstadfolk         kingdom    the High Age   13 arts · treasury     1096 · lore  88978
+
+---- checks ----------------------------------------------------------
+[PASS] population growth ×                         199.02×   (sweet 2–500× — dawn towns are tiny)
+[PASS] still growing at half-run              35% of final   (pop at half-run ≤92% of final)
+[PASS] settlements grew                              16→65   (colonies should outnumber the dawn towns)
+[PASS] dry-country towns exist                     8 of 65   (≥1 town beyond fresh water by the century mark)
+[PASS] routes exist                                    103   (a world without trade is broken)
+[PASS] no unconnected towns                              0   (every town should reach the web of trade)
+[PASS] no template placeholders                          0   (no {P}/{S} may leak into chronicle text)
+[PASS] no empty event texts                              0   (every event tells its story)
+[PASS] settlement names unique              65 names / 65 towns   (the taken-set must hold)
+[PASS] events per year                                 7.2   (sweet 2–40 · hard 0.5–100)
+[PASS] no long silences                              25 mo   (≤36 months between chronicle entries)
+[PASS] strikes happened                                 23   (the age of prospectors must actually happen)
+[PASS] era advanced past Stone                the High Age   (≥ Age of Bronze by now)
+[PASS] arts accumulate                      62 arts / 4 peoples   (≥3 arts per people)
+[PASS] era reached Iron                       the High Age   (≥ Age of Iron by now)
+[PASS] numbers stay finite                             yes   (no NaN pops, wealth or prices)
+CHECKS: 16 pass · 0 warn · 0 fail
