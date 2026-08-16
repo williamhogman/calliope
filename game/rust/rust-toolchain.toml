@@ -1,0 +1,8 @@
+# E6.9 — locked toolchain: the wasm binary (and therefore the version
+# stamp in game/web/js/wasm/version.js) is only meaningful across machines
+# when every machine compiles with the same rustc. rustup honors this file
+# automatically; the nix path in scripts/build.sh resolves rustc from the
+# environment's nixpkgs pin, which currently matches.
+[toolchain]
+channel = "1.91.1"
+targets = ["wasm32-unknown-unknown"]
