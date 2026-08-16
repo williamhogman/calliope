@@ -658,6 +658,25 @@ impl Orbital {
             misc[i * 4 + 2] = if flags[i] & 2 != 0 { 1.0 } else { 0.0 };
             misc[i * 4 + 3] = coast[i].min(32.0) / 32.0;
         }
+        // bridge diagonal river steps so the shader's bilinear mask reads as
+        // a continuous channel instead of a string of beads
+        let (wu, _hu) = (w as usize, h as usize);
+        let riv = |i: usize, f: &[u8]| f[i] & 1 != 0;
+        for y in 0..(h as usize - 1) {
+            for x in 0..(wu - 1) {
+                let i = y * wu + x;
+                let (a, b) = (riv(i, flags), riv(i + 1, flags));
+                let (c, d) = (riv(i + wu, flags), riv(i + wu + 1, flags));
+                if a && d && !b && !c {
+                    misc[(i + 1) * 4 + 1] = misc[(i + 1) * 4 + 1].max(0.5);
+                    misc[(i + wu) * 4 + 1] = misc[(i + wu) * 4 + 1].max(0.5);
+                } else if b && c && !a && !d {
+                    misc[i * 4 + 1] = misc[i * 4 + 1].max(0.5);
+                    misc[(i + wu + 1) * 4 + 1] = misc[(i + wu + 1) * 4 + 1].max(0.5);
+                }
+            }
+        }
+
 
         let t_height = self.make_tex(w, h, wgpu::TextureFormat::R32Float);
         let t_clim = self.make_tex(w, h, wgpu::TextureFormat::Rgba32Float);
