@@ -136,6 +136,92 @@ coverage, veiled share, death-spiral invariants) — in `report.sh`.
 Live evidence: 300 y browser run at seed 777 — 25 ruins with strata-glossed
 cards, failing-town notices, faded old ways, veiled entries in the feed.
 
+## M10 — Peoples and Thrones (culture ≠ realm)
+
+The structural prerequisite for everything below. Today one `Culture`
+is simultaneously a *people* (tongue, gods, demonym, name bank) and a
+*state* (treasury, ruler, wars, opinion row) — so the only way a rising
+can resolve is by minting an entire new people (`culture::secede`),
+realms can only multiply, and the map churns. Split the axes: a
+**People** changes on a generational clock (style, pantheon, kinship);
+a **Realm** changes on a political clock (dynasty, seat, tier,
+treasury, legitimacy, diplomacy). Realms map N:1 onto peoples, and one
+realm may hold towns of several peoples. This is the ADR of the arc.
+
+- [ ] M10.1 ADR + type split: `People` in `culture.rs`, `Realm` in `politics.rs`; settlements carry `people` and `realm` ids; `secede` no longer creates a people (L)
+- [ ] M10.2 Move all M4 state to the realm axis: opinion matrix, AE dread, coalitions, wars, sieges, tribute, vassalage, asabiyyah, legitimacy (L)
+- [ ] M10.3 Dynasties first-class: house name coined in the people's tongue, founder, seat; succession stays in-house; chronicle ruler events become dynasty state, registry-linked (M)
+- [ ] M10.4 Seat and court: the capital is a named seat; losing it in war is a legitimacy shock; seat-moved events (S-M)
+- [ ] M10.5 Ownership sort: lore/tech travels with the people, treasury/armies with the realm; markets and territory kernels read realm (M)
+- [ ] M10.6 Pack + UI: political layer colours by realm, culture layer by people; inspector reads "a town of the Norrfolk, under the crown of Vessmark" (M)
+
+Gates: full suite green after the split with physical-layer hashes
+unchanged; every settlement resolves to exactly one people and one
+realm across the sweep; no orphan realms or peoples; chronicle entity
+links survive the migration; determinism hash stable per ADR-0003.
+
+## M11 — The Crown Endures (the unrest ladder: coup before cleavage)
+
+`rebellion_pass` currently has one answer to a hollow realm: carve out
+a new state. Replace the single roll with a severity ladder resolved
+by *who* is angry: same-people rebels want the throne, not a border —
+only alien or detached peripheries want out. Turchin/Khaldun pacing
+(research/09) drives when; kinship (M12) drives which rung.
+
+- [ ] M11.1 Unrest stat per realm — fed by low legitimacy, guttering asabiyyah, famine (M2.6), war weariness, and over-extension (towns beyond the tier's administrative reach); replaces the raw rebellion roll (M)
+- [ ] M11.2 Palace coup: a named usurper (general from M6.2, or a courtier) takes the circlet — same realm, same borders, new house; legitimacy resets low; chronicle beats + earned epithets ("the Usurper", "the Kingslayer") (M)
+- [ ] M11.3 Succession crisis: a death on a low-legitimacy throne raises 2-3 pretenders; a months-long war of the circlet resolves *internally* — the winner's house rules, no border moves (M-L)
+- [ ] M11.4 Secession gate: a rising escalates to secession only when the rebel towns are of another people, or geographically detached (over-sea / beyond admin reach), *and* the realm is hollow; otherwise it resolves lower on the ladder (S-M)
+- [ ] M11.5 Charters: realms holding law-codes may answer unrest with concessions — treasury down, legitimacy up, no blood; makes the law tech mechanically real (S)
+- [ ] M11.6 Rising cooldown + hysteresis so one realm cannot convulse monthly; sifter patterns for usurpation and restoration arcs (S-M)
+
+Gates: over 300 y sweeps, internal resolutions (coup + crisis + charter)
+outnumber secessions ≥ 3:1; a secession never mints a new people when
+the rebels share the parent's people; realm count rises *and falls*
+within band; no realm posts two risings within the cooldown window;
+`diagnose civ` grows an unrest-ledger check.
+
+## M12 — Kindred and Crown (kinship, assimilation, union)
+
+Peoples currently never converge — every historical split adds one and
+nothing ever subtracts, so old worlds fragment into a babel and every
+minority is forever revolt fuel. Give peoples a kinship metric and let
+proximity under one crown do what Axelrod dissemination (research/06)
+says it does: pull neighbours together. Merging is the counterweight
+that keeps the revolt ledger of M11 balanced.
+
+- [ ] M12.1 Kinship metric between peoples: shared style family, secession lineage (child remembers parent), pantheon overlap, years spent under one realm (S-M)
+- [ ] M12.2 Assimilation: towns of people A under a realm of kindred people B drift toward B over ~3-4 generations — faster along roads and shared market areas, slower across straits and ranges (M)
+- [ ] M12.3 Peaceful union: two realms of kindred peoples with high mutual opinion and a shared threat merge under one crown by compact or marriage; the lesser house persists as a named vassal line (M-L)
+- [ ] M12.4 People merging: kindred peoples long under one realm fuse — the dominant tongue keeps the name bank, the minority leaves loanword strata in toponyms (M9.3 machinery) and its gods enter the shared pantheon (L)
+- [ ] M12.5 Minorities and memory: unassimilated towns remember their people across conquests — the standing fuel M11.4 reads; exonym/endonym doubling marks the seam (S)
+- [ ] M12.6 Diagnostics: people-count trajectory must fall as well as rise over 300 y; assimilation cadence band; unions fire in sweeps (S)
+
+Gates: people count moves in both directions on ≥ 60 % of sweep seeds;
+≥ 1 union or merge per long run in band; hydronym conservatism (M9.2)
+survives merges; no assimilation of towns across non-kindred pairs;
+suite green.
+
+## M13 — The Arc of Empires (civilizations that rise and fall whole)
+
+With realms, houses, kinship and mergers in place, name the emergent
+tier: a **civilization** is a family of kindred peoples plus the realms
+that carry them. Give the arc a shape — golden ages, overstretch,
+collapse into *successor realms* rather than deletion — so the telling
+can narrate rise-and-fall whole instead of a flicker of secessions.
+
+- [ ] M13.1 Civilization as a derived entity: the kinship-closure of peoples, named, registry-tracked, browsable in the legends UI (M)
+- [ ] M13.2 Golden ages: sustained legitimacy + asabiyyah + wealth open an era of building — monument artifacts, tech pace up, chronicle set-pieces (M)
+- [ ] M13.3 Overstretch and decadence: administrative upkeep superlinear in realm span (Bettencourt ∝ pop^0.85 reuse); the Khaldun decay already in `ASAB_DECAY` surfaced as court-rot events (S-M)
+- [ ] M13.4 Collapse and succession: a failing empire fragments into kindred successor realms through an interregnum — never into new peoples; ruins and name strata mark the fall (M)
+- [ ] M13.5 Hegemony: tribute/vassal edges compose into a named paramount tier; decisive peaces can build it, collapse dissolves it (S-M)
+- [ ] M13.6 Sifter arc: the rise and fall of a civilization detected and told as one multi-century story (M6.7 eventfulness reuse) (M)
+
+Gates: ≥ 1 full rise-and-fall arc per 300 y on most sweep seeds;
+successor states inherit their peoples (zero people-minting on
+collapse); no runaway single-civilization ending on > 80 % of seeds;
+polity count oscillates across the run; suite green.
+
 ## Ready (calibration queue)
 
 Near-band findings from the M3 closure run, staged for the next tuning
