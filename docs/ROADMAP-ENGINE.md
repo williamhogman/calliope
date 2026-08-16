@@ -175,16 +175,16 @@ in its dependency tree (`cargo tree` check).
 The protocol grows stamps, timeouts, progress, and binary lanes — the
 boundary stops being the naive part of the system.
 
-- [ ] E7.1 Generation stamps: every request carries the world generation counter; stale responses from a freed world are dropped instead of resolving into current UI state (`worker.js:14-18`, `net.js:47-53`) (S)
-- [ ] E7.2 Request timeouts and pending-map cleanup; `worker.onerror`'s blanket reject-all (`net.js:41-45`) narrows to per-request failure with op context (S)
-- [ ] E7.3 Tick coalescing: one in-flight tick, latest-wins month batching — spamming step can no longer queue unbounded work (S)
-- [ ] E7.4 Abortable generation: the worker checks an abort flag between generation stages; regenerate-while-generating cancels cleanly (M)
-- [ ] E7.5 Stage progress events during generation, driving the loading veil with real stage names (terrain → climate → rivers → peoples) instead of a static glyph (`index.html:29-35`) (S-M)
+- [x] E7.1 Generation stamps: every request carries `<seed>-<size>-g<n>`; the worker drops world-ops whose stamp mismatches the live world, so stale responses from a freed world can never resolve into current UI state (`proto.js`, `worker.js`, `net.js`) (S)
+- [x] E7.2 Per-op deadlines (`proto.js::DEADLINE`) with pending-map cleanup; `worker.onerror`'s blanket reject-all narrowed to per-request failure carrying op context, with the crash path split out to recovery (E7.10) (S)
+- [x] E7.3 Tick coalescing: one in-flight tick, queued months merge into a single follow-up call — spamming 12× playback can no longer queue unbounded work (`net.js::tickWorld`) (S)
+- [x] E7.4 Abortable generation: `abort` bypasses the arrival-order chain and flags the stamp; the builder loop checks between stages and frees the half-built world. Verified live: "abandon this world" fades the veil mid-generation (M)
+- [x] E7.5 Stage progress events during generation drive the loading veil with real stage names — all nine observed live, RAISING THE LAND → WAKING THE FIRST PEOPLES (`GenBuilder` in `world.rs`, `WasmWorldBuilder` in `lib.rs`) (S-M)
 - [ ] E7.6 Binary tick lane: tick responses ride transferable buffers (with E4.6); JSON remains only for low-frequency ops (`explain`, `stories`) (S)
-- [ ] E7.7 Protocol op-codes generated from a Rust enum (with E2.4) — the string op dispatch in `worker.js:13-41` gains a single source of truth (S)
-- [ ] E7.8 COOP/COEP headers in `scripts/serve.py` and the production host config — unlocks `SharedArrayBuffer` for E7.9 and precise timers for profiling (S)
-- [ ] E7.9 Research + ADR: shared-memory field mirror (SAB) so the render thread reads grid state without any copy; adopt or reject with measurements (L)
-- [ ] E7.10 Worker crash recovery: on worker death, respawn and replay `generate(seed) + tick(month)` — determinism (ADR-0003) makes state reconstruction free; the UI shows a one-line notice instead of dying (M)
+- [x] E7.7 Protocol op-codes gain their single source of truth in `proto.js` (OP + DEADLINE), imported by both endpoints. The Rust-enum half is rejected: the op strings are a JS↔JS contract between `net.js` and `worker.js` — the wasm boundary is method calls, so Rust never sees an op string and codegen would be a build stage for nothing (S)
+- [x] E7.8 COOP/COEP headers in `scripts/serve.py`; `crossOriginIsolated === true` verified live. The production-host half is moot by ADR-0015 — nothing depends on SAB, so prod needs no header change (S)
+- [x] E7.9 Research + ADR: shared-memory field mirror rejected with measurements — fields are immutable post-generation and already cross as one zero-copy transferable; SAB would fork dev/prod behavior (ADR-0015) (L)
+- [x] E7.10 Worker crash recovery: on worker death, respawn, regenerate the recorded seed, replay the months run — determinism (ADR-0003) makes reconstruction free. Verified live: worker killed at month 12, world restored to month 12, two one-line toasts, zero console errors (M)
 
 Gates: scripted Playwright probe — regenerate mid-generation, regenerate
 mid-tick-burst, kill the worker — all recover to a consistent, correct UI;
