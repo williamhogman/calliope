@@ -331,6 +331,9 @@ pub struct World {
     dirty: Dirty,
     /// E4.2/E4.3 — hashes of the last-shipped JSON per wire surface.
     sent: SentCache,
+    /// E5.8 — reused serialization scratch for the tick payload; keeps its
+    /// high-water capacity so `tick_json` stops paying growth reallocations.
+    wire_buf: Vec<u8>,
     /// Deterministic drought field over (space × year) — the famine die (M2.6).
     drought: Perlin3,
     /// Last year grain was shock-priced by famine, to spike at most once a year.
@@ -647,6 +650,7 @@ impl World {
             territory: Array2::from_elem((1, 1), -1),
             dirty: Dirty::default(),
             sent: SentCache::default(),
+            wire_buf: Vec::new(),
             drought: Perlin3::new(seed + 4444),
             grain_shock_year: -1,
             site_score: founded.site_score,
