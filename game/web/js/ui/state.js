@@ -21,7 +21,7 @@ export const [popHistory, setPopHistory] = createSignal([]);
 
 // ---------- view state ----------
 
-export const [layer, setLayer] = createSignal("biomes");
+export const [layer, setLayer] = createSignal("political");
 export const [overlays, setOverlays] = createStore({
   rivers: true, snow: true, settlements: true, routes: true,
   resources: false, labels: true, winds: false, hillshade: true,

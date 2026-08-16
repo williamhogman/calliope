@@ -17,7 +17,7 @@ import {
 } from "../palette.js";
 
 export const LAYERS = [
-  ["biomes", "Biomes"],
+  ["biomes", "Terrain"],
   ["elevation", "Elevation"],
   ["temperature", "Temperature"],
   ["precip", "Precipitation"],
@@ -312,8 +312,8 @@ function LegendSection() {
             <span>${b.name}</span>
           </div>`)}
       </div>${l === "political"
-        ? html`<div class="legend-note">Realms are tinted by their people \u2014 see Peoples below.</div>`
-        : ""}`;
+        ? html`<div class="legend-note">Realms tinted by their people over satellite terrain \u2014 see Peoples below.</div>`
+        : html`<div class="legend-note">True-colour composite \u2014 canopy, soil, rock and snow as seen from orbit.</div>`}`;
     }
     if (l === "elevation") return gradLegend(ELEV_LAND_GRAD, 0, 1, "sea level", "high peaks");
     if (l === "temperature") return gradLegend(TEMP_GRAD, -35, 35, "\u221235\u00b0C", "35\u00b0C");

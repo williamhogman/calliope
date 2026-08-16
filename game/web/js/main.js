@@ -3,6 +3,7 @@
 
 import { generateWorld, tickWorld } from "./net.js";
 import { Renderer } from "./render.js";
+import { createGpu } from "./gpu.js";
 import { View } from "./view.js";
 import { mountUI } from "./ui/app.js";
 import {
@@ -23,11 +24,56 @@ const markDirty = () => { dirty = true; };
 const view = new View(canvas, markDirty);
 let hover = null;
 
-window.__calliope = { view, renderer, world, month, advance: (m) => advance(m) };
+window.__calliope = {
+  view, renderer, world, month, advance: (m) => advance(m),
+  gpuMode: () => (gpuLive ? "live" : "on-demand"),
+  gpuForceLive: () => { governorOn = false; gpuLive = true; },
+};
+
+// GPU imagery: bring up the Rust wgpu engine (WebGPU, else WebGL2).
+// If no adapter exists the CPU compositor stays in charge.
+const glCanvas = $("gl");
+createGpu(glCanvas)
+  .then((gpu) => {
+    renderer.gpu = gpu;
+    const w = world();
+    if (w) gpu.setWorld(w);
+    markDirty();
+  })
+  .catch((err) => {
+    console.warn("GPU engine unavailable; CPU compositor in charge:", err);
+    glCanvas.remove();
+  });
 
 // ---------- render loop ----------
 
-function frame() {
+// Frame governor: on hardware GL the fullscreen pass is ~free, so it runs
+// every frame (living water, gliding seasons). Software rasterisers can't
+// afford that — when the frame time stays heavy, fall back to on-demand
+// GL rendering: everything still works, the water just holds still.
+let lastTs = 0;
+let frameEma = 16;
+let gpuLive = true;
+let governorOn = true;
+
+function frame(ts) {
+  if (lastTs) {
+    frameEma += (Math.min(ts - lastTs, 250) - frameEma) * 0.05;
+    if (governorOn && gpuLive && ts > 6000 && frameEma > 70) {
+      gpuLive = false;
+      dirty = true;
+      console.info("calliope: slow rasteriser detected — GL renders on demand");
+    }
+  }
+  lastTs = ts;
+  const gpu = renderer.gpu;
+  if (gpu && gpu.hasWorld && renderer.world && (gpuLive || dirty)) {
+    if (layer() === "political") gpu.setTint(renderer.tintRgba(version), version);
+    gpu.render(
+      { layer: layer(), overlays, month: month() },
+      view, canvas.clientWidth, canvas.clientHeight,
+    );
+  }
   // caravans and winds animate continuously while time flows
   if (playing() && (overlays.routes || overlays.winds)) dirty = true;
   if (dirty) {
@@ -86,6 +132,7 @@ async function generate(rawSeed) {
     setWars(w.header.wars || []);
     setMarket(w.header.market || []);
     renderer.setWorld(w);
+    renderer.gpu?.setWorld(w);
     view.fit(w.header.width || w.header.size, w.header.size);
     buildDepositIndex(w);
     setPopHistory([{
