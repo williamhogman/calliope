@@ -6,6 +6,10 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# E5.10 — counting allocator in the diagnose harness; never in the wasm.
+alloc-count = []
+
 [dependencies]
 ndarray = "0.16"
 rand = { version = "0.8", default-features = false, features = ["std", "std_rng"] }

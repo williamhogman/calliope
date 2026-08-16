@@ -21,6 +21,47 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
+// E5.10 — counting allocator behind the `alloc-count` feature: every heap
+// allocation (and growth realloc) bumps one relaxed atomic, making
+// allocations/tick a banded metric in `bench`. The count is deterministic
+// for a fixed seed, so the band can be tight; report.sh builds with the
+// feature on.
+#[cfg(feature = "alloc-count")]
+mod alloc_count {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static ALLOCS: AtomicU64 = AtomicU64::new(0);
+
+    pub fn count() -> u64 {
+        ALLOCS.load(Ordering::Relaxed)
+    }
+
+    pub struct Counting;
+
+    unsafe impl GlobalAlloc for Counting {
+        unsafe fn alloc(&self, l: Layout) -> *mut u8 {
+            ALLOCS.fetch_add(1, Ordering::Relaxed);
+            System.alloc(l)
+        }
+        unsafe fn alloc_zeroed(&self, l: Layout) -> *mut u8 {
+            ALLOCS.fetch_add(1, Ordering::Relaxed);
+            System.alloc_zeroed(l)
+        }
+        unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
+            System.dealloc(p, l)
+        }
+        unsafe fn realloc(&self, p: *mut u8, l: Layout, n: usize) -> *mut u8 {
+            ALLOCS.fetch_add(1, Ordering::Relaxed);
+            System.realloc(p, l, n)
+        }
+    }
+}
+
+#[cfg(feature = "alloc-count")]
+#[global_allocator]
+static GLOBAL: alloc_count::Counting = alloc_count::Counting;
+
 use ndarray::Array2;
 
 use calliope::world::CellFlags;
