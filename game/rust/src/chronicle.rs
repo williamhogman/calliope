@@ -8,17 +8,20 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
+use crate::ids::{CultureId, EntityId};
 use crate::culture::Culture;
+use crate::entity::EntityKind;
 use crate::entity::Registry;
 use crate::naming::{self, Feature};
 use crate::settlements::Settlement;
+use crate::world::EventKind;
 use crate::world::Event;
 
 // ---------------------------------------------------------------- state
 
 #[derive(Serialize, Clone)]
 pub struct Ruler {
-    pub culture: usize,
+    pub culture: CultureId,
     pub name: String,
     pub epithet: String,
     pub since: i64,
@@ -26,7 +29,7 @@ pub struct Ruler {
     pub age_months: i64,
     /// Registry id of the person under the circlet (M6.2).
     #[serde(skip)]
-    pub ent: i64,
+    pub ent: EntityId,
 }
 
 impl Ruler {
@@ -136,7 +139,7 @@ pub fn founding_myths(
     events.push(Event {
         m: 0,
         s: world_name.to_string(),
-        k: "myth".to_string(),
+        k: EventKind::Myth,
         text: format!(
             "In the elder dark there was only {}. Then the gods drew {} up from the deep, and the first fires were kindled.",
             ocean, continent
@@ -173,7 +176,7 @@ pub fn founding_myths(
         events.push(Event {
             m: 0,
             s: c.people.clone(),
-            k: "myth".to_string(),
+            k: EventKind::Myth,
             text: line,
             ..Default::default()
         });
@@ -184,7 +187,7 @@ pub fn founding_myths(
             events.push(Event {
                 m: 0,
                 s: c.people.clone(),
-                k: "myth".to_string(),
+                k: EventKind::Myth,
                 text: format!(
                     "Chief among the gods of the {} stands {}, who holds {}; after them {}, who holds {}.",
                     c.people, g0.name, g0.domain, g1.name, g1.domain
@@ -230,7 +233,7 @@ pub fn monthly(
         let p = 0.0006 + ((age - 480).max(0) as f64) * 0.000045;
         if rng.gen::<f64>() < p {
             let cid = state.rulers[ri].culture;
-            let culture = &cultures[cid];
+            let culture = &cultures[cid.idx()];
             let old_title = state.rulers[ri].title();
             let old_ent = state.rulers[ri].ent;
             let years = ((month_abs - state.rulers[ri].since) / 12).max(0);
@@ -255,7 +258,7 @@ pub fn monthly(
                 .iter()
                 .filter(|s| s.culture == cid)
                 .max_by_key(|s| s.pop);
-            let culture_ent = reg.find_kind("culture", &culture.people);
+            let culture_ent = reg.find_kind(EntityKind::Culture, &culture.people);
             let mut ids = vec![old_ent, heir.ent];
             if let Some(ce) = culture_ent {
                 ids.insert(0, ce);
@@ -263,7 +266,7 @@ pub fn monthly(
             events.push(Event {
                 m: month_abs,
                 s: culture.people.clone(),
-                k: "ruler".to_string(),
+                k: EventKind::Ruler,
                 text,
                 ids,
                 x: seat.map(|s| s.x).unwrap_or(-1),
@@ -287,7 +290,7 @@ pub fn monthly(
         events.push(Event {
             m: month_abs,
             s: world_name.to_string(),
-            k: "omen".to_string(),
+            k: EventKind::Omen,
             text,
             ..Default::default()
         });
@@ -306,7 +309,7 @@ pub fn monthly(
             events.push(Event {
                 m: month_abs,
                 s: c.people.clone(),
-                k: "omen".to_string(),
+                k: EventKind::Omen,
                 text,
                 ..Default::default()
             });
@@ -355,7 +358,7 @@ pub fn monthly(
             events.push(Event {
                 m: month_abs,
                 s: host.name.clone(),
-                k: "festival".to_string(),
+                k: EventKind::Festival,
                 text: format!("{} {} in {}{}.", c.people, what, host.name, feast),
                 ..Default::default()
             });
@@ -375,7 +378,7 @@ pub fn wonder_for(
 ) -> Vec<Event> {
     let mut events = Vec::new();
     let style = cultures
-        .get(s.culture)
+        .get(s.culture.idx())
         .map(|c| c.style.as_str())
         .unwrap_or("hellenic");
     if s.tier == "Town" {
@@ -389,7 +392,7 @@ pub fn wonder_for(
         events.push(Event {
             m: month_abs,
             s: s.name.clone(),
-            k: "wonder".to_string(),
+            k: EventKind::Wonder,
             text: format!("{} {}.", s.name, built),
             ..Default::default()
         });
@@ -398,7 +401,7 @@ pub fn wonder_for(
             events.push(Event {
                 m: month_abs,
                 s: s.name.clone(),
-                k: "omen".to_string(),
+                k: EventKind::Omen,
                 text: format!(
                     "Travellers carry the word to every shore: {} is the first true town of the age.",
                     s.name
@@ -411,7 +414,7 @@ pub fn wonder_for(
         events.push(Event {
             m: month_abs,
             s: s.name.clone(),
-            k: "wonder".to_string(),
+            k: EventKind::Wonder,
             text: format!(
                 "{} has become a city — the first the world has known. Its walls swallow whole hills.",
                 s.name
@@ -422,3 +425,12 @@ pub fn wonder_for(
     let _ = rng;
     events
 }
+
+// ---------------------------------------------------------------- bands
+
+use crate::util::Band;
+
+/// Diagnostics bands (E2.7): the pace of the telling.
+pub const BANDS: &[Band] = &[
+    Band { name: "events per year", sweet: (2.0, 40.0), hard: (0.5, 100.0), target: "sweet 2–40 · hard 0.5–100" },
+];

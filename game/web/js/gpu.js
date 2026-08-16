@@ -10,10 +10,14 @@
 // If no adapter exists at all the caller keeps the CPU compositor.
 
 import { loadEngine } from "./wasm-load.js";
+// Engine vocabulary generated from the Rust tables (E2.4) — layer ids as
+// the shader branches on them, and the field registry in upload order.
+import { LAYER_ID, FIELDS } from "./gen/constants.js";
 
-const LAYER_ID = {
-  biomes: 0, political: 1, elevation: 2, temperature: 3,
-  precip: 4, hydro: 5, fertility: 6,
+const EMPTY = {
+  float32: new Float32Array(0),
+  uint8: new Uint8Array(0),
+  int16: new Int16Array(0),
 };
 
 export async function createGpu(canvas, { forceGl = false } = {}) {
@@ -51,12 +55,12 @@ class GpuEngine {
   setWorld(world) {
     const W = world.header.width || world.header.size;
     const H = world.header.size;
-    const { height, tmean, tamp, precip, fertility, discharge, flags, strahler } = world.arrays;
-    this.orbital.set_world(
-      W, H, height, tmean, tamp, precip,
-      fertility || new Float32Array(0), discharge, flags,
-      strahler || new Uint8Array(0),
+    // E2.2 — the upload argument list derives from the generated field
+    // registry, so it cannot drift from Orbital's set_world signature.
+    const args = FIELDS.filter((f) => f.gpu).map(
+      (f) => world.arrays[f.name] ?? EMPTY[f.dtype],
     );
+    this.orbital.set_world(W, H, ...args);
     this.hasWorld = true;
     this.hasTint = false;
     this.tintVersion = -1;

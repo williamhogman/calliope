@@ -1,6 +1,6 @@
 # ADR-0007: Binary pack protocol with version-locked loader
 
-- **Status:** Accepted (backfilled)
+- **Status:** Superseded by [ADR-0016](0016-pack-v2-quantized-crc-payload.md)
 - **Date:** 2026-08 (decision predates ADR system)
 - **Touches:** `game/rust/src/world.rs::pack`, `game/web/js/wasm-load.js`, `scripts/serve.py`
 

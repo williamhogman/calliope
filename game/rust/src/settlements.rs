@@ -7,10 +7,11 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
+use crate::ids::{CultureId, SettlementId};
 use crate::constants as gc;
 use crate::naming;
 use crate::ndimage;
-use crate::resources::{isa_chain, Deposit};
+use crate::resources::{Deposit, Good, Goods};
 
 pub const TIERS: [(i64, &str); 4] = [
     (0, "Camp"),
@@ -31,26 +32,33 @@ pub fn tier(pop: i64) -> String {
 
 #[derive(Serialize, Clone)]
 pub struct Settlement {
-    pub id: i64,
+    pub id: SettlementId,
     pub name: String,
     pub x: i64,
     pub y: i64,
     pub pop: i64,
     pub tier: String,
+    /// Food per head — wire precision 0.1 (E4.2 heartbeat).
+    #[serde(serialize_with = "crate::util::ser_f1")]
     pub food: f64,
     /// Carrying capacity, souls — recomputed monthly by `capacity_at`
-    /// (crop package + soil + Kaplan arts factor). Shipped to the client.
+    /// (crop package + soil + Kaplan arts factor). Shipped to the client
+    /// as whole souls (E4.2 heartbeat).
+    #[serde(serialize_with = "crate::util::ser_round_i64")]
     pub k: f64,
     pub coastal: bool,
     pub river: bool,
-    pub culture: usize,
+    pub culture: CultureId,
     /// Culture whose tongue coined the name — stable through conquest
     /// (names carry time, M9.2); the M3 label audit classifies against
     /// this, not the current owner.
-    pub namer: usize,
+    pub namer: CultureId,
     pub connections: i64,
-    pub goods: Vec<String>,
-    pub exports: Option<String>,
+    pub goods: Goods,
+    pub exports: Option<Good>,
+    /// Whole coin on the wire (E4.2 heartbeat) — the client displays
+    /// rounded coin, so finer precision is pure payload noise.
+    #[serde(serialize_with = "crate::util::ser_round_i64")]
     pub wealth: f64,
     /// true when this town's trade takes to the sea at its own quays
     pub port: bool,
@@ -97,7 +105,7 @@ pub const KM2_HINTERLAND: f64 = 110.0;
 /// try_colonize and explain.rs read `s.k` — no second copy exists.
 pub fn capacity_at(
     crops: &Array2<u8>,
-    fert: &Array2<f64>,
+    fert: &Array2<f32>,
     y: usize,
     x: usize,
     coastal: bool,
@@ -118,8 +126,8 @@ pub fn capacity_at(
                 continue;
             }
             let (yy, xx) = (yy as usize, xx as usize);
-            let d = crate::agriculture::PACK_DENSITY[crops[[yy, xx]] as usize]
-                * (0.45 + 0.9 * fert[[yy, xx]]);
+            let d = crate::agriculture::CropPackage::from_code(crops[[yy, xx]]).density()
+                * (0.45 + 0.9 * fert[[yy, xx]] as f64);
             dsum += d;
             n += 1.0;
         }
@@ -146,14 +154,14 @@ pub fn work_radius(pop: i64) -> f64 {
 
 pub fn site_food(
     food_grid: &Array2<f64>,
-    fert: &Array2<f64>,
+    fert: &Array2<f32>,
     near_fresh: &Array2<bool>,
     coast: &Array2<bool>,
     y: usize,
     x: usize,
 ) -> f64 {
     let v = food_grid[[y, x]]
-        + 1.6 * fert[[y, x]]
+        + 1.6 * fert[[y, x]] as f64
         + 1.4 * (near_fresh[[y, x]] as u8 as f64)
         + (coast[[y, x]] as u8 as f64);
     crate::util::round2(v.max(0.35))
@@ -171,14 +179,14 @@ pub struct Founded {
 /// Score cells and greedily found settlements with min spacing.
 #[allow(clippy::too_many_arguments)]
 pub fn found_settlements(
-    height: &Array2<f64>,
+    height: &Array2<f32>,
     biomes: &Array2<u8>,
-    tmean: &Array2<f64>,
+    tmean: &Array2<f32>,
     rivers: &Array2<bool>,
     lakes: &Array2<bool>,
-    discharge: &Array2<f64>,
+    discharge: &Array2<f32>,
     deposits: &[Deposit],
-    fert: &Array2<f64>,
+    fert: &Array2<f32>,
     rng: &mut Pcg64Mcg,
     taken: &mut HashSet<String>,
 ) -> Founded {
@@ -220,7 +228,7 @@ pub fn found_settlements(
             if !mouth {
                 continue;
             }
-            let w = (discharge[[y, x]] / 300.0).sqrt().clamp(0.6, 1.8);
+            let w = (discharge[[y, x]] as f64 / 300.0).sqrt().clamp(0.6, 1.8);
             let rr = 6i64;
             for dy in -rr..=rr {
                 for dx in -rr..=rr {
@@ -245,7 +253,7 @@ pub fn found_settlements(
     // food kernel from deposits whose ISA chain reaches "food"
     let mut food = Array2::<f64>::zeros((size, size));
     for d in deposits {
-        if isa_chain(&d.r).iter().any(|s| s == "food") {
+        if d.r.is_food() {
             food[[d.y as usize, d.x as usize]] += d.rich;
         }
     }
@@ -260,7 +268,7 @@ pub fn found_settlements(
                 score[[y, x]] = -1e9;
                 continue;
             }
-            let comfort = (-(((tmean[[y, x]] - 12.0) / 14.0).powi(2))).exp();
+            let comfort = (-(((tmean[[y, x]] as f64 - 12.0) / 14.0).powi(2))).exp();
             let b = biomes[[y, x]];
             // fresh water pulls hard but no longer vetoes: a sheltered
             // coast with good soil can found on wells and cisterns.
@@ -269,11 +277,11 @@ pub fn found_settlements(
                 + 2.8 * delta[[y, x]]
                 + food[[y, x]]
                 + 2.0 * comfort
-                + 2.6 * fert[[y, x]]
+                + 2.6 * fert[[y, x]] as f64
                 - 2.5 * ((b == gc::DESERT) as u8 as f64)
                 - 3.5 * ((b == gc::ICE) as u8 as f64)
                 - 1.5 * ((b == gc::TUNDRA) as u8 as f64)
-                - 2.0 * (height[[y, x]] - 0.5).clamp(0.0, 1.0) * 4.0;
+                - 2.0 * (height[[y, x]] as f64 - 0.5).clamp(0.0, 1.0) * 4.0;
         }
     }
 
@@ -304,7 +312,7 @@ pub fn found_settlements(
         }
         let pop = rng.gen_range(40..140) as i64;
         settlements.push(Settlement {
-            id: settlements.len() as i64,
+            id: SettlementId(settlements.len() as i64),
             name: naming::make_word(rng, "hellenic", taken),
             x: bx as i64,
             y: by as i64,
@@ -314,10 +322,10 @@ pub fn found_settlements(
             k: 0.0, // set by World::generate once the crop grid exists
             coastal: coast[[by, bx]],
             river: near_fresh[[by, bx]],
-            culture: 0,
-            namer: 0,
+            culture: CultureId(0),
+            namer: CultureId(0),
             connections: 0,
-            goods: Vec::new(),
+            goods: Goods::new(),
             exports: None,
             wealth: crate::util::round2(pop as f64 * 0.2),
             port: false,
@@ -404,3 +412,12 @@ pub fn colony_site(
     }
     found
 }
+
+// ---------------------------------------------------------------- bands
+
+use crate::util::Band;
+
+/// Diagnostics bands (E2.7): how the towns grow.
+pub const BANDS: &[Band] = &[
+    Band { name: "century growth", sweet: (2.0, 1200.0), hard: (1.05, 3000.0), target: "M2 crop-package K: sweet 2–1200×" },
+];

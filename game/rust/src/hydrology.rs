@@ -377,3 +377,16 @@ pub fn hydrology(
         flow_amp,
     }
 }
+
+// ---------------------------------------------------------------- bands
+
+use crate::util::Band;
+
+/// Diagnostics bands (E2.7): rivers, lakes and their power.
+pub const BANDS: &[Band] = &[
+    Band { name: "river share of land", sweet: (0.008, 0.05), hard: (0.003, 0.10), target: "sweet 0.8–5% · hard 0.3–10%" },
+    Band { name: "lake share of land", sweet: (0.0, 0.03), hard: (0.0, 0.08), target: "sweet 0–3% · hard 0–8%" },
+    Band { name: "river systems", sweet: (8.0, 400.0), hard: (3.0, 2000.0), target: "sweet 8–400 · hard 3–2000" },
+    Band { name: "strahler top order", sweet: (4.0, 9.0), hard: (3.0, 12.0), target: "sweet 4–9 · hard 3–12" },
+    Band { name: "river seasonal swing", sweet: (0.05, 0.50), hard: (0.01, 0.90), target: "mean |amp| · sweet .05–.50 · hard .01–.90" },
+];

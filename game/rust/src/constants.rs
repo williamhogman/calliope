@@ -2,45 +2,86 @@
 
 use serde_json::{json, Value};
 
-pub const WATER: u8 = 0;
-pub const DESERT: u8 = 1;
-pub const SAVANNA: u8 = 2;
-pub const TROPICAL_RAIN_FOREST: u8 = 3;
-pub const GRASSLAND: u8 = 4;
-pub const WOODLAND: u8 = 5;
-pub const SEASONAL_RAIN_FOREST: u8 = 6;
-pub const TEMPERATE_RAIN_FOREST: u8 = 7;
-pub const BOREAL_FOREST: u8 = 8;
-pub const TUNDRA: u8 = 9;
-pub const ICE: u8 = 10;
+/// The eleven biomes (E1.8) — one declaration: codes, display names and
+/// map colors live on the variants; `biome_meta()` is generated from it.
+/// Codes are stable — they ship in the pack.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, strum::Display, strum::EnumIter, strum::EnumCount, strum::IntoStaticStr)]
+#[repr(u8)]
+pub enum Biome {
+    Water = 0,
+    Desert = 1,
+    Savanna = 2,
+    #[strum(serialize = "Tropical Rainforest")]
+    TropicalRainForest = 3,
+    Grasslands = 4,
+    Woodlands = 5,
+    #[strum(serialize = "Seasonal Rainforest")]
+    SeasonalRainForest = 6,
+    #[strum(serialize = "Temperate Rainforest")]
+    TemperateRainForest = 7,
+    #[strum(serialize = "Boreal Forest")]
+    BorealForest = 8,
+    Tundra = 9,
+    Ice = 10,
+}
 
-pub const PRETTY_BIOMES: [&str; 11] = [
-    "Water",
-    "Desert",
-    "Savanna",
-    "Tropical Rainforest",
-    "Grasslands",
-    "Woodlands",
-    "Seasonal Rainforest",
-    "Temperate Rainforest",
-    "Boreal Forest",
-    "Tundra",
-    "Ice",
-];
+impl Biome {
+    #[inline]
+    pub const fn code(self) -> u8 {
+        self as u8
+    }
 
-pub const BIOME_COLORS: [[u8; 3]; 11] = [
-    [38, 84, 148],
-    [231, 196, 132],
-    [196, 168, 83],
-    [22, 108, 48],
-    [144, 189, 102],
-    [104, 156, 74],
-    [55, 128, 62],
-    [32, 104, 84],
-    [58, 92, 62],
-    [148, 145, 122],
-    [235, 242, 246],
-];
+    pub fn name(self) -> &'static str {
+        self.into()
+    }
+
+    #[inline]
+    pub fn from_code(c: u8) -> Biome {
+        match c {
+            1 => Biome::Desert,
+            2 => Biome::Savanna,
+            3 => Biome::TropicalRainForest,
+            4 => Biome::Grasslands,
+            5 => Biome::Woodlands,
+            6 => Biome::SeasonalRainForest,
+            7 => Biome::TemperateRainForest,
+            8 => Biome::BorealForest,
+            9 => Biome::Tundra,
+            10 => Biome::Ice,
+            _ => Biome::Water,
+        }
+    }
+
+    pub const fn color(self) -> [u8; 3] {
+        match self {
+            Biome::Water => [38, 84, 148],
+            Biome::Desert => [231, 196, 132],
+            Biome::Savanna => [196, 168, 83],
+            Biome::TropicalRainForest => [22, 108, 48],
+            Biome::Grasslands => [144, 189, 102],
+            Biome::Woodlands => [104, 156, 74],
+            Biome::SeasonalRainForest => [55, 128, 62],
+            Biome::TemperateRainForest => [32, 104, 84],
+            Biome::BorealForest => [58, 92, 62],
+            Biome::Tundra => [148, 145, 122],
+            Biome::Ice => [235, 242, 246],
+        }
+    }
+}
+
+// Grid codes for the biome field (`Array2<u8>` — the pack contract):
+// defined from the enum, so there is exactly one source of truth.
+pub const WATER: u8 = Biome::Water.code();
+pub const DESERT: u8 = Biome::Desert.code();
+pub const SAVANNA: u8 = Biome::Savanna.code();
+pub const TROPICAL_RAIN_FOREST: u8 = Biome::TropicalRainForest.code();
+pub const GRASSLAND: u8 = Biome::Grasslands.code();
+pub const WOODLAND: u8 = Biome::Woodlands.code();
+pub const SEASONAL_RAIN_FOREST: u8 = Biome::SeasonalRainForest.code();
+pub const TEMPERATE_RAIN_FOREST: u8 = Biome::TemperateRainForest.code();
+pub const BOREAL_FOREST: u8 = Biome::BorealForest.code();
+pub const TUNDRA: u8 = Biome::Tundra.code();
+pub const ICE: u8 = Biome::Ice.code();
 
 /// Height unit: 1.0 == 4000 m (from geo.hy)
 pub const METRES_PER_UNIT: f64 = 4000.0;
@@ -65,14 +106,28 @@ pub const MONTHS: [&str; 12] = [
 ];
 
 pub fn biome_meta() -> Value {
-    let list: Vec<Value> = (0..11u8)
+    use strum::IntoEnumIterator;
+    let list: Vec<Value> = Biome::iter()
         .map(|b| {
             json!({
-                "id": b,
-                "name": PRETTY_BIOMES[b as usize],
-                "color": BIOME_COLORS[b as usize],
+                "id": b.code(),
+                "name": b.to_string(),
+                "color": b.color(),
             })
         })
         .collect();
     Value::Array(list)
 }
+
+/// Raster layer ids exactly as the Orbital WGSL shader branches on them
+/// (`render.rs`). The generated JS constants (E2.4) mirror this table, so
+/// the client can never drift from the shader.
+pub const LAYERS: &[(&str, u8)] = &[
+    ("biomes", 0),
+    ("political", 1),
+    ("elevation", 2),
+    ("temperature", 3),
+    ("precip", 4),
+    ("hydro", 5),
+    ("fertility", 6),
+];

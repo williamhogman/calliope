@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-16 15:39 UTC
+mode: full · size: 512 · generated: 2026-08-16 22:28 UTC
 
-totals: 266 pass · 2 warn · 0 fail
+totals: 282 pass · 2 warn · 0 fail
 
 -- bench.txt
    all checks pass

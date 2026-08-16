@@ -10,52 +10,57 @@
 //! smiths and the right arts work RECIPES into finished goods (M5.1), and
 //! named MERCHANTS ride the widest gaps for profit (M5.5).
 //!
-//! Deterministic: BTreeMaps only, fixed iteration orders, no wall-clock.
+//! Deterministic: goods are `Copy` enums (E1); every map over goods is an
+//! `EnumMap` whose iteration order is the enum's alphabetical variant
+//! order — the exact order the old `BTreeMap<String, _>` gave. No strings,
+//! no wall-clock.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
+use enum_map::EnumMap;
 use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 use serde_json::{json, Value};
 
+use crate::ids::{CultureId, EntityId, SettlementId};
 use crate::culture::Culture;
 use crate::entity::Registry;
 use crate::naming;
-use crate::resources::{abundance, isa_chain};
+use crate::resources::{Abundance, Good, GoodSet};
 use crate::settlements::Settlement;
-use crate::society::{self, Society};
+use crate::society::{self, Society, TechId};
 use crate::trade::Route;
 use crate::util::round2;
+use crate::world::EventKind;
 use crate::world::Event;
 
 /// Base worth of one unit of a good, from its rarity in the world.
-pub fn base_value(good: &str) -> f64 {
-    let mut v = match abundance(good) {
-        "uncommon" => 1.8,
-        "rare" => 3.4,
-        "legendary" => 7.0,
-        _ => 1.0,
+pub fn base_value(good: Good) -> f64 {
+    let mut v = match good.abundance() {
+        Abundance::Uncommon => 1.8,
+        Abundance::Rare => 3.4,
+        Abundance::Legendary => 7.0,
+        Abundance::Common => 1.0,
     };
-    if isa_chain(good).iter().any(|s| s == "food") {
+    if good.is_food() {
         v *= 0.85;
     }
     round2(v)
 }
 
 // pub(crate): explain.rs mirrors the price math for its term ledger.
-pub(crate) fn demand_weight(good: &str, luxury: f64) -> f64 {
-    let chain = isa_chain(good);
-    if chain.iter().any(|s| s == "food") {
+pub(crate) fn demand_weight(good: Good, luxury: f64) -> f64 {
+    if good.is_food() {
         1.15
-    } else if chain.iter().any(|s| s == "craft") {
+    } else if good.is_craft() {
         // M5.1: finished goods are bought with surplus — a taste that
         // sharpens as the world grows rich
         0.50 + 1.3 * luxury
-    } else if chain.iter().any(|s| s == "metal") {
+    } else if good.is_metal() {
         // M2.7: metal hunger grows fast with wealth — smiths, arms, coin
         0.60 + 1.1 * luxury
-    } else if chain.iter().any(|s| s == "material") {
+    } else if good.is_material() {
         // M2.7: timber and stone are bulk goods; even rich folk buy few
         0.45 + 0.35 * luxury
     } else {
@@ -65,42 +70,63 @@ pub(crate) fn demand_weight(good: &str, luxury: f64) -> f64 {
 
 // ---------------------------------------------------------------- market
 
+/// Price book over the goods actually traded here. `None` = the market has
+/// never priced that good (the old "key absent" state).
 #[derive(Default, Clone)]
 pub struct Market {
-    pub prices: BTreeMap<String, f64>,
-    prev: BTreeMap<String, f64>,
+    pub prices: EnumMap<Good, Option<f64>>,
+    prev: EnumMap<Good, Option<f64>>,
 }
 
 impl Market {
-    pub fn price(&self, good: &str) -> f64 {
-        *self.prices.get(good).unwrap_or(&base_value(good))
+    pub fn price(&self, good: Good) -> f64 {
+        self.prices[good].unwrap_or_else(|| base_value(good))
+    }
+
+    #[inline]
+    pub fn contains(&self, good: Good) -> bool {
+        self.prices[good].is_some()
+    }
+
+    /// Priced goods, alphabetical (variant) order — the old BTreeMap keys.
+    pub fn keys(&self) -> impl Iterator<Item = Good> + '_ {
+        self.prices
+            .iter()
+            .filter_map(|(g, p)| p.map(|_| g))
+    }
+
+    /// (good, price) rows in alphabetical order.
+    pub fn iter_some(&self) -> impl Iterator<Item = (Good, f64)> + '_ {
+        self.prices.iter().filter_map(|(g, p)| p.map(|p| (g, p)))
+    }
+
+    pub fn set(&mut self, good: Good, price: f64) {
+        self.prices[good] = Some(price);
     }
 
     /// Rows for the client: {g, p, b, t} sorted dearest first.
     pub fn snapshot(&self) -> Value {
-        let mut rows: Vec<(&String, f64, f64, f64)> = self
-            .prices
-            .iter()
-            .map(|(g, &p)| {
-                let prev = *self.prev.get(g).unwrap_or(&p);
+        let mut rows: Vec<(Good, f64, f64, f64)> = self
+            .iter_some()
+            .map(|(g, p)| {
+                let prev = self.prev[g].unwrap_or(p);
                 (g, p, base_value(g), round2(p - prev))
             })
             .collect();
         rows.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
         Value::Array(
             rows.into_iter()
-                .map(|(g, p, b, t)| json!({ "g": g, "p": p, "b": b, "t": t }))
+                .map(|(g, p, b, t)| json!({ "g": g, "p": round2(p), "b": b, "t": t }))
                 .collect(),
         )
     }
 
     /// A sudden strike or a dead mine jolts the price at once, before the
     /// slow-moving supply average has time to catch up.
-    pub fn shock(&mut self, good: &str, factor: f64) {
+    pub fn shock(&mut self, good: Good, factor: f64) {
         let p = self.price(good);
         let b = base_value(good);
-        self.prices
-            .insert(good.to_string(), round2((p * factor).clamp(0.3 * b, 5.0 * b)));
+        self.prices[good] = Some(round2((p * factor).clamp(0.3 * b, 5.0 * b)));
     }
 }
 
@@ -108,44 +134,53 @@ impl Market {
 /// mean, eased 25 % per month toward target. `catalogue`, when given, adds
 /// goods the members do NOT produce — in a local market a good nobody makes
 /// is dear, and that gap is exactly what the caravans live on (M5.2).
-fn compute_prices<'a, I>(market: &mut Market, members: I, catalogue: Option<&BTreeSet<String>>)
+fn compute_prices<'a, I>(market: &mut Market, members: I, catalogue: Option<GoodSet>)
 where
     I: Iterator<Item = &'a Settlement>,
 {
-    let mut supply: BTreeMap<String, f64> = BTreeMap::new();
+    let mut supply: EnumMap<Good, Option<f64>> = EnumMap::default();
     let mut total_pop: i64 = 0;
     let mut total_wealth = 0.0;
     for s in members {
         total_pop += s.pop;
         total_wealth += s.wealth;
-        for (i, g) in s.goods.iter().enumerate() {
+        for (i, &g) in s.goods.iter().enumerate() {
             let w = (s.pop as f64 / 1000.0) * 0.7f64.powi(i as i32);
-            *supply.entry(g.clone()).or_insert(0.0) += w;
+            *supply[g].get_or_insert(0.0) += w;
         }
     }
     if let Some(cat) = catalogue {
-        for g in cat {
-            supply.entry(g.clone()).or_insert(0.0);
+        for g in cat.iter() {
+            supply[g].get_or_insert(0.0);
         }
     }
     let luxury = (total_wealth / (total_pop.max(1) as f64) / 4.0).min(0.5);
 
     market.prev = market.prices.clone();
-    let mut pressure: BTreeMap<String, f64> = BTreeMap::new();
+    let mut pressure: EnumMap<Good, Option<f64>> = EnumMap::default();
+    let mut ln_sum = 0.0;
+    let mut n = 0usize;
     for (g, s) in &supply {
-        pressure.insert(g.clone(), (demand_weight(g, luxury) + 0.02) / (s + 0.02));
+        if let Some(sv) = s {
+            let p = (demand_weight(g, luxury) + 0.02) / (sv + 0.02);
+            pressure[g] = Some(p);
+            ln_sum += p.ln();
+            n += 1;
+        }
     }
-    if pressure.is_empty() {
-        market.prices.clear();
+    if n == 0 {
+        market.prices = EnumMap::default();
         return;
     }
-    let gm = (pressure.values().map(|p| p.ln()).sum::<f64>() / pressure.len() as f64).exp();
-    let mut next: BTreeMap<String, f64> = BTreeMap::new();
+    let gm = (ln_sum / n as f64).exp();
+    let mut next: EnumMap<Good, Option<f64>> = EnumMap::default();
     for (g, p) in &pressure {
-        let base = base_value(g);
-        let target = (base * (p / gm).powf(0.55)).clamp(0.3 * base, 5.0 * base);
-        let old = market.price(g);
-        next.insert(g.clone(), round2(0.75 * old + 0.25 * target));
+        if let Some(p) = p {
+            let base = base_value(g);
+            let target = (base * (p / gm).powf(0.55)).clamp(0.3 * base, 5.0 * base);
+            let old = market.price(g);
+            next[g] = Some(round2(0.75 * old + 0.25 * target));
+        }
     }
     market.prices = next;
 }
@@ -163,7 +198,7 @@ pub fn update_prices(market: &mut Market, settlements: &[Settlement]) {
 #[derive(Default)]
 pub struct MarketAreas {
     /// Hub settlement id per area, in area order.
-    pub hubs: Vec<i64>,
+    pub hubs: Vec<SettlementId>,
     /// Settlement index -> area index. Rebuilt with the towns.
     pub area: Vec<usize>,
     /// One market per area, prices carried across rebuilds by hub id.
@@ -211,20 +246,26 @@ fn within_hops(adj: &[Vec<(usize, f64)>], from: usize, to: usize, max_hops: usiz
 /// Carve the route web into market areas around the great towns. Hubs are
 /// the biggest towns at least 3 route-legs apart; every town joins the hub
 /// cheapest to reach along the actual roads and lanes.
+/// The settlement id→index map every monthly pass shares (E5.2): built
+/// once per month in the tick loop, passed down — no pass rebuilds it.
+pub fn sidx(settlements: &[Settlement]) -> HashMap<SettlementId, usize> {
+    settlements
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (s.id, i))
+        .collect()
+}
+
 pub fn build_areas(
     settlements: &[Settlement],
     routes: &[Route],
     prev: Option<&MarketAreas>,
+    by_id: &HashMap<SettlementId, usize>,
 ) -> MarketAreas {
     let n = settlements.len();
     if n == 0 {
         return MarketAreas::default();
     }
-    let by_id: HashMap<i64, usize> = settlements
-        .iter()
-        .enumerate()
-        .map(|(i, s)| (s.id, i))
-        .collect();
     let mut adj: Vec<Vec<(usize, f64)>> = vec![Vec::new(); n];
     let mut edges: Vec<(usize, usize, f64)> = Vec::new();
     for r in routes {
@@ -307,7 +348,7 @@ pub fn build_areas(
     }
 
     // carry each hub's price book across the rebuild
-    let hub_ids: Vec<i64> = hubs.iter().map(|&h| settlements[h].id).collect();
+    let hub_ids: Vec<SettlementId> = hubs.iter().map(|&h| settlements[h].id).collect();
     let markets: Vec<Market> = hub_ids
         .iter()
         .map(|id| {
@@ -335,9 +376,9 @@ pub fn build_areas(
 /// the basics long before the great caravans bother (M5.2).
 pub fn update_area_prices(areas: &mut MarketAreas, settlements: &[Settlement], world: &Market) {
     const OPENNESS: f64 = 0.5; // how hard the world blend pulls on a local book
-    let catalogue: BTreeSet<String> = settlements
+    let catalogue: GoodSet = settlements
         .iter()
-        .flat_map(|s| s.goods.iter().cloned())
+        .flat_map(|s| s.goods.iter().copied())
         .collect();
     for k in 0..areas.markets.len() {
         let members: Vec<&Settlement> = settlements
@@ -346,14 +387,13 @@ pub fn update_area_prices(areas: &mut MarketAreas, settlements: &[Settlement], w
             .filter(|(i, _)| areas.area.get(*i) == Some(&k))
             .map(|(_, s)| s)
             .collect();
-        compute_prices(&mut areas.markets[k], members.into_iter(), Some(&catalogue));
+        compute_prices(&mut areas.markets[k], members.into_iter(), Some(catalogue));
         let mk = &mut areas.markets[k];
-        let keys: Vec<String> = mk.prices.keys().cloned().collect();
-        for g in keys {
-            let local = mk.price(&g);
-            let anchor = world.price(&g);
-            mk.prices
-                .insert(g, round2(local + (anchor - local) * OPENNESS));
+        for g in catalogue.iter() {
+            if let Some(local) = mk.prices[g] {
+                let anchor = world.price(g);
+                mk.prices[g] = Some(round2(local + (anchor - local) * OPENNESS));
+            }
         }
     }
 }
@@ -364,12 +404,8 @@ fn equalize_along_routes(
     areas: &mut MarketAreas,
     settlements: &[Settlement],
     routes: &[Route],
+    by_id: &HashMap<SettlementId, usize>,
 ) {
-    let by_id: HashMap<i64, usize> = settlements
-        .iter()
-        .enumerate()
-        .map(|(i, s)| (s.id, i))
-        .collect();
     for r in routes {
         let (Some(&ia), Some(&ib)) = (by_id.get(&r.a), by_id.get(&r.b)) else {
             continue;
@@ -379,22 +415,18 @@ fn equalize_along_routes(
             continue;
         }
         let rate = 0.05 * r.w.min(1.0);
-        let goods: BTreeSet<String> = settlements[ia]
+        let goods: GoodSet = settlements[ia]
             .goods
             .iter()
             .chain(settlements[ib].goods.iter())
-            .cloned()
+            .copied()
             .collect();
-        for g in &goods {
+        for g in goods.iter() {
             let pa = areas.markets[ka].price(g);
             let pb = areas.markets[kb].price(g);
             let mid = 0.5 * (pa + pb);
-            areas.markets[ka]
-                .prices
-                .insert(g.clone(), round2(pa + (mid - pa) * rate));
-            areas.markets[kb]
-                .prices
-                .insert(g.clone(), round2(pb + (mid - pb) * rate));
+            areas.markets[ka].set(g, round2(pa + (mid - pa) * rate));
+            areas.markets[kb].set(g, round2(pb + (mid - pb) * rate));
         }
     }
 }
@@ -407,7 +439,7 @@ pub fn areas_json(areas: &MarketAreas, settlements: &[Settlement]) -> Value {
             counts[a] += 1;
         }
     }
-    let by_id: HashMap<i64, &Settlement> =
+    let by_id: HashMap<SettlementId, &Settlement> =
         settlements.iter().map(|s| (s.id, s)).collect();
     let hubs: Vec<Value> = areas
         .hubs
@@ -415,14 +447,13 @@ pub fn areas_json(areas: &MarketAreas, settlements: &[Settlement]) -> Value {
         .zip(counts.iter())
         .enumerate()
         .map(|(k, (id, n))| {
-            // local price list, ordered for determinism (BTreeMap)
-            let prices: std::collections::BTreeMap<String, f64> = areas
+            // local price list, ordered for determinism (alphabetical keys)
+            let prices: BTreeMap<&'static str, f64> = areas
                 .markets
                 .get(k)
                 .map(|m| {
-                    m.prices
-                        .iter()
-                        .map(|(g, p)| (g.clone(), round2(*p)))
+                    m.iter_some()
+                        .map(|(g, p)| (g.name(), round2(p)))
                         .collect()
                 })
                 .unwrap_or_default();
@@ -437,13 +468,13 @@ pub fn areas_json(areas: &MarketAreas, settlements: &[Settlement]) -> Value {
     // widest spreads: for every good priced anywhere, max/min across areas
     let mut spreads: Vec<Value> = Vec::new();
     if areas.markets.len() > 1 {
-        let goods: BTreeSet<String> = areas
+        let goods: GoodSet = areas
             .markets
             .iter()
-            .flat_map(|m| m.prices.keys().cloned())
+            .flat_map(|m| m.keys())
             .collect();
         let mut rows: Vec<(f64, Value)> = Vec::new();
-        for g in &goods {
+        for g in goods.iter() {
             let mut lo = (f64::INFINITY, 0usize);
             let mut hi = (f64::NEG_INFINITY, 0usize);
             for (k, m) in areas.markets.iter().enumerate() {
@@ -490,21 +521,21 @@ pub fn areas_json(areas: &MarketAreas, settlements: &[Settlement]) -> Value {
 
 /// M5.1 — what the workshops turn ore into, and what it takes.
 struct Recipe {
-    out: &'static str,
+    out: Good,
     /// any one of these arts unlocks the craft
-    tech_any: &'static [&'static str],
+    tech_any: &'static [TechId],
     /// workforce gate: no finished goods from a hamlet
     min_pop: i64,
     /// any one of these among the town's goods feeds the forge
-    ore_any: &'static [&'static str],
+    ore_any: &'static [Good],
     /// the forge burns coal or charcoal (timber)
     needs_fuel: bool,
 }
 
 const RECIPES: [Recipe; 3] = [
-    Recipe { out: "tools", tech_any: &["bronze", "iron"], min_pop: 1200, ore_any: &["copper", "iron"], needs_fuel: true },
-    Recipe { out: "weapons", tech_any: &["steel"], min_pop: 2500, ore_any: &["iron"], needs_fuel: true },
-    Recipe { out: "jewelry", tech_any: &["coin"], min_pop: 2000, ore_any: &["gold", "silver"], needs_fuel: false },
+    Recipe { out: Good::Tools, tech_any: &[TechId::Bronze, TechId::Iron], min_pop: 1200, ore_any: &[Good::Copper, Good::Iron], needs_fuel: true },
+    Recipe { out: Good::Weapons, tech_any: &[TechId::Steel], min_pop: 2500, ore_any: &[Good::Iron], needs_fuel: true },
+    Recipe { out: Good::Jewelry, tech_any: &[TechId::Coin], min_pop: 2000, ore_any: &[Good::Gold, Good::Silver], needs_fuel: false },
 ];
 
 const FORGE_LIT: [&str; 3] = [
@@ -527,37 +558,37 @@ pub fn craft_pass(
     // own pits — that is what the market carve is for (M5.2). A forge town
     // buys ore off the carts; it only goes cold when the whole area's
     // seams are spent.
-    let mut area_goods: Vec<BTreeSet<String>> = vec![BTreeSet::new(); areas.markets.len()];
+    let mut area_goods: Vec<GoodSet> = vec![GoodSet::EMPTY; areas.markets.len()];
     // ...and each area supports only a couple of workshops per finished
     // good: the first forge takes the custom, the rest buy its wares.
-    let mut area_craft: BTreeMap<(usize, &str), usize> = BTreeMap::new();
+    let mut area_craft: BTreeMap<(usize, Good), usize> = BTreeMap::new();
     for (i, s) in settlements.iter().enumerate() {
         if let Some(&k) = areas.area.get(i) {
             if let Some(set) = area_goods.get_mut(k) {
-                set.extend(s.goods.iter().cloned());
+                set.extend(s.goods.iter().copied());
             }
             for rc in RECIPES.iter() {
-                if s.goods.iter().any(|g| g == rc.out) {
+                if s.goods.contains(&rc.out) {
                     *area_craft.entry((k, rc.out)).or_insert(0) += 1;
                 }
             }
         }
     }
     for (si, s) in settlements.iter_mut().enumerate() {
-        let Some(soc) = socs.get(s.culture) else { continue };
+        let Some(soc) = socs.get(s.culture.idx()) else { continue };
         let k_area = areas.area.get(si).copied();
-        let nearby = k_area.and_then(|k| area_goods.get(k));
-        let own: Vec<String> = s.goods.clone();
-        let has_good = move |g: &str| -> bool {
-            own.iter().any(|x| x == g)
-                || nearby.map(|set| set.contains(g)).unwrap_or(false)
-        };
-        let fuel = has_good("coal") || has_good("timber");
+        let nearby: GoodSet = k_area
+            .and_then(|k| area_goods.get(k))
+            .copied()
+            .unwrap_or_default();
+        let own: GoodSet = s.goods.iter().copied().collect();
+        let has_good = |g: Good| -> bool { own.contains(g) || nearby.contains(g) };
+        let fuel = has_good(Good::Coal) || has_good(Good::Timber);
         for rc in RECIPES.iter() {
-            let has = s.goods.iter().any(|g| g == rc.out);
+            let has = s.goods.contains(&rc.out);
             let eligible = s.pop >= rc.min_pop
-                && rc.tech_any.iter().any(|t| soc.knows(t))
-                && rc.ore_any.iter().any(|o| has_good(o))
+                && rc.tech_any.iter().any(|&t| soc.knows(t))
+                && rc.ore_any.iter().any(|&o| has_good(o))
                 && (!rc.needs_fuel || fuel);
             // the market niche: at most 2 workshops per good per area, and
             // a forge takes months of guild wrangling to light, not a tick
@@ -568,7 +599,7 @@ pub fn craft_pass(
                 if let Some(k) = k_area {
                     *area_craft.entry((k, rc.out)).or_insert(0) += 1;
                 }
-                s.goods.push(rc.out.to_string());
+                s.goods.push(rc.out);
                 s.goods.truncate(8);
                 // the finished good becomes the export when it out-earns
                 // whatever the town shipped before
@@ -576,29 +607,28 @@ pub fn craft_pass(
                 let p_out = local.map(|m| m.price(rc.out)).unwrap_or_else(|| base_value(rc.out));
                 let p_cur = s
                     .exports
-                    .as_deref()
                     .map(|e| local.map(|m| m.price(e)).unwrap_or_else(|| base_value(e)))
                     .unwrap_or(0.0);
                 if p_out > p_cur {
-                    s.exports = Some(rc.out.to_string());
+                    s.exports = Some(rc.out);
                 }
                 let t = FORGE_LIT[rng.gen_range(0..FORGE_LIT.len())];
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
-                    k: "trade".to_string(),
-                    text: t.replace("{S}", &s.name).replace("{G}", rc.out),
+                    k: EventKind::Trade,
+                    text: t.replace("{S}", &s.name).replace("{G}", rc.out.name()),
                     ..Default::default()
                 });
             } else if !eligible && has {
-                s.goods.retain(|g| g != rc.out);
-                if s.exports.as_deref() == Some(rc.out) {
-                    s.exports = s.goods.first().cloned();
+                s.goods.retain(|g| *g != rc.out);
+                if s.exports == Some(rc.out) {
+                    s.exports = s.goods.first().copied();
                 }
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
-                    k: "trade".to_string(),
+                    k: EventKind::Trade,
                     text: format!(
                         "The forges of {} go cold — no ore comes, and the {} trade dies with them.",
                         s.name, rc.out
@@ -619,11 +649,13 @@ pub fn craft_pass(
 pub struct Merchant {
     pub name: String,
     /// Entity id in the registry (M6.2).
-    pub ent: i64,
+    pub ent: EntityId,
     /// Home settlement id.
-    pub home: i64,
+    pub home: SettlementId,
     /// Month they took to the roads.
     pub born: i64,
+    /// Whole coin on the wire (E4.2) — displayed rounded.
+    #[serde(serialize_with = "crate::util::ser_round_i64")]
     pub wealth: f64,
     pub alive: bool,
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -646,16 +678,12 @@ pub fn merchant_pass(
     month_abs: i64,
     rng: &mut Pcg64Mcg,
     reg: &mut Registry,
+    by_id: &HashMap<SettlementId, usize>,
 ) -> Vec<Event> {
     let mut events = Vec::new();
     if areas.markets.len() < 2 {
         return events;
     }
-    let by_id: HashMap<i64, usize> = settlements
-        .iter()
-        .enumerate()
-        .map(|(i, s)| (s.id, i))
-        .collect();
 
     // which areas the roads actually join (merchants follow routes)
     let mut linked: BTreeSet<(usize, usize)> = BTreeSet::new();
@@ -673,8 +701,9 @@ pub fn merchant_pass(
     if month_abs.rem_euclid(12) == 5 {
         let alive = merchants.iter().filter(|m| m.alive).count();
         if alive < MERCHANT_CAP {
-            for (cid, cu) in cultures.iter().enumerate() {
-                if !socs.get(cid).map_or(false, |so| so.knows("coin")) {
+            for (ci, cu) in cultures.iter().enumerate() {
+            let cid = CultureId(ci);
+                if !socs.get(ci).map_or(false, |so| so.knows(TechId::Coin)) {
                     continue;
                 }
                 let of_culture = merchants
@@ -702,7 +731,7 @@ pub fn merchant_pass(
                 events.push(Event {
                     m: month_abs,
                     s: home.name.clone(),
-                    k: "trade".to_string(),
+                    k: EventKind::Trade,
                     text: format!(
                         "{} of {} takes to the roads with a mule-train and a ledger.",
                         name, home.name
@@ -748,8 +777,8 @@ pub fn merchant_pass(
         };
         let ka = areas.area_of(hi);
         // widest gap from home market to any route-linked area
-        let mut best: Option<(f64, String, usize)> = None; // (gap, good, other)
-        let goods: Vec<String> = areas.markets[ka].prices.keys().cloned().collect();
+        let mut best: Option<(f64, Good, usize)> = None; // (gap, good, other)
+        let goods: Vec<Good> = areas.markets[ka].keys().collect();
         for &(x, y) in &linked {
             let kb = if x == ka {
                 y
@@ -758,10 +787,10 @@ pub fn merchant_pass(
             } else {
                 continue;
             };
-            for g in &goods {
+            for &g in &goods {
                 let gap = (areas.markets[kb].price(g) - areas.markets[ka].price(g)).abs();
                 if best.as_ref().map_or(true, |(bg, _, _)| gap > *bg) {
-                    best = Some((gap, g.clone(), kb));
+                    best = Some((gap, g, kb));
                 }
             }
         }
@@ -772,15 +801,11 @@ pub fn merchant_pass(
                 merchants[mi].wealth = round2(merchants[mi].wealth + 0.6 * profit);
                 settlements[hi].wealth = round2(settlements[hi].wealth + 0.4 * profit);
                 // their loads close the gap faster than the ambient trade
-                let pa = areas.markets[ka].price(&good);
-                let pb = areas.markets[kb].price(&good);
+                let pa = areas.markets[ka].price(good);
+                let pb = areas.markets[kb].price(good);
                 let mid = 0.5 * (pa + pb);
-                areas.markets[ka]
-                    .prices
-                    .insert(good.clone(), round2(pa + (mid - pa) * 0.04));
-                areas.markets[kb]
-                    .prices
-                    .insert(good.clone(), round2(pb + (mid - pb) * 0.04));
+                areas.markets[ka].set(good, round2(pa + (mid - pa) * 0.04));
+                areas.markets[kb].set(good, round2(pb + (mid - pb) * 0.04));
                 if gap > 2.0 && rng.gen::<f64>() < 0.10 {
                     let (cheap, dear) = if pa < pb { (ka, kb) } else { (kb, ka) };
                     let prior = reg.mention(merchants[mi].ent);
@@ -792,7 +817,7 @@ pub fn merchant_pass(
                     events.push(Event {
                         m: month_abs,
                         s: merchants[mi].name.clone(),
-                        k: "trade".to_string(),
+                        k: EventKind::Trade,
                         text: format!(
                             "{} brings {} out of the {} market to {}; the price breaks by the quay.",
                             told,
@@ -823,7 +848,7 @@ pub fn merchant_pass(
             events.push(Event {
                 m: month_abs,
                 s: merchants[mi].name.clone(),
-                k: "trade".to_string(),
+                k: EventKind::Trade,
                 text: format!(
                     "{} hangs up the ledger after thirty years on the roads; {} inherits the fortune.",
                     merchants[mi].name, settlements[hi].name
@@ -840,7 +865,7 @@ pub fn merchant_pass(
             events.push(Event {
                 m: month_abs,
                 s: merchants[mi].name.clone(),
-                k: "trade".to_string(),
+                k: EventKind::Trade,
                 text: format!(
                     "Word comes that {}'s caravan never reached the pass. The road keeps what it takes.",
                     merchants[mi].name
@@ -874,18 +899,15 @@ pub fn monthly(
     socs: &mut [Society],
     month_abs: i64,
     rng: &mut Pcg64Mcg,
+    by_id: &HashMap<SettlementId, usize>,
 ) -> Vec<Event> {
     let mut events = Vec::new();
     update_prices(market, settlements);
     update_area_prices(areas, settlements, market);
-    equalize_along_routes(areas, settlements, routes);
+    equalize_along_routes(areas, settlements, routes, by_id);
 
     let mods: Vec<society::Mods> = socs.iter().map(society::mods_for).collect();
-    let by_id: HashMap<i64, usize> = settlements
-        .iter()
-        .enumerate()
-        .map(|(i, s)| (s.id, i))
-        .collect();
+
 
     // --- trade first (read phase): every route pays both ends.
     // Carriage pays a little; ARBITRAGE pays well — the spread between the
@@ -910,8 +932,8 @@ pub fn monthly(
         };
         let (sa, sb) = (&settlements[ia], &settlements[ib]);
         let (ka, kb) = (areas.area_of(ia), areas.area_of(ib));
-        let pa = market.price(sa.exports.as_deref().unwrap_or("grain"));
-        let pb = market.price(sb.exports.as_deref().unwrap_or("grain"));
+        let pa = market.price(sa.exports.unwrap_or(Good::Grain));
+        let pb = market.price(sb.exports.unwrap_or(Good::Grain));
         // gravity carriage (M5.4): cargo scales with BOTH ends' masses and
         // thins with distance — big close pairs carry the trade
         let mass = ((sa.pop as f64 * sb.pop as f64).sqrt() / 1400.0).clamp(0.05, 5.0);
@@ -919,10 +941,14 @@ pub fn monthly(
         // the goods either end actually ships, priced in each end's market
         let mut gap = 0.0;
         if ka != kb && ka < areas.markets.len() && kb < areas.markets.len() {
-            let goods: BTreeSet<&String> =
-                sa.goods.iter().chain(sb.goods.iter()).collect();
+            let goods: GoodSet = sa
+                .goods
+                .iter()
+                .chain(sb.goods.iter())
+                .copied()
+                .collect();
             let mut gaps: Vec<f64> = goods
-                .into_iter()
+                .iter()
                 .map(|g| (areas.markets[ka].price(g) - areas.markets[kb].price(g)).abs())
                 .collect();
             gaps.sort_by(|a, b| b.partial_cmp(a).unwrap());
@@ -936,8 +962,8 @@ pub fn monthly(
                 .cos();
             flow *= (1.0 + 0.5 * r.ramp * phase).max(0.4);
         }
-        let ta = mods.get(sa.culture).map(|m| m.trade).unwrap_or(1.0);
-        let tb = mods.get(sb.culture).map(|m| m.trade).unwrap_or(1.0);
+        let ta = mods.get(sa.culture.idx()).map(|m| m.trade).unwrap_or(1.0);
+        let tb = mods.get(sb.culture.idx()).map(|m| m.trade).unwrap_or(1.0);
         // a harbour works the cranes: more cargo through, more dues taken
         let ha = if sa.port { 1.25 } else { 1.0 };
         let hb = if sb.port { 1.25 } else { 1.0 };
@@ -952,7 +978,7 @@ pub fn monthly(
     // same luxury formula as update_prices — one taste, two ledgers
     let luxury = (total_wealth / (total_pop.max(1) as f64) / 4.0).min(0.5);
     for (i, s) in settlements.iter_mut().enumerate() {
-        let m = mods.get(s.culture).cloned().unwrap_or_default();
+        let m = mods.get(s.culture.idx()).cloned().unwrap_or_default();
         // M2.4 Bettencourt: socio-economic output scales superlinearly with
         // town size (∝ pop^1.15) — denser streets, faster deals — while
         // infrastructure upkeep scales sublinearly (∝ pop^0.85): shared
@@ -960,8 +986,8 @@ pub fn monthly(
         let workforce = (s.pop as f64 / 800.0).powf(1.15);
         // even the goodless town tills, fishes and hauls: a subsistence
         // floor so big farm towns never book zero wealth forever
-        let mut production = (0.50 + 0.50 * s.food.min(1.5)) * market.price("grain");
-        for (gi, g) in s.goods.iter().enumerate() {
+        let mut production = (0.50 + 0.50 * s.food.min(1.5)) * market.price(Good::Grain);
+        for (gi, &g) in s.goods.iter().enumerate() {
             // a town sells at ITS OWN market's price — the local ledger,
             // not the world blend (M5.2)
             let p = areas
@@ -980,7 +1006,7 @@ pub fn monthly(
         let income = production + trade_income[i] - upkeep;
         s.wealth = round2((s.wealth + income).max(0.0));
         if income > 0.0 {
-            if let Some(soc) = socs.get_mut(s.culture) {
+            if let Some(soc) = socs.get_mut(s.culture.idx()) {
                 soc.treasury = round2(soc.treasury + 0.08 * income);
             }
         }
@@ -1003,7 +1029,7 @@ pub fn monthly(
             events.push(Event {
                 m: month_abs,
                 s: s.name.clone(),
-                k: "wonder".to_string(),
+                k: EventKind::Wonder,
                 text: which.replace("{S}", &s.name),
                 ..Default::default()
             });
@@ -1012,9 +1038,9 @@ pub fn monthly(
 
     // --- market talk: shortages and gluts worth a line in the chronicle
     if rng.gen::<f64>() < 0.010 {
-        let mut dearest: Option<(&String, f64)> = None;
-        let mut cheapest: Option<(&String, f64)> = None;
-        for (g, &p) in &market.prices {
+        let mut dearest: Option<(Good, f64)> = None;
+        let mut cheapest: Option<(Good, f64)> = None;
+        for (g, p) in market.iter_some() {
             let ratio = p / base_value(g);
             if dearest.map_or(true, |(_, r)| ratio > r) {
                 dearest = Some((g, ratio));
@@ -1027,17 +1053,17 @@ pub fn monthly(
             if r > 2.2 {
                 let producer = settlements
                     .iter()
-                    .filter(|s| s.goods.iter().any(|x| x == g))
+                    .filter(|s| s.goods.contains(&g))
                     .max_by_key(|s| s.pop)
                     .map(|s| s.name.clone())
                     .unwrap_or_else(|| "distant ports".to_string());
                 events.push(Event {
                     m: month_abs,
-                    s: g.clone(),
-                    k: "trade".to_string(),
+                    s: g.to_string(),
+                    k: EventKind::Trade,
                     text: format!(
                         "{} fetches many times its old price; caravans race for {}.",
-                        capitalize(g), producer
+                        capitalize(g.name()), producer
                     ),
                     ..Default::default()
                 });
@@ -1048,8 +1074,8 @@ pub fn monthly(
                 if r < 0.5 {
                     events.push(Event {
                         m: month_abs,
-                        s: g.clone(),
-                        k: "trade".to_string(),
+                        s: g.to_string(),
+                        k: EventKind::Trade,
                         text: format!(
                             "The bottom falls out of the {} trade; warehouses overflow and merchants weep.",
                             g
@@ -1071,3 +1097,13 @@ fn capitalize(s: &str) -> String {
         None => String::new(),
     }
 }
+
+// ---------------------------------------------------------------- bands
+
+use crate::util::Band;
+
+/// Diagnostics bands (E2.7): prices and the spread of wealth.
+pub const BANDS: &[Band] = &[
+    Band { name: "max pinned price share", sweet: (0.0, 0.25), hard: (0.0, 0.55), target: "sweet ≤25% · hard ≤55%" },
+    Band { name: "wealth gini", sweet: (0.20, 0.80), hard: (0.05, 0.95), target: "sweet 0.20–0.80 — some inequality, no monopoly" },
+];

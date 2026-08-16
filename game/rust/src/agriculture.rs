@@ -65,21 +65,67 @@ pub fn fertility(
 }
 
 // ---------------------------------------------------------------- crops
-// M2.1 — crop packages. Codes are stable (they ship in the pack).
-
-pub const PACK_NONE: u8 = 0;
-pub const PACK_WHEAT: u8 = 1;
-pub const PACK_RICE: u8 = 2;
-pub const PACK_MAIZE: u8 = 3;
-pub const PACK_PASTORAL: u8 = 4;
-
-pub const PACK_NAMES: [&str; 5] = ["wildland", "wheat", "rice", "maize", "pastoral"];
+// M2.1 — crop packages. Codes are stable (they ship in the pack);
+// the enum is the single declaration (E1.10) — names, codes and dawn-age
+// densities live on the variants, no parallel arrays.
 
 /// Souls per km² a package feeds at dawn-age arts (research/08:
 /// hunter-gatherer 0.05–0.4 · pastoral 2 · wheat ~30 · rice ~90–120).
 /// Kaplan's T^−0.5 (land per soul shrinks as arts accumulate) raises
 /// these through `society::Mods::kaplan`.
-pub const PACK_DENSITY: [f64; 5] = [0.4, 30.0, 90.0, 22.0, 2.0];
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
+    strum::Display,
+    strum::EnumIter,
+    strum::IntoStaticStr,
+    strum::EnumCount,
+)]
+#[strum(serialize_all = "lowercase")]
+#[repr(u8)]
+pub enum CropPackage {
+    Wildland = 0,
+    Wheat = 1,
+    Rice = 2,
+    Maize = 3,
+    Pastoral = 4,
+}
+
+impl CropPackage {
+    #[inline]
+    pub const fn code(self) -> u8 {
+        self as u8
+    }
+
+    #[inline]
+    pub fn from_code(c: u8) -> CropPackage {
+        match c {
+            1 => CropPackage::Wheat,
+            2 => CropPackage::Rice,
+            3 => CropPackage::Maize,
+            4 => CropPackage::Pastoral,
+            _ => CropPackage::Wildland,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        self.into()
+    }
+
+    #[inline]
+    pub const fn density(self) -> f64 {
+        match self {
+            CropPackage::Wildland => 0.4,
+            CropPackage::Wheat => 30.0,
+            CropPackage::Rice => 90.0,
+            CropPackage::Maize => 22.0,
+            CropPackage::Pastoral => 2.0,
+        }
+    }
+}
 
 #[inline]
 fn gauss(v: f64, mu: f64, sig: f64) -> f64 {
@@ -114,7 +160,7 @@ pub fn crop_packages(
     let lak = ndimage::binary_dilation(lakes, 1);
     Array2::from_shape_fn((rows, cols), |(y, x)| {
         if height[[y, x]] < 0.0 || lakes[[y, x]] {
-            return PACK_NONE;
+            return CropPackage::Wildland.code();
         }
         let t = tmean[[y, x]];
         let p = precip[[y, x]];
@@ -122,9 +168,9 @@ pub fn crop_packages(
         // no growing season at all: the high ice and the deep tundra
         if t < 1.5 {
             return if t >= -4.0 && p >= 130.0 {
-                PACK_PASTORAL
+                CropPackage::Pastoral.code()
             } else {
-                PACK_NONE
+                CropPackage::Wildland.code()
             };
         }
         let mut wheat = gauss(t, 12.0, 8.0) * trap(p, 270.0, 700.0, 1400.0);
@@ -145,15 +191,24 @@ pub fn crop_packages(
         let pastoral = 0.32 * gauss(t, 12.0, 18.0) * trap(p, 110.0, 420.0, 1500.0);
         let best = wheat.max(maize).max(rice).max(pastoral);
         if best < 0.07 {
-            PACK_NONE
+            CropPackage::Wildland.code()
         } else if rice >= best {
-            PACK_RICE
+            CropPackage::Rice.code()
         } else if maize >= best {
-            PACK_MAIZE
+            CropPackage::Maize.code()
         } else if wheat >= best {
-            PACK_WHEAT
+            CropPackage::Wheat.code()
         } else {
-            PACK_PASTORAL
+            CropPackage::Pastoral.code()
         }
     })
 }
+
+// ---------------------------------------------------------------- bands
+
+use crate::util::Band;
+
+/// Diagnostics bands (E2.7): where fields can feed a city.
+pub const BANDS: &[Band] = &[
+    Band { name: "arable share of land", sweet: (0.15, 0.65), hard: (0.06, 0.85), target: "M2.1: wheat+rice+maize belts cover the good land" },
+];

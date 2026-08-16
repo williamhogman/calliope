@@ -1,5 +1,8 @@
 // Static UI vocabulary: lenses, overlays, event taxonomy.
 
+import { EVENT_KINDS as ENGINE_EVENT_KINDS } from "../gen/constants.js";
+
+
 export const LAYERS = [
   ["political", "Political", "Realms and their reach"],
   ["biomes", "Terrain", "The land as seen from orbit"],
@@ -21,25 +24,36 @@ export const OVERLAYS = [
   ["winds", "Winds"],
 ];
 
-// Every chronicle entry is tinted by what kind of thing happened, and each
-// kind belongs to a family used by filters and notification channels.
-export const EVENT_KINDS = {
-  myth:      { color: "#c9b458", family: "myth" },
-  omen:      { color: "#a8d4b8", family: "myth" },
-  festival:  { color: "#f0d090", family: "myth" },
-  found:     { color: "#d4a94a", family: "realm" },
-  growth:    { color: "#8fb6dd", family: "realm" },
-  ruler:     { color: "#c9a0e8", family: "realm" },
-  realm:     { color: "#e8c07a", family: "realm" },
-  society:   { color: "#e0b0d0", family: "realm" },
-  tech:      { color: "#7fc4e8", family: "realm" },
-  wonder:    { color: "#ffd766", family: "realm" },
-  war:       { color: "#e05555", family: "war" },
-  trade:     { color: "#9fd0c8", family: "economy" },
-  discovery: { color: "#f2c14e", family: "economy" },
-  depletion: { color: "#b09a86", family: "economy" },
-  disaster:  { color: "#e07a6a", family: "nature" },
+// Every chronicle entry is tinted by what kind of thing happened. The
+// kind→family mapping comes from the engine's event table (E2.3, via the
+// generated constants); only the tint — pure presentation — lives here.
+const KIND_COLOR = {
+  myth:      "#c9b458",
+  omen:      "#a8d4b8",
+  festival:  "#f0d090",
+  found:     "#d4a94a",
+  growth:    "#8fb6dd",
+  ruler:     "#c9a0e8",
+  realm:     "#e8c07a",
+  society:   "#e0b0d0",
+  tech:      "#7fc4e8",
+  wonder:    "#ffd766",
+  war:       "#e05555",
+  trade:     "#9fd0c8",
+  discovery: "#f2c14e",
+  depletion: "#b09a86",
+  disaster:  "#e07a6a",
+  famine:    "#d3885c",
+  economy:   "#a9c9a4",
+  nature:    "#8fbf9f",
 };
+
+export const EVENT_KINDS = Object.fromEntries(
+  ENGINE_EVENT_KINDS.map((k) => [
+    k.name,
+    { color: KIND_COLOR[k.name] || "#8a8fa0", family: k.family },
+  ]),
+);
 
 export const EVENT_FAMILIES = [
   ["realm", "Realm"],

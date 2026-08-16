@@ -23,6 +23,7 @@ use std::time::Instant;
 
 use ndarray::Array2;
 
+use calliope::world::CellFlags;
 use calliope::constants as gc;
 use calliope::economy;
 use calliope::hydrology;
@@ -31,7 +32,7 @@ use calliope::ndimage;
 use calliope::resources;
 use calliope::society;
 use calliope::telling;
-use calliope::util::quantile;
+use calliope::util::{band as band_spec, quantile};
 use calliope::world::{Event, World};
 
 // ================================================================ checks
@@ -54,6 +55,16 @@ impl Checks {
             2
         };
         self.rows.push((lvl, name.to_string(), shown, target.to_string()));
+    }
+    /// Range check against a band declared beside its system (E2.7).
+    fn band(&mut self, name: &str, v: f64, shown: String) {
+        let b = band_spec(name);
+        self.range(b.name, v, shown, b.sweet, b.hard, b.target);
+    }
+    /// Same band, reported under another row name (sweep means etc.).
+    fn band_as(&mut self, display: &str, band: &str, v: f64, shown: String) {
+        let b = band_spec(band);
+        self.range(display, v, shown, b.sweet, b.hard, b.target);
     }
     fn must(&mut self, name: &str, ok: bool, shown: String, target: &str) {
         self.rows.push((if ok { 0 } else { 2 }, name.to_string(), shown, target.to_string()));
@@ -90,8 +101,8 @@ fn land_mask(w: &World) -> Array2<bool> {
     w.height.mapv(|h| h >= 0.0)
 }
 
-fn masked(a: &Array2<f64>, m: &Array2<bool>) -> Vec<f64> {
-    a.iter().zip(m.iter()).filter(|(_, &b)| b).map(|(&v, _)| v).collect()
+fn masked<T: Copy + Into<f64>>(a: &Array2<T>, m: &Array2<bool>) -> Vec<f64> {
+    a.iter().zip(m.iter()).filter(|(_, &b)| b).map(|(&v, _)| v.into()).collect()
 }
 
 fn biome_counts(w: &World) -> [usize; 11] {
@@ -145,38 +156,19 @@ fn hash_settlements(w: &World) -> u64 {
 
 /// Hash the true world state — arrays and entities, NOT the packed payload
 /// (whose header embeds wall-clock stage timings and thus always differs).
+/// The grid section comes from the field registry (E2.2): every field
+/// declared `in_hash` contributes its exact storage bits in registry order.
 fn hash_state(w: &World) -> u64 {
     let mut bytes: Vec<u8> = Vec::new();
-    for &v in w.height.iter() {
-        bytes.extend_from_slice(&v.to_bits().to_le_bytes());
-    }
-    for &b in w.biomes.iter() {
-        bytes.push(b);
-    }
-    for &b in w.crops.iter() {
-        bytes.push(b);
-    }
-    for (((&r, &l), &s), &sw) in w
-        .rivers
-        .iter()
-        .zip(w.lakes.iter())
-        .zip(w.salt.iter())
-        .zip(w.seasonal.iter())
-    {
-        bytes.push((r as u8) | ((l as u8) << 1) | ((s as u8) << 2) | ((sw as u8) << 3));
-    }
-    for &o in w.strahler.iter() {
-        bytes.push(o);
-    }
-    for &v in w.pamp.iter().chain(w.flow_amp.iter()) {
-        bytes.extend_from_slice(&v.to_bits().to_le_bytes());
+    for f in w.fields().iter().filter(|f| f.in_hash) {
+        f.data.hash_bytes(&mut bytes);
     }
     let mut s = String::new();
     for d in &w.deposits {
         s.push_str(&format!("d{}|{}|{}|{:.2}|{}|{:.0}\n", d.r, d.x, d.y, d.rich, d.known, d.left));
     }
     for t in &w.settlements {
-        s.push_str(&format!("s{}|{}|{}|{}|{:.2}|{:?}\n", t.id, t.name, t.pop, t.culture, t.wealth, t.goods));
+        s.push_str(&format!("s{}|{}|{}|{}|{:.2}|{:?}\n", t.id, t.name, t.pop, t.culture, t.wealth, t.goods.iter().map(|g| g.name()).collect::<Vec<_>>()));
     }
     for f in &w.features {
         s.push_str(&format!("f{}|{}|{}|{}\n", f.t, f.name, f.x, f.y));
@@ -184,7 +176,7 @@ fn hash_state(w: &World) -> u64 {
     for r in &w.routes {
         s.push_str(&format!("r{}|{}|{:.2}|{:.3}\n", r.a, r.b, r.cost, r.sea));
     }
-    for (g, p) in &w.market.prices {
+    for (g, p) in w.market.iter_some() {
         s.push_str(&format!("m{}|{:.2}\n", g, p));
     }
     s.push_str(&format!("t{}\n", w.month));
@@ -252,15 +244,15 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
         .collect();
     let alive_count = |w: &World| -> usize {
         (0..w.cultures.len())
-            .filter(|&c| w.settlements.iter().any(|s| s.culture == c))
+            .filter(|&c| w.settlements.iter().any(|s| s.culture.0 == c))
             .count()
     };
-    let mut owners: Vec<usize> = w.settlements.iter().map(|s| s.culture).collect();
+    let mut owners: Vec<usize> = w.settlements.iter().map(|s| s.culture.0).collect();
     let mut n_cultures = w.cultures.len();
     for yr in 1..=years {
         let (evs, _founded, _dep) = w.tick(12);
         for e in &evs {
-            *log.census.entry(e.k.clone()).or_default() += 1;
+            *log.census.entry(e.k.name().to_string()).or_default() += 1;
             if god_names.iter().any(|g| e.text.contains(g.as_str())) {
                 log.god_citations += 1;
             }
@@ -273,7 +265,7 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
             if e.text.contains("mining camp") {
                 log.camps += 1;
             }
-            match e.k.as_str() {
+            match e.k.name() {
                 "discovery" => log.strikes += 1,
                 "depletion" => log.depletions += 1,
                 "war" => log.wars += 1,
@@ -287,11 +279,11 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
         log.total_events += evs.len();
         // ---- M4: who holds what, and did any of it move this year ----
         for (i, s) in w.settlements.iter().enumerate() {
-            if i < owners.len() && owners[i] != s.culture {
+            if i < owners.len() && owners[i] != s.culture.0 {
                 log.transfers += 1;
             }
         }
-        owners = w.settlements.iter().map(|s| s.culture).collect();
+        owners = w.settlements.iter().map(|s| s.culture.0).collect();
         if w.cultures.len() > n_cultures {
             log.rebellions += w.cultures.len() - n_cultures;
             n_cultures = w.cultures.len();
@@ -330,7 +322,7 @@ fn cmd_terrain(seed: i64, size: usize) {
 
     // hypsometry
     let hs = masked(&w.height, &land);
-    let depths: Vec<f64> = w.height.iter().filter(|&&h| h < 0.0).cloned().collect();
+    let depths: Vec<f64> = w.height.iter().filter(|&&h| h < 0.0).map(|&h| h as f64).collect();
     println!("hypsometry (land h): p5 {:.3} · p25 {:.3} · p50 {:.3} · p75 {:.3} · p95 {:.3} · max {:.3}", quantile(&hs, 0.05), quantile(&hs, 0.25), quantile(&hs, 0.50), quantile(&hs, 0.75), quantile(&hs, 0.95), quantile(&hs, 1.0));
     println!("bathymetry (sea h): p5 {:.3} · p50 {:.3} · p95 {:.3}", quantile(&depths, 0.05), quantile(&depths, 0.50), quantile(&depths, 0.95));
     let hills = hs.iter().filter(|&&h| h > 0.35).count() as f64 / land_n;
@@ -412,13 +404,13 @@ fn cmd_terrain(seed: i64, size: usize) {
     let bl = border_land(&w);
 
     let mut c = Checks::default();
-    c.range("land fraction", land_frac, pct(land_frac), (0.22, 0.40), (0.15, 0.52), "sweet 22–40% · hard 15–52%");
+    c.band("land fraction", land_frac, pct(land_frac));
     c.must("border land cells", bl == 0, format!("{}", bl), "must be 0 — no clipped landmasses");
-    c.range("largest landmass share of land", largest / land_n.max(1.0), pct(largest / land_n.max(1.0)), (0.25, 0.85), (0.10, 0.93), "sweet 25–85% · hard 10–93%");
-    c.range("landmass count", li.n as f64, format!("{}", li.n), (15.0, 400.0), (6.0, 2000.0), "sweet 15–400 · hard 6–2000");
-    c.range("small isles+islets", (islands + islets) as f64, format!("{}", islands + islets), (10.0, 380.0), (3.0, 1900.0), "sweet 10–380 · hard 3–1900");
-    c.range("mountain share of land (h>0.5)", mtn, pct(mtn), (0.02, 0.14), (0.005, 0.22), "sweet 2–14% · hard 0.5–22%");
-    c.range("coastline crenulation", coast_ratio, format!("{:.3}", coast_ratio), (0.02, 0.30), (0.012, 0.50), "sweet 0.02–0.30 at 4 km cells");
+    c.band("largest landmass share of land", largest / land_n.max(1.0), pct(largest / land_n.max(1.0)));
+    c.band("landmass count", li.n as f64, format!("{}", li.n));
+    c.band("small isles+islets", (islands + islets) as f64, format!("{}", islands + islets));
+    c.band("mountain share of land (h>0.5)", mtn, pct(mtn));
+    c.band("coastline crenulation", coast_ratio, format!("{:.3}", coast_ratio));
     c.want("archipelagos named", arch >= 1, format!("{}", arch), "≥1 — island clusters should get names");
     c.print();
 }
@@ -436,7 +428,7 @@ fn cmd_climate(seed: i64, size: usize) {
 
     println!("biome shares of land:");
     for b in 1..11u8 {
-        println!("  {:<24} {:>7}  {}", gc::PRETTY_BIOMES[b as usize], bc[b as usize], pct(share(b)));
+        println!("  {:<24} {:>7}  {}", gc::Biome::from_code(b), bc[b as usize], pct(share(b)));
     }
     let desert = share(gc::DESERT);
     let frozen = share(gc::TUNDRA) + share(gc::ICE);
@@ -445,7 +437,7 @@ fn cmd_climate(seed: i64, size: usize) {
 
     let ts = masked(&w.tmean, &land);
     let ps = masked(&w.precip, &land);
-    let amps: Vec<f64> = w.tamp.iter().zip(land.iter()).filter(|(_, &b)| b).map(|(&v, _)| v.abs()).collect();
+    let amps: Vec<f64> = w.tamp.iter().zip(land.iter()).filter(|(_, &b)| b).map(|(&v, _)| v.abs() as f64).collect();
     let t_mean = ts.iter().sum::<f64>() / ts.len().max(1) as f64;
     let p_mean = ps.iter().sum::<f64>() / ps.len().max(1) as f64;
     let a_mean = amps.iter().sum::<f64>() / amps.len().max(1) as f64;
@@ -472,8 +464,8 @@ fn cmd_climate(seed: i64, size: usize) {
                     continue;
                 }
                 n += 1;
-                tsum += w.tmean[[y, x]];
-                psum += w.precip[[y, x]];
+                tsum += w.tmean[[y, x]] as f64;
+                psum += w.precip[[y, x]] as f64;
                 counts[w.biomes[[y, x]] as usize] += 1;
             }
         }
@@ -483,7 +475,7 @@ fn cmd_climate(seed: i64, size: usize) {
             continue;
         }
         let dom = (1..11).max_by_key(|&i| counts[i]).unwrap_or(1);
-        println!("  {:<12} {:>6} {:>7.1}C {:>7.0}mm  {}", label, n, tsum / n as f64, psum / n as f64, gc::PRETTY_BIOMES[dom]);
+        println!("  {:<12} {:>6} {:>7.1}C {:>7.0}mm  {}", label, n, tsum / n as f64, psum / n as f64, gc::Biome::from_code(dom as u8));
     }
 
     // monsoon: the ITCZ march should breathe hardest in the tropics
@@ -494,7 +486,7 @@ fn cmd_climate(seed: i64, size: usize) {
             if !land[[y, x]] {
                 continue;
             }
-            let a = w.pamp[[y, x]].abs();
+            let a = w.pamp[[y, x]].abs() as f64;
             if y >= rows / 3 && y < 2 * rows / 3 {
                 trop_amp.push(a);
             } else {
@@ -522,16 +514,16 @@ fn cmd_climate(seed: i64, size: usize) {
     let arable = pshare(1) + pshare(2) + pshare(3);
 
     let mut c = Checks::default();
-    c.range("desert share of land", desert, pct(desert), (0.12, 0.28), (0.06, 0.38), "sweet 12–28% · hard 6–38%");
-    c.range("tundra+ice share of land", frozen, pct(frozen), (0.05, 0.30), (0.01, 0.45), "sweet 5–30% · hard 1–45%");
-    c.range("forest share of land", forest, pct(forest), (0.25, 0.60), (0.15, 0.75), "sweet 25–60% · hard 15–75%");
-    c.range("grass+savanna share of land", open, pct(open), (0.10, 0.45), (0.04, 0.60), "sweet 10–45% · hard 4–60%");
-    c.range("land mean temperature", t_mean, format!("{:.1}°C", t_mean), (5.0, 20.0), (-2.0, 28.0), "sweet 5–20°C · hard -2–28°C");
-    c.range("land mean precipitation", p_mean, format!("{:.0}mm", p_mean), (500.0, 1500.0), (250.0, 2400.0), "sweet 500–1500 · hard 250–2400");
-    c.range("mean seasonal swing", a_mean, format!("{:.1}°C", a_mean), (4.0, 14.0), (2.0, 20.0), "sweet 4–14°C · hard 2–20°C");
-    c.range("tropical monsoon amplitude", trop_m, format!("{:.2}", trop_m), (0.12, 0.55), (0.05, 0.85), "sweet .12–.55 · hard .05–.85");
+    c.band("desert share of land", desert, pct(desert));
+    c.band("tundra+ice share of land", frozen, pct(frozen));
+    c.band("forest share of land", forest, pct(forest));
+    c.band("grass+savanna share of land", open, pct(open));
+    c.band("land mean temperature", t_mean, format!("{:.1}°C", t_mean));
+    c.band("land mean precipitation", p_mean, format!("{:.0}mm", p_mean));
+    c.band("mean seasonal swing", a_mean, format!("{:.1}°C", a_mean));
+    c.band("tropical monsoon amplitude", trop_m, format!("{:.2}", trop_m));
     c.want("monsoon lives in the tropics", trop_m > mid_m, format!("{:.2} vs {:.2}", trop_m, mid_m), "ITCZ march beats continental swing");
-    c.range("arable share of land", arable, pct(arable), (0.15, 0.65), (0.06, 0.85), "M2.1: wheat+rice+maize belts cover the good land");
+    c.band("arable share of land", arable, pct(arable));
     c.range("pastoral share of land", pshare(4), pct(pshare(4)), (0.02, 0.45), (0.005, 0.65), "M2.1: the dry steppe carries herds");
     c.want("rice hugs the water", pk[2] == 0 || pk[2] < pk[1] + pk[3], format!("rice {} vs wheat+maize {}", pk[2], pk[1] + pk[3]), "paddies are the exception, not the rule");
     c.print();
@@ -545,16 +537,17 @@ fn cmd_hydro(seed: i64, size: usize) {
 
     let land = land_mask(&w);
     let land_n = land.iter().filter(|&&b| b).count() as f64;
-    let river_n = w.rivers.iter().filter(|&&r| r).count() as f64;
-    let lake_n = w.lakes.iter().filter(|&&l| l).count() as f64;
+    let rivers = w.mask(CellFlags::RIVER);
+    let river_n = rivers.iter().filter(|&&r| r).count() as f64;
+    let lake_n = w.flags.iter().filter(|&&f| f & CellFlags::LAKE.bits() != 0).count() as f64;
     println!("river cells: {} ({} of land) · lake cells: {} ({} of land)", river_n as usize, pct(river_n / land_n.max(1.0)), lake_n as usize, pct(lake_n / land_n.max(1.0)));
 
-    let li = ndimage::label(&w.rivers, true);
+    let li = ndimage::label(&rivers, true);
     let systems = li.areas.iter().filter(|&&a| a >= 12.0).count();
     let longest = li.areas.iter().cloned().fold(0.0f64, f64::max);
     println!("river systems (≥12 cells): {} · longest network {} cells ≈ {:.0} km", systems, longest as usize, longest * gc::KM_PER_CELL);
 
-    let dis: Vec<f64> = w.discharge.iter().zip(w.rivers.iter()).filter(|(_, &r)| r).map(|(&d, _)| d).collect();
+    let dis: Vec<f64> = w.discharge.iter().zip(rivers.iter()).filter(|(_, &r)| r).map(|(&d, _)| d as f64).collect();
     if !dis.is_empty() {
         println!("discharge on rivers: p50 {:.1} · p90 {:.1} · p99 {:.1} · max {:.1}", quantile(&dis, 0.5), quantile(&dis, 0.9), quantile(&dis, 0.99), quantile(&dis, 1.0));
     }
@@ -570,7 +563,7 @@ fn cmd_hydro(seed: i64, size: usize) {
     // Strahler orders, wadis, and the dead seas of the dry country
     let mut order_hist = [0usize; 13];
     let mut top_order = 0u8;
-    for (&o, &r) in w.strahler.iter().zip(w.rivers.iter()) {
+    for (&o, &r) in w.strahler.iter().zip(rivers.iter()) {
         if r && o > 0 {
             order_hist[(o as usize).min(12)] += 1;
             top_order = top_order.max(o);
@@ -581,15 +574,16 @@ fn cmd_hydro(seed: i64, size: usize) {
         print!(" {}:{}", o, order_hist[o]);
     }
     println!(" · top {}", top_order);
-    let wadi_n = w.seasonal.iter().filter(|&&s| s).count();
-    let salt_cells = w.salt.iter().filter(|&&s| s).count();
-    let salt_comp = ndimage::label(&w.salt, true).areas.len();
+    let wadi_n = w.flags.iter().filter(|&&f| f & CellFlags::SEASONAL.bits() != 0).count();
+    let salt = w.mask(CellFlags::SALT);
+    let salt_cells = salt.iter().filter(|&&s| s).count();
+    let salt_comp = ndimage::label(&salt, true).areas.len();
     let famp: Vec<f64> = w
         .flow_amp
         .iter()
-        .zip(w.rivers.iter())
+        .zip(rivers.iter())
         .filter(|(_, &r)| r)
-        .map(|(&a, _)| a.abs())
+        .map(|(&a, _)| a.abs() as f64)
         .collect();
     let famp_mean = famp.iter().sum::<f64>() / famp.len().max(1) as f64;
     println!(
@@ -599,17 +593,17 @@ fn cmd_hydro(seed: i64, size: usize) {
 
     let finite = dis.iter().all(|d| d.is_finite());
     let mut c = Checks::default();
-    c.range("river share of land", river_n / land_n.max(1.0), pct(river_n / land_n.max(1.0)), (0.008, 0.05), (0.003, 0.10), "sweet 0.8–5% · hard 0.3–10%");
-    c.range("lake share of land", lake_n / land_n.max(1.0), pct(lake_n / land_n.max(1.0)), (0.0, 0.03), (0.0, 0.08), "sweet 0–3% · hard 0–8%");
-    c.range("river systems", systems as f64, format!("{}", systems), (8.0, 400.0), (3.0, 2000.0), "sweet 8–400 · hard 3–2000");
+    c.band("river share of land", river_n / land_n.max(1.0), pct(river_n / land_n.max(1.0)));
+    c.band("lake share of land", lake_n / land_n.max(1.0), pct(lake_n / land_n.max(1.0)));
+    c.band("river systems", systems as f64, format!("{}", systems));
     c.want("named deltas", deltas >= 1, format!("{}", deltas), "≥1 — great river mouths get names");
     c.must("discharge finite", finite, if finite { "yes".into() } else { "NO".into() }, "no NaN/inf in flow accumulation");
     // dawn towns all on fresh water is history, not a bug — the dry
     // harbours and mining camps arrive with the colonies (checked in civ).
     let rt_share = river_towns as f64 / w.settlements.len().max(1) as f64;
     c.want("dawn towns reach fresh water", rt_share >= 0.2, pct(rt_share), "≥20% — rivers should pull the first peoples");
-    c.range("strahler top order", top_order as f64, format!("{}", top_order), (4.0, 9.0), (3.0, 12.0), "sweet 4–9 · hard 3–12");
-    c.range("river seasonal swing", famp_mean, format!("{:.2}", famp_mean), (0.05, 0.50), (0.01, 0.90), "mean |amp| · sweet .05–.50 · hard .01–.90");
+    c.band("strahler top order", top_order as f64, format!("{}", top_order));
+    c.band("river seasonal swing", famp_mean, format!("{:.2}", famp_mean));
     c.want("endorheic salt basins", salt_comp >= 1, format!("{}", salt_comp), "≥1 — the desert keeps its dead seas");
     c.want("wadis", wadi_n >= 1, format!("{}", wadi_n), "≥1 — some rivers should run dry half the year");
     c.print();
@@ -631,7 +625,7 @@ fn cmd_resources(seed: i64, size: usize) {
     for kind in resources::ALL_PLACEABLE {
         let ds: Vec<&calliope::resources::Deposit> = w.deposits.iter().filter(|d| d.r == kind).collect();
         if ds.is_empty() {
-            missing.push(kind);
+            missing.push(kind.name());
             println!("{:<14} {:>5} {:>10} {:>7} {:>8} {:>10} {:>9}", kind, 0, "—", "—", "—", "—", "—");
             continue;
         }
@@ -651,7 +645,7 @@ fn cmd_resources(seed: i64, size: usize) {
             .collect();
         dists.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let med = dists[dists.len() / 2];
-        let is_mineral = matches!(kind, "stone" | "coal" | "copper" | "iron" | "silver" | "gold" | "mithril");
+        let is_mineral = kind.is_mineral();
         if is_mineral {
             minerals_total += ds.len();
             minerals_hidden += ds.len() - known;
@@ -667,13 +661,13 @@ fn cmd_resources(seed: i64, size: usize) {
         println!("kinds absent from this world: {:?}", missing);
     }
 
-    let gold = w.deposits.iter().any(|d| d.r == "gold");
-    let mithril = w.deposits.iter().any(|d| d.r == "mithril");
+    let gold = w.deposits.iter().any(|d| d.r == resources::Good::Gold);
+    let mithril = w.deposits.iter().any(|d| d.r == resources::Good::Mithril);
     let essential_missing = missing.iter().filter(|k| !matches!(**k, "mithril" | "bananas")).count();
 
     let mut c = Checks::default();
-    c.range("deposits per 1000 land cells", per_1000, format!("{:.2}", per_1000), (1.0, 6.0), (0.5, 12.0), "sweet 1–6 · hard 0.5–12");
-    c.range("mineral hidden share at dawn", hidden_share, pct(hidden_share), (0.45, 0.85), (0.25, 0.95), "sweet 45–85% — leave an age of prospectors");
+    c.band("deposits per 1000 land cells", per_1000, format!("{:.2}", per_1000));
+    c.band("mineral hidden share at dawn", hidden_share, pct(hidden_share));
     c.want("essential kinds all present", essential_missing == 0, format!("{} missing", essential_missing), "everything except mithril/bananas should place");
     c.want("gold placed", gold, if gold { "yes".into() } else { "no".into() }, "a world without gold has a dull late game");
     c.want("mithril placed", mithril, if mithril { "yes".into() } else { "no".into() }, "the legendary seam should exist somewhere");
@@ -733,7 +727,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     let techs_total: usize = w.societies.iter().map(|s| s.techs.len()).sum();
     let ev_per_year = log.total_events as f64 / years.max(1) as f64;
     let unconnected = w.settlements.iter().filter(|s| s.connections == 0).count();
-    let finite_ok = w.settlements.iter().all(|s| s.wealth.is_finite() && s.pop >= 0) && w.market.prices.values().all(|p| p.is_finite());
+    let finite_ok = w.settlements.iter().all(|s| s.wealth.is_finite() && s.pop >= 0) && w.market.iter_some().all(|(_, p)| p.is_finite());
 
     let mut c = Checks::default();
     c.range("population growth ×", growth, format!("{:.2}×", growth), (2.0, 1200.0), (1.05, 3000.0), "M2 crop-package K: filled worlds run ~10⁶ souls from tiny dawns");
@@ -756,7 +750,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     c.must("no template placeholders", log.placeholders == 0, format!("{}", log.placeholders), "no {P}/{S} may leak into chronicle text");
     c.must("no empty event texts", log.empties == 0, format!("{}", log.empties), "every event tells its story");
     c.must("settlement names unique", names.len() == w.settlements.len(), format!("{} names / {} towns", names.len(), w.settlements.len()), "the taken-set must hold");
-    c.range("events per year", ev_per_year, format!("{:.1}", ev_per_year), (2.0, 40.0), (0.5, 100.0), "sweet 2–40 · hard 0.5–100");
+    c.band("events per year", ev_per_year, format!("{:.1}", ev_per_year));
     c.want("no long silences", log.max_gap <= 36, format!("{} mo", log.max_gap), "≤36 months between chronicle entries");
     if years >= 80 {
         c.want("strikes happened", log.strikes >= 1, format!("{}", log.strikes), "the age of prospectors must actually happen");
@@ -818,7 +812,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let mut audited = 0usize;
         let mut hits = 0usize;
         for s in &w.settlements {
-            let Some(cu) = w.cultures.get(s.namer) else { continue };
+            let Some(cu) = w.cultures.get(s.namer.idx()) else { continue };
             let b = naming::bank(&cu.style);
             audited += 1;
             let pre_ok = b.pre.iter().any(|(p, _)| s.name.starts_with(p));
@@ -882,8 +876,8 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     let dx = (s.x - f.x) as f64;
                     let dy = (s.y - f.y) as f64;
                     let d2 = dx * dx + dy * dy;
-                    if d2 < best[s.culture] {
-                        best[s.culture] = d2;
+                    if d2 < best[s.culture.idx()] {
+                        best[s.culture.idx()] = d2;
                     }
                 }
                 let mut v: Vec<f64> = best.into_iter().filter(|d| d.is_finite()).collect();
@@ -952,7 +946,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 let total: i64 = w.settlements.iter().map(|s| s.pop).sum();
                 let mut by_c: BTreeMap<usize, i64> = BTreeMap::new();
                 for s in &w.settlements {
-                    *by_c.entry(s.culture).or_default() += s.pop;
+                    *by_c.entry(s.culture.0).or_default() += s.pop;
                 }
                 by_c.values().max().copied().unwrap_or(0) as f64 / total.max(1) as f64
             };
@@ -972,13 +966,14 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         }
         // inter-area price divergence: mean over goods of max/min across areas
         if n_areas >= 2 {
-            let goods: std::collections::BTreeSet<String> = w
-                .settlements
-                .iter()
-                .flat_map(|s| s.goods.iter().cloned())
-                .collect();
+            let mut goods = resources::GoodSet::EMPTY;
+            for s in &w.settlements {
+                for &g in s.goods.iter() {
+                    goods.insert(g);
+                }
+            }
             let mut ratios = Vec::new();
-            for g in &goods {
+            for g in goods.iter() {
                 let ps: Vec<f64> = w.areas.markets.iter().map(|m| m.price(g)).collect();
                 let lo = ps.iter().cloned().fold(f64::INFINITY, f64::min);
                 let hi = ps.iter().cloned().fold(0.0f64, f64::max);
@@ -995,10 +990,10 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             let crafts = w
                 .settlements
                 .iter()
-                .filter(|s| s.goods.iter().any(|g| matches!(g.as_str(), "tools" | "weapons" | "jewelry")))
+                .filter(|s| s.goods.iter().any(|g| g.is_craft()))
                 .count();
             c.want("recipe towns emerge", crafts >= 1, format!("{} towns craft", crafts), "M5.1 gate: ore, fuel and art make finished goods");
-            let coin_known = w.societies.iter().any(|so| so.knows("coin"));
+            let coin_known = w.societies.iter().any(|so| so.knows(calliope::society::TechId::Coin));
             if coin_known {
                 c.want("merchants take the roads", !w.merchants.is_empty(), format!("{} ever", w.merchants.len()), "M5.5: coin-wise realms send out traders");
             }
@@ -1006,7 +1001,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // M5.4 gravity cross-check: realized route flow should correlate
         // with pop·pop/cost² over the same edges
         {
-            let by_id: BTreeMap<i64, &_> = w.settlements.iter().map(|s| (s.id, s)).collect();
+            let by_id: BTreeMap<calliope::ids::SettlementId, &_> = w.settlements.iter().map(|s| (s.id, s)).collect();
             let mut xs = Vec::new();
             let mut ys = Vec::new();
             for (ri, r) in w.routes.iter().enumerate() {
@@ -1054,7 +1049,12 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     let mut w = World::generate(seed, size);
     header("ECONOMY", &format!("seed {} · {}x{} · {}y", seed, w.width, size, years));
 
-    const TRACKED: [&str; 10] = ["grain", "fish", "timber", "stone", "coal", "copper", "iron", "silver", "gold", "mithril"];
+    const TRACKED: [resources::Good; 10] = [
+        resources::Good::Grain, resources::Good::Fish, resources::Good::Timber,
+        resources::Good::Stone, resources::Good::Coal, resources::Good::Copper,
+        resources::Good::Iron, resources::Good::Silver, resources::Good::Gold,
+        resources::Good::Mithril,
+    ];
     let mut series: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
     let mut strikes = 0usize;
     let mut depletions = 0usize;
@@ -1063,7 +1063,7 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     for _ in 0..months {
         let (evs, _f, _d) = w.tick(1);
         for e in &evs {
-            match e.k.as_str() {
+            match e.k.name() {
                 "discovery" => strikes += 1,
                 "depletion" => depletions += 1,
                 "trade" => trade_events += 1,
@@ -1071,8 +1071,8 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
             }
         }
         for g in TRACKED {
-            if let Some(&p) = w.market.prices.get(g) {
-                series.entry(g).or_default().push(p);
+            if w.market.contains(g) {
+                series.entry(g.name()).or_default().push(w.market.price(g));
             }
         }
     }
@@ -1081,7 +1081,7 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     let mut max_pinned = 0.0f64;
     let mut means: BTreeMap<&str, f64> = BTreeMap::new();
     for (g, s) in &series {
-        let base = economy::base_value(g);
+        let base = economy::base_value(g.parse().expect("tracked good name"));
         let mean = s.iter().sum::<f64>() / s.len() as f64;
         means.insert(g, mean);
         let min = s.iter().cloned().fold(f64::INFINITY, f64::min);
@@ -1103,7 +1103,7 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     by_wealth.sort_by(|a, b| b.wealth.partial_cmp(&a.wealth).unwrap());
     println!("richest towns:");
     for s in by_wealth.iter().take(5) {
-        println!("  {:<20} pop {:>6} · wealth {:>8.0} · exports {} {}", s.name, s.pop, s.wealth, s.exports.as_deref().unwrap_or("—"), if s.port { "· harbour" } else { "" });
+        println!("  {:<20} pop {:>6} · wealth {:>8.0} · exports {} {}", s.name, s.pop, s.wealth, s.exports.map(|g| g.name()).unwrap_or("—"), if s.port { "· harbour" } else { "" });
     }
     println!("poorest towns:");
     for s in by_wealth.iter().rev().take(3) {
@@ -1126,12 +1126,12 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         println!("  {:<22} {:>9.0}", cu.people, soc.treasury);
     }
 
-    let finite_ok = w.market.prices.values().all(|p| p.is_finite()) && wealth.iter().all(|v| v.is_finite());
+    let finite_ok = w.market.iter_some().all(|(_, p)| p.is_finite()) && wealth.iter().all(|v| v.is_finite());
     let treasuries_ok = w.societies.iter().all(|s| s.treasury >= 0.0 && s.treasury.is_finite());
 
     let mut c = Checks::default();
-    c.range("max pinned price share", max_pinned, pct(max_pinned), (0.0, 0.25), (0.0, 0.55), "sweet ≤25% · hard ≤55%");
-    c.range("wealth gini", g, format!("{:.2}", g), (0.20, 0.80), (0.05, 0.95), "sweet 0.20–0.80 — some inequality, no monopoly");
+    c.band("max pinned price share", max_pinned, pct(max_pinned));
+    c.band("wealth gini", g, format!("{:.2}", g));
     c.must("routes exist", !w.routes.is_empty(), format!("{}", w.routes.len()), "the web of trade must hold");
     c.want("no unconnected towns", unconnected == 0, format!("{}", unconnected), "every town trades");
     c.want("harbours exist", ports >= 1, format!("{}", ports), "coastal trade should produce ports");
@@ -1142,8 +1142,7 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     }
 
     // ---- the mines: does the world work what it knows? ----
-    const MINERALS: [&str; 7] = ["stone", "coal", "copper", "iron", "silver", "gold", "mithril"];
-    let known: Vec<_> = w.deposits.iter().filter(|d| d.known && d.left > 0.0 && MINERALS.contains(&d.r.as_str())).collect();
+    let known: Vec<_> = w.deposits.iter().filter(|d| d.known && d.left > 0.0 && d.r.is_mineral()).collect();
     let worked = known.iter().filter(|d| {
         w.settlements.iter().any(|s| {
             let r = calliope::settlements::work_radius(s.pop);
@@ -1155,7 +1154,7 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     let mut goods_census: BTreeMap<&str, usize> = BTreeMap::new();
     for s in &w.settlements {
         for g in &s.goods {
-            *goods_census.entry(g.as_str()).or_default() += 1;
+            *goods_census.entry(g.name()).or_default() += 1;
         }
     }
     println!();
@@ -1217,15 +1216,15 @@ fn cmd_telling(seed: i64, size: usize, years: usize) {
     // ---- the log itself
     let with_ids = evs.iter().filter(|e| !e.ids.is_empty()).count();
     let with_xy = evs.iter().filter(|e| e.x >= 0).count();
-    let loud = evs.iter().filter(|e| telling::weight(&e.k) >= 3).count();
+    let loud = evs.iter().filter(|e| telling::weight(e.k) >= 3).count();
     let loud_legend = evs
         .iter()
-        .filter(|e| telling::weight(&e.k) >= 3 && !e.legend.is_empty())
+        .filter(|e| telling::weight(e.k) >= 3 && !e.legend.is_empty())
         .count();
     let bad_ids = evs
         .iter()
         .flat_map(|e| e.ids.iter())
-        .filter(|&&id| id < 0 || id as usize >= reg.items.len())
+        .filter(|&&id| id.0 < 0 || id.idx() >= reg.items.len())
         .count();
     println!("chronicle: {} entries over {}y ({:.1}/y)", evs.len(), years, evs.len() as f64 / years as f64);
     println!("  ids on {:.1}% · coords on {:.1}% · legend layer on {}/{} loud entries", 100.0 * with_ids as f64 / n as f64, 100.0 * with_xy as f64 / n as f64, loud_legend, loud);
@@ -1233,7 +1232,7 @@ fn cmd_telling(seed: i64, size: usize, years: usize) {
         let mut orphans: BTreeMap<&str, usize> = BTreeMap::new();
         let mut samples: Vec<&Event> = Vec::new();
         for e in evs.iter().filter(|e| e.ids.is_empty()) {
-            *orphans.entry(e.k.as_str()).or_default() += 1;
+            *orphans.entry(e.k.name()).or_default() += 1;
             if samples.len() < 4 {
                 samples.push(e);
             }
@@ -1248,7 +1247,7 @@ fn cmd_telling(seed: i64, size: usize, years: usize) {
     // ---- the cast
     let mut kinds: BTreeMap<&str, (usize, usize)> = BTreeMap::new(); // kind -> (alive, closed)
     for e in &reg.items {
-        let k = kinds.entry(e.kind.as_str()).or_default();
+        let k = kinds.entry(e.kind.name()).or_default();
         if e.until.is_some() {
             k.1 += 1;
         } else {
@@ -1276,7 +1275,7 @@ fn cmd_telling(seed: i64, size: usize, years: usize) {
     println!("epithets earned: {}{}", epithets, if named.is_empty() { String::new() } else { format!("  ({})", named.join(", ")) });
 
     // ---- the relics
-    let held = w.artifacts.iter().filter(|a| a.holder >= 0).count();
+    let held = w.artifacts.iter().filter(|a| a.holder.0 >= 0).count();
     println!("artifacts: {} wrought · {} held · {} lost", w.artifacts.len(), held, w.artifacts.len() - held);
 
     // ---- the sifter
@@ -1525,30 +1524,23 @@ fn cmd_bench() {
     let sizes = [320usize, 512, 640, 768];
     println!("{:>5} {:>9} {:>11} {:>9}  stage breakdown (ms)", "size", "gen ms", "pack bytes", "cells");
     let mut gen512 = 0.0f64;
+    let mut bpc512 = 0.0f64;
     for &s in &sizes {
         let t = Instant::now();
         let w = World::generate(4242, s);
         let ms = t.elapsed().as_millis() as f64;
+        let packed = w.pack();
         if s == 512 {
             gen512 = ms;
+            bpc512 = packed.len() as f64 / w.height.len() as f64;
         }
-        let packed = w.pack();
-        let mut stages = String::new();
-        if let Some(arr) = w.meta()["timings"].as_array() {
-            let parts: Vec<String> = arr
-                .iter()
-                .filter_map(|e| {
-                    let name = e[0].as_str()?;
-                    let v = e[1].as_f64()?;
-                    if name == "total" {
-                        None
-                    } else {
-                        Some(format!("{} {:.0}", name, v))
-                    }
-                })
-                .collect();
-            stages = parts.join(" · ");
-        }
+        let stages: String = w
+            .timings
+            .iter()
+            .filter(|(name, _)| *name != "total")
+            .map(|(name, v)| format!("{} {:.0}", name, v))
+            .collect::<Vec<_>>()
+            .join(" · ");
         println!("{:>5} {:>9.0} {:>11} {:>9}  {}", s, ms, packed.len(), w.height.len(), stages);
     }
 
@@ -1566,9 +1558,44 @@ fn cmd_bench() {
     println!();
     println!("tick throughput @512 with {} towns: 240 months in {:.0} ms = {:.0} months/s", w.settlements.len(), tick_ms, rate);
 
+    // E4 — tick payload budget: a century of single-month tick_json calls
+    // on a fresh 512 world; the median is what a playing client pays. The
+    // per-section ledger below shows where the bytes actually live.
+    let mut w = World::generate(4242, 512);
+    let mut lens: Vec<usize> = Vec::with_capacity(1200);
+    let mut sections: BTreeMap<String, (usize, usize)> = BTreeMap::new();
+    for _ in 0..1200 {
+        let p = w.tick_json(1);
+        lens.push(p.len());
+        let v: serde_json::Value = serde_json::from_str(&p).unwrap();
+        for (k, val) in v.as_object().unwrap() {
+            let e = sections.entry(k.clone()).or_insert((0, 0));
+            e.0 += 1;
+            e.1 += val.to_string().len();
+        }
+    }
+    lens.sort_unstable();
+    let med = lens[lens.len() / 2] as f64;
+    let p90 = lens[lens.len() * 9 / 10];
+    let max = *lens.last().unwrap();
+    println!(
+        "tick payload @512 over 100 y: median {} B · p90 {} B · max {} B",
+        med as usize, p90, max
+    );
+    let mut by_bytes: Vec<_> = sections.into_iter().collect();
+    by_bytes.sort_by(|a, b| b.1 .1.cmp(&a.1 .1));
+    for (k, (ships, bytes)) in by_bytes {
+        println!(
+            "  {:<18} {:>5} ships · {:>9} B total · {:>6} B/ship",
+            k, ships, bytes, bytes / ships.max(1)
+        );
+    }
+
     let mut c = Checks::default();
-    c.range("512 generation time", gen512, format!("{:.0} ms", gen512), (0.0, 3000.0), (0.0, 8000.0), "sweet ≤3s · hard ≤8s (wasm ≈ 2× native)");
-    c.range("tick rate", rate, format!("{:.0} mo/s", rate), (100.0, f64::INFINITY), (25.0, f64::INFINITY), "sweet ≥100 mo/s · hard ≥25");
+    c.band("512 generation time", gen512, format!("{:.0} ms", gen512));
+    c.band("tick rate", rate, format!("{:.0} mo/s", rate));
+    c.band("pack bytes per cell", bpc512, format!("{:.1} B/cell", bpc512));
+    c.band("median tick payload", med, format!("{:.0} B", med));
     c.print();
 }
 
@@ -1690,12 +1717,12 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
     let worst_flags: Vec<String> = rows.iter().filter(|r| r.flags != "·").map(|r| format!("{}:{}", r.seed, r.flags)).collect();
 
     let mut c = Checks::default();
-    c.range("mean land fraction", m_land, pct(m_land), (0.22, 0.40), (0.15, 0.52), "sweet 22–40%");
-    c.range("mean desert share", m_des, pct(m_des), (0.12, 0.28), (0.06, 0.38), "sweet 12–28%");
-    c.range("mean forest share", m_for, pct(m_for), (0.25, 0.60), (0.15, 0.75), "sweet 25–60%");
-    c.range("mean mountain share", m_mtn, pct(m_mtn), (0.02, 0.14), (0.005, 0.22), "sweet 2–14%");
-    c.range("mean growth", m_grw, format!("{:.2}×", m_grw), (2.0, 1200.0), (1.05, 3000.0), "M2 crop-package K: sweet 2–1200×");
-    c.range("mean events/year", m_evy, format!("{:.1}", m_evy), (2.0, 40.0), (0.5, 100.0), "sweet 2–40");
+    c.band_as("mean land fraction", "land fraction", m_land, pct(m_land));
+    c.band_as("mean desert share", "desert share of land", m_des, pct(m_des));
+    c.band_as("mean forest share", "forest share of land", m_for, pct(m_for));
+    c.band_as("mean mountain share", "mountain share of land (h>0.5)", m_mtn, pct(m_mtn));
+    c.band_as("mean growth", "century growth", m_grw, format!("{:.2}×", m_grw));
+    c.band_as("mean events/year", "events per year", m_evy, format!("{:.1}", m_evy));
     c.must("all seeds clean of hard flags", clean == rows.len(), if worst_flags.is_empty() { "all clean".into() } else { worst_flags.join(" ") }, "no B/P/R/G/S/U flags on any seed");
     c.want("strikes on every seed", strike_seeds == rows.len(), format!("{}/{}", strike_seeds, rows.len()), "prospecting fires everywhere");
     if years >= 80 {
@@ -1821,7 +1848,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
 
         // ---- P1: every river cell descends the filled surface to an outlet
         let water = w.height.mapv(|h| h < 0.0);
-        let filled = fill_rect(&w.height, &water);
+        let filled = fill_rect(&w.height.mapv(|h| h as f64), &water);
         let dirs = dirs_rect(&filled, &water);
         let mut uphill = 0usize;
         let mut cycles = 0usize;
@@ -1829,7 +1856,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         let mut river_cells = 0usize;
         for y in 0..rows {
             for x in 0..cols {
-                if !w.rivers[[y, x]] { continue; }
+                if w.flags[[y, x]] & CellFlags::RIVER.bits() == 0 { continue; }
                 river_cells += 1;
                 let (mut cy, mut cx) = (y, x);
                 let mut steps = 0usize;
@@ -1838,7 +1865,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
                     if d < 0 {
                         // legitimate terminals: the basin floor of an
                         // endorheic lake, or a lake cell (ghost-spill)
-                        if !(w.lakes[[cy, cx]] || w.salt[[cy, cx]]) { dry_terminals += 1; }
+                        if w.flags[[cy, cx]] & (CellFlags::LAKE.bits() | CellFlags::SALT.bits()) == 0 { dry_terminals += 1; }
                         break;
                     }
                     let (dy, dx) = hydrology::N8[d as usize];
@@ -1860,7 +1887,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
 
         // ---- P2: every living settlement is reachable on the route network
         let living: Vec<usize> = (0..w.settlements.len()).filter(|&i| w.settlements[i].pop > 0).collect();
-        let mut idx_of: BTreeMap<i64, usize> = BTreeMap::new();
+        let mut idx_of: BTreeMap<calliope::ids::SettlementId, usize> = BTreeMap::new();
         for (k, &i) in living.iter().enumerate() { idx_of.insert(w.settlements[i].id, k); }
         let mut uf: Vec<usize> = (0..living.len()).collect();
         fn find(uf: &mut Vec<usize>, i: usize) -> usize {
@@ -1892,13 +1919,19 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         c.must(&format!("route graph connected ({})", seed), comps <= 1,
             format!("{} comps", comps.max(1)), "M8.1: one world, one web");
 
-        // ---- P3: the pack protocol round-trips byte-perfectly
+        // ---- P3: pack v2 round-trips — stable bytes, honest layout,
+        // valid crc, quantization inside ε, territory RLE exact (E3.3-E3.6)
         let p1 = w.pack();
         let p2 = w.pack();
         c.must(&format!("pack is stable ({})", seed), p1 == p2,
             format!("{} B", p1.len()), "M8.1: same world ⇒ same bytes");
         let hlen = u32::from_le_bytes([p1[0], p1[1], p1[2], p1[3]]) as usize;
         let hdr: serde_json::Value = serde_json::from_slice(&p1[4..4 + hlen]).unwrap();
+        let base = 4 + hlen;
+        let crc = calliope::util::crc32(&p1[base..]);
+        c.must(&format!("pack v2 + crc32 ({})", seed),
+            hdr["pack"].as_u64() == Some(2) && hdr["crc32"].as_u64() == Some(crc as u64),
+            format!("crc {:08x}", crc), "E3.6: stamped and checksummed");
         let entries = hdr["arrays"].as_array().unwrap();
         let mut ok_layout = true;
         let mut expected_off = 0usize;
@@ -1907,7 +1940,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
             let off = e["offset"].as_u64().unwrap() as usize;
             let nb = e["nbytes"].as_u64().unwrap() as usize;
             let shape: Vec<usize> = e["shape"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect();
-            let cell = match e["dtype"].as_str().unwrap() { "float32" => 4, "int16" => 2, _ => 1 };
+            let cell = match e["dtype"].as_str().unwrap() { "float32" => 4, "uint16" | "int16" => 2, _ => 1 };
             ok_layout &= off == expected_off && nb == shape[0] * shape[1] * cell;
             expected_off = off + nb;
             total += nb;
@@ -1915,51 +1948,280 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         ok_layout &= p1.len() == 4 + hlen + total;
         c.must(&format!("unpack layout sound ({})", seed), ok_layout,
             format!("{} arrays", entries.len()), "M8.1: offsets contiguous, sizes exact");
-        // decode height + territory back out and compare to the source arrays
-        let base = 4 + hlen;
+
+        // decode every section exactly the way the client does and compare
+        let f32_grid = |name: &str| -> &ndarray::Array2<f32> {
+            match name {
+                "height" => &w.height, "tmean" => &w.tmean, "tamp" => &w.tamp,
+                "precip" => &w.precip, "pamp" => &w.pamp, "discharge" => &w.discharge,
+                "flow_amp" => &w.flow_amp, "fertility" => &w.fertility,
+                other => unreachable!("unknown f32 field {other}"),
+            }
+        };
+        let u8_grid = |name: &str| -> &ndarray::Array2<u8> {
+            match name {
+                "biomes" => &w.biomes, "crops" => &w.crops,
+                "strahler" => &w.strahler, "flags" => &w.flags,
+                other => unreachable!("unknown u8 field {other}"),
+            }
+        };
         let mut ok_data = true;
+        let mut worst_q = 0.0f64; // worst quantization error, in units of scale
         for e in entries {
             let name = e["name"].as_str().unwrap();
             let off = base + e["offset"].as_u64().unwrap() as usize;
             let nb = e["nbytes"].as_u64().unwrap() as usize;
-            match name {
-                "height" => {
-                    let vals: Vec<f32> = p1[off..off + nb].chunks_exact(4)
-                        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
-                    ok_data &= vals.len() == w.height.len()
-                        && vals.iter().zip(w.height.iter()).all(|(&v, &h)| v == h as f32);
+            if let Some(q) = e.get("q").filter(|q| !q.is_null()) {
+                let scale = q["scale"].as_f64().unwrap();
+                let qoff = q["offset"].as_f64().unwrap();
+                let sqrt = q["xform"].as_str() == Some("sqrt");
+                let grid = f32_grid(name);
+                let qs: Vec<u16> = p1[off..off + nb].chunks_exact(2)
+                    .map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
+                ok_data &= qs.len() == grid.len();
+                for (&qv, &orig) in qs.iter().zip(grid.iter()) {
+                    let dec = qoff + qv as f64 * scale;
+                    // compare in encode-space: |dec − T(orig)| ≤ scale/2
+                    let target = if sqrt { (orig.max(0.0) as f64).sqrt() } else { orig as f64 };
+                    if scale > 0.0 {
+                        worst_q = worst_q.max((dec - target).abs() / scale);
+                    } else {
+                        ok_data &= (dec - target).abs() < 1e-12;
+                    }
                 }
-                "territory" => {
-                    let vals: Vec<i16> = p1[off..off + nb].chunks_exact(2)
-                        .map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
-                    ok_data &= vals.iter().zip(w.territory.iter()).all(|(&v, &t)| v == t);
+            } else {
+                match e["dtype"].as_str().unwrap() {
+                    "uint8" => {
+                        let grid = u8_grid(name);
+                        ok_data &= p1[off..off + nb].iter().zip(grid.iter()).all(|(&a, &b)| a == b);
+                    }
+                    "float32" => {
+                        let grid = f32_grid(name);
+                        let vals: Vec<f32> = p1[off..off + nb].chunks_exact(4)
+                            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+                        ok_data &= vals.iter().zip(grid.iter()).all(|(&v, &g)| v == g);
+                    }
+                    other => panic!("unexpected raw dtype {other}"),
                 }
-                "flags" => {
-                    ok_data &= p1[off..off + nb].iter()
-                        .zip(w.rivers.iter().zip(w.lakes.iter()).zip(w.salt.iter()).zip(w.seasonal.iter()))
-                        .all(|(&f, (((&r, &l), &s), &sw))| {
-                            f == (r as u8) | ((l as u8) << 1) | ((s as u8) << 2) | ((sw as u8) << 3)
-                        });
-                }
-                _ => {}
             }
         }
-        c.must(&format!("unpack = world ({})", seed), ok_data,
+        c.must(&format!("raw sections bit-equal ({})", seed), ok_data,
             "bit-equal".into(), "M8.1: arrays survive the wire");
+        c.must(&format!("quantization ≤ ε ({})", seed), worst_q <= 0.5 + 1e-6,
+            format!("worst {:.3}·scale", worst_q), "E3.4: u16 wire loses ≤ half a step");
+
+        // territory rides the header as RLE (E3.5) — expand and compare
+        let rle: Vec<i64> = hdr["territory"].as_array().unwrap().iter()
+            .map(|v| v.as_i64().unwrap()).collect();
+        let mut terr: Vec<i16> = Vec::with_capacity(rows * cols);
+        for pair in rle.chunks_exact(2) {
+            for _ in 0..pair[0] {
+                terr.push(pair[1] as i16);
+            }
+        }
+        let terr_ok = terr.len() == w.territory.len()
+            && terr.iter().zip(w.territory.iter()).all(|(&a, &b)| a == b);
+        c.must(&format!("territory RLE exact ({})", seed), terr_ok,
+            format!("{} runs", rle.len() / 2), "E3.5: borders compress, nothing drifts");
 
         // ---- M8.2 metamorphic: more rain must not shrink the rivers
         let dry = World::generate(seed, size);
         let wet = World::generate_scaled(seed, size, 1.25);
-        let rc_dry = dry.rivers.iter().filter(|&&r| r).count();
-        let rc_wet = wet.rivers.iter().filter(|&&r| r).count();
-        let q_dry: f64 = dry.discharge.iter().sum();
-        let q_wet: f64 = wet.discharge.iter().sum();
+        let rc_dry = dry.flags.iter().filter(|&&f| f & CellFlags::RIVER.bits() != 0).count();
+        let rc_wet = wet.flags.iter().filter(|&&f| f & CellFlags::RIVER.bits() != 0).count();
+        let q_dry: f64 = dry.discharge.iter().map(|&v| v as f64).sum();
+        let q_wet: f64 = wet.discharge.iter().map(|&v| v as f64).sum();
         println!("seed {:>6}: rain ×1.25 ⇒ river cells {} → {} · discharge {:.0} → {:.0}",
             seed, rc_dry, rc_wet, q_dry, q_wet);
         c.must(&format!("rain↑ ⇒ rivers not↓ ({})", seed), rc_wet >= rc_dry,
             format!("{} → {}", rc_dry, rc_wet), "M8.2: metamorphic monotonicity");
         c.must(&format!("rain↑ ⇒ discharge↑ ({})", seed), q_wet > q_dry,
             format!("×{:.2}", q_wet / q_dry.max(1e-9)), "M8.2: more water flows");
+        println!();
+    }
+
+    // ---- P4: tick v2 deltas tell the truth (E4). A client that starts
+    // from bootstrap and merges every delta must end holding exactly the
+    // engine's settlements; no section may reship unchanged bytes; the
+    // chronicle cursor must tile [start, end) with no gap or overlap.
+    {
+        let seed = seeds[0];
+        let mut w = World::generate(seed, size);
+        let boot = w.bootstrap();
+
+        // the client's shadow: id -> serialized settlement (as Value)
+        let mut shadow: BTreeMap<i64, serde_json::Value> = boot["settlements"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| (s["id"].as_i64().unwrap(), s.clone()))
+            .collect();
+
+        // areas shadow: hub id -> held row Value (partial merges land here)
+        let mut areas_shadow: BTreeMap<i64, serde_json::Value> = boot["areas"]["hubs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|h| (h["id"].as_i64().unwrap(), h.clone()))
+            .collect();
+
+        // market shadow: good -> held row (m_hot patches merge by good)
+        let mut market_shadow: BTreeMap<String, serde_json::Value> = boot["market"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| (r["g"].as_str().unwrap().to_string(), r.clone()))
+            .collect();
+
+        const BLOCKS: [&str; 4] = ["cultures", "c_hot", "wars", "merchants"];
+        let mut last_block: BTreeMap<&str, String> = BTreeMap::new();
+        let mut reships = 0usize;
+        let mut cursor_breaks = 0usize;
+        let mut expect_ev = w.events.len() as u64;
+        let months = 240usize;
+        for _ in 0..months {
+            let payload = w.tick_json(1);
+            let t: serde_json::Value = serde_json::from_str(&payload).unwrap();
+            let ev = t["ev"].as_array().unwrap();
+            if ev[0].as_u64().unwrap() != expect_ev {
+                cursor_breaks += 1;
+            }
+            expect_ev = ev[1].as_u64().unwrap();
+            for b in BLOCKS {
+                if let Some(v) = t.get(b) {
+                    let s = v.to_string();
+                    if last_block.get(b) == Some(&s) {
+                        reships += 1;
+                    }
+                    last_block.insert(b, s);
+                }
+            }
+            if let Some(setts) = t.get("settlements").and_then(|v| v.as_array()) {
+                for s in setts {
+                    let id = s["id"].as_i64().unwrap();
+                    // a full object identical to what the client holds is
+                    // wasted wire — the hash gate should have caught it
+                    if shadow.get(&id) == Some(s) {
+                        reships += 1;
+                    }
+                    shadow.insert(id, s.clone());
+                }
+            }
+            // heartbeat patches (E4.2): positional rows [id, pop, food, k,
+            // wealth] merged over the held object — a patch whose every
+            // non-null slot equals what the client holds is a reship
+            if let Some(hots) = t.get("s_hot").and_then(|v| v.as_array()) {
+                const SLOTS: [&str; 4] = ["pop", "food", "k", "wealth"];
+                for p in hots {
+                    let row = p.as_array().unwrap();
+                    let id = row[0].as_i64().unwrap();
+                    let held = shadow.get_mut(&id).expect("hot patch for unknown town");
+                    let live: Vec<(&str, &serde_json::Value)> = SLOTS
+                        .iter()
+                        .zip(row[1..].iter())
+                        .filter(|(_, v)| !v.is_null())
+                        .map(|(k, v)| (*k, v))
+                        .collect();
+                    let redundant = !live.is_empty()
+                        && live.iter().all(|(k, v)| held.get(k) == Some(v));
+                    if redundant || live.is_empty() {
+                        reships += 1;
+                    }
+                    for (k, v) in live {
+                        held[k] = v.clone();
+                    }
+                }
+            }
+            if let Some(gone) = t.get("settlements_gone").and_then(|v| v.as_array()) {
+                for id in gone {
+                    shadow.remove(&id.as_i64().unwrap());
+                }
+            }
+            // the market ledger (E4.3): full replace on good-set change,
+            // else m_hot rows merge by good — unchanged rows are waste
+            if let Some(m) = t.get("market").and_then(|v| v.as_array()) {
+                market_shadow = m
+                    .iter()
+                    .map(|r| (r["g"].as_str().unwrap().to_string(), r.clone()))
+                    .collect();
+            }
+            if let Some(mh) = t.get("m_hot").and_then(|v| v.as_array()) {
+                for r in mh {
+                    let g = r["g"].as_str().unwrap().to_string();
+                    if market_shadow.get(&g) == Some(r) {
+                        reships += 1;
+                    }
+                    market_shadow.insert(g, r.clone());
+                }
+            }
+            // market areas (E4.3): full replace when "of" rides along;
+            // rows with a name replace the hub, nameless rows are per-good
+            // price patches — and a patch that changes nothing is waste
+            if let Some(a) = t.get("areas") {
+                let full = a.get("of").is_some();
+                if full {
+                    areas_shadow.clear();
+                }
+                for h in a["hubs"].as_array().unwrap() {
+                    let id = h["id"].as_i64().unwrap();
+                    if h.get("name").is_some() {
+                        if !full && areas_shadow.get(&id) == Some(h) {
+                            reships += 1;
+                        }
+                        areas_shadow.insert(id, h.clone());
+                    } else {
+                        let held = areas_shadow
+                            .get_mut(&id)
+                            .expect("price patch for unknown hub");
+                        let pm = h["p"].as_object().unwrap();
+                        let redundant =
+                            pm.iter().all(|(g, v)| held["p"].get(g) == Some(v));
+                        if redundant {
+                            reships += 1;
+                        }
+                        for (g, v) in pm {
+                            held["p"][g.as_str()] = v.clone();
+                        }
+                    }
+                }
+            }
+        }
+        let truth: BTreeMap<i64, serde_json::Value> = w
+            .settlements
+            .iter()
+            .map(|s| (s.id.0, serde_json::to_value(s).unwrap()))
+            .collect();
+        let replay_ok = shadow == truth;
+        let market_truth: BTreeMap<String, serde_json::Value> = w
+            .market
+            .snapshot()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| (r["g"].as_str().unwrap().to_string(), r.clone()))
+            .collect();
+        let areas_truth: BTreeMap<i64, serde_json::Value> =
+            calliope::economy::areas_json(&w.areas, &w.settlements)["hubs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|h| (h["id"].as_i64().unwrap(), h.clone()))
+                .collect();
+        println!(
+            "seed {:>6}: {} months of deltas · {} towns replayed · {} reships · {} cursor breaks",
+            seed, months, truth.len(), reships, cursor_breaks
+        );
+        c.must(&format!("tick deltas replay to truth ({})", seed), replay_ok,
+            format!("{} towns", truth.len()), "E4.2: merge(bootstrap, deltas) = engine state");
+        c.must(&format!("market replays to truth ({})", seed), market_shadow == market_truth,
+            format!("{} goods", market_truth.len()), "E4.3: merge(bootstrap, m_hot) = engine ledger");
+        c.must(&format!("area prices replay to truth ({})", seed), areas_shadow == areas_truth,
+            format!("{} hubs", areas_truth.len()), "E4.3: per-good hub patches rebuild the areas");
+        c.must(&format!("no unchanged section reships ({})", seed), reships == 0,
+            format!("{} reships", reships), "E4.2/E4.3: a section crosses only when it moved");
+        c.must(&format!("event cursor tiles the log ({})", seed), cursor_breaks == 0
+            && expect_ev == w.events.len() as u64,
+            format!("→ {}", expect_ev), "E4.4: ranges concatenate without gap or overlap");
         println!();
     }
     c.print();
@@ -2006,7 +2268,7 @@ fn era_metrics(seed: i64, size: usize, years: usize) -> EraRow {
             let h = w.height[[y, x]];
             if h < 0.0 { continue; }
             land += 1;
-            if w.rivers[[y, x]] { river += 1; }
+            if w.flags[[y, x]] & CellFlags::RIVER.bits() != 0 { river += 1; }
             if h > 0.45 { mountain += 1; }
             let b = w.biomes[[y, x]] as usize;
             if b < bcount.len() { bcount[b] += 1.0; }

@@ -11,25 +11,28 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
+use crate::ids::{CultureId, EntityId, SettlementId};
 use crate::culture::Culture;
+use crate::entity::EntityKind;
 use crate::entity::Registry;
 use crate::settlements::Settlement;
 use crate::society::Society;
+use crate::world::EventKind;
 use crate::world::Event;
 
 #[derive(Serialize, Clone)]
 pub struct Artifact {
     /// Entity id in the registry — the provenance key.
-    pub ent: i64,
+    pub ent: EntityId,
     pub name: String,
     /// "crown" | "blade" | "cup" | "torc" | "harp" | "stone"
     pub kind: String,
     /// Settlement id whose treasury holds it; −1 while lost.
-    pub holder: i64,
+    pub holder: SettlementId,
     /// Culture whose smiths wrought it.
-    pub maker: usize,
+    pub maker: CultureId,
     /// Culture that keeps it now (drifts with conquest).
-    pub keeper: usize,
+    pub keeper: CultureId,
     pub made: i64,
     pub lost: bool,
 }
@@ -70,8 +73,9 @@ pub fn monthly(
 
     // --- the forging: a settled age, a full treasury, a master smith
     if arts.len() < CAP && month.rem_euclid(7) == 3 {
-        for (cid, cu) in cultures.iter().enumerate() {
-            let Some(so) = socs.get(cid) else { continue };
+        for (ci, cu) in cultures.iter().enumerate() {
+            let cid = CultureId(ci);
+            let Some(so) = socs.get(ci) else { continue };
             if so.era < 2 || so.treasury < 60.0 {
                 continue;
             }
@@ -102,12 +106,12 @@ pub fn monthly(
                 continue; // the song already knows that name; wait for another
             }
             taken.insert(name.clone());
-            let ent = reg.add("artifact", &name, month, Some(cid), home.x, home.y);
+            let ent = reg.add(EntityKind::Artifact, &name, month, Some(cid), home.x, home.y);
             let made = MADE[rng.gen_range(0..MADE.len())];
             events.push(Event {
                 m: month,
                 s: name.clone(),
-                k: "myth".to_string(),
+                k: EventKind::Myth,
                 text: format!(
                     "In {} the smiths of the {} finish {} — {}. Men come far to look on it.",
                     home.name, cu.people, name, made
@@ -142,14 +146,11 @@ pub fn monthly(
                 arts[ai].holder = s.id;
                 arts[ai].keeper = s.culture;
                 let name = arts[ai].name.clone();
-                if let Some(e) = reg.get_mut(arts[ai].ent) {
-                    e.x = s.x;
-                    e.y = s.y;
-                }
+                reg.relocate(arts[ai].ent, s.x, s.y);
                 events.push(Event {
                     m: month,
                     s: name.clone(),
-                    k: "myth".to_string(),
+                    k: EventKind::Myth,
                     text: format!(
                         "A trader in {} unwraps {} from oil-cloth, asking a king's price — the relic returns to the light.",
                         s.name, name
@@ -166,7 +167,7 @@ pub fn monthly(
         let Some(town) = settlements.iter().find(|s| s.id == arts[ai].holder) else {
             // the town is gone from the map; the relic goes into the dark
             arts[ai].lost = true;
-            arts[ai].holder = -1;
+            arts[ai].holder = SettlementId(-1);
             continue;
         };
 
@@ -175,14 +176,14 @@ pub fn monthly(
             let old = arts[ai].keeper;
             arts[ai].keeper = town.culture;
             let people = cultures
-                .get(town.culture)
+                .get(town.culture.idx())
                 .map(|c| c.people.clone())
                 .unwrap_or_default();
-            let old_people = cultures.get(old).map(|c| c.people.clone()).unwrap_or_default();
+            let old_people = cultures.get(old.idx()).map(|c| c.people.clone()).unwrap_or_default();
             events.push(Event {
                 m: month,
                 s: arts[ai].name.clone(),
-                k: "myth".to_string(),
+                k: EventKind::Myth,
                 text: format!(
                     "With {} fallen, {} passes from the {} into the hands of the {} — spoils worth more than the walls.",
                     town.name, arts[ai].name, old_people, people
@@ -198,14 +199,14 @@ pub fn monthly(
         // a sack or burning at the holder's gates may swallow the relic
         let struck = month_evs
             .iter()
-            .any(|e| e.k == "war" && e.s == town.name);
+            .any(|e| e.k == EventKind::War && e.s == town.name);
         if struck && rng.gen::<f64>() < 0.12 {
             arts[ai].lost = true;
-            arts[ai].holder = -1;
+            arts[ai].holder = SettlementId(-1);
             events.push(Event {
                 m: month,
                 s: arts[ai].name.clone(),
-                k: "myth".to_string(),
+                k: EventKind::Myth,
                 text: format!(
                     "In the burning of {}, {} vanishes from its shrine. Every survivor tells a different thief.",
                     town.name, arts[ai].name
@@ -221,11 +222,11 @@ pub fn monthly(
         // and sometimes the treasury simply cannot say where it went
         if rng.gen::<f64>() < 0.0004 {
             arts[ai].lost = true;
-            arts[ai].holder = -1;
+            arts[ai].holder = SettlementId(-1);
             events.push(Event {
                 m: month,
                 s: arts[ai].name.clone(),
-                k: "myth".to_string(),
+                k: EventKind::Myth,
                 text: format!(
                     "{} is missed from the treasury of {}; none will say how, and two stewards hang for it.",
                     arts[ai].name, town.name

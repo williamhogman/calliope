@@ -6,6 +6,7 @@
 //! itself. Everything here is deterministic — worn forms and withheld
 //! codas key off `det_hash`, never wall-clock, never iteration order.
 
+use crate::ids::EntityId;
 use serde::Serialize;
 
 use crate::telling::det_hash;
@@ -30,7 +31,7 @@ pub struct Ruin {
     #[serde(skip_serializing_if = "String::is_empty")]
     pub ety: String,
     /// Registry entity id (kind "ruin").
-    pub eid: i64,
+    pub eid: EntityId,
 }
 
 const VOWELS: &[char] = &['a', 'e', 'i', 'o', 'u', 'y'];

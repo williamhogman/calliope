@@ -18,6 +18,7 @@ pub mod erosion;
 pub mod explain;
 pub mod geo;
 pub mod hydrology;
+pub mod ids;
 pub mod naming;
 pub mod ndimage;
 pub mod noisegen;
@@ -54,9 +55,22 @@ impl WasmWorld {
         })
     }
 
-    /// Binary world payload: [u32 header_len][header json][raw arrays].
+    /// Binary world payload, pack v2: [u32 header_len][header json][blob]
+    /// — crc-stamped, quantized u16 float grids, territory as header RLE.
     pub fn pack(&self) -> Vec<u8> {
         self.inner.pack()
+    }
+
+    /// Generation stage timings as JSON pairs — debug side channel (E3.9);
+    /// wall-clock never rides the pack itself.
+    pub fn timings(&self) -> String {
+        self.inner.timings_json()
+    }
+
+    /// Once-per-world bootstrap JSON (E3.1): vocabulary tables and entity
+    /// state — the pack header stays lean.
+    pub fn bootstrap(&self) -> String {
+        self.inner.bootstrap_json()
     }
 
     /// Advance the simulation; returns {month, settlements, events, routes?} JSON.
@@ -94,7 +108,7 @@ impl WasmWorld {
             .inner
             .events
             .iter()
-            .filter(|e| e.ids.contains(&id))
+            .filter(|e| e.ids.contains(&ids::EntityId(id)))
             .collect();
         serde_json::to_string(&evs).unwrap_or_else(|_| "[]".into())
     }

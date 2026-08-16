@@ -262,7 +262,7 @@ pub struct Feature {
 
 enum Anchor<'a> {
     Interior,
-    Peak(&'a Array2<f64>),
+    Peak(&'a Array2<f32>),
 }
 
 fn add_features(
@@ -295,13 +295,13 @@ fn add_features(
 
 /// Returns (features, world_name).
 pub fn name_features(
-    height: &Array2<f64>,
+    height: &Array2<f32>,
     biomes: &Array2<u8>,
     rivers: &Array2<bool>,
     lakes: &Array2<bool>,
-    discharge: &Array2<f64>,
-    tmean: &Array2<f64>,
-    precip: &Array2<f64>,
+    discharge: &Array2<f32>,
+    tmean: &Array2<f32>,
+    precip: &Array2<f32>,
     seed: i64,
 ) -> (Vec<Feature>, String) {
     let mut rng = crate::util::rng(seed + 12000);
@@ -450,7 +450,7 @@ pub fn name_features(
     }
 
     // deltas: the mightiest river mouths, named for their rivers
-    let mut max_dis = 0.0f64;
+    let mut max_dis = 0.0f32;
     for &d in discharge.iter() {
         if d > max_dis { max_dis = d; }
     }
@@ -475,8 +475,8 @@ pub fn name_features(
                         }
                     }
                 }
-                if coastal && best.map_or(true, |(d, _, _)| discharge[[y, x]] > d) {
-                    best = Some((discharge[[y, x]], y, x));
+                if coastal && best.map_or(true, |(d, _, _)| discharge[[y, x]] as f64 > d) {
+                    best = Some((discharge[[y, x]] as f64, y, x));
                 }
             }
         }
@@ -486,7 +486,7 @@ pub fn name_features(
     }
     mouths.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
     for (d, y, x, word, ety) in mouths.into_iter().take(3) {
-        if d < 0.15 * max_dis {
+        if d < 0.15 * max_dis as f64 {
             break;
         }
         let name = phrase(&mut rng, "delta", &word);
@@ -627,7 +627,7 @@ pub fn name_features(
     for y in 0..hgt {
         for x in 0..wid {
             if height[[y, x]] > 0.60 && (height[[y, x]] - maxf[[y, x]]).abs() < 1e-12 {
-                summits.push((height[[y, x]], y, x));
+                summits.push((height[[y, x]] as f64, y, x));
             }
         }
     }
@@ -731,9 +731,9 @@ pub fn name_route_features(
     rng: &mut Pcg64Mcg,
     taken: &mut HashSet<String>,
     routes: &[crate::trade::Route],
-    height: &Array2<f64>,
+    height: &Array2<f32>,
     rivers: &Array2<bool>,
-    discharge: &Array2<f64>,
+    discharge: &Array2<f32>,
 ) {
     let (hh, ww) = height.dim();
     let mut pass_cands: Vec<(f64, i64, i64)> = Vec::new();
@@ -756,7 +756,7 @@ pub fn name_route_features(
             if x < 0 || y < 0 || x >= ww as i64 || y >= hh as i64 {
                 continue;
             }
-            let h = height[[y as usize, x as usize]];
+            let h = height[[y as usize, x as usize]] as f64;
             if h > 0.45 && best_pass.map_or(true, |(bh, _, _)| h > bh) {
                 best_pass = Some((h, x, y));
             }
@@ -769,7 +769,7 @@ pub fn name_route_features(
                     }
                     let (nxu, nyu) = (nx as usize, ny as usize);
                     if rivers[[nyu, nxu]] {
-                        dmax = dmax.max(discharge[[nyu, nxu]]);
+                        dmax = dmax.max(discharge[[nyu, nxu]] as f64);
                     }
                 }
             }
@@ -913,8 +913,8 @@ pub fn culture_toponyms(
             let d = (s.x - f.x) as f64;
             let e = (s.y - f.y) as f64;
             let d2 = d * d + e * e;
-            if d2 < best[s.culture].0 {
-                best[s.culture] = (d2, s.culture);
+            if d2 < best[s.culture.idx()].0 {
+                best[s.culture.idx()] = (d2, s.culture.idx());
             }
         }
         let mut near: Vec<(f64, usize)> = best
@@ -976,8 +976,8 @@ pub fn exonym_pass(
             let dx = (s.x - f.x) as f64;
             let dy = (s.y - f.y) as f64;
             let d2 = dx * dx + dy * dy;
-            if d2 < best[s.culture] {
-                best[s.culture] = d2;
+            if d2 < best[s.culture.idx()] {
+                best[s.culture.idx()] = d2;
             }
         }
         let mut near: Vec<(f64, usize)> = best

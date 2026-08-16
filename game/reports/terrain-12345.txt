@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 12345 · 640x512
 ========================================================================
-world: "Voreth" · generated in 1064 ms
+world: "Voreth" · generated in 1068 ms
 land: 112169 cells of 327680 (34.2%) · 1794704 km²
 hypsometry (land h): p5 0.020 · p25 0.116 · p50 0.278 · p75 0.427 · p95 0.561 · max 0.682
 bathymetry (sea h): p5 -0.593 · p50 -0.402 · p95 -0.039

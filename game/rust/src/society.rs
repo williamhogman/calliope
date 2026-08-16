@@ -9,9 +9,11 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
+use crate::ids::CultureId;
 use crate::culture::Culture;
-use crate::resources::Deposit;
+use crate::resources::{Deposit, Good, GoodSet};
 use crate::settlements::{territory_radius, Settlement};
+use crate::world::EventKind;
 use crate::world::Event;
 
 pub const ERAS: [&str; 4] = [
@@ -26,15 +28,82 @@ pub const RULER_TITLES: [&str; 4] = ["", "Chief", "King", "Emperor"];
 
 // ---------------------------------------------------------------- techs
 
+/// The 21 arts, one bit each (E1.9). Declared in `TECHS` order so
+/// `TECHS[id as usize]` is the id's row; serialized as the same
+/// snake_case ids the strings used.
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
+    Serialize,
+    strum::Display,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    strum::EnumCount,
+)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum TechId {
+    Pottery,
+    Loom,
+    HerbLore,
+    Stonecraft,
+    Bow,
+    Bronze,
+    Plough,
+    Wheel,
+    Sail,
+    Script,
+    Masonry,
+    Iron,
+    Coin,
+    Law,
+    Aqueduct,
+    StarCharts,
+    Medicine,
+    Philosophy,
+    Engineering,
+    Steel,
+    MithrilCraft,
+}
+
+impl TechId {
+    #[inline]
+    pub const fn bit(self) -> u32 {
+        1 << self as u32
+    }
+}
+
+/// Which arts a people has mastered — one u32, O(1) membership (E1.9).
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub struct TechSet(u32);
+
+impl TechSet {
+    pub const EMPTY: TechSet = TechSet(0);
+
+    #[inline]
+    pub fn insert(&mut self, t: TechId) {
+        self.0 |= t.bit();
+    }
+
+    #[inline]
+    pub fn contains(self, t: TechId) -> bool {
+        self.0 & t.bit() != 0
+    }
+}
+
+
 pub struct Tech {
-    pub id: &'static str,
+    pub id: TechId,
     pub name: &'static str,
     pub era: usize,
     pub cost: f64,
     /// all of these must already be known
-    pub requires: &'static [&'static str],
+    pub requires: &'static [TechId],
     /// at least one deposit of these kinds must lie in the people's lands
-    pub any_deposit: &'static [&'static str],
+    pub any_deposit: &'static [Good],
     pub needs_coastal: bool,
     /// chronicle line; {P} is replaced with the people's name
     pub flavor: &'static str,
@@ -42,55 +111,56 @@ pub struct Tech {
 
 pub const TECHS: [Tech; 21] = [
     // -- Age of Stone ------------------------------------------------
-    Tech { id: "pottery", name: "pottery", era: 0, cost: 60.0, requires: &[], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Pottery, name: "pottery", era: 0, cost: 60.0, requires: &[], any_deposit: &[], needs_coastal: false,
         flavor: "The {P} shape river clay into jars and kilns — the harvest no longer rots before spring." },
-    Tech { id: "loom", name: "the loom", era: 0, cost: 60.0, requires: &[], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Loom, name: "the loom", era: 0, cost: 60.0, requires: &[], any_deposit: &[], needs_coastal: false,
         flavor: "Weavers among the {P} string the first tall looms; good cloth becomes as good as coin." },
-    Tech { id: "herb_lore", name: "herb-lore", era: 0, cost: 70.0, requires: &[], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::HerbLore, name: "herb-lore", era: 0, cost: 70.0, requires: &[], any_deposit: &[], needs_coastal: false,
         flavor: "The wise-women of the {P} set down which roots cure and which kill." },
-    Tech { id: "stonecraft", name: "stone-cutting", era: 0, cost: 70.0, requires: &[], any_deposit: &["stone"], needs_coastal: false,
+    Tech { id: TechId::Stonecraft, name: "stone-cutting", era: 0, cost: 70.0, requires: &[], any_deposit: &[Good::Stone], needs_coastal: false,
         flavor: "Masons of the {P} learn to split stone along its hidden grain." },
-    Tech { id: "bow", name: "the bow", era: 0, cost: 50.0, requires: &[], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Bow, name: "the bow", era: 0, cost: 50.0, requires: &[], any_deposit: &[], needs_coastal: false,
         flavor: "The {P} learn to bend seasoned yew — no beast nor foe outruns an arrow." },
     // -- Age of Bronze -----------------------------------------------
-    Tech { id: "bronze", name: "bronze-working", era: 1, cost: 140.0, requires: &[], any_deposit: &["copper"], needs_coastal: false,
+    Tech { id: TechId::Bronze, name: "bronze-working", era: 1, cost: 140.0, requires: &[], any_deposit: &[Good::Copper], needs_coastal: false,
         flavor: "Smiths of the {P} marry copper and tin; the first bronze rings like a bell in the temple square." },
-    Tech { id: "plough", name: "the plough", era: 1, cost: 130.0, requires: &["pottery"], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Plough, name: "the plough", era: 1, cost: 130.0, requires: &[TechId::Pottery], any_deposit: &[], needs_coastal: false,
         flavor: "The {P} yoke oxen to a deep-cutting plough, and the heavy earth turns to wealth." },
-    Tech { id: "wheel", name: "the wheel", era: 1, cost: 120.0, requires: &[], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Wheel, name: "the wheel", era: 1, cost: 120.0, requires: &[], any_deposit: &[], needs_coastal: false,
         flavor: "Wainwrights of the {P} set carts on true-turning wheels; the roads grow short." },
-    Tech { id: "sail", name: "the sail", era: 1, cost: 120.0, requires: &[], any_deposit: &[], needs_coastal: true,
+    Tech { id: TechId::Sail, name: "the sail", era: 1, cost: 120.0, requires: &[], any_deposit: &[], needs_coastal: true,
         flavor: "The {P} raise woven sails above their hulls, and the wind carries trade beyond the horizon." },
-    Tech { id: "script", name: "writing", era: 1, cost: 180.0, requires: &["pottery"], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Script, name: "writing", era: 1, cost: 180.0, requires: &[TechId::Pottery], any_deposit: &[], needs_coastal: false,
         flavor: "Scribes of the {P} press marks into wet clay — words now outlive the speaker." },
-    Tech { id: "masonry", name: "masonry", era: 1, cost: 150.0, requires: &["stonecraft"], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Masonry, name: "masonry", era: 1, cost: 150.0, requires: &[TechId::Stonecraft], any_deposit: &[], needs_coastal: false,
         flavor: "The {P} raise dressed-stone walls; raiders find gates where fields used to burn." },
     // -- Age of Iron -------------------------------------------------
-    Tech { id: "iron", name: "iron-working", era: 2, cost: 260.0, requires: &["bronze"], any_deposit: &["iron"], needs_coastal: false,
+    Tech { id: TechId::Iron, name: "iron-working", era: 2, cost: 260.0, requires: &[TechId::Bronze], any_deposit: &[Good::Iron], needs_coastal: false,
         flavor: "The {P} draw iron from red earth; the age of bronze passes into fire." },
-    Tech { id: "coin", name: "coinage", era: 2, cost: 240.0, requires: &["script"], any_deposit: &["gold", "silver"], needs_coastal: false,
+    Tech { id: TechId::Coin, name: "coinage", era: 2, cost: 240.0, requires: &[TechId::Script], any_deposit: &[Good::Gold, Good::Silver], needs_coastal: false,
         flavor: "The {P} strike their first coin, and every market from coast to coast learns its face." },
-    Tech { id: "law", name: "law-codes", era: 2, cost: 220.0, requires: &["script"], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Law, name: "law-codes", era: 2, cost: 220.0, requires: &[TechId::Script], any_deposit: &[], needs_coastal: false,
         flavor: "The lawspeakers of the {P} carve a code upon standing stones for every eye to read." },
-    Tech { id: "aqueduct", name: "aqueducts", era: 2, cost: 260.0, requires: &["masonry"], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Aqueduct, name: "aqueducts", era: 2, cost: 260.0, requires: &[TechId::Masonry], any_deposit: &[], needs_coastal: false,
         flavor: "The {P} bring cold mountain water into their streets on arches of stone." },
-    Tech { id: "star_charts", name: "star-charts", era: 2, cost: 240.0, requires: &["sail", "script"], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::StarCharts, name: "star-charts", era: 2, cost: 240.0, requires: &[TechId::Sail, TechId::Script], any_deposit: &[], needs_coastal: false,
         flavor: "Pilots of the {P} chart the wheeling stars and sail out of sight of land unafraid." },
-    Tech { id: "medicine", name: "medicine", era: 2, cost: 250.0, requires: &["herb_lore", "script"], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Medicine, name: "medicine", era: 2, cost: 250.0, requires: &[TechId::HerbLore, TechId::Script], any_deposit: &[], needs_coastal: false,
         flavor: "Physicians of the {P} found a house of healing; fewer are given to the plague-pits." },
     // -- the High Age ------------------------------------------------
-    Tech { id: "philosophy", name: "philosophy", era: 3, cost: 380.0, requires: &["law"], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Philosophy, name: "philosophy", era: 3, cost: 380.0, requires: &[TechId::Law], any_deposit: &[], needs_coastal: false,
         flavor: "In the colonnades of the {P}, thinkers begin to ask why — and the world grows larger." },
-    Tech { id: "engineering", name: "engineering", era: 3, cost: 400.0, requires: &["aqueduct", "iron"], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Engineering, name: "engineering", era: 3, cost: 400.0, requires: &[TechId::Aqueduct, TechId::Iron], any_deposit: &[], needs_coastal: false,
         flavor: "Engineers of the {P} span gorges and drive true roads through the hills." },
-    Tech { id: "steel", name: "steel-smithing", era: 3, cost: 420.0, requires: &["iron"], any_deposit: &[], needs_coastal: false,
+    Tech { id: TechId::Steel, name: "steel-smithing", era: 3, cost: 420.0, requires: &[TechId::Iron], any_deposit: &[], needs_coastal: false,
         flavor: "The forges of the {P} learn folded steel; their blades keep an edge through a whole war." },
-    Tech { id: "mithril_craft", name: "mithril-craft", era: 3, cost: 600.0, requires: &["steel"], any_deposit: &["mithril"], needs_coastal: false,
+    Tech { id: TechId::MithrilCraft, name: "mithril-craft", era: 3, cost: 600.0, requires: &[TechId::Steel], any_deposit: &[Good::Mithril], needs_coastal: false,
         flavor: "Deep miners of the {P} bring up mithril, and their smiths work wonders whiter than moonlight." },
 ];
 
-pub fn tech_by_id(id: &str) -> Option<&'static Tech> {
-    TECHS.iter().find(|t| t.id == id)
+/// The id's row in `TECHS` — variant order and table order are one.
+pub fn tech(id: TechId) -> &'static Tech {
+    &TECHS[id as usize]
 }
 
 const ERA_DAWNS: [&str; 4] = [
@@ -114,7 +184,11 @@ pub struct Society {
     pub culture: usize,
     pub era: usize,
     pub polity: usize,
-    pub techs: Vec<String>,
+    pub techs: Vec<TechId>,
+    /// Bitset mirror of `techs` for O(1) `knows` (E1.9); rebuilt nowhere —
+    /// the two are only ever written together.
+    #[serde(skip)]
+    pub known: TechSet,
     pub knowledge: f64,
     pub treasury: f64,
 }
@@ -123,10 +197,11 @@ pub fn init(cultures: &[Culture]) -> Vec<Society> {
     cultures
         .iter()
         .map(|c| Society {
-            culture: c.id,
+            culture: c.id.0,
             era: 0,
             polity: 0,
             techs: Vec::new(),
+            known: TechSet::EMPTY,
             knowledge: 0.0,
             treasury: 25.0,
         })
@@ -134,8 +209,9 @@ pub fn init(cultures: &[Culture]) -> Vec<Society> {
 }
 
 impl Society {
-    pub fn knows(&self, id: &str) -> bool {
-        self.techs.iter().any(|t| t == id)
+    #[inline]
+    pub fn knows(&self, id: TechId) -> bool {
+        self.known.contains(id)
     }
 }
 
@@ -180,30 +256,29 @@ impl Default for Mods {
 pub fn mods_for(soc: &Society) -> Mods {
     let mut m = Mods::default();
     m.kaplan = (1.0 + 0.16 * soc.techs.len() as f64).sqrt();
-    for id in &soc.techs {
-        match id.as_str() {
-            "pottery" => { m.capacity *= 1.10; m.production *= 1.05; }
-            "loom" => { m.production *= 1.10; }
-            "herb_lore" => { m.health *= 0.80; }
-            "stonecraft" => { m.production *= 1.05; m.prospecting *= 1.25; }
-            "bow" => { m.war *= 1.15; }
-            "bronze" => { m.war *= 1.30; m.production *= 1.10; m.prospecting *= 1.15; }
-            "plough" => { m.growth *= 1.12; m.capacity *= 1.15; }
-            "wheel" => { m.trade *= 1.25; }
-            "sail" => { m.trade *= 1.20; m.colony_range *= 1.35; }
-            "script" => { m.research *= 1.35; m.trade *= 1.10; }
-            "masonry" => { m.defense *= 0.65; }
-            "iron" => { m.war *= 1.40; m.production *= 1.12; m.prospecting *= 1.30; }
-            "coin" => { m.trade *= 1.50; m.production *= 1.08; }
-            "law" => { m.defense *= 0.90; m.research *= 1.10; m.growth *= 1.05; }
-            "aqueduct" => { m.capacity *= 1.30; m.health *= 0.85; }
-            "star_charts" => { m.colony_range *= 1.40; m.research *= 1.15; }
-            "medicine" => { m.health *= 0.55; }
-            "philosophy" => { m.research *= 1.40; }
-            "engineering" => { m.trade *= 1.20; m.capacity *= 1.15; m.prospecting *= 1.45; }
-            "steel" => { m.war *= 1.50; }
-            "mithril_craft" => { m.production *= 1.20; m.trade *= 1.15; }
-            _ => {}
+    for &id in &soc.techs {
+        match id {
+            TechId::Pottery => { m.capacity *= 1.10; m.production *= 1.05; }
+            TechId::Loom => { m.production *= 1.10; }
+            TechId::HerbLore => { m.health *= 0.80; }
+            TechId::Stonecraft => { m.production *= 1.05; m.prospecting *= 1.25; }
+            TechId::Bow => { m.war *= 1.15; }
+            TechId::Bronze => { m.war *= 1.30; m.production *= 1.10; m.prospecting *= 1.15; }
+            TechId::Plough => { m.growth *= 1.12; m.capacity *= 1.15; }
+            TechId::Wheel => { m.trade *= 1.25; }
+            TechId::Sail => { m.trade *= 1.20; m.colony_range *= 1.35; }
+            TechId::Script => { m.research *= 1.35; m.trade *= 1.10; }
+            TechId::Masonry => { m.defense *= 0.65; }
+            TechId::Iron => { m.war *= 1.40; m.production *= 1.12; m.prospecting *= 1.30; }
+            TechId::Coin => { m.trade *= 1.50; m.production *= 1.08; }
+            TechId::Law => { m.defense *= 0.90; m.research *= 1.10; m.growth *= 1.05; }
+            TechId::Aqueduct => { m.capacity *= 1.30; m.health *= 0.85; }
+            TechId::StarCharts => { m.colony_range *= 1.40; m.research *= 1.15; }
+            TechId::Medicine => { m.health *= 0.55; }
+            TechId::Philosophy => { m.research *= 1.40; }
+            TechId::Engineering => { m.trade *= 1.20; m.capacity *= 1.15; m.prospecting *= 1.45; }
+            TechId::Steel => { m.war *= 1.50; }
+            TechId::MithrilCraft => { m.production *= 1.20; m.trade *= 1.15; }
         }
     }
     m
@@ -212,8 +287,8 @@ pub fn mods_for(soc: &Society) -> Mods {
 // ---------------------------------------------------------------- monthly
 
 /// Resource kinds within reach of a people's settlements.
-fn reachable_kinds(cid: usize, settlements: &[Settlement], deposits: &[Deposit]) -> Vec<String> {
-    let mut kinds: Vec<String> = Vec::new();
+fn reachable_kinds(cid: CultureId, settlements: &[Settlement], deposits: &[Deposit]) -> GoodSet {
+    let mut kinds = GoodSet::EMPTY;
     for s in settlements.iter().filter(|s| s.culture == cid) {
         let r = territory_radius(s.pop) * 2.2;
         let r2 = r * r;
@@ -223,8 +298,8 @@ fn reachable_kinds(cid: usize, settlements: &[Settlement], deposits: &[Deposit])
             }
             let dx = (d.x - s.x) as f64;
             let dy = (d.y - s.y) as f64;
-            if dx * dx + dy * dy <= r2 && !kinds.contains(&d.r) {
-                kinds.push(d.r.clone());
+            if dx * dx + dy * dy <= r2 {
+                kinds.insert(d.r);
             }
         }
     }
@@ -242,13 +317,13 @@ pub fn monthly(
 ) -> Vec<Event> {
     let mut events = Vec::new();
     for si in 0..socs.len() {
-        let cid = socs[si].culture;
+        let cid = CultureId(socs[si].culture);
         let mine: Vec<&Settlement> =
             settlements.iter().filter(|s| s.culture == cid).collect();
         if mine.is_empty() {
             continue;
         }
-        let people = cultures[cid].people.clone();
+        let people = cultures[cid.0].people.clone();
         let m = mods_for(&socs[si]);
 
         // --- lore: towns think, cities argue, roads carry ideas.
@@ -277,20 +352,21 @@ pub fn monthly(
             .filter(|t| {
                 !socs[si].knows(t.id)
                     && socs[si].knowledge >= t.cost * dearness
-                    && t.requires.iter().all(|r| socs[si].knows(r))
+                    && t.requires.iter().all(|&r| socs[si].knows(r))
                     && (t.any_deposit.is_empty()
-                        || t.any_deposit.iter().any(|d| kinds.iter().any(|k| k == d)))
+                        || t.any_deposit.iter().any(|&d| kinds.contains(d)))
                     && (!t.needs_coastal || coastal)
             })
             .collect();
         if !affordable.is_empty() {
             let t = affordable[rng.gen_range(0..affordable.len())];
             socs[si].knowledge -= t.cost * dearness;
-            socs[si].techs.push(t.id.to_string());
+            socs[si].techs.push(t.id);
+            socs[si].known.insert(t.id);
             events.push(Event {
                 m: month_abs,
                 s: people.clone(),
-                k: "tech".to_string(),
+                k: EventKind::Tech,
                 text: t.flavor.replace("{P}", &people),
                 ..Default::default()
             });
@@ -299,7 +375,7 @@ pub fn monthly(
                 events.push(Event {
                     m: month_abs,
                     s: people.clone(),
-                    k: "society".to_string(),
+                    k: EventKind::Society,
                     text: ERA_DAWNS[t.era].replace("{P}", &people),
                     ..Default::default()
                 });
@@ -313,8 +389,8 @@ pub fn monthly(
         let next = socs[si].polity + 1;
         let ready = match next {
             1 => pop >= 700 && n >= 2,
-            2 => pop >= 2600 && has_town && socs[si].knows("script"),
-            3 => pop >= 9000 && n >= 4 && socs[si].knows("coin") && socs[si].knows("law"),
+            2 => pop >= 2600 && has_town && socs[si].knows(TechId::Script),
+            3 => pop >= 9000 && n >= 4 && socs[si].knows(TechId::Coin) && socs[si].knows(TechId::Law),
             _ => false,
         };
         if ready {
@@ -322,7 +398,7 @@ pub fn monthly(
             events.push(Event {
                 m: month_abs,
                 s: people.clone(),
-                k: "society".to_string(),
+                k: EventKind::Society,
                 text: ASCENSIONS[next].replace("{P}", &people),
                 ..Default::default()
             });

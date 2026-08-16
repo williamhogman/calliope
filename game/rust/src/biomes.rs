@@ -66,3 +66,15 @@ pub fn classify(
         }
     })
 }
+
+// ---------------------------------------------------------------- bands
+
+use crate::util::Band;
+
+/// Diagnostics bands (E2.7): how the land is dressed.
+pub const BANDS: &[Band] = &[
+    Band { name: "desert share of land", sweet: (0.12, 0.28), hard: (0.06, 0.38), target: "sweet 12–28% · hard 6–38%" },
+    Band { name: "tundra+ice share of land", sweet: (0.05, 0.30), hard: (0.01, 0.45), target: "sweet 5–30% · hard 1–45%" },
+    Band { name: "forest share of land", sweet: (0.25, 0.60), hard: (0.15, 0.75), target: "sweet 25–60% · hard 15–75%" },
+    Band { name: "grass+savanna share of land", sweet: (0.10, 0.45), hard: (0.04, 0.60), target: "sweet 10–45% · hard 4–60%" },
+];

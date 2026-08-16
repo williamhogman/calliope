@@ -7,6 +7,7 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
+use crate::ids::CultureId;
 use crate::constants as gc;
 use crate::naming;
 use crate::settlements::Settlement;
@@ -60,7 +61,7 @@ pub const DOMAINS: [&str; 10] = [
 
 #[derive(Serialize, Clone)]
 pub struct Culture {
-    pub id: usize,
+    pub id: CultureId,
     pub name: String,
     pub people: String,
     pub style: String,
@@ -199,7 +200,7 @@ pub fn assign_cultures(
         used_styles.insert(style);
         let root = naming::make_word(&mut rng, style, taken);
         cultures.push(Culture {
-            id: cid,
+            id: CultureId(cid),
             people: format!("{}{}", root, demonym(style)),
             name: root,
             style: style.to_string(),
@@ -211,8 +212,8 @@ pub fn assign_cultures(
     // rename settlements in their culture's tongue, keeping the reading
     // of each name's parts (M3.3)
     for (s, &l) in settlements.iter_mut().zip(lab.iter()) {
-        s.culture = l;
-        s.namer = l;
+        s.culture = CultureId(l);
+        s.namer = CultureId(l);
         let c = naming::coin(&mut rng, &cultures[l].style, taken);
         s.name = c.word;
         s.ety = c.ety;
@@ -226,7 +227,7 @@ pub fn assign_cultures(
 /// people) but take a new name and a new colour on the map.
 pub fn secede(
     parent: &Culture,
-    new_id: usize,
+    new_id: CultureId,
     rng: &mut Pcg64Mcg,
     taken: &mut HashSet<String>,
 ) -> Culture {
@@ -236,7 +237,7 @@ pub fn secede(
         people: format!("{}{}", root, demonym(&parent.style)),
         name: root,
         style: parent.style.clone(),
-        color: CULTURE_COLORS[new_id % CULTURE_COLORS.len()].to_string(),
+        color: CULTURE_COLORS[new_id.idx() % CULTURE_COLORS.len()].to_string(),
         pantheon: parent.pantheon.clone(),
     }
 }

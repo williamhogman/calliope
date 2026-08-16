@@ -187,3 +187,17 @@ pub fn heightmap(seed: i64, size: usize) -> Array2<f64> {
     }
     h
 }
+
+// ---------------------------------------------------------------- bands
+
+use crate::util::Band;
+
+/// Diagnostics bands (E2.7): the shape of the land.
+pub const BANDS: &[Band] = &[
+    Band { name: "land fraction", sweet: (0.22, 0.40), hard: (0.15, 0.52), target: "sweet 22–40% · hard 15–52%" },
+    Band { name: "largest landmass share of land", sweet: (0.25, 0.85), hard: (0.10, 0.93), target: "sweet 25–85% · hard 10–93%" },
+    Band { name: "landmass count", sweet: (15.0, 400.0), hard: (6.0, 2000.0), target: "sweet 15–400 · hard 6–2000" },
+    Band { name: "small isles+islets", sweet: (10.0, 380.0), hard: (3.0, 1900.0), target: "sweet 10–380 · hard 3–1900" },
+    Band { name: "mountain share of land (h>0.5)", sweet: (0.02, 0.14), hard: (0.005, 0.22), target: "sweet 2–14% · hard 0.5–22%" },
+    Band { name: "coastline crenulation", sweet: (0.02, 0.30), hard: (0.012, 0.50), target: "sweet 0.02–0.30 at 4 km cells" },
+];

@@ -3,7 +3,7 @@
 // ./ui/app.js reading ./ui/state.js.
 
 import {
-  generateWorld, tickWorld, explainWorld,
+  generateWorld, tickWorld, explainWorld, timingsWorld,
   storiesWorld, entitiesWorld, entityLogWorld, artifactsWorld,
 } from "./net.js";
 import { Renderer } from "./render.js";
@@ -18,7 +18,7 @@ import {
   worldSize, setWorldSize, setBusy, layer, setLayer, overlays, setOverlays,
   selection, setSelection, setHoverTip,
   popHistory, setPopHistory, setSeenEvents,
-  setMarket, setAreas, setMerchants, setDepositsTick, setMarketTick, pushToast,
+  market, setMarket, setAreas, setMerchants, setDepositsTick, setMarketTick, pushToast,
   searchOpen, setSearchOpen, closePopovers,
   overlaysOpen, setOverlaysOpen, legendOpen, setLegendOpen,
   worldMenuOpen, notifOpen, notif, isMobile, sheet, setSheet,
@@ -230,6 +230,10 @@ async function generate(rawSeed) {
   $("loading").classList.remove("fade");
   try {
     const w = await generateWorld(seed, worldSize());
+    // stage timings live on a debug side channel, not the pack (E3.9)
+    timingsWorld()
+      .then((t) => console.debug("[calliope] generation timings (s)", t))
+      .catch(() => {});
     setWorld(w);
     setMonth(w.header.month || 0);
     version++;
@@ -288,8 +292,41 @@ async function advance(months) {
   try {
     const res = await tickWorld(w.header.id, months);
     setMonth(res.month);
-    w.header.settlements = res.settlements;
-    setSettlements(res.settlements);
+    // Tick v2 (E4.2): settlements arrive as a delta — merge by id into the
+    // array we hold, drop the gone, append the newly founded in order.
+    if (res.settlements || res.settlements_gone || res.s_hot) {
+      const gone = new Set(res.settlements_gone || []);
+      const delta = new Map((res.settlements || []).map((s) => [s.id, s]));
+      // positional heartbeat rows (E4.2): [id, pop, food, k, wealth],
+      // null = that field did not move this month
+      const HOT = ["pop", "food", "k", "wealth"];
+      const hot = new Map((res.s_hot || []).map((r) => [r[0], r]));
+      const merged = [];
+      for (const s of w.header.settlements) {
+        if (gone.has(s.id)) continue;
+        if (delta.has(s.id)) {
+          merged.push(delta.get(s.id));
+          delta.delete(s.id);
+        } else if (hot.has(s.id)) {
+          const row = hot.get(s.id);
+          const patch = { ...s };
+          HOT.forEach((k, i) => {
+            if (row[i + 1] !== null) patch[k] = row[i + 1];
+          });
+          merged.push(patch);
+        } else {
+          merged.push(s);
+        }
+      }
+      for (const s of res.settlements || []) {
+        if (delta.has(s.id)) {
+          merged.push(s);
+          delta.delete(s.id);
+        }
+      }
+      w.header.settlements = merged;
+      setSettlements(merged);
+    }
     if (res.routes) {
       w.header.routes = res.routes;
       renderer.setRoutes(res.routes); // colonies joined the network
@@ -297,10 +334,42 @@ async function advance(months) {
     if (res.cultures) {
       w.header.cultures = res.cultures;
       setCultures(res.cultures);
+    } else if (res.c_hot) {
+      // heartbeat patch (E4.2): treasury/asab/legit over the held cultures
+      const culs = w.header.cultures.slice();
+      for (const { i, ...p } of res.c_hot) culs[i] = { ...culs[i], ...p };
+      w.header.cultures = culs;
+      setCultures(culs);
     }
     if (res.wars) setWars(res.wars);
-    if (res.market) setMarket(res.market);
-    if (res.areas) setAreas(res.areas);
+    if (res.market) {
+      setMarket(res.market);
+    } else if (res.m_hot) {
+      // per-good row patches (E4.3): merge into the held ledger by good
+      const byG = new Map(res.m_hot.map((r) => [r.g, r]));
+      setMarket((market() || []).map((r) => byG.get(r.g) || r));
+    }
+    if (res.areas) {
+      if (res.areas.of) {
+        // full replace: the hub set itself changed (E4.3)
+        w.header.areas = res.areas;
+      } else {
+        // partial: merge changed hub rows by id; fresh spread if present.
+        // A row without a name is a price-only patch — merge its goods.
+        const held = w.header.areas || { hubs: [], of: [], spread: [] };
+        const byId = new Map((res.areas.hubs || []).map((h) => [h.id, h]));
+        w.header.areas = {
+          ...held,
+          hubs: held.hubs.map((h) => {
+            const d = byId.get(h.id);
+            if (!d) return h;
+            return d.name === undefined ? { ...h, p: { ...h.p, ...d.p } } : d;
+          }),
+          ...(res.areas.spread ? { spread: res.areas.spread } : {}),
+        };
+      }
+      setAreas(w.header.areas);
+    }
     if (res.merchants) setMerchants(res.merchants);
     if (res.deposits) {
       // discoveries or dead mines: refresh the map's mineral ledger
@@ -324,10 +393,13 @@ async function advance(months) {
     }
     if (res.events?.length) {
       setEvents([...events(), ...res.events]);
-      notifyEvents(res.events);
     }
+    // E4.8 — toasts come from the engine-picked headline slice.
+    if (res.headlines?.length) notifyEvents(res.headlines);
     version++;
-    recordHistories(res.settlements, res.market, res.month);
+    // Histories stay aligned even when unchanged sections stayed home:
+    // the merged settlements and the last-known market carry the series.
+    recordHistories(w.header.settlements, res.market || market(), res.month);
     markDirty();
   } catch (err) {
     console.error(err);

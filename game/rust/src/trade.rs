@@ -11,18 +11,20 @@ use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap};
 use ndarray::Array2;
 use serde::Serialize;
 
+use crate::ids::SettlementId;
+use crate::world::CellFlags;
 use crate::constants as gc;
 use crate::hydrology::{DIST, N8};
 use crate::ndimage;
-use crate::resources::{abundance, Deposit};
+use crate::resources::{Abundance, Deposit, Good, Goods};
 use crate::settlements::Settlement;
 
-fn rarity_w(ab: &str) -> f64 {
+fn rarity_w(ab: Abundance) -> f64 {
     match ab {
-        "uncommon" => 1.6,
-        "rare" => 2.4,
-        "legendary" => 4.0,
-        _ => 1.0,
+        Abundance::Uncommon => 1.6,
+        Abundance::Rare => 2.4,
+        Abundance::Legendary => 4.0,
+        Abundance::Common => 1.0,
     }
 }
 
@@ -42,8 +44,8 @@ pub const NAVIGABLE: f64 = 90.0; // discharge above which barges swim
 
 #[derive(Serialize, Clone)]
 pub struct Route {
-    pub a: i64,
-    pub b: i64,
+    pub a: SettlementId,
+    pub b: SettlementId,
     pub path: Vec<[i64; 2]>,
     /// travel mode per path point: 0 land, 1 sea, 2 river
     pub m: Vec<u8>,
@@ -54,7 +56,7 @@ pub struct Route {
     pub sea: f64,
     /// signed seasonal swing of the barge legs: high water lifts trade
     pub ramp: f64,
-    pub goods: Vec<Option<String>>,
+    pub goods: Vec<Option<Good>>,
     /// Disused (M9.4): years without realized flow let the grass grow —
     /// the road stays on the map, drawn faded, a mark history left.
     #[serde(skip_serializing_if = "std::ops::Not::not", default)]
@@ -62,7 +64,7 @@ pub struct Route {
 }
 
 /// Work out what a settlement produces from its hinterland.
-pub fn goods_for(s: &mut Settlement, deposits: &[Deposit], fertility: &Array2<f64>) {
+pub fn goods_for(s: &mut Settlement, deposits: &[Deposit], fertility: &Array2<f32>) {
     let r = crate::settlements::work_radius(s.pop);
     let r2 = r * r;
     let mut near: Vec<&Deposit> = deposits
@@ -77,34 +79,30 @@ pub fn goods_for(s: &mut Settlement, deposits: &[Deposit], fertility: &Array2<f6
         })
         .collect();
     near.sort_by(|a, b| {
-        let ka = a.rich * rarity_w(abundance(&a.r));
-        let kb = b.rich * rarity_w(abundance(&b.r));
+        let ka = a.rich * rarity_w(a.r.abundance());
+        let kb = b.rich * rarity_w(b.r.abundance());
         kb.partial_cmp(&ka).unwrap()
     });
-    let mut goods: Vec<String> = Vec::new();
+    let mut goods: Goods = Goods::new();
     for d in near {
         if !goods.contains(&d.r) {
-            goods.push(d.r.clone());
+            goods.push(d.r);
         }
     }
     let fert = fertility[[s.y as usize, s.x as usize]];
-    if fert > 0.45 && !goods.iter().any(|g| g == "grain") {
+    if fert > 0.45 && !goods.contains(&Good::Grain) {
         let pos = if fert > 0.7 { 0 } else { 1.min(goods.len()) };
-        goods.insert(pos, "grain".to_string());
+        goods.insert(pos, Good::Grain);
     }
     if goods.is_empty() {
-        goods = if s.coastal {
-            vec!["fish".to_string()]
-        } else {
-            vec!["grain".to_string()]
-        };
+        goods.push(if s.coastal { Good::Fish } else { Good::Grain });
     }
     goods.truncate(6);
-    s.exports = Some(goods[0].clone());
+    s.exports = Some(goods[0]);
     s.goods = goods;
 }
 
-pub fn assign_goods(settlements: &mut [Settlement], deposits: &[Deposit], fertility: &Array2<f64>) {
+pub fn assign_goods(settlements: &mut [Settlement], deposits: &[Deposit], fertility: &Array2<f32>) {
     for s in settlements.iter_mut() {
         goods_for(s, deposits, fertility);
     }
@@ -127,22 +125,21 @@ pub struct TradeGrid {
 
 impl TradeGrid {
     pub fn build(
-        height: &Array2<f64>,
-        rivers: &Array2<bool>,
-        lakes: &Array2<bool>,
+        height: &Array2<f32>,
+        flags: &Array2<u8>,
         biomes: &Array2<u8>,
-        discharge: &Array2<f64>,
+        discharge: &Array2<f32>,
         f: usize,
     ) -> TradeGrid {
         let (rows, cols) = height.dim();
         let sea_mask = height.mapv(|h| h < 0.0);
         // distance (on water) to the nearest shore — cabotage vs blue water
         let shore_d = ndimage::distance_transform_edt(&sea_mask);
-        let hpos = height.mapv(|h| h.max(0.0));
+        let hpos = height.mapv(|h| h.max(0.0) as f64);
         let (gy, gx) = ndimage::gradient(&hpos);
 
         let full = Array2::from_shape_fn((rows, cols), |(y, x)| {
-            let h = height[[y, x]];
+            let h = height[[y, x]] as f64;
             if h < 0.0 {
                 return if shore_d[[y, x]] <= 6.0 {
                     COAST_SEA_COST
@@ -150,7 +147,7 @@ impl TradeGrid {
                     OPEN_SEA_COST
                 };
             }
-            if lakes[[y, x]] {
+            if flags[[y, x]] & CellFlags::LAKE.bits() != 0 {
                 return LAKE_COST;
             }
             let slope = gy[[y, x]].hypot(gx[[y, x]]) * rows as f64 / 8.0;
@@ -166,8 +163,8 @@ impl TradeGrid {
                     || b == gc::SEASONAL_RAIN_FOREST
                     || b == gc::TEMPERATE_RAIN_FOREST
                     || b == gc::BOREAL_FOREST) as u8 as f64);
-            if rivers[[y, x]] {
-                if discharge[[y, x]] > NAVIGABLE {
+            if flags[[y, x]] & CellFlags::RIVER.bits() != 0 {
+                if discharge[[y, x]] as f64 > NAVIGABLE {
                     // a broad river carries barges: the cheapest road inland
                     cost = cost.min(RIVER_BARGE_COST);
                 } else {
@@ -302,9 +299,9 @@ pub fn astar(
 fn point_mode(
     x: i64,
     y: i64,
-    height: &Array2<f64>,
-    rivers: &Array2<bool>,
-    discharge: &Array2<f64>,
+    height: &Array2<f32>,
+    flags: &Array2<u8>,
+    discharge: &Array2<f32>,
 ) -> u8 {
     let (hh, ww) = height.dim();
     if x < 0 || y < 0 || x >= ww as i64 || y >= hh as i64 {
@@ -320,7 +317,7 @@ fn point_mode(
                 continue;
             }
             let (nxu, nyu) = (nx as usize, ny as usize);
-            if rivers[[nyu, nxu]] && discharge[[nyu, nxu]] > NAVIGABLE {
+            if flags[[nyu, nxu]] & CellFlags::RIVER.bits() != 0 && discharge[[nyu, nxu]] as f64 > NAVIGABLE {
                 return MODE_RIVER;
             }
         }
@@ -335,10 +332,10 @@ pub fn route_entry(
     path: &[(usize, usize)],
     f: usize,
     total_cost: f64,
-    height: &Array2<f64>,
-    rivers: &Array2<bool>,
-    discharge: &Array2<f64>,
-    flow_amp: &Array2<f64>,
+    height: &Array2<f32>,
+    flags: &Array2<u8>,
+    discharge: &Array2<f32>,
+    flow_amp: &Array2<f32>,
 ) -> Route {
     let mut pts: Vec<[i64; 2]> = path
         .iter()
@@ -360,7 +357,7 @@ pub fn route_entry(
     let n = pts.len();
     let mut modes: Vec<u8> = pts
         .iter()
-        .map(|p| point_mode(p[0], p[1], height, rivers, discharge))
+        .map(|p| point_mode(p[0], p[1], height, flags, discharge))
         .collect();
     modes[0] = MODE_LAND; // journeys begin and end at the town gate
     modes[n - 1] = MODE_LAND;
@@ -378,7 +375,7 @@ pub fn route_entry(
             && (p[0] as usize) < ww
             && (p[1] as usize) < hh
         {
-            amp_sum += flow_amp[[p[1] as usize, p[0] as usize]];
+            amp_sum += flow_amp[[p[1] as usize, p[0] as usize]] as f64;
             nriv += 1;
         }
     }
@@ -406,7 +403,7 @@ pub fn route_entry(
 }
 
 pub fn recount_connections(settlements: &mut [Settlement], routes: &[Route]) {
-    let mut conn: HashMap<i64, i64> = settlements.iter().map(|s| (s.id, 0)).collect();
+    let mut conn: HashMap<SettlementId, i64> = settlements.iter().map(|s| (s.id, 0)).collect();
     for r in routes {
         *conn.entry(r.a).or_insert(0) += 1;
         *conn.entry(r.b).or_insert(0) += 1;
@@ -419,7 +416,7 @@ pub fn recount_connections(settlements: &mut [Settlement], routes: &[Route]) {
 /// A harbour is where a settlement's trade takes to the water: coastal,
 /// with at least one route that goes under sail close to its gates.
 pub fn mark_ports(settlements: &mut [Settlement], routes: &[Route]) {
-    let mut ports: BTreeSet<i64> = BTreeSet::new();
+    let mut ports: BTreeSet<SettlementId> = BTreeSet::new();
     for r in routes {
         if r.sea < 0.05 {
             continue;
@@ -455,15 +452,15 @@ fn viable(total_cost: f64, start: (usize, usize), goal: (usize, usize)) -> bool 
 pub fn build_routes(
     grid: &TradeGrid,
     settlements: &mut [Settlement],
-    height: &Array2<f64>,
-    rivers: &Array2<bool>,
-    discharge: &Array2<f64>,
-    flow_amp: &Array2<f64>,
+    height: &Array2<f32>,
+    flags: &Array2<u8>,
+    discharge: &Array2<f32>,
+    flow_amp: &Array2<f32>,
 ) -> Vec<Route> {
     let f = grid.f;
     let rows = grid.cost.dim().0 * f;
     let far2 = ((rows as f64) / 5.0).powi(2);
-    let mut pairs: BTreeSet<(i64, i64)> = BTreeSet::new();
+    let mut pairs: BTreeSet<(SettlementId, SettlementId)> = BTreeSet::new();
     for s in settlements.iter() {
         let mut others: Vec<&Settlement> =
             settlements.iter().filter(|o| o.id != s.id).collect();
@@ -486,7 +483,7 @@ pub fn build_routes(
         }
     }
 
-    let by_id: HashMap<i64, usize> = settlements
+    let by_id: HashMap<SettlementId, usize> = settlements
         .iter()
         .enumerate()
         .map(|(i, s)| (s.id, i))
@@ -499,13 +496,13 @@ pub fn build_routes(
         let goal = (sb.y as usize / f, sb.x as usize / f);
         if let Some((path, cost)) = astar(grid, start, goal) {
             if viable(cost, start, goal) {
-                routes.push(route_entry(sa, sb, &path, f, cost, height, rivers, discharge, flow_amp));
+                routes.push(route_entry(sa, sb, &path, f, cost, height, flags, discharge, flow_amp));
             }
         }
     }
     recount_connections(settlements, &routes);
-    rescue_unconnected(settlements, &mut routes, grid, height, rivers, discharge, flow_amp);
-    bridge_components(settlements, &mut routes, grid, height, rivers, discharge, flow_amp);
+    rescue_unconnected(settlements, &mut routes, grid, height, flags, discharge, flow_amp);
+    bridge_components(settlements, &mut routes, grid, height, flags, discharge, flow_amp);
     routes
 }
 
@@ -516,10 +513,10 @@ pub fn rescue_unconnected(
     settlements: &mut [Settlement],
     routes: &mut Vec<Route>,
     grid: &TradeGrid,
-    height: &Array2<f64>,
-    rivers: &Array2<bool>,
-    discharge: &Array2<f64>,
-    flow_amp: &Array2<f64>,
+    height: &Array2<f32>,
+    flags: &Array2<u8>,
+    discharge: &Array2<f32>,
+    flow_amp: &Array2<f32>,
 ) {
     let f = grid.f;
     let lonely: Vec<usize> = settlements
@@ -547,7 +544,7 @@ pub fn rescue_unconnected(
             if let Some((path, cost)) = astar(grid, start, goal) {
                 if best.as_ref().map_or(true, |(_, c)| cost < *c) {
                     best = Some((
-                        route_entry(&s, o, &path, f, cost, height, rivers, discharge, flow_amp),
+                        route_entry(&s, o, &path, f, cost, height, flags, discharge, flow_amp),
                         cost,
                     ));
                 }
@@ -567,10 +564,10 @@ pub fn connect_settlement(
     settlements: &mut [Settlement],
     routes: &mut Vec<Route>,
     grid: &TradeGrid,
-    height: &Array2<f64>,
-    rivers: &Array2<bool>,
-    discharge: &Array2<f64>,
-    flow_amp: &Array2<f64>,
+    height: &Array2<f32>,
+    flags: &Array2<u8>,
+    discharge: &Array2<f32>,
+    flow_amp: &Array2<f32>,
 ) {
     let f = grid.f;
     let s = settlements[idx].clone();
@@ -586,14 +583,14 @@ pub fn connect_settlement(
         let goal = (o.y as usize / f, o.x as usize / f);
         if let Some((path, cost)) = astar(grid, start, goal) {
             if viable(cost, start, goal) {
-                new_routes.push(route_entry(&s, o, &path, f, cost, height, rivers, discharge, flow_amp));
+                new_routes.push(route_entry(&s, o, &path, f, cost, height, flags, discharge, flow_amp));
             }
         }
     }
     routes.extend(new_routes);
     recount_connections(settlements, routes);
-    rescue_unconnected(settlements, routes, grid, height, rivers, discharge, flow_amp);
-    bridge_components(settlements, routes, grid, height, rivers, discharge, flow_amp);
+    rescue_unconnected(settlements, routes, grid, height, flags, discharge, flow_amp);
+    bridge_components(settlements, routes, grid, height, flags, discharge, flow_amp);
     mark_ports(settlements, routes);
 }
 
@@ -608,17 +605,17 @@ pub fn bridge_components(
     settlements: &mut [Settlement],
     routes: &mut Vec<Route>,
     grid: &TradeGrid,
-    height: &Array2<f64>,
-    rivers: &Array2<bool>,
-    discharge: &Array2<f64>,
-    flow_amp: &Array2<f64>,
+    height: &Array2<f32>,
+    flags: &Array2<u8>,
+    discharge: &Array2<f32>,
+    flow_amp: &Array2<f32>,
 ) {
     let n = settlements.len();
     if n < 2 {
         return;
     }
     let f = grid.f;
-    let idx_of: HashMap<i64, usize> = settlements
+    let idx_of: HashMap<SettlementId, usize> = settlements
         .iter()
         .enumerate()
         .map(|(i, s)| (s.id, i))
@@ -697,7 +694,7 @@ pub fn bridge_components(
             if let Some((path, cost)) = astar(grid, start, goal) {
                 if best.as_ref().map_or(true, |(_, c)| cost < *c) {
                     best = Some((
-                        route_entry(s, o, &path, f, cost, height, rivers, discharge, flow_amp),
+                        route_entry(s, o, &path, f, cost, height, flags, discharge, flow_amp),
                         cost,
                     ));
                 }

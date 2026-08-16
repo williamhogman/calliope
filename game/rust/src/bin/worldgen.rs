@@ -1,5 +1,6 @@
 //! Native harness: generate a world, print stats, run years of simulation.
 
+use calliope::world::EventKind;
 use calliope::world::World;
 
 fn main() {
@@ -12,15 +13,15 @@ fn main() {
 
     let total = w.height.len() as f64;
     let land = w.height.iter().filter(|&&h| h >= 0.0).count() as f64;
-    let rivers = w.rivers.iter().filter(|&&r| r).count();
-    let lakes = w.lakes.iter().filter(|&&l| l).count();
+    let rivers = w.flags.iter().filter(|&&f| f & calliope::world::CellFlags::RIVER.bits() != 0).count();
+    let lakes = w.flags.iter().filter(|&&f| f & calliope::world::CellFlags::LAKE.bits() != 0).count();
 
     println!("world '{}' seed={} size={}x{}", w.world_name, seed, w.width, size);
     println!("land: {:.1}%  rivers: {} cells  lakes: {} cells", 100.0 * land / total, rivers, lakes);
     // biome shares of land — the balance check for deserts and mountains
     let mut bc: std::collections::BTreeMap<&str, usize> = Default::default();
     for &b in w.biomes.iter() {
-        *bc.entry(calliope::constants::PRETTY_BIOMES[b as usize]).or_default() += 1;
+        *bc.entry(calliope::constants::Biome::from_code(b).name()).or_default() += 1;
     }
     let shares: Vec<String> = bc
         .iter()
@@ -96,11 +97,17 @@ fn main() {
             s.name, s.tier, s.pop, s.food, s.goods
         );
     }
-    let meta = w.meta();
-    println!("timings: {}", meta["timings"]);
+    println!("timings: {}", w.timings_json());
 
     let packed = w.pack();
     println!("packed payload: {} bytes", packed.len());
+    let boot = w.bootstrap_json();
+    println!(
+        "bootstrap json: {} bytes ({} settlements, {} deposits)",
+        boot.len(),
+        w.settlements.len(),
+        w.deposits.len()
+    );
 
     if months > 0 {
         let mut all_events = 0usize;
@@ -111,11 +118,11 @@ fn main() {
             let step = chunks.min(240);
             let (evs, _founded, _dep) = w.tick(step);
             all_events += evs.len();
-            discoveries += evs.iter().filter(|e| e.k == "discovery").count();
-            depletions += evs.iter().filter(|e| e.k == "depletion").count();
+            discoveries += evs.iter().filter(|e| e.k == EventKind::Discovery).count();
+            depletions += evs.iter().filter(|e| e.k == EventKind::Depletion).count();
             for e in &evs {
-                if e.k == "discovery"
-                    || e.k == "depletion"
+                if e.k == EventKind::Discovery
+                    || e.k == EventKind::Depletion
                     || e.text.contains("mining camp")
                 {
                     println!("  [m{}] ({}) {}", e.m, e.k, e.text);
@@ -151,7 +158,7 @@ fn main() {
                 soc.knowledge
             );
             if !soc.techs.is_empty() {
-                println!("    arts: {}", soc.techs.join(", "));
+                println!("    arts: {}", soc.techs.iter().map(|t| t.to_string()).collect::<Vec<_>>().join(", "));
             }
         }
         if let serde_json::Value::Array(rows) = w.market.snapshot() {

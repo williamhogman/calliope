@@ -50,7 +50,7 @@ MADR-lite. See [`template.md`](template.md). Sections:
 | [0004](0004-square-grid-4km-cells.md) | Square grid at 4 km/cell, not a graph world | Accepted (backfilled) |
 | [0005](0005-layered-generation-then-tick.md) | Layered one-shot generation, then monthly ticks | Accepted (backfilled) |
 | [0006](0006-wgpu-fullscreen-shader-renderer.md) | wgpu fullscreen-shader renderer ("Orbital") | Accepted (backfilled) |
-| [0007](0007-binary-pack-protocol.md) | Binary pack protocol with version-locked loader | Accepted (backfilled) |
+| [0007](0007-binary-pack-protocol.md) | Binary pack protocol with version-locked loader | Superseded by 0016 |
 | [0008](0008-vendored-solidjs-no-build.md) | Vendored Solid.js UI without a build step | Accepted (backfilled) |
 | [0009](0009-diagnostics-harness-as-gate.md) | Native diagnostics harness as the tuning gate | Accepted (backfilled) |
 | [0010](0010-terrain-priced-trade.md) | Terrain-priced trade with sea/land asymmetry | Accepted (backfilled) |
@@ -58,3 +58,5 @@ MADR-lite. See [`template.md`](template.md). Sections:
 | [0012](0012-relative-scarcity-pricing.md) | Relative-scarcity market pricing | Accepted (backfilled) |
 | [0013](0013-resource-floor-guarantees.md) | Resource floor guarantees | Accepted (backfilled) |
 | [0014](0014-ocean-frame-falloff.md) | Ocean-frame falloff: no clipped landmasses | Accepted (backfilled) |
+| [0015](0015-registry-codegen-architecture.md) | Registries and codegen as the single declaration point | Accepted |
+| [0016](0016-pack-v2-quantized-crc-payload.md) | Pack v2: quantized, checksummed, header/meta split | Accepted |

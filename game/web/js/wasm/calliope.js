@@ -92,18 +92,22 @@ export class Orbital {
     }
     /**
      * Upload the world fields as textures. Coast distance is computed here.
+     * Upload the world grids. Parameter order is the field registry's
+     * pack order filtered to `gpu: true` (E2.2) — the JS caller derives
+     * its argument list from the generated `FIELDS` table, so this
+     * signature and the registry cannot drift apart.
      * @param {number} w
      * @param {number} h
      * @param {Float32Array} height
      * @param {Float32Array} tmean
      * @param {Float32Array} tamp
      * @param {Float32Array} precip
-     * @param {Float32Array} fertility
      * @param {Float32Array} discharge
-     * @param {Uint8Array} flags
+     * @param {Float32Array} fertility
      * @param {Uint8Array} strahler
+     * @param {Uint8Array} flags
      */
-    set_world(w, h, height, tmean, tamp, precip, fertility, discharge, flags, strahler) {
+    set_world(w, h, height, tmean, tamp, precip, discharge, fertility, strahler, flags) {
         const ptr0 = passArrayF32ToWasm0(height, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passArrayF32ToWasm0(tmean, wasm.__wbindgen_malloc);
@@ -112,13 +116,13 @@ export class Orbital {
         const len2 = WASM_VECTOR_LEN;
         const ptr3 = passArrayF32ToWasm0(precip, wasm.__wbindgen_malloc);
         const len3 = WASM_VECTOR_LEN;
-        const ptr4 = passArrayF32ToWasm0(fertility, wasm.__wbindgen_malloc);
+        const ptr4 = passArrayF32ToWasm0(discharge, wasm.__wbindgen_malloc);
         const len4 = WASM_VECTOR_LEN;
-        const ptr5 = passArrayF32ToWasm0(discharge, wasm.__wbindgen_malloc);
+        const ptr5 = passArrayF32ToWasm0(fertility, wasm.__wbindgen_malloc);
         const len5 = WASM_VECTOR_LEN;
-        const ptr6 = passArray8ToWasm0(flags, wasm.__wbindgen_malloc);
+        const ptr6 = passArray8ToWasm0(strahler, wasm.__wbindgen_malloc);
         const len6 = WASM_VECTOR_LEN;
-        const ptr7 = passArray8ToWasm0(strahler, wasm.__wbindgen_malloc);
+        const ptr7 = passArray8ToWasm0(flags, wasm.__wbindgen_malloc);
         const len7 = WASM_VECTOR_LEN;
         wasm.orbital_set_world(this.__wbg_ptr, w, h, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6, ptr7, len7);
     }
@@ -145,6 +149,23 @@ export class WasmWorld {
         let deferred1_1;
         try {
             const ret = wasm.wasmworld_artifacts(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Once-per-world bootstrap JSON (E3.1): vocabulary tables and entity
+     * state — the pack header stays lean.
+     * @returns {string}
+     */
+    bootstrap() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmworld_bootstrap(this.__wbg_ptr);
             deferred1_0 = ret[0];
             deferred1_1 = ret[1];
             return getStringFromWasm0(ret[0], ret[1]);
@@ -248,7 +269,8 @@ export class WasmWorld {
         return this;
     }
     /**
-     * Binary world payload: [u32 header_len][header json][raw arrays].
+     * Binary world payload, pack v2: [u32 header_len][header json][blob]
+     * — crc-stamped, quantized u16 float grids, territory as header RLE.
      * @returns {Uint8Array}
      */
     pack() {
@@ -284,6 +306,23 @@ export class WasmWorld {
         let deferred1_1;
         try {
             const ret = wasm.wasmworld_tick(this.__wbg_ptr, months);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Generation stage timings as JSON pairs — debug side channel (E3.9);
+     * wall-clock never rides the pack itself.
+     * @returns {string}
+     */
+    timings() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmworld_timings(this.__wbg_ptr);
             deferred1_0 = ret[0];
             deferred1_1 = ret[1];
             return getStringFromWasm0(ret[0], ret[1]);
@@ -2043,13 +2082,13 @@ function __wbg_get_imports() {
             arg0.writeTexture(arg1, arg2, arg3, arg4);
         }, arguments); },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1696, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1699, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__hcd906056e493c802);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 49, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h96b666bf41a67151);
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 54, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h1be139f70db77d8e);
             return ret;
         },
         __wbindgen_cast_0000000000000003: function(arg0) {
@@ -2113,8 +2152,8 @@ function __wbg_get_imports() {
     };
 }
 
-function wasm_bindgen__convert__closures_____invoke__h96b666bf41a67151(arg0, arg1, arg2) {
-    wasm.wasm_bindgen__convert__closures_____invoke__h96b666bf41a67151(arg0, arg1, arg2);
+function wasm_bindgen__convert__closures_____invoke__h1be139f70db77d8e(arg0, arg1, arg2) {
+    wasm.wasm_bindgen__convert__closures_____invoke__h1be139f70db77d8e(arg0, arg1, arg2);
 }
 
 function wasm_bindgen__convert__closures_____invoke__hcd906056e493c802(arg0, arg1, arg2) {

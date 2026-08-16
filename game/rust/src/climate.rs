@@ -167,3 +167,15 @@ pub fn precipitation(
     p.mapv_inplace(|v| (v * k).clamp(0.0, 4500.0));
     (p, pamp)
 }
+
+// ---------------------------------------------------------------- bands
+
+use crate::util::Band;
+
+/// Diagnostics bands (E2.7): temperature, rain and the seasons.
+pub const BANDS: &[Band] = &[
+    Band { name: "land mean temperature", sweet: (5.0, 20.0), hard: (-2.0, 28.0), target: "sweet 5–20°C · hard -2–28°C" },
+    Band { name: "land mean precipitation", sweet: (500.0, 1500.0), hard: (250.0, 2400.0), target: "sweet 500–1500 · hard 250–2400" },
+    Band { name: "mean seasonal swing", sweet: (4.0, 14.0), hard: (2.0, 20.0), target: "sweet 4–14°C · hard 2–20°C" },
+    Band { name: "tropical monsoon amplitude", sweet: (0.12, 0.55), hard: (0.05, 0.85), target: "sweet .12–.55 · hard .05–.85" },
+];

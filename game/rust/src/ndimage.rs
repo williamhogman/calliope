@@ -147,28 +147,36 @@ pub fn binary_dilation(m: &Array2<bool>, iterations: usize) -> Array2<bool> {
     cur
 }
 
-/// Separable maximum filter, mode='reflect' (scipy default).
-pub fn maximum_filter(a: &Array2<f64>, size: usize) -> Array2<f64> {
+/// Separable maximum filter, mode='reflect' (scipy default). Generic over
+/// the element type (E3.2): serves both the f64 generation grids and the
+/// f32 world grids.
+pub fn maximum_filter<T: Copy + PartialOrd>(a: &Array2<T>, size: usize) -> Array2<T> {
     let r = (size / 2) as isize;
     let (h, w) = a.dim();
-    let mut tmp = Array2::<f64>::zeros((h, w));
+    let mut tmp = a.clone();
     for y in 0..h {
         for x in 0..w {
-            let mut m = f64::NEG_INFINITY;
-            for d in -r..=r {
+            let mut m = a[[y, reflect(x as isize - r, w as isize)]];
+            for d in (1 - r)..=r {
                 let xx = reflect(x as isize + d, w as isize);
-                m = m.max(a[[y, xx]]);
+                let v = a[[y, xx]];
+                if v > m {
+                    m = v;
+                }
             }
             tmp[[y, x]] = m;
         }
     }
-    let mut out = Array2::<f64>::zeros((h, w));
+    let mut out = a.clone();
     for y in 0..h {
         for x in 0..w {
-            let mut m = f64::NEG_INFINITY;
-            for d in -r..=r {
+            let mut m = tmp[[reflect(y as isize - r, h as isize), x]];
+            for d in (1 - r)..=r {
                 let yy = reflect(y as isize + d, h as isize);
-                m = m.max(tmp[[yy, x]]);
+                let v = tmp[[yy, x]];
+                if v > m {
+                    m = v;
+                }
             }
             out[[y, x]] = m;
         }
@@ -291,15 +299,20 @@ pub fn interior_anchor(l: &Labeled, idx: usize) -> (usize, usize) {
     (y0 + by - 1, x0 + bx - 1)
 }
 
-/// Peak of `field` inside a component (row-major first maximum).
-pub fn peak_anchor(l: &Labeled, idx: usize, field: &Array2<f64>) -> (usize, usize) {
+/// Peak of `field` inside a component (row-major first maximum). Generic
+/// over the element type (E3.2).
+pub fn peak_anchor<T: Copy + PartialOrd>(
+    l: &Labeled,
+    idx: usize,
+    field: &Array2<T>,
+) -> (usize, usize) {
     let (y0, y1, x0, x1) = l.bbox[idx - 1];
-    let mut best = f64::NEG_INFINITY;
+    let mut best: Option<T> = None;
     let (mut by, mut bx) = (y0, x0);
     for y in y0..y1 {
         for x in x0..x1 {
-            if l.lab[[y, x]] == idx as i32 && field[[y, x]] > best {
-                best = field[[y, x]];
+            if l.lab[[y, x]] == idx as i32 && best.map_or(true, |b| field[[y, x]] > b) {
+                best = Some(field[[y, x]]);
                 by = y;
                 bx = x;
             }

@@ -718,6 +718,10 @@ impl Orbital {
 
     /// Upload the world fields as textures. Coast distance is computed here.
     #[allow(clippy::too_many_arguments)]
+    /// Upload the world grids. Parameter order is the field registry's
+    /// pack order filtered to `gpu: true` (E2.2) — the JS caller derives
+    /// its argument list from the generated `FIELDS` table, so this
+    /// signature and the registry cannot drift apart.
     pub fn set_world(
         &mut self,
         w: u32,
@@ -726,10 +730,10 @@ impl Orbital {
         tmean: &[f32],
         tamp: &[f32],
         precip: &[f32],
-        fertility: &[f32],
         discharge: &[f32],
-        flags: &[u8],
+        fertility: &[f32],
         strahler: &[u8],
+        flags: &[u8],
     ) {
         let n = (w * h) as usize;
         self.world_w = w;

@@ -8,6 +8,21 @@ use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 use serde_json::{json, Value};
 
+use strum::IntoEnumIterator;
+
+bitflags::bitflags! {
+    /// Per-cell water flags (E1.7) — one byte per cell, stored directly in
+    /// `World.flags` and shipped verbatim in the pack (bit layout is the
+    /// wire contract the JS client already reads).
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct CellFlags: u8 {
+        const RIVER    = 1 << 0;
+        const LAKE     = 1 << 1;
+        const SALT     = 1 << 2;
+        const SEASONAL = 1 << 3;
+    }
+}
+
 use crate::agriculture;
 use crate::artifact;
 use crate::biomes as biomes_mod;
@@ -16,10 +31,12 @@ use crate::climate;
 use crate::constants;
 use crate::culture::{self, Culture};
 use crate::economy::{self, Market};
+use crate::entity::EntityKind;
 use crate::entity::Registry;
 use crate::erosion;
 use crate::geo;
 use crate::hydrology;
+use crate::ids::{CultureId, EntityId, SettlementId};
 use crate::naming::{self, Feature};
 use crate::noisegen::Perlin3;
 use crate::patina::{self, Ruin};
@@ -31,15 +48,107 @@ use crate::telling;
 use crate::trade::{self, Route};
 use crate::util::{now_ms, round2, round3};
 
+/// Closed vocabulary of chronicle event kinds (E1.4). Displayed and
+/// serialized as the same lowercase names the strings used, so the wire
+/// format and the determinism hash are unchanged.
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Debug,
+    serde_repr::Serialize_repr,
+    strum::Display,
+    strum::EnumString,
+    strum::IntoStaticStr,
+    strum::EnumCount,
+    strum::EnumIter,
+)]
+#[strum(serialize_all = "lowercase")]
+#[repr(u8)]
+pub enum EventKind {
+    Depletion,
+    Disaster,
+    Discovery,
+    Economy,
+    Famine,
+    Festival,
+    Found,
+    Growth,
+    Myth,
+    Nature,
+    Omen,
+    Realm,
+    Ruler,
+    Society,
+    Tech,
+    Trade,
+    War,
+    Wonder,
+}
+
+impl EventKind {
+    pub fn name(self) -> &'static str {
+        self.into()
+    }
+}
+
+/// E2.3 — the event table: every kind's notification family, telling
+/// weight (M6.5) and fortune lean (M6.7) declared in one row. `telling.rs`
+/// and the generated JS constants (E2.4) both read this table. The
+/// chronicle's prose intentionally stays at the emission sites in
+/// `chronicle.rs` — each line is composed from live context (names, goods,
+/// tallies) that no static template column could carry.
+macro_rules! event_table {
+    ($($kind:ident => family $fam:ident, weight $w:literal, fortune $f:literal;)+) => {
+        impl EventKind {
+            /// Filter/notification family: realm · war · economy · myth · nature.
+            pub fn family(self) -> &'static str {
+                match self { $(EventKind::$kind => stringify!($fam),)+ }
+            }
+            /// How loudly this kind rings down the years (M6.5).
+            pub fn weight(self) -> i32 {
+                match self { $(EventKind::$kind => $w,)+ }
+            }
+            /// Which way fortune leans for the subject: +1 rising, −1
+            /// falling, 0 flat — the reversal detector counts sign changes.
+            pub fn fortune(self) -> i32 {
+                match self { $(EventKind::$kind => $f,)+ }
+            }
+        }
+    };
+}
+
+event_table! {
+    Depletion => family economy, weight 2, fortune -1;
+    Disaster  => family nature,  weight 4, fortune -1;
+    Discovery => family economy, weight 2, fortune 1;
+    Economy   => family economy, weight 1, fortune 0;
+    Famine    => family nature,  weight 3, fortune -1;
+    Festival  => family myth,    weight 1, fortune 1;
+    Found     => family realm,   weight 2, fortune 1;
+    Growth    => family realm,   weight 1, fortune 1;
+    Myth      => family myth,    weight 1, fortune 0;
+    Nature    => family nature,  weight 1, fortune 0;
+    Omen      => family myth,    weight 1, fortune 0;
+    Realm     => family realm,   weight 3, fortune 0;
+    Ruler     => family realm,   weight 2, fortune 0;
+    Society   => family realm,   weight 1, fortune 0;
+    Tech      => family realm,   weight 2, fortune 1;
+    Trade     => family economy, weight 1, fortune 0;
+    War       => family war,     weight 3, fortune -1;
+    Wonder    => family realm,   weight 2, fortune 1;
+}
+
 #[derive(Serialize, Clone)]
 pub struct Event {
     pub m: i64,
     pub s: String,
-    pub k: String,
+    pub k: EventKind,
     pub text: String,
     /// Entities this event speaks of (M6.1); the first id is the subject.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub ids: Vec<i64>,
+    pub ids: Vec<EntityId>,
     /// Map anchor for fly-to, in grid cells; -1 = nowhere in particular.
     #[serde(skip_serializing_if = "neg")]
     pub x: i64,
@@ -57,12 +166,87 @@ fn neg(v: &i64) -> bool {
     *v < 0
 }
 
+/// E4.8 — kinds worth a toast, picked engine-side; the client applies its
+/// own notification-family preferences on top.
+pub fn headline_worthy(k: EventKind) -> bool {
+    matches!(
+        k,
+        EventKind::War
+            | EventKind::Found
+            | EventKind::Ruler
+            | EventKind::Wonder
+            | EventKind::Disaster
+            | EventKind::Discovery
+            | EventKind::Depletion
+            | EventKind::Society
+            | EventKind::Tech
+            | EventKind::Myth
+    )
+}
+
+/// E4.5 — one seat for "this wire section must reship on the next tick".
+/// Systems mark bits as they change state; `tick_json` takes them.
+#[derive(Default, Clone, Copy)]
+pub struct Dirty(u8);
+
+impl Dirty {
+    pub const ROUTES: u8 = 1 << 0;
+    pub const FEATURES: u8 = 1 << 1;
+    pub const RUINS: u8 = 1 << 2;
+    pub const TERRITORY: u8 = 1 << 3;
+    pub const DEPOSITS: u8 = 1 << 4;
+
+    pub fn mark(&mut self, bits: u8) {
+        self.0 |= bits;
+    }
+    /// Read-and-clear: true when any of `bits` was set.
+    pub fn take(&mut self, bits: u8) -> bool {
+        let hit = self.0 & bits != 0;
+        self.0 &= !bits;
+        hit
+    }
+    pub fn clear(&mut self, bits: u8) {
+        self.0 &= !bits;
+    }
+}
+
+/// E4.2/E4.3 — FNV hashes of the last-shipped JSON per wire surface; a
+/// section crosses the boundary only when its bytes moved. Seeded by
+/// `prime_sent()` to the freshly generated world, which is exactly what
+/// `bootstrap()` ships.
+#[derive(Default)]
+struct SentCache {
+    /// (settlement id, cold-form hash, heartbeat quanta), engine order.
+    /// The cold form zeroes the monthly heartbeat (pop/food/k/wealth); the
+    /// quanta are the heartbeat at wire precision (pop · food×10 · k ·
+    /// wealth×10), so a town ships a per-field patch only when a value the
+    /// client can actually see has moved (E4.2).
+    settlements: Vec<(i64, u64, [i64; 4])>,
+    /// cultures · wars · merchants (full-form hashes).
+    blocks: [u64; 3],
+    /// Cold-form hash of the cultures block (heartbeat stripped).
+    cultures_cold: u64,
+    /// Per-good market row hashes — the ledger reships whole only when
+    /// the set of priced goods changes (E4.3).
+    market_rows: Vec<(String, u64)>,
+    /// Per-hub delta state for the market-areas block, keyed by hub id
+    /// (E4.3): cold hash (id·name·n) and price bits per good.
+    areas_hubs: Vec<(i64, u64, Vec<(String, u64)>)>,
+    /// Hash of the area assignment vector — when this moves, the hub set
+    /// itself changed and the whole block reships.
+    areas_of: u64,
+    /// Hash of the price-spread rows.
+    areas_spread: u64,
+}
+
 impl Default for Event {
     fn default() -> Self {
         Event {
             m: 0,
             s: String::new(),
-            k: String::new(),
+            // never observed: every construction site sets `k` explicitly
+            // (audited — 26 `..Default::default()` sites, all override it)
+            k: EventKind::Growth,
             text: String::new(),
             ids: Vec::new(),
             x: -1,
@@ -79,34 +263,33 @@ pub struct World {
     pub width: usize, // grid columns after ocean margins are added
     pub month: i64,
 
-    pub height: Array2<f64>,
-    pub tmean: Array2<f64>,
-    pub tamp: Array2<f64>,
-    pub precip: Array2<f64>,
-    pub discharge: Array2<f64>,
-    pub fertility: Array2<f64>,
+    // E3.2 — the eight float grids live as f32 at rest: generation math
+    // runs in f64 (geo → climate → hydrology → biomes → agriculture), the
+    // result is stored once as f32, and every human-stage consumer
+    // (naming, resources, settlements, trade, economy) reads f32. Halves
+    // grid memory and makes pack() a straight memcpy per field.
+    pub height: Array2<f32>,
+    pub tmean: Array2<f32>,
+    pub tamp: Array2<f32>,
+    pub precip: Array2<f32>,
+    pub discharge: Array2<f32>,
+    pub fertility: Array2<f32>,
     pub biomes: Array2<u8>,
     /// Crop package per cell (M2.1): 0 wild · 1 wheat · 2 rice · 3 maize · 4 pastoral.
     pub crops: Array2<u8>,
-    pub rivers: Array2<bool>,
-    pub lakes: Array2<bool>,
+    /// Per-cell `CellFlags` bits: river / lake / salt / seasonal.
+    pub flags: Array2<u8>,
     /// Signed monsoon share of the year's rain (positive peaks month 0).
-    pub pamp: Array2<f64>,
+    pub pamp: Array2<f32>,
     /// Signed seasonal discharge swing per cell, -1..1.
-    pub flow_amp: Array2<f64>,
+    pub flow_amp: Array2<f32>,
     /// Strahler stream order, 0 off-river.
     pub strahler: Array2<u8>,
-    /// Endorheic salt lakes.
-    pub salt: Array2<bool>,
-    /// Rivers that run dry half the year.
-    pub seasonal: Array2<bool>,
 
     pub deposits: Vec<Deposit>,
     pub settlements: Vec<Settlement>,
     pub cultures: Vec<Culture>,
     pub features: Vec<Feature>,
-    /// Set when mid-run naming alters features; tick_json ships and clears it.
-    features_dirty: bool,
     pub routes: Vec<Route>,
     pub events: Vec<Event>,
     pub world_name: String,
@@ -121,11 +304,6 @@ pub struct World {
     pub route_flow: Vec<f64>,
     /// M9.1 — where towns died: named remains on the map.
     pub ruins: Vec<Ruin>,
-    /// Set when a town falls to ruin mid-run; tick_json ships and clears.
-    ruins_dirty: bool,
-    /// Set when the route web changes outside a founding (M9.1 removals,
-    /// M9.4 roads falling disused); tick_json reships routes.
-    routes_dirty: bool,
     /// Years each route has gone without realized flow (M9.4).
     route_idle: Vec<u16>,
     /// M6.1 — the chronicle's cast: every named thing, one stable id.
@@ -143,7 +321,10 @@ pub struct World {
     pub politics: Politics,
     /// Influence-map territory: owner culture per cell, −1 wilderness (M4.1).
     pub territory: Array2<i16>,
-    territory_dirty: bool,
+    /// E4.5 — which wire sections must reship on the next tick.
+    dirty: Dirty,
+    /// E4.2/E4.3 — hashes of the last-shipped JSON per wire surface.
+    sent: SentCache,
     /// Deterministic drought field over (space × year) — the famine die (M2.6).
     drought: Perlin3,
     /// Last year grain was shock-priced by famine, to spike at most once a year.
@@ -154,7 +335,7 @@ pub struct World {
     coast: Array2<bool>,
     max_settlements: usize,
     trade: trade::TradeGrid,
-    timings: Vec<(&'static str, f64)>,
+    pub timings: Vec<(&'static str, f64)>,
 }
 
 impl World {
@@ -213,13 +394,26 @@ impl World {
         );
         timings.push(("fertility", now_ms() - t4));
 
+        // E3.2 — the physical stages are done; the world's float grids
+        // drop to their resting f32 width here, and every human stage
+        // below (naming, resources, settlements, trade, economy) reads
+        // the same f32 the ticks will read.
+        let height = height.mapv(|x| x as f32);
+        let tmean = tmean.mapv(|x| x as f32);
+        let tamp = tamp.mapv(|x| x as f32);
+        let precip = precip.mapv(|x| x as f32);
+        let pamp = pamp.mapv(|x| x as f32);
+        let discharge = hydro.discharge.mapv(|x| x as f32);
+        let flow_amp = hydro.flow_amp.mapv(|x| x as f32);
+        let fertility = fertility.mapv(|x| x as f32);
+
         let t5 = now_ms();
         let (mut features, world_name) = naming::name_features(
             &height,
             &biome_map,
             &hydro.rivers,
             &hydro.lakes,
-            &hydro.discharge,
+            &discharge,
             &tmean,
             &precip,
             seed,
@@ -240,7 +434,7 @@ impl World {
             &tmean,
             &hydro.rivers,
             &hydro.lakes,
-            &hydro.discharge,
+            &discharge,
             &deposits,
             &fertility,
             &mut rng9000,
@@ -283,21 +477,42 @@ impl World {
         let cultures = culture::assign_cultures(&biome_map, &mut setts, &mut taken, seed);
         trade::assign_goods(&mut setts, &deposits, &fertility);
 
+        // E1.7 — fold the four hydrology masks into one CellFlags byte grid;
+        // this is the exact byte the pack ships, so pack() is now a memcpy.
+        let flags = {
+            let mut f = Array2::<u8>::zeros(hydro.rivers.dim());
+            for (o, (((&r, &l), &s), &sw)) in f.iter_mut().zip(
+                hydro
+                    .rivers
+                    .iter()
+                    .zip(hydro.lakes.iter())
+                    .zip(hydro.salt.iter())
+                    .zip(hydro.seasonal.iter()),
+            ) {
+                let mut c = CellFlags::empty();
+                c.set(CellFlags::RIVER, r);
+                c.set(CellFlags::LAKE, l);
+                c.set(CellFlags::SALT, s);
+                c.set(CellFlags::SEASONAL, sw);
+                *o = c.bits();
+            }
+            f
+        };
+
         let trade_grid = trade::TradeGrid::build(
             &height,
-            &hydro.rivers,
-            &hydro.lakes,
+            &flags,
             &biome_map,
-            &hydro.discharge,
+            &discharge,
             (size / 128).max(1),
         );
         let routes = trade::build_routes(
             &trade_grid,
             &mut setts,
             &height,
-            &hydro.rivers,
-            &hydro.discharge,
-            &hydro.flow_amp,
+            &flags,
+            &discharge,
+            &flow_amp,
         );
         trade::mark_ports(&mut setts, &routes);
         // The roads themselves name the land: passes where they climb,
@@ -309,7 +524,7 @@ impl World {
             &routes,
             &height,
             &hydro.rivers,
-            &hydro.discharge,
+            &discharge,
         );
         // M3.1/M3.4 — the peoples lay their tongues over the nearby land;
         // border features gain an exonym from the second-closest people.
@@ -318,7 +533,8 @@ impl World {
         let mut market = Market::default();
         economy::update_prices(&mut market, &setts);
         // the first carve of the market areas (M5.2)
-        let mut areas = economy::build_areas(&setts, &routes, None);
+        let sidx0 = economy::sidx(&setts);
+        let mut areas = economy::build_areas(&setts, &routes, None, &sidx0);
         economy::update_area_prices(&mut areas, &setts, &market);
         timings.push(("settlements", now_ms() - t7));
 
@@ -328,24 +544,27 @@ impl World {
         // each get one stable id for their whole life (M6.1). The world
         // itself is entity zero, so even the creation myth has a subject.
         let mut registry = Registry::default();
-        registry.add("world", &world_name, 0, None, -1, -1);
+        registry.add(EntityKind::World, &world_name, 0, None, -1, -1);
         for c in &cultures {
-            registry.add("culture", &c.people, 0, Some(c.id), -1, -1);
+            registry.add(EntityKind::Culture, &c.people, 0, Some(c.id), -1, -1);
         }
-        let sett_ents: Vec<i64> = setts
+        let sett_ents: Vec<EntityId> = setts
             .iter()
-            .map(|s| registry.add("settlement", &s.name, 0, Some(s.culture), s.x, s.y))
+            .map(|s| registry.add(EntityKind::Settlement, &s.name, 0, Some(s.culture), s.x, s.y))
             .collect();
         for f in &features {
-            registry.add("feature", &f.name, 0, None, f.x, f.y);
+            registry.add(EntityKind::Feature, &f.name, 0, None, f.x, f.y);
         }
         // The goods trade under their own names: market shocks, gluts and
         // strikes all speak of them, so they join the cast too (M6.1).
-        for g in resources::ALL_PLACEABLE
-            .iter()
-            .chain(["grain", "tools", "weapons", "jewelry"].iter())
-        {
-            registry.add("good", g, 0, None, -1, -1);
+        // Legacy creation order: placeables first, then the produced goods.
+        for g in resources::ALL_PLACEABLE.iter().copied().chain([
+            resources::Good::Grain,
+            resources::Good::Tools,
+            resources::Good::Weapons,
+            resources::Good::Jewelry,
+        ]) {
+            registry.add(EntityKind::Good, g.name(), 0, None, -1, -1);
         }
 
         let mut chron = ChronicleState::default();
@@ -355,7 +574,7 @@ impl World {
             chronicle::founding_myths(&mut rng, &cultures, &features, &world_name);
         for (si, s) in setts.iter().enumerate() {
             let people = if !cultures.is_empty() {
-                cultures[s.culture].people.clone()
+                cultures[s.culture.idx()].people.clone()
             } else {
                 "first peoples".to_string()
             };
@@ -369,7 +588,7 @@ impl World {
             events.push(Event {
                 m: 0,
                 s: s.name.clone(),
-                k: "found".to_string(),
+                k: EventKind::Found,
                 text: format!("{} founded by the {}{}", s.name, people, suffix),
                 ids: vec![sett_ents[si]],
                 x: s.x,
@@ -389,22 +608,19 @@ impl World {
             tmean,
             tamp,
             precip,
-            discharge: hydro.discharge,
+            discharge,
             fertility,
             biomes: biome_map,
             crops,
-            rivers: hydro.rivers,
-            lakes: hydro.lakes,
+            flags,
             pamp,
-            flow_amp: hydro.flow_amp,
+            flow_amp,
             strahler: hydro.strahler,
-            salt: hydro.salt,
-            seasonal: hydro.seasonal,
             deposits,
             settlements: setts,
             cultures,
             features,
-            features_dirty: false,
+            
             routes,
             events,
             world_name,
@@ -414,8 +630,6 @@ impl World {
             merchants: Vec::new(),
             route_flow: Vec::new(),
             ruins: Vec::new(),
-            ruins_dirty: false,
-            routes_dirty: false,
             route_idle: Vec::new(),
             registry,
             artifacts: Vec::new(),
@@ -425,7 +639,8 @@ impl World {
             chron,
             politics: Politics::init(n_cultures),
             territory: Array2::from_elem((1, 1), -1),
-            territory_dirty: false,
+            dirty: Dirty::default(),
+            sent: SentCache::default(),
             drought: Perlin3::new(seed + 4444),
             grain_shock_year: -1,
             site_score: founded.site_score,
@@ -445,7 +660,9 @@ impl World {
         world.events = dawn;
         // The first political map: who holds what, before any drum beats.
         world.recompute_territory();
-        world.territory_dirty = false; // ships with the pack, not the first tick
+        world.dirty.clear(Dirty::TERRITORY); // ships with the pack, not the first tick
+        // Seed the delta baseline (E4.2/E4.3) to what bootstrap() ships.
+        world.prime_sent();
         world
     }
 
@@ -458,7 +675,7 @@ impl World {
             &self.politics.asab,
             self.cultures.len(),
         );
-        self.territory_dirty = true;
+        self.dirty.mark(Dirty::TERRITORY);
     }
 
     /// Grow the map horizontally: every grid gains `pad` ocean columns on both
@@ -471,11 +688,15 @@ impl World {
         let (h, w) = self.height.dim();
         let p = pad as isize;
 
-        fn grow_f64(
-            a: &Array2<f64>,
+        /// Widen any copyable grid: interior cells shift east by `pad`,
+        /// margin cells get `margin(edge_value, t)` with t rising 0→1
+        /// toward the map border. Serves both f32 world grids and the
+        /// f64 tick caches.
+        fn grow<T: Copy>(
+            a: &Array2<T>,
             pad: usize,
-            margin: impl Fn(f64, f64) -> f64,
-        ) -> Array2<f64> {
+            margin: impl Fn(T, f64) -> T,
+        ) -> Array2<T> {
             let (h, w) = a.dim();
             let p = pad as isize;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
@@ -502,19 +723,19 @@ impl World {
         }
 
         // Bathymetry: slide from the coastal edge down toward open deep sea.
-        self.height = grow_f64(&self.height, pad, |e, t| {
+        self.height = grow(&self.height, pad, |e, t| {
             let shelf = e.min(-0.03);
-            let deep = (-0.62_f64).min(e);
-            shelf + (deep - shelf) * t
+            let deep = (-0.62_f32).min(e);
+            shelf + (deep - shelf) * t as f32
         });
         // Climate margins keep zonal continuity by extending the edge column.
-        self.tmean = grow_f64(&self.tmean, pad, |e, _| e);
-        self.tamp = grow_f64(&self.tamp, pad, |e, _| e);
-        self.precip = grow_f64(&self.precip, pad, |e, _| e);
-        self.discharge = grow_f64(&self.discharge, pad, |_, _| 0.0);
-        self.fertility = grow_f64(&self.fertility, pad, |_, _| 0.0);
-        self.site_score = grow_f64(&self.site_score, pad, |_, _| 0.0);
-        self.food_grid = grow_f64(&self.food_grid, pad, |_, _| 0.0);
+        self.tmean = grow(&self.tmean, pad, |e, _| e);
+        self.tamp = grow(&self.tamp, pad, |e, _| e);
+        self.precip = grow(&self.precip, pad, |e, _| e);
+        self.discharge = grow(&self.discharge, pad, |_, _| 0.0);
+        self.fertility = grow(&self.fertility, pad, |_, _| 0.0);
+        self.site_score = grow(&self.site_score, pad, |_, _| 0.0);
+        self.food_grid = grow(&self.food_grid, pad, |_, _| 0.0);
         self.biomes = {
             let a = &self.biomes;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
@@ -537,14 +758,21 @@ impl World {
                 }
             })
         };
-        self.rivers = grow_bool(&self.rivers, pad);
-        self.lakes = grow_bool(&self.lakes, pad);
-        self.salt = grow_bool(&self.salt, pad);
-        self.seasonal = grow_bool(&self.seasonal, pad);
+        self.flags = {
+            let a = &self.flags;
+            Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
+                let xi = x as isize - p;
+                if xi >= 0 && (xi as usize) < w {
+                    a[[y, xi as usize]]
+                } else {
+                    0 // open water: no river, lake, salt or wadi
+                }
+            })
+        };
         self.near_fresh = grow_bool(&self.near_fresh, pad);
         self.coast = grow_bool(&self.coast, pad);
-        self.pamp = grow_f64(&self.pamp, pad, |e, _| e);
-        self.flow_amp = grow_f64(&self.flow_amp, pad, |_, _| 0.0);
+        self.pamp = grow(&self.pamp, pad, |e, _| e);
+        self.flow_amp = grow(&self.flow_amp, pad, |_, _| 0.0);
         self.strahler = {
             let a = &self.strahler;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
@@ -616,20 +844,20 @@ impl World {
         // The head of the rank-size curve is political as much as economic.
         let mut seat: Vec<usize> = Vec::new();
         for (i, s) in self.settlements.iter().enumerate() {
-            while seat.len() <= s.culture {
+            while seat.len() <= s.culture.0 {
                 seat.push(usize::MAX);
             }
-            if seat[s.culture] == usize::MAX
-                || s.pop > self.settlements[seat[s.culture]].pop
+            if seat[s.culture.idx()] == usize::MAX
+                || s.pop > self.settlements[seat[s.culture.idx()]].pop
             {
-                seat[s.culture] = i;
+                seat[s.culture.idx()] = i;
             }
         }
         for (si, s) in self.settlements.iter_mut().enumerate() {
-            let md = mods.get(s.culture).cloned().unwrap_or_default();
+            let md = mods.get(s.culture.idx()).cloned().unwrap_or_default();
             let (y, x) = (s.y as usize, s.x as usize);
             let t_now =
-                climate::month_temperature(self.tmean[[y, x]], self.tamp[[y, x]], month);
+                climate::month_temperature(self.tmean[[y, x]] as f64, self.tamp[[y, x]] as f64, month);
             // NOTE: this growth chain is mirrored by explain.rs — change both.
             // ~6%/yr at best: the world should still be filling in at year
             // 100, not saturated by year 45 with a century of flat plateau.
@@ -658,7 +886,7 @@ impl World {
             // and the fat head of the rank-size curve lives in the hubs.
             k *= 1.0 + 0.26 * (s.connections.min(8) as f64);
             // NOTE: mirrored by explain.rs — the court term rides on s.k.
-            if seat.get(s.culture) == Some(&si) {
+            if seat.get(s.culture.idx()) == Some(&si) {
                 k *= 1.6; // the court eats what the realm sends
             }
             s.k = round2(k);
@@ -671,7 +899,7 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
-                    k: "disaster".to_string(),
+                    k: EventKind::Disaster,
                     text: format!("A brutal winter grips {} — {} lost.", s.name, loss),
                     ..Default::default()
                 });
@@ -683,7 +911,7 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
-                    k: "disaster".to_string(),
+                    k: EventKind::Disaster,
                     text: format!("Plague stalks the streets of {} — {} souls perish.", s.name, loss),
                     ..Default::default()
                 });
@@ -696,7 +924,7 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
-                    k: "disaster".to_string(),
+                    k: EventKind::Disaster,
                     text: format!("The earth shakes beneath {} — walls fall, {} are lost.", s.name, loss),
                     ..Default::default()
                 });
@@ -713,7 +941,7 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
-                    k: "disaster".to_string(),
+                    k: EventKind::Disaster,
                     text: format!("Fire leaps the rooftops of {}; {} perish in the smoke.", s.name, loss),
                     ..Default::default()
                 });
@@ -725,7 +953,7 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
-                    k: "disaster".to_string(),
+                    k: EventKind::Disaster,
                     text: format!("The river bursts its banks at {} — {} swept away in the brown water.", s.name, loss),
                     ..Default::default()
                 });
@@ -737,7 +965,7 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
-                    k: "disaster".to_string(),
+                    k: EventKind::Disaster,
                     text: format!("A black storm off the open sea lashes {} — {} lost to the waves.", s.name, loss),
                     ..Default::default()
                 });
@@ -747,7 +975,7 @@ impl World {
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
-                    k: "growth".to_string(),
+                    k: EventKind::Growth,
                     text: format!("The harvest overflows in {}; granaries groan.", s.name),
                     ..Default::default()
                 });
@@ -755,14 +983,11 @@ impl World {
             }
             // markets overflow where many roads meet
             if s.connections >= 3 && pop > 400 && self.rng.gen::<f64>() < 0.0015 {
-                let good = s
-                    .exports
-                    .clone()
-                    .unwrap_or_else(|| "grain".to_string());
+                let good = s.exports.unwrap_or(resources::Good::Grain);
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
-                    k: "trade".to_string(),
+                    k: EventKind::Trade,
                     text: format!("Caravans crowd the gates of {}; {} flows out to every shore.", s.name, good),
                     ..Default::default()
                 });
@@ -792,7 +1017,7 @@ impl World {
                     events.push(Event {
                         m: month_abs,
                         s: s.name.clone(),
-                        k: "realm".to_string(),
+                        k: EventKind::Realm,
                         text: format!(
                             "The young of {} take the roads out; houses stand empty by the gate and no one bids on them.",
                             s.name
@@ -829,7 +1054,7 @@ impl World {
                     events.push(Event {
                         m: month_abs,
                         s: s.name.clone(),
-                        k: "growth".to_string(),
+                        k: EventKind::Growth,
                         text: format!("{} has grown into a {}.", s.name, s.tier.to_lowercase()),
                         ..Default::default()
                     });
@@ -846,7 +1071,7 @@ impl World {
                     events.push(Event {
                         m: month_abs,
                         s: s.name.clone(),
-                        k: "disaster".to_string(),
+                        k: EventKind::Disaster,
                         text: format!("{} dwindles to a {}.", s.name, s.tier.to_lowercase()),
                         ..Default::default()
                     });
@@ -869,10 +1094,7 @@ impl World {
                 continue;
             }
             // renewables draw no rush; it is metal, coal and stone that call
-            if !matches!(
-                d.r.as_str(),
-                "stone" | "coal" | "copper" | "iron" | "silver" | "gold" | "mithril"
-            ) {
+            if !d.r.is_mineral() {
                 continue;
             }
             let claimed = self.settlements.iter().any(|s| {
@@ -885,7 +1107,7 @@ impl World {
                 continue;
             }
             // far ore must out-pull farmland or nobody ever leaves the plough
-            let worth = self.market.price(&d.r) * d.rich * 2.2;
+            let worth = self.market.price(d.r) * d.rich * 2.2;
             for yy in (d.y - R).max(0)..=(d.y + R).min(h as i64 - 1) {
                 for xx in (d.x - R).max(0)..=(d.x + R).min(w as i64 - 1) {
                     if self.height[[yy as usize, xx as usize]] < 0.0 {
@@ -924,7 +1146,7 @@ impl World {
                 // carries — not the import-lifted ceiling stored in s.k
                 // (hub and court terms), which would gate colonists on
                 // grain barges that feed the city just fine.
-                let md = mods_v.get(p.culture).cloned().unwrap_or_default();
+                let md = mods_v.get(p.culture.idx()).cloned().unwrap_or_default();
                 let kland = settlements::capacity_at(
                     &self.crops,
                     &self.fertility,
@@ -950,7 +1172,7 @@ impl World {
                 let parent = self.settlements[pi].clone();
                 let range = self
                     .societies
-                    .get(parent.culture)
+                    .get(parent.culture.idx())
                     .map(|so| society::mods_for(so).colony_range)
                     .unwrap_or(1.0);
                 settlements::colony_site(
@@ -994,7 +1216,7 @@ impl World {
             events.push(Event {
                 m: month_abs,
                 s: name.clone(),
-                k: "found".to_string(),
+                k: EventKind::Found,
                 text,
                 ..Default::default()
             });
@@ -1005,14 +1227,14 @@ impl World {
     /// Raise a new settlement at (y, x): coin a name in the founding
     /// culture's style, list its goods, size its land, and wire it into
     /// the trade web. Shared by colonists and rush camps alike.
-    fn found_settlement(&mut self, y: usize, x: usize, migrants: i64, cid: usize) -> usize {
+    fn found_settlement(&mut self, y: usize, x: usize, migrants: i64, cid: CultureId) -> usize {
         let style = if !self.cultures.is_empty() {
-            self.cultures[cid].style.clone()
+            self.cultures[cid.0].style.clone()
         } else {
             "hellenic".to_string()
         };
         let coined = naming::coin(&mut self.rng, &style, &mut self.taken);
-        let new_id = self.settlements.iter().map(|o| o.id).max().unwrap_or(-1) + 1;
+        let new_id = SettlementId(self.settlements.iter().map(|o| o.id.0).max().unwrap_or(-1) + 1);
         let mut s = Settlement {
             id: new_id,
             name: coined.word.clone(),
@@ -1034,7 +1256,7 @@ impl World {
             culture: cid,
             namer: cid,
             connections: 0,
-            goods: Vec::new(),
+            goods: resources::Goods::new(),
             exports: None,
             wealth: round2(migrants as f64 * 0.2),
             port: false,
@@ -1049,7 +1271,7 @@ impl World {
         trade::goods_for(&mut s, &self.deposits, &self.fertility);
         let mdc = self
             .societies
-            .get(cid)
+            .get(cid.0)
             .map(society::mods_for)
             .unwrap_or_default();
         s.k = round2(settlements::capacity_at(
@@ -1068,7 +1290,7 @@ impl World {
         {
             let t = &self.settlements[idx];
             self.registry
-                .add("settlement", &t.name, self.month, Some(t.culture), t.x, t.y);
+                .add(EntityKind::Settlement, &t.name, self.month, Some(t.culture), t.x, t.y);
         }
         trade::connect_settlement(
             idx,
@@ -1076,7 +1298,7 @@ impl World {
             &mut self.routes,
             &self.trade,
             &self.height,
-            &self.rivers,
+            &self.flags,
             &self.discharge,
             &self.flow_amp,
         );
@@ -1103,10 +1325,7 @@ impl World {
             if !d.known || d.left == 0.0 {
                 continue;
             }
-            if !matches!(
-                d.r.as_str(),
-                "stone" | "coal" | "copper" | "iron" | "silver" | "gold" | "mithril"
-            ) {
+            if !d.r.is_mineral() {
                 continue;
             }
             // a claimed seam already has crews — no rush to a worked pit
@@ -1120,9 +1339,9 @@ impl World {
                 continue;
             }
             // the pull of the price: dearer metal, richer seam, faster rush
-            let worth = (self.market.price(&d.r) * d.rich / 2.0).clamp(0.2, 3.0);
+            let worth = (self.market.price(d.r) * d.rich / 2.0).clamp(0.2, 3.0);
             let (dx0, dy0) = (d.x, d.y);
-            let kind = d.r.clone();
+            let kind = d.r;
             if self.rng.gen::<f64>() >= 0.0045 * worth {
                 continue;
             }
@@ -1174,7 +1393,7 @@ impl World {
             events.push(Event {
                 m: month_abs,
                 s: name.clone(),
-                k: "found".to_string(),
+                k: EventKind::Found,
                 text: format!(
                     "Word of the {} above {} draws chancers and mule-trains — the camp of {} springs up hard by the diggings.",
                     kind, sname, name
@@ -1213,18 +1432,18 @@ impl World {
                 let s = &self.settlements[i];
                 (
                     s.name.clone(),
-                    self.cultures[s.culture].people.clone(),
+                    self.cultures[s.culture.idx()].people.clone(),
                     s.x,
                     s.y,
                 )
             };
             let t = patina::UNEXPLAINED
                 [self.rng.gen_range(0..patina::UNEXPLAINED.len())];
-            let ent = self.registry.find_alive("settlement", x, y);
+            let ent = self.registry.find_alive(EntityKind::Settlement, x, y);
             evs.push(Event {
                 m: month_abs,
                 s: name.clone(),
-                k: "myth".to_string(),
+                k: EventKind::Myth,
                 text: t.replace("{T}", &name).replace("{P}", &people),
                 ids: ent.into_iter().collect(),
                 x,
@@ -1249,8 +1468,8 @@ impl World {
                 continue;
             }
             self.taken.insert(name.clone());
-            let people = self.cultures[winner].people.clone();
-            let eid = self.registry.add("feature", &name, m, Some(winner), x, y);
+            let people = self.cultures[winner.0].people.clone();
+            let eid = self.registry.add(EntityKind::Feature, &name, m, Some(winner), x, y);
             self.features.push(Feature {
                 t: "battlefield".to_string(),
                 name: name.clone(),
@@ -1261,11 +1480,11 @@ impl World {
                 people,
                 ..Default::default()
             });
-            self.features_dirty = true;
+            self.dirty.mark(Dirty::FEATURES);
             evs.push(Event {
                 m: month_abs,
                 s: name.clone(),
-                k: "war".to_string(),
+                k: EventKind::War,
                 text: format!(
                     "The dead are buried and the ground remembered: the country folk speak now of the {}.",
                     name
@@ -1300,10 +1519,10 @@ impl World {
             if self.rng.gen::<f64>() >= 0.35 {
                 continue;
             }
-            let style = self.cultures[to].style.clone();
+            let style = self.cultures[to.0].style.clone();
             let coined = naming::coin(&mut self.rng, &style, &mut self.taken);
             let old = self.settlements[i].name.clone();
-            let people = self.cultures[to].people.clone();
+            let people = self.cultures[to.0].people.clone();
             let (x, y) = (self.settlements[i].x, self.settlements[i].y);
             {
                 let s = &mut self.settlements[i];
@@ -1312,14 +1531,14 @@ impl World {
                 s.ety = coined.ety.clone();
                 s.namer = to;
             }
-            let ent = self.registry.find_alive("settlement", x, y);
+            let ent = self.registry.find_alive(EntityKind::Settlement, x, y);
             if let Some(id) = ent {
                 self.registry.rename(id, &coined.word);
             }
             evs.push(Event {
                 m: month_abs,
                 s: coined.word.clone(),
-                k: "society".to_string(),
+                k: EventKind::Society,
                 text: format!(
                     "The {} lay their own name over {} — on the new rolls it is written {}.",
                     people, old, coined.word
@@ -1348,9 +1567,9 @@ impl World {
         }
         let mut counts = vec![0usize; self.cultures.len()];
         for s in &self.settlements {
-            counts[s.culture] += 1;
+            counts[s.culture.idx()] += 1;
         }
-        let besieged: HashSet<i64> = self
+        let besieged: HashSet<SettlementId> = self
             .politics
             .wars
             .iter()
@@ -1361,7 +1580,7 @@ impl World {
             if month_abs - s.born < 240 {
                 continue; // twenty years' grace: young colonies struggle honestly
             }
-            if counts[s.culture] <= 1 {
+            if counts[s.culture.idx()] <= 1 {
                 continue; // never a people's last hearth
             }
             if besieged.contains(&s.id) {
@@ -1393,7 +1612,7 @@ impl World {
             "famine"
         };
         let why = patina::ruin_why(cause);
-        let ent = self.registry.find_alive("settlement", dead.x, dead.y);
+        let ent = self.registry.find_alive(EntityKind::Settlement, dead.x, dead.y);
         if let Some(id) = ent {
             self.registry
                 .close(id, month_abs, &format!("abandoned — {}", why));
@@ -1401,7 +1620,7 @@ impl World {
         let ruin_name = format!("Ruins of {}", dead.name);
         let rid = self
             .registry
-            .add("ruin", &ruin_name, month_abs, Some(dead.culture), dead.x, dead.y);
+            .add(EntityKind::Ruin, &ruin_name, month_abs, Some(dead.culture), dead.x, dead.y);
         self.ruins.push(Ruin {
             name: ruin_name.clone(),
             of: dead.name.clone(),
@@ -1409,11 +1628,11 @@ impl World {
             y: dead.y,
             since: month_abs,
             why: why.to_string(),
-            people: self.cultures[dead.culture].people.clone(),
+            people: self.cultures[dead.culture.idx()].people.clone(),
             ety: dead.ety.clone(),
             eid: rid,
         });
-        self.ruins_dirty = true;
+        self.dirty.mark(Dirty::RUINS);
         // cut the dead town's routes, keeping the flow/idle ledgers aligned
         let keep: Vec<bool> = self
             .routes
@@ -1442,7 +1661,7 @@ impl World {
             &mut self.routes,
             &self.trade,
             &self.height,
-            &self.rivers,
+            &self.flags,
             &self.discharge,
             &self.flow_amp,
         );
@@ -1451,18 +1670,18 @@ impl World {
             &mut self.routes,
             &self.trade,
             &self.height,
-            &self.rivers,
+            &self.flags,
             &self.discharge,
             &self.flow_amp,
         );
         trade::recount_connections(&mut self.settlements, &self.routes);
         trade::mark_ports(&mut self.settlements, &self.routes);
-        self.routes_dirty = true;
+        self.dirty.mark(Dirty::ROUTES);
         self.recompute_territory();
         evs.push(Event {
             m: month_abs,
             s: dead.name.clone(),
-            k: "realm".to_string(),
+            k: EventKind::Realm,
             text: format!(
                 "The last hearth goes cold in {} — {}. Within ten years the roofs are fallen and the road grows grass; travellers call the place the {}.",
                 dead.name, why, ruin_name
@@ -1486,14 +1705,14 @@ impl World {
                 self.route_idle[i] = 0;
                 if self.routes[i].old {
                     self.routes[i].old = false; // the wagons came back
-                    self.routes_dirty = true;
+                    self.dirty.mark(Dirty::ROUTES);
                 }
                 continue;
             }
             self.route_idle[i] = self.route_idle[i].saturating_add(1);
             if self.route_idle[i] == 25 && !self.routes[i].old {
                 self.routes[i].old = true;
-                self.routes_dirty = true;
+                self.dirty.mark(Dirty::ROUTES);
                 let an = self
                     .settlements
                     .iter()
@@ -1508,7 +1727,7 @@ impl World {
                     evs.push(Event {
                         m: month_abs,
                         s: an.clone(),
-                        k: "economy".to_string(),
+                        k: EventKind::Economy,
                         text: format!(
                             "Grass closes over the way between {} and {} — no load has passed in a generation, and the itineraries drop it.",
                             an, bn
@@ -1557,14 +1776,14 @@ impl World {
                 }
                 s.name = worn.clone();
             }
-            let ent = self.registry.find_alive("settlement", x, y);
+            let ent = self.registry.find_alive(EntityKind::Settlement, x, y);
             if let Some(id) = ent {
                 self.registry.rename(id, &worn);
             }
             evs.push(Event {
                 m: month_abs,
                 s: worn.clone(),
-                k: "society".to_string(),
+                k: EventKind::Society,
                 text: format!(
                     "A lifetime of speech wears {} smooth — travellers and tax rolls alike now write {}.",
                     name, worn
@@ -1599,11 +1818,11 @@ impl World {
             } else {
                 f.ety = format!("{} worn to {}", old_tok, new_tok);
             }
-            self.features_dirty = true;
+            self.dirty.mark(Dirty::FEATURES);
             evs.push(Event {
                 m: month_abs,
                 s: worn_phrase.clone(),
-                k: "society".to_string(),
+                k: EventKind::Society,
                 text: format!(
                     "The maps catch up with the tongue: {} appears on the new charts as {}.",
                     old_name, worn_phrase
@@ -1628,8 +1847,15 @@ impl World {
             // the flavor families — entries whose truth the record can
             // afford to doubt; wars, foundings and realm acts stay firm
             if !matches!(
-                e.k.as_str(),
-                "myth" | "omen" | "wonder" | "society" | "nature" | "disaster" | "famine" | "growth"
+                e.k,
+                EventKind::Myth
+                    | EventKind::Omen
+                    | EventKind::Wonder
+                    | EventKind::Society
+                    | EventKind::Nature
+                    | EventKind::Disaster
+                    | EventKind::Famine
+                    | EventKind::Growth
             ) {
                 continue;
             }
@@ -1688,11 +1914,11 @@ impl World {
                     &mut self.rng,
                 );
                 for (fname, people, alt) in doubled {
-                    self.features_dirty = true;
+                    self.dirty.mark(Dirty::FEATURES);
                     new_events.push(Event {
                         m: self.month,
                         s: fname.clone(),
-                        k: "society".to_string(),
+                        k: EventKind::Society,
                         text: format!(
                             "Spread now into that country, the {} keep their own word for {} — in their tongue it is {}.",
                             people, fname, alt
@@ -1710,13 +1936,17 @@ impl World {
                 &mut self.rng,
             );
             new_events.extend(soc_evs);
+            // E5.2: one id→index map for every pass this month — settlement
+            // membership is fixed from here to the end of the economy block
+            // (the passes below take slices, which cannot grow or shrink)
+            let sidx = economy::sidx(&self.settlements);
             // M5.2: re-carve the market areas when towns appeared, and
             // refresh every other year as the route web thickens
             if self.areas.area.len() != self.settlements.len()
                 || self.month.rem_euclid(24) == 2
             {
                 self.areas =
-                    economy::build_areas(&self.settlements, &self.routes, Some(&self.areas));
+                    economy::build_areas(&self.settlements, &self.routes, Some(&self.areas), &sidx);
             }
             // M5.1: forges light where ore, fuel, hands and the art meet
             let craft_evs = economy::craft_pass(
@@ -1736,6 +1966,7 @@ impl World {
                 &mut self.societies,
                 self.month,
                 &mut self.rng,
+                &sidx,
             );
             new_events.extend(eco_evs);
             // M5.5: the merchants ride the widest gaps
@@ -1750,6 +1981,7 @@ impl World {
                 self.month,
                 &mut self.rng,
                 &mut self.registry,
+                &sidx,
             );
             new_events.extend(mer_evs);
             // statecraft: wars that move borders, dread, risings (M4)
@@ -1790,12 +2022,12 @@ impl World {
                 pace,
             );
             new_events.extend(chron_evs);
-            // the relics ride the month's tides: forged, plundered, lost (M6.3)
-            let month_slice: Vec<Event> = new_events[month_start..].to_vec();
+            // the relics ride the month's tides: forged, plundered, lost
+            // (M6.3) — read straight off the month's slice, no clone (E5.6)
             let art_evs = artifact::monthly(
                 &mut self.artifacts,
                 &mut self.registry,
-                &month_slice,
+                &new_events[month_start..],
                 &self.settlements,
                 &self.cultures,
                 &self.societies,
@@ -1812,9 +2044,17 @@ impl World {
             // narrative heat: the month's weighted noise, slowly cooling (M6.4)
             let m_heat: i32 = new_events[month_start..]
                 .iter()
-                .map(|e| telling::weight(&e.k) - 1)
+                .map(|e| telling::weight(e.k) - 1)
                 .sum();
             self.heat = self.heat * 0.94 + (m_heat as f64 / 6.0) * 0.06;
+        }
+        // change tracking for the wire (E4.5): foundings reship routes,
+        // strikes and dead mines reship the mineral ledger
+        if founded {
+            self.dirty.mark(Dirty::ROUTES);
+        }
+        if deposits_changed {
+            self.dirty.mark(Dirty::DEPOSITS);
         }
         // the full log is the chronicle's memory — the sifter reads all of it,
         // and the client pages it with events_range (M6)
@@ -1830,9 +2070,16 @@ impl World {
     fn resolve_events(&mut self, from: usize, events: &mut [Event]) {
         for e in events[from..].iter_mut() {
             if e.ids.is_empty() {
-                let found = ["settlement", "war", "culture", "person", "artifact", "feature"]
-                    .iter()
-                    .find_map(|k| self.registry.find_kind(k, &e.s))
+                let found = [
+                    EntityKind::Settlement,
+                    EntityKind::War,
+                    EntityKind::Culture,
+                    EntityKind::Person,
+                    EntityKind::Artifact,
+                    EntityKind::Feature,
+                ]
+                .iter()
+                .find_map(|&k| self.registry.find_kind(k, &e.s))
                     .or_else(|| self.registry.find(&e.s));
                 if let Some(id) = found {
                     e.ids.push(id);
@@ -1841,9 +2088,9 @@ impl World {
             if e.ids.is_empty() && e.x >= 0 {
                 // the subject may have been renamed this very tick (M9.2):
                 // fall back to the one thing a rename never moves — its ground
-                let found = ["settlement", "ruin", "feature"]
+                let found = [EntityKind::Settlement, EntityKind::Ruin, EntityKind::Feature]
                     .iter()
-                    .find_map(|k| self.registry.find_alive(k, e.x, e.y));
+                    .find_map(|&k| self.registry.find_alive(k, e.x, e.y));
                 if let Some(id) = found {
                     e.ids.push(id);
                 }
@@ -1856,7 +2103,7 @@ impl World {
                     }
                 }
             }
-            if e.legend.is_empty() && telling::weight(&e.k) >= 3 {
+            if e.legend.is_empty() && telling::weight(e.k) >= 3 {
                 e.legend = telling::legendize(e);
             }
         }
@@ -1886,10 +2133,9 @@ impl World {
                 (s.y, s.x, s.pop, s.culture, s.river, s.name.clone())
             };
             let pack = self.crops[[y as usize, x as usize]];
-            let rainfed = matches!(
-                pack,
-                agriculture::PACK_WHEAT | agriculture::PACK_MAIZE
-            ) && !river;
+            let rainfed = (pack == agriculture::CropPackage::Wheat.code()
+                || pack == agriculture::CropPackage::Maize.code())
+                && !river;
             if !rainfed || pop <= 90 {
                 continue;
             }
@@ -1902,8 +2148,8 @@ impl World {
             // granaries (pottery) blunt a failed year
             let granary = if self
                 .societies
-                .get(culture)
-                .map_or(false, |so| so.knows("pottery"))
+                .get(culture.0)
+                .map_or(false, |so| so.knows(society::TechId::Pottery))
             {
                 0.75
             } else {
@@ -1948,7 +2194,7 @@ impl World {
             events.push(Event {
                 m: month_abs,
                 s: name,
-                k: "famine".to_string(),
+                k: EventKind::Famine,
                 text,
                 ..Default::default()
             });
@@ -1959,7 +2205,7 @@ impl World {
         // scarcity is priced at once: one grain spike per failed year
         if worst > 0.0 && self.grain_shock_year != year {
             self.grain_shock_year = year;
-            self.market.shock("grain", 1.0 + 0.30 * worst);
+            self.market.shock(resources::Good::Grain, 1.0 + 0.30 * worst);
         }
         events
     }
@@ -1987,7 +2233,7 @@ impl World {
             for (si, s) in self.settlements.iter().enumerate() {
                 let reach = settlements::territory_radius(s.pop)
                     * 2.4
-                    * mods.get(s.culture).map(|m| m.prospecting).unwrap_or(1.0);
+                    * mods.get(s.culture.idx()).map(|m| m.prospecting).unwrap_or(1.0);
                 let dx = (d.x - s.x) as f64;
                 let dy = (d.y - s.y) as f64;
                 let ratio = (dx * dx + dy * dy).sqrt() / reach.max(1e-9);
@@ -1996,11 +2242,11 @@ impl World {
                 }
             }
             let Some((ratio, si)) = best else { continue };
-            let rarity = match resources::abundance(&d.r) {
-                "uncommon" => 0.6,
-                "rare" => 0.35,
-                "legendary" => 0.12,
-                _ => 1.0,
+            let rarity = match d.r.abundance() {
+                resources::Abundance::Uncommon => 0.6,
+                resources::Abundance::Rare => 0.35,
+                resources::Abundance::Legendary => 0.12,
+                resources::Abundance::Common => 1.0,
             };
             let p = if ratio <= 1.0 {
                 0.012 * rarity * (1.0 - 0.65 * ratio) // combing the home range
@@ -2016,34 +2262,37 @@ impl World {
         for (di, si) in found {
             self.deposits[di].known = true;
             changed = true;
-            let kind = self.deposits[di].r.clone();
+            let kind = self.deposits[di].r;
             let rich = self.deposits[di].rich;
-            let precious = matches!(kind.as_str(), "silver" | "gold" | "mithril");
+            let precious = matches!(
+                kind,
+                resources::Good::Silver | resources::Good::Gold | resources::Good::Mithril
+            );
             // the market feels the strike before the first cart arrives —
             // hardest where the ore actually is (M5.2: local first)
-            self.market.shock(&kind, if precious { 0.88 } else { 0.84 });
+            self.market.shock(kind, if precious { 0.88 } else { 0.84 });
             let ka = self.areas.area_of(si);
             if let Some(mk) = self.areas.markets.get_mut(ka) {
-                mk.shock(&kind, if precious { 0.80 } else { 0.75 });
+                mk.shock(kind, if precious { 0.80 } else { 0.75 });
             }
             let sname = self.settlements[si].name.clone();
-            let strike = 12.0 + 45.0 * rich * economy::base_value(&kind);
+            let strike = 12.0 + 45.0 * rich * economy::base_value(kind);
             self.settlements[si].wealth = round2(self.settlements[si].wealth + strike);
             if precious {
                 // a rush: prospectors, chancers and mule-trains pour in
                 let influx = ((self.settlements[si].pop as f64 * 0.05) as i64).max(10);
                 self.settlements[si].pop += influx;
             }
-            let text = match kind.as_str() {
-                "gold" => format!(
+            let text = match kind {
+                resources::Good::Gold => format!(
                     "Gold! Panners out of {} lift bright dust from the gravels — word runs faster than horses.",
                     sname
                 ),
-                "silver" => format!(
+                resources::Good::Silver => format!(
                     "A silver seam glitters by torchlight in the diggings above {}.",
                     sname
                 ),
-                "mithril" => format!(
+                resources::Good::Mithril => format!(
                     "Beneath the mountain-roots, miners of {} strike mithril — truesilver, the dream of every smith.",
                     sname
                 ),
@@ -2055,7 +2304,7 @@ impl World {
             events.push(Event {
                 m: month_abs,
                 s: sname,
-                k: "discovery".to_string(),
+                k: EventKind::Discovery,
                 text,
                 ..Default::default()
             });
@@ -2092,7 +2341,7 @@ impl World {
         }
         for di in spent {
             changed = true;
-            let kind = self.deposits[di].r.clone();
+            let kind = self.deposits[di].r;
             let (dx0, dy0) = (self.deposits[di].x, self.deposits[di].y);
             let near_i = self
                 .settlements
@@ -2103,18 +2352,18 @@ impl World {
             let near = near_i
                 .map(|i| self.settlements[i].name.clone())
                 .unwrap_or_else(|| "the wilds".to_string());
-            self.market.shock(&kind, 1.22);
+            self.market.shock(kind, 1.22);
             // the pit's own market feels the silence first (M5.2)
             if let Some(i) = near_i {
                 let ka = self.areas.area_of(i);
                 if let Some(mk) = self.areas.markets.get_mut(ka) {
-                    mk.shock(&kind, 1.35);
+                    mk.shock(kind, 1.35);
                 }
             }
             events.push(Event {
                 m: month_abs,
                 s: near.clone(),
-                k: "depletion".to_string(),
+                k: EventKind::Depletion,
                 text: format!(
                     "The last good ore comes up from the {} pits near {}; the galleries fall silent.",
                     kind, near
@@ -2152,7 +2401,7 @@ impl World {
             .iter()
             .map(|c| {
                 let mut v = serde_json::to_value(c).unwrap();
-                let polity = self.societies.get(c.id).map(|s| s.polity).unwrap_or(0);
+                let polity = self.societies.get(c.id.0).map(|s| s.polity).unwrap_or(0);
                 if let Some(r) = self.chron.rulers.iter().find(|r| r.culture == c.id) {
                     let title = society::RULER_TITLES[polity];
                     v["ruler"] = if title.is_empty() {
@@ -2161,27 +2410,27 @@ impl World {
                         json!(format!("{} {}", title, r.title()))
                     };
                 }
-                if let Some(soc) = self.societies.get(c.id) {
+                if let Some(soc) = self.societies.get(c.id.0) {
                     v["era"] = json!(society::ERAS[soc.era]);
                     v["polity"] = json!(society::POLITIES[soc.polity]);
                     v["treasury"] = json!(round2(soc.treasury));
                     let names: Vec<&'static str> = soc
                         .techs
                         .iter()
-                        .filter_map(|id| society::tech_by_id(id).map(|t| t.name))
+                        .map(|&id| society::tech(id).name)
                         .collect();
                     v["techs"] = json!(names);
                 }
                 // statecraft readouts (M4): solidarity, the crown's standing,
                 // whose leash they wear, and whether the realm still stands
-                if let Some(a) = self.politics.asab.get(c.id) {
+                if let Some(a) = self.politics.asab.get(c.id.0) {
                     v["asab"] = json!(round2(*a));
                 }
-                if let Some(l) = self.politics.legit.get(c.id) {
+                if let Some(l) = self.politics.legit.get(c.id.0) {
                     v["legit"] = json!(round2(*l));
                 }
-                if let Some(Some(suz)) = self.politics.vassal_of.get(c.id) {
-                    v["vassal_of"] = json!(self.cultures[*suz].people.clone());
+                if let Some(Some(suz)) = self.politics.vassal_of.get(c.id.0) {
+                    v["vassal_of"] = json!(self.cultures[suz.0].people.clone());
                 }
                 v["alive"] = json!(politics::alive(&self.settlements, c.id));
                 v
@@ -2190,49 +2439,447 @@ impl World {
         Value::Array(arr)
     }
 
-    pub fn tick_json(&mut self, months: i64) -> String {
-        let (events, founded, deposits_changed) = self.tick(months);
-        let mut out = json!({
-            "month": self.month,
-            "settlements": self.settlements,
-            "events": events,
-            "cultures": self.cultures_json(),
-            "wars": self.politics.wars,
-            "market": self.market.snapshot(),
-            "areas": economy::areas_json(&self.areas, &self.settlements),
-            "merchants": self.merchants,
-        });
-        if founded || self.routes_dirty {
-            out["routes"] = json!(self.routes);
-            self.routes_dirty = false;
-        }
-        if deposits_changed {
-            out["deposits"] = json!(self.known_deposits());
-            out["deposits_hidden"] =
-                json!(self.deposits.iter().filter(|d| !d.known).count());
-        }
-        if self.features_dirty {
-            out["features"] = json!(self.features);
-            self.features_dirty = false;
-        }
-        if self.ruins_dirty {
-            out["ruins"] = json!(self.ruins);
-            self.ruins_dirty = false;
-        }
-        if self.territory_dirty {
-            out["territory"] = json!(politics::territory_rle(&self.territory));
-            self.territory_dirty = false;
-        }
-        serde_json::to_string(&out).unwrap()
+    /// E4.2 hot/cold split, town side: the monthly heartbeat zeroed out.
+    /// A town whose full form moved but whose cold form did not ships a
+    /// tiny heartbeat patch instead of the whole object.
+    fn settlement_cold_sig(s: &Settlement) -> u64 {
+        let mut c = s.clone();
+        c.pop = 0;
+        c.food = 0.0;
+        c.k = 0.0;
+        c.wealth = 0.0;
+        crate::util::fnv1a64(serde_json::to_string(&c).unwrap().as_bytes())
     }
 
-    pub fn meta(&self) -> Value {
-        let ev_start = self.events.len().saturating_sub(60);
-        let timings: serde_json::Map<String, Value> = self
-            .timings
+    /// Decompose a market-area hub row for delta gating (E4.3): hub id,
+    /// cold hash over id·name·member-count, and price bits per good at
+    /// wire precision.
+    fn hub_wire(h: &Value) -> (i64, u64, Vec<(String, u64)>) {
+        let id = h["id"].as_i64().unwrap();
+        let cold =
+            crate::util::fnv1a64(format!("{}|{}|{}", id, h["name"], h["n"]).as_bytes());
+        let pbits = h["p"]
+            .as_object()
+            .map(|m| {
+                m.iter()
+                    .map(|(g, v)| (g.clone(), v.as_f64().unwrap_or(0.0).to_bits()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        (id, cold, pbits)
+    }
+
+
+    /// E4.2 hot/cold split, culture side: (full string, cold string, hot
+    /// patch rows). treasury/asab/legit are the heartbeat; the cold form
+    /// strips them, the hot rows carry them keyed by array index.
+    fn cultures_split(&self) -> (String, String, String) {
+        let full = self.cultures_json();
+        let mut cold = full.clone();
+        let mut rows: Vec<Value> = Vec::new();
+        if let Value::Array(items) = &mut cold {
+            for (i, cv) in items.iter_mut().enumerate() {
+                if let Value::Object(o) = cv {
+                    let mut row = serde_json::Map::new();
+                    row.insert("i".into(), json!(i));
+                    for kf in ["treasury", "asab", "legit"] {
+                        if let Some(v) = o.remove(kf) {
+                            row.insert(kf.into(), v);
+                        }
+                    }
+                    if row.len() > 1 {
+                        rows.push(Value::Object(row));
+                    }
+                }
+            }
+        }
+        (
+            full.to_string(),
+            cold.to_string(),
+            serde_json::to_string(&rows).unwrap(),
+        )
+    }
+
+    /// The tick payload, v2 (E4.1–E4.4): month and chronicle cursor always;
+    /// every other section rides only when its content moved since it last
+    /// crossed (E4.2/E4.3 hashes, E4.5 dirty bits). One direct-serialize
+    /// struct of pre-serialized `RawValue` sections — nothing is built
+    /// twice. Absent key = "you already hold the truth"; the client merges.
+    pub fn tick_json(&mut self, months: i64) -> String {
+        use serde_json::value::RawValue;
+
+        #[derive(Serialize)]
+        struct Payload {
+            month: i64,
+            /// Chronicle cursor [from, to): the client pulls the slice via
+            /// `events_range` (E4.4) — event arrays left the tick payload.
+            ev: [u64; 2],
+            /// Toast-worthy picks as indices into the [from, to) slice
+            /// (E4.8) — no event ever ships twice.
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            headlines: Vec<u32>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            settlements: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Vec::is_empty")]
+            settlements_gone: Vec<i64>,
+            /// Heartbeat patches (E4.2): towns whose only news is
+            /// pop/food/k/wealth — merged over the held object client-side.
+            #[serde(skip_serializing_if = "Option::is_none")]
+            s_hot: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            cultures: Option<Box<RawValue>>,
+            /// Heartbeat patches for cultures (treasury/asab/legit), by
+            /// array index — ships when only the heartbeat moved (E4.2).
+            #[serde(skip_serializing_if = "Option::is_none")]
+            c_hot: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            wars: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            market: Option<Box<RawValue>>,
+            /// Per-good market row patches (E4.3), merged by `g`.
+            #[serde(skip_serializing_if = "Option::is_none")]
+            m_hot: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            areas: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            merchants: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            routes: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            deposits: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            deposits_hidden: Option<usize>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            features: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            ruins: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            territory: Option<Box<RawValue>>,
+        }
+
+        fn raw(s: String) -> Option<Box<RawValue>> {
+            Some(RawValue::from_string(s).unwrap())
+        }
+
+        let ev_from = self.events.len();
+        let _ = self.tick(months); // change tracking rides self.dirty (E4.5)
+        let ev_to = self.events.len();
+
+        // E4.8 — the toast-worthy picks, as indices into the [from, to)
+        // chronicle slice the client pulls anyway; no event ships twice.
+        let heads: Vec<u32> = self.events[ev_from..ev_to]
             .iter()
-            .map(|(k, v)| (k.to_string(), json!(round3(*v / 1000.0))))
+            .enumerate()
+            .filter(|(_, e)| headline_worthy(e.k))
+            .map(|(i, _)| i as u32)
+            .take(6)
             .collect();
+
+        // E4.2 — settlements cross only when their cold form moved; when
+        // only the heartbeat moved, the fields that moved cross as a patch.
+        let mut changed: Vec<String> = Vec::new();
+        let mut hot: Vec<String> = Vec::new();
+        let mut cache: Vec<(i64, u64, [i64; 4])> =
+            Vec::with_capacity(self.settlements.len());
+        for s in &self.settlements {
+            let cold = Self::settlement_cold_sig(s);
+            // the heartbeat at wire precision: pop · food(0.1) · k(1) ·
+            // wealth(1) — each matches what the client actually displays
+            let hotq = [
+                s.pop,
+                (s.food * 10.0).round() as i64,
+                s.k.round() as i64,
+                s.wealth.round() as i64,
+            ];
+            let prev = self
+                .sent
+                .settlements
+                .iter()
+                .find(|(id, _, _)| *id == s.id.0)
+                .map(|&(_, c, q)| (c, q));
+            match prev {
+                Some((pc, pq)) if pc == cold && pq == hotq => {}
+                Some((pc, pq)) if pc == cold => {
+                    // positional heartbeat row (E4.2): [id, pop, food, k,
+                    // wealth], null = unchanged — keys carry no information
+                    // the slot position doesn't already carry
+                    let mut row =
+                        vec![json!(s.id.0), Value::Null, Value::Null, Value::Null, Value::Null];
+                    if pq[0] != hotq[0] {
+                        row[1] = json!(s.pop);
+                    }
+                    if pq[1] != hotq[1] {
+                        row[2] = json!(hotq[1] as f64 / 10.0);
+                    }
+                    if pq[2] != hotq[2] {
+                        row[3] = json!(hotq[2]);
+                    }
+                    if pq[3] != hotq[3] {
+                        row[4] = json!(hotq[3]);
+                    }
+                    hot.push(Value::Array(row).to_string());
+                }
+                _ => changed.push(serde_json::to_string(s).unwrap()),
+            }
+            cache.push((s.id.0, cold, hotq));
+        }
+        let gone: Vec<i64> = self
+            .sent
+            .settlements
+            .iter()
+            .map(|&(id, _, _)| id)
+            .filter(|id| !cache.iter().any(|(cid, _, _)| cid == id))
+            .collect();
+        self.sent.settlements = cache;
+
+        // E4.3 — whole blocks gated by content hash: serialized once for
+        // the gate, reused verbatim as the wire bytes when they moved.
+        // Cultures get the hot/cold split: when only the heartbeat moved,
+        // the tiny c_hot rows cross instead of the whole block (E4.2).
+        let (cul_full, cul_cold, cul_hot) = self.cultures_split();
+        let cul_full_h = crate::util::fnv1a64(cul_full.as_bytes());
+        let cul_cold_h = crate::util::fnv1a64(cul_cold.as_bytes());
+        let mut cultures = None;
+        let mut c_hot = None;
+        if self.sent.blocks[0] != cul_full_h {
+            if self.sent.cultures_cold != cul_cold_h {
+                cultures = raw(cul_full);
+            } else {
+                c_hot = raw(cul_hot);
+            }
+            self.sent.blocks[0] = cul_full_h;
+            self.sent.cultures_cold = cul_cold_h;
+        }
+
+        let block_strings = [
+            serde_json::to_string(&self.politics.wars).unwrap(),
+            serde_json::to_string(&self.merchants).unwrap(),
+        ];
+        let mut gated: [Option<Box<RawValue>>; 2] = [None, None];
+        for (i, s) in block_strings.into_iter().enumerate() {
+            let h = crate::util::fnv1a64(s.as_bytes());
+            if self.sent.blocks[i + 1] != h {
+                self.sent.blocks[i + 1] = h;
+                gated[i] = raw(s);
+            }
+        }
+        let [wars, merchants] = gated;
+
+        // E4.3 — the market ledger, gated per row: the whole list reships
+        // only when the set of priced goods changed; otherwise the rows
+        // whose content moved cross as m_hot and the client merges by good.
+        let market_v = self.market.snapshot();
+        let market_rows: Vec<(String, String)> = market_v
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| (r["g"].as_str().unwrap().to_string(), r.to_string()))
+            .collect();
+        let mut names: Vec<&String> = market_rows.iter().map(|(g, _)| g).collect();
+        names.sort();
+        let mut prev_names: Vec<&String> =
+            self.sent.market_rows.iter().map(|(g, _)| g).collect();
+        prev_names.sort();
+        let (market, m_hot) = if names != prev_names {
+            self.sent.market_rows = market_rows
+                .iter()
+                .map(|(g, s)| (g.clone(), crate::util::fnv1a64(s.as_bytes())))
+                .collect();
+            (raw(market_v.to_string()), None)
+        } else {
+            let mut out: Vec<&str> = Vec::new();
+            let mut fresh: Vec<(String, u64)> = Vec::with_capacity(market_rows.len());
+            for (g, s) in &market_rows {
+                let h = crate::util::fnv1a64(s.as_bytes());
+                let prev = self
+                    .sent
+                    .market_rows
+                    .iter()
+                    .find(|(pg, _)| pg == g)
+                    .map(|&(_, h)| h);
+                if prev != Some(h) {
+                    out.push(s);
+                }
+                fresh.push((g.clone(), h));
+            }
+            self.sent.market_rows = fresh;
+            if out.is_empty() {
+                (None, None)
+            } else {
+                (None, raw(format!("[{}]", out.join(","))))
+            }
+        };
+
+        // E4.3 — market areas, gated per hub and per good: the whole block
+        // reships only when the hub set changed (the "of" vector moved).
+        // Otherwise a hub whose cold half (name, member count) moved ships
+        // its full row; a hub where only prices moved ships {id, p: {only
+        // the goods that moved}}; spread rows ride along when they moved.
+        let areas_v = economy::areas_json(&self.areas, &self.settlements);
+        let of_h = crate::util::fnv1a64(areas_v["of"].to_string().as_bytes());
+        let spread_s = areas_v["spread"].to_string();
+        let spread_h = crate::util::fnv1a64(spread_s.as_bytes());
+        let hubs_v = areas_v["hubs"].as_array().unwrap();
+        let areas = if of_h != self.sent.areas_of {
+            self.sent.areas_of = of_h;
+            self.sent.areas_spread = spread_h;
+            self.sent.areas_hubs = hubs_v.iter().map(Self::hub_wire).collect();
+            raw(areas_v.to_string())
+        } else {
+            let mut rows: Vec<String> = Vec::new();
+            let mut fresh: Vec<(i64, u64, Vec<(String, u64)>)> =
+                Vec::with_capacity(hubs_v.len());
+            for h in hubs_v {
+                let (id, cold, pbits) = Self::hub_wire(h);
+                let prev = self.sent.areas_hubs.iter().find(|(pid, _, _)| *pid == id);
+                match prev {
+                    Some((_, pcold, ppb))
+                        if *pcold == cold
+                            && ppb.len() == pbits.len()
+                            && ppb.iter().zip(pbits.iter()).all(|(a, b)| a.0 == b.0) =>
+                    {
+                        let mut pm = serde_json::Map::new();
+                        for ((g, bits), (_, pb)) in pbits.iter().zip(ppb.iter()) {
+                            if bits != pb {
+                                pm.insert(g.clone(), json!(f64::from_bits(*bits)));
+                            }
+                        }
+                        if !pm.is_empty() {
+                            rows.push(json!({ "id": id, "p": Value::Object(pm) }).to_string());
+                        }
+                    }
+                    _ => rows.push(h.to_string()),
+                }
+                fresh.push((id, cold, pbits));
+            }
+            self.sent.areas_hubs = fresh;
+            let spread_moved = spread_h != self.sent.areas_spread;
+            self.sent.areas_spread = spread_h;
+            if rows.is_empty() && !spread_moved {
+                None
+            } else {
+                let mut out = format!("{{\"hubs\":[{}]", rows.join(","));
+                if spread_moved {
+                    out.push_str(",\"spread\":");
+                    out.push_str(&spread_s);
+                }
+                out.push('}');
+                raw(out)
+            }
+        };
+
+        let dep = self.dirty.take(Dirty::DEPOSITS);
+        let payload = Payload {
+            month: self.month,
+            ev: [ev_from as u64, ev_to as u64],
+            headlines: heads,
+            settlements: if changed.is_empty() {
+                None
+            } else {
+                raw(format!("[{}]", changed.join(",")))
+            },
+            settlements_gone: gone,
+            s_hot: if hot.is_empty() {
+                None
+            } else {
+                raw(format!("[{}]", hot.join(",")))
+            },
+            cultures,
+            c_hot,
+            wars,
+            market,
+            m_hot,
+            areas,
+            merchants,
+            routes: if self.dirty.take(Dirty::ROUTES) {
+                raw(serde_json::to_string(&self.routes).unwrap())
+            } else {
+                None
+            },
+            deposits: if dep {
+                raw(serde_json::to_string(&self.known_deposits()).unwrap())
+            } else {
+                None
+            },
+            deposits_hidden: if dep {
+                Some(self.deposits.iter().filter(|d| !d.known).count())
+            } else {
+                None
+            },
+            features: if self.dirty.take(Dirty::FEATURES) {
+                raw(serde_json::to_string(&self.features).unwrap())
+            } else {
+                None
+            },
+            ruins: if self.dirty.take(Dirty::RUINS) {
+                raw(serde_json::to_string(&self.ruins).unwrap())
+            } else {
+                None
+            },
+            territory: if self.dirty.take(Dirty::TERRITORY) {
+                raw(serde_json::to_string(&politics::territory_rle(&self.territory)).unwrap())
+            } else {
+                None
+            },
+        };
+        serde_json::to_string(&payload).unwrap()
+    }
+
+    /// E4.2/E4.3 — seed the delta baseline to the freshly generated world,
+    /// which is exactly what `bootstrap()` ships; the first tick then
+    /// carries only what actually moved after month 0.
+    fn prime_sent(&mut self) {
+        self.sent.settlements = self
+            .settlements
+            .iter()
+            .map(|s| {
+                (
+                    s.id.0,
+                    Self::settlement_cold_sig(s),
+                    [
+                        s.pop,
+                        (s.food * 10.0).round() as i64,
+                        s.k.round() as i64,
+                        s.wealth.round() as i64,
+                    ],
+                )
+            })
+            .collect();
+        let (cul_full, cul_cold, _) = self.cultures_split();
+        self.sent.cultures_cold = crate::util::fnv1a64(cul_cold.as_bytes());
+        self.sent.blocks = [
+            crate::util::fnv1a64(cul_full.as_bytes()),
+            crate::util::fnv1a64(serde_json::to_string(&self.politics.wars).unwrap().as_bytes()),
+            crate::util::fnv1a64(serde_json::to_string(&self.merchants).unwrap().as_bytes()),
+        ];
+        self.sent.market_rows = self
+            .market
+            .snapshot()
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                (
+                    r["g"].as_str().unwrap().to_string(),
+                    crate::util::fnv1a64(r.to_string().as_bytes()),
+                )
+            })
+            .collect();
+        let areas_v = economy::areas_json(&self.areas, &self.settlements);
+        self.sent.areas_of = crate::util::fnv1a64(areas_v["of"].to_string().as_bytes());
+        self.sent.areas_spread =
+            crate::util::fnv1a64(areas_v["spread"].to_string().as_bytes());
+        self.sent.areas_hubs = areas_v["hubs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(Self::hub_wire)
+            .collect();
+    }
+
+    /// Minimal pack-header meta (E3.1): identity, dimensions and physical
+    /// constants only — everything entity-shaped rides `bootstrap()`.
+    fn pack_meta(&self) -> Value {
         json!({
             "seed": self.seed,
             "size": self.size,
@@ -2244,14 +2891,24 @@ impl World {
             "metres_per_unit": constants::METRES_PER_UNIT,
             "km_per_cell": constants::KM_PER_CELL,
             "world_name": self.world_name,
+        })
+    }
+
+    /// The once-per-world bootstrap (E3.1): vocabulary tables plus the
+    /// entity state ticks also carry. Its own small JSON call — the
+    /// multi-megabyte pack header stops duplicating the tick payload.
+    pub fn bootstrap(&self) -> Value {
+        let ev_start = self.events.len().saturating_sub(60);
+        json!({
             "biomes": constants::biome_meta(),
-            "crop_packages": agriculture::PACK_NAMES
-                .iter()
-                .enumerate()
-                .map(|(i, n)| json!({
-                    "id": i,
-                    "name": n,
-                    "density": agriculture::PACK_DENSITY[i],
+            // E1.12 — wire enums ship as small ints; these tables give them names
+            "event_kinds": EventKind::iter().map(|k| k.name()).collect::<Vec<_>>(),
+            "entity_kinds": crate::entity::EntityKind::iter().map(|k| k.name()).collect::<Vec<_>>(),
+            "crop_packages": agriculture::CropPackage::iter()
+                .map(|p| json!({
+                    "id": p.code(),
+                    "name": p.name(),
+                    "density": p.density(),
                 }))
                 .collect::<Vec<Value>>(),
             "resources": resources::resource_meta(),
@@ -2267,77 +2924,328 @@ impl World {
             "areas": economy::areas_json(&self.areas, &self.settlements),
             "merchants": self.merchants,
             "events": self.events[ev_start..],
-            "timings": timings,
         })
     }
 
-    /// [u32 header_len][header json (padded to 4)][raw little-endian arrays]
-    pub fn pack(&self) -> Vec<u8> {
-        fn f32_bytes(a: &Array2<f64>) -> Vec<u8> {
-            let v: Vec<f32> = a.iter().map(|&x| x as f32).collect();
-            bytemuck::cast_slice(&v).to_vec()
+    pub fn bootstrap_json(&self) -> String {
+        self.bootstrap().to_string()
+    }
+
+    /// Merged view — exactly what the client holds after unpack +
+    /// bootstrap. Native tooling (genjs, worldgen) reads this.
+    pub fn meta(&self) -> Value {
+        let mut m = self.pack_meta();
+        for (k, v) in self.bootstrap().as_object().unwrap() {
+            m[k.as_str()] = v.clone();
         }
-        let mut flags: Vec<u8> = Vec::with_capacity(self.rivers.len());
-        for (((&r, &l), &s), &sw) in self
-            .rivers
+        m
+    }
+
+    /// Generation stage timings, seconds, in stage order — the debug side
+    /// channel (E3.9). Wall-clock was the one nondeterministic region of
+    /// the pack header; it no longer rides the pack at all.
+    pub fn timings_json(&self) -> String {
+        let pairs: Vec<Value> = self
+            .timings
             .iter()
-            .zip(self.lakes.iter())
-            .zip(self.salt.iter())
-            .zip(self.seasonal.iter())
-        {
-            flags.push(
-                (r as u8) | ((l as u8) << 1) | ((s as u8) << 2) | ((sw as u8) << 3),
-            );
-        }
-        let biomes: Vec<u8> = self.biomes.iter().cloned().collect();
-        let crops: Vec<u8> = self.crops.iter().cloned().collect();
-        let strahler: Vec<u8> = self.strahler.iter().cloned().collect();
-        let territory: Vec<i16> = self.territory.iter().cloned().collect();
+            .map(|(k, v)| json!([k, round3(*v / 1000.0)]))
+            .collect();
+        serde_json::to_string(&pairs).unwrap()
+    }
 
-        let arrays: Vec<(&str, &str, Vec<u8>)> = vec![
-            ("height", "float32", f32_bytes(&self.height)),
-            ("tmean", "float32", f32_bytes(&self.tmean)),
-            ("tamp", "float32", f32_bytes(&self.tamp)),
-            ("precip", "float32", f32_bytes(&self.precip)),
-            ("pamp", "float32", f32_bytes(&self.pamp)),
-            ("discharge", "float32", f32_bytes(&self.discharge)),
-            ("flow_amp", "float32", f32_bytes(&self.flow_amp)),
-            ("fertility", "float32", f32_bytes(&self.fertility)),
-            ("biomes", "uint8", biomes),
-            ("crops", "uint8", crops),
-            ("strahler", "uint8", strahler),
-            ("flags", "uint8", flags),
-            ("territory", "int16", bytemuck::cast_slice(&territory).to_vec()),
-        ];
+    /// Boolean view of one `CellFlags` bit — offline tooling convenience;
+    /// hot paths test bits on `self.flags` directly.
+    pub fn mask(&self, f: CellFlags) -> Array2<bool> {
+        self.flags.mapv(|b| b & f.bits() != 0)
+    }
 
+    // The field registry itself is declared once, below `pack()`, via the
+    // `field_registry!` macro (E2.1) — it expands to both the static
+    // `FIELD_SPECS` table (for codegen, E2.4) and `World::fields()`.
+
+    /// Pack v2 (E3.3–E3.6): `[u32 header_len][header json (padded to 4)][blob]`.
+    /// The header carries `pack: 2`, a CRC-32 of the blob (E3.6), and the
+    /// territory grid as RLE instead of a raw section (E3.5); float grids
+    /// ride as quantized u16 where the registry says so (E3.4). The blob is
+    /// written once, straight from grid storage — no per-field temporary
+    /// buffers (E3.3). Section order comes from the field registry (E2.2).
+    pub fn pack(&self) -> Vec<u8> {
+        let fields = self.fields();
+        let cells = self.size * self.width;
+        let mut blob: Vec<u8> = Vec::with_capacity(cells * 20 + 64);
         let mut entries: Vec<Value> = Vec::new();
-        let mut offset = 0usize;
-        for (name, dtype, raw) in &arrays {
-            entries.push(json!({
-                "name": name,
-                "dtype": dtype,
+        for f in &fields {
+            // territory rides the header as RLE (E3.5): contiguous realms
+            // compress ~1000×, and the client already speaks this encoding
+            // for tick patches.
+            if f.name == "territory" {
+                continue;
+            }
+            let offset = blob.len();
+            let mut entry = json!({
+                "name": f.name,
+                "dtype": f.data.dtype(),
                 "shape": [self.size, self.width],
-                "offset": offset,
-                "nbytes": raw.len(),
-            }));
-            offset += raw.len();
+            });
+            match (&f.data, f.quant) {
+                (FieldData::F32(a), Quant::Linear) => {
+                    let s = a.as_slice().expect("registry grids are contiguous");
+                    let (lo, hi) = min_max(s);
+                    let (scale, inv) = quant_steps(lo, hi);
+                    blob.reserve(s.len() * 2);
+                    for &v in s {
+                        let q = ((v as f64 - lo) * inv).round().clamp(0.0, 65535.0) as u16;
+                        blob.extend_from_slice(&q.to_le_bytes());
+                    }
+                    entry["dtype"] = json!("uint16");
+                    entry["q"] = json!({ "scale": scale, "offset": lo, "xform": "linear" });
+                }
+                (FieldData::F32(a), Quant::Sqrt) => {
+                    // 16 bits spent in sqrt-space: low flows keep relative
+                    // precision even though discharge spans ~6 decades.
+                    let s = a.as_slice().expect("registry grids are contiguous");
+                    let mut lo = f64::INFINITY;
+                    let mut hi = f64::NEG_INFINITY;
+                    for &v in s {
+                        let t = (v.max(0.0) as f64).sqrt();
+                        if t < lo { lo = t; }
+                        if t > hi { hi = t; }
+                    }
+                    if !lo.is_finite() {
+                        lo = 0.0;
+                        hi = 0.0;
+                    }
+                    let (scale, inv) = quant_steps(lo, hi);
+                    blob.reserve(s.len() * 2);
+                    for &v in s {
+                        let t = (v.max(0.0) as f64).sqrt();
+                        let q = ((t - lo) * inv).round().clamp(0.0, 65535.0) as u16;
+                        blob.extend_from_slice(&q.to_le_bytes());
+                    }
+                    entry["dtype"] = json!("uint16");
+                    entry["q"] = json!({ "scale": scale, "offset": lo, "xform": "sqrt" });
+                }
+                (data, _) => data.write_into(&mut blob),
+            }
+            entry["offset"] = json!(offset);
+            entry["nbytes"] = json!(blob.len() - offset);
+            entries.push(entry);
         }
 
-        let mut header = self.meta();
+        let mut header = self.pack_meta();
         header["id"] = json!(format!("{}-{}", self.seed, self.size));
+        header["pack"] = json!(PACK_VERSION);
+        header["crc32"] = json!(crate::util::crc32(&blob));
+        header["territory"] = json!(politics::territory_rle(&self.territory));
         header["arrays"] = Value::Array(entries);
         let mut hjson = serde_json::to_string(&header).unwrap().into_bytes();
         while hjson.len() % 4 != 0 {
             hjson.push(b' ');
         }
 
-        let total = 4 + hjson.len() + offset;
-        let mut out = Vec::with_capacity(total);
+        let mut out = Vec::with_capacity(4 + hjson.len() + blob.len());
         out.extend_from_slice(&(hjson.len() as u32).to_le_bytes());
         out.extend_from_slice(&hjson);
-        for (_, _, raw) in &arrays {
-            out.extend_from_slice(raw);
-        }
+        out.extend_from_slice(&blob);
         out
     }
 }
+
+/// Pack protocol version — the client refuses any other (E3.6).
+pub const PACK_VERSION: u32 = 2;
+
+fn min_max(s: &[f32]) -> (f64, f64) {
+    let mut lo = f64::INFINITY;
+    let mut hi = f64::NEG_INFINITY;
+    for &v in s {
+        let v = v as f64;
+        if v < lo { lo = v; }
+        if v > hi { hi = v; }
+    }
+    if lo.is_finite() { (lo, hi) } else { (0.0, 0.0) }
+}
+
+/// `(scale, 1/scale)` for a u16 span over `[lo, hi]`; constant fields get 0.
+fn quant_steps(lo: f64, hi: f64) -> (f64, f64) {
+    if hi > lo {
+        let scale = (hi - lo) / 65535.0;
+        (scale, 1.0 / scale)
+    } else {
+        (0.0, 0.0)
+    }
+}
+
+/// One grid's declaration in the field registry (E2.1).
+pub struct FieldDecl<'a> {
+    /// Wire + registry name; also the JS-side array key.
+    pub name: &'static str,
+    /// Human units, for docs and generated constants.
+    pub units: &'static str,
+    /// Included in the diagnostics state hash (mutable-by-tick grids yes;
+    /// grids derivable from them or static after generation, no).
+    pub in_hash: bool,
+    /// True when Orbital uploads this grid as a texture (E2.2: the upload
+    /// list on the JS side derives from the generated constants).
+    pub gpu: bool,
+    /// Wire quantization (E3.4) — storage and the determinism hash always
+    /// see full f32; quantization is strictly a wire concern.
+    pub quant: Quant,
+    pub data: FieldData<'a>,
+}
+
+/// Data-free registry row — what codegen and offline tooling see (E2.4).
+pub struct FieldSpec {
+    pub name: &'static str,
+    pub dtype: &'static str,
+    pub units: &'static str,
+    pub in_hash: bool,
+    pub gpu: bool,
+}
+
+/// E2.1 — the field registry macro: every per-cell grid the world owns,
+/// declared exactly once with name, storage kind, units, hash inclusion and
+/// GPU upload flag. Expands to the static `FIELD_SPECS` table (codegen) and
+/// `World::fields()` (pack + hash). A grid added here is a grid added
+/// everywhere; field-order drift dies structurally (E2.2).
+///
+/// Order is the pack order and is a versioned contract (ADR-0007).
+macro_rules! dtype_name {
+    (F32) => { "float32" };
+    (U8) => { "uint8" };
+    (I16) => { "int16" };
+}
+
+// The `wire` column: how the grid crosses WASM→JS (E3.4). `raw` ships
+// storage bytes verbatim; `u16` is linear 16-bit quantization over the
+// field's live range; `u16sqrt` quantizes in sqrt-space (wide-dynamic-range
+// fields keep relative precision at the low end). The client dequantizes
+// back to float32 at the unpack edge, so everything downstream is unchanged.
+macro_rules! quant_mode {
+    (raw) => { Quant::None };
+    (u16) => { Quant::Linear };
+    (u16sqrt) => { Quant::Sqrt };
+}
+
+macro_rules! field_registry {
+    ($($field:ident : $kind:ident, units $units:literal, hash $h:literal, gpu $g:literal, wire $wire:ident;)+) => {
+        /// Static view of the field registry, in pack order (E2.1/E2.4).
+        /// `dtype` is the *decoded* type the client ends up holding.
+        pub const FIELD_SPECS: &[FieldSpec] = &[$(
+            FieldSpec {
+                name: stringify!($field),
+                dtype: dtype_name!($kind),
+                units: $units,
+                in_hash: $h,
+                gpu: $g,
+            },
+        )+];
+
+        impl World {
+            /// The live registry: specs bound to this world's grids.
+            pub fn fields(&self) -> Vec<FieldDecl<'_>> {
+                vec![$(
+                    FieldDecl {
+                        name: stringify!($field),
+                        units: $units,
+                        in_hash: $h,
+                        gpu: $g,
+                        quant: quant_mode!($wire),
+                        data: FieldData::$kind(&self.$field),
+                    },
+                )+]
+            }
+        }
+    };
+}
+
+field_registry! {
+    height:    F32, units "rel. elevation (0 = sea)",        hash true,  gpu true,  wire u16;
+    tmean:     F32, units "°C annual mean",                  hash false, gpu true,  wire u16;
+    tamp:      F32, units "°C seasonal amplitude",           hash false, gpu true,  wire u16;
+    precip:    F32, units "mm/yr",                           hash false, gpu true,  wire u16;
+    pamp:      F32, units "signed monsoon share −1..1",      hash true,  gpu false, wire u16;
+    discharge: F32, units "flow accumulation (cells·rain)",  hash false, gpu true,  wire u16sqrt;
+    flow_amp:  F32, units "signed seasonal swing −1..1",     hash true,  gpu false, wire u16;
+    fertility: F32, units "0..1 arable index",               hash false, gpu true,  wire u16;
+    biomes:    U8,  units "biome id",                        hash true,  gpu false, wire raw;
+    crops:     U8,  units "crop package id",                 hash true,  gpu false, wire raw;
+    strahler:  U8,  units "stream order, 0 off-river",       hash true,  gpu true,  wire raw;
+    flags:     U8,  units "CellFlags bits",                  hash true,  gpu true,  wire raw;
+    territory: I16, units "owner culture, −1 wild",          hash false, gpu false, wire raw;
+}
+
+/// Wire quantization mode for a registry field (E3.4).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Quant {
+    /// Storage bytes ride verbatim.
+    None,
+    /// Linear u16 over the field's live `[min, max]` span.
+    Linear,
+    /// Linear u16 in sqrt-space — for wide-dynamic-range fields.
+    Sqrt,
+}
+
+/// Borrowed grid storage behind a registry entry. Storage is f32 at rest
+/// (E3.2); the wire may narrow further via `Quant` (E3.4).
+pub enum FieldData<'a> {
+    F32(&'a Array2<f32>),
+    U8(&'a Array2<u8>),
+    I16(&'a Array2<i16>),
+}
+
+impl FieldData<'_> {
+    /// Decoded dtype name as the JS client ends up holding it.
+    pub fn dtype(&self) -> &'static str {
+        match self {
+            FieldData::F32(_) => "float32",
+            FieldData::U8(_) => "uint8",
+            FieldData::I16(_) => "int16",
+        }
+    }
+
+    /// Append raw little-endian bytes straight from grid storage — the
+    /// no-temporaries path of pack v2 (E3.3).
+    pub fn write_into(&self, out: &mut Vec<u8>) {
+        match self {
+            FieldData::F32(a) => out.extend_from_slice(bytemuck::cast_slice(
+                a.as_slice().expect("registry grids are contiguous"),
+            )),
+            FieldData::U8(a) => {
+                out.extend_from_slice(a.as_slice().expect("registry grids are contiguous"))
+            }
+            FieldData::I16(a) => out.extend_from_slice(bytemuck::cast_slice(
+                a.as_slice().expect("registry grids are contiguous"),
+            )),
+        }
+    }
+
+    /// Exact-width storage bytes for the determinism hash — the hash sees
+    /// every bit the simulation sees (f32 at rest since E3.2).
+    pub fn hash_bytes(&self, out: &mut Vec<u8>) {
+        match self {
+            FieldData::F32(a) => {
+                for &v in a.iter() {
+                    out.extend_from_slice(&v.to_bits().to_le_bytes());
+                }
+            }
+            FieldData::U8(a) => out.extend(a.iter().cloned()),
+            FieldData::I16(a) => {
+                for &v in a.iter() {
+                    out.extend_from_slice(&v.to_le_bytes());
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- bands
+
+use crate::util::Band;
+
+/// Diagnostics bands (E2.7): the engine's speed and wire budget.
+pub const BANDS: &[Band] = &[
+    Band { name: "512 generation time", sweet: (0.0, 3000.0), hard: (0.0, 8000.0), target: "sweet ≤3s · hard ≤8s (wasm ≈ 2× native)" },
+    Band { name: "tick rate", sweet: (100.0, f64::INFINITY), hard: (25.0, f64::INFINITY), target: "sweet ≥100 mo/s · hard ≥25" },
+    Band { name: "pack bytes per cell", sweet: (0.0, 21.0), hard: (0.0, 24.0), target: "sweet ≤21 · hard ≤24 (8×u16 + 4×u8 = 20 B/cell + header)" },
+    Band { name: "median tick payload", sweet: (0.0, 4096.0), hard: (0.0, 16384.0), target: "sweet ≤4 KB · hard ≤16 KB (E4: ship what changed)" },
+];

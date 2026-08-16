@@ -11,29 +11,24 @@ use std::collections::BTreeMap;
 
 use serde::Serialize;
 
+use crate::ids::EntityId;
+use crate::entity::EntityKind;
 use crate::entity::Registry;
+use crate::world::EventKind;
 use crate::world::Event;
 
 // ---------------------------------------------------------------- weight
 
-/// How loudly an event kind rings down the years.
-pub fn weight(k: &str) -> i32 {
-    match k {
-        "disaster" => 4,
-        "war" | "famine" | "realm" => 3,
-        "found" | "wonder" | "discovery" | "depletion" | "ruler" | "tech" => 2,
-        _ => 1, // myth, omen, festival, society, trade, growth
-    }
+/// How loudly an event kind rings down the years — one row per kind in
+/// the event table beside `EventKind` itself (E2.3).
+pub fn weight(k: EventKind) -> i32 {
+    k.weight()
 }
 
 /// Which way fortune leans for the subject: +1 rising, −1 falling, 0 flat.
 /// The reversal detector (M6.7) counts the sign changes.
-pub fn fortune(k: &str) -> i32 {
-    match k {
-        "found" | "wonder" | "growth" | "tech" | "discovery" | "festival" => 1,
-        "war" | "famine" | "disaster" | "depletion" => -1,
-        _ => 0,
-    }
+pub fn fortune(k: EventKind) -> i32 {
+    k.fortune()
 }
 
 // ---------------------------------------------------------------- hashing
@@ -114,7 +109,7 @@ pub struct Story {
     pub pattern: String,
     pub title: String,
     /// Entities the story is about; the first is the protagonist.
-    pub ids: Vec<i64>,
+    pub ids: Vec<EntityId>,
     /// Years spanned (inclusive).
     pub y0: i64,
     pub y1: i64,
@@ -131,8 +126,8 @@ fn score_beats(beats: &[&Event]) -> f64 {
     let mut last = 0i32;
     let mut reversals = 0;
     for b in beats {
-        sc += weight(&b.k) as f64;
-        let f = fortune(&b.k);
+        sc += weight(b.k) as f64;
+        let f = fortune(b.k);
         if f != 0 {
             if last != 0 && f != last {
                 reversals += 1;
@@ -152,7 +147,7 @@ fn reversal_count(beats: &[&Event]) -> usize {
     let mut last = 0i32;
     let mut n = 0;
     for b in beats {
-        let f = fortune(&b.k);
+        let f = fortune(b.k);
         if f != 0 {
             if last != 0 && f != last {
                 n += 1;
@@ -171,8 +166,8 @@ fn trim_beats(mut beats: Vec<&Event>, cap: usize) -> Vec<Event> {
         let tail: Vec<&Event> = beats.split_off(beats.len() - 2);
         let mut mid = beats;
         mid.sort_by(|a, b| {
-            weight(&b.k)
-                .cmp(&weight(&a.k))
+            weight(b.k)
+                .cmp(&weight(a.k))
                 .then(a.m.cmp(&b.m))
         });
         mid.truncate(cap - 4);
@@ -190,21 +185,21 @@ fn trim_beats(mut beats: Vec<&Event>, cap: usize) -> Vec<Event> {
 /// BTree ordering everywhere, ties broken by year then title.
 pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
     // per-entity event index, in id order
-    let mut index: BTreeMap<i64, Vec<usize>> = BTreeMap::new();
+    let mut index: BTreeMap<EntityId, Vec<usize>> = BTreeMap::new();
     for (i, e) in events.iter().enumerate() {
         for &id in &e.ids {
             index.entry(id).or_default().push(i);
         }
     }
-    let beats_of = |id: i64| -> Vec<&Event> {
+    let beats_of = |id: EntityId| -> Vec<&Event> {
         index
             .get(&id)
             .map(|v| v.iter().map(|&i| &events[i]).collect())
             .unwrap_or_default()
     };
 
-    let mut out: BTreeMap<(String, i64), Story> = BTreeMap::new();
-    let mut push = |pattern: &str, key: i64, title: String, ids: Vec<i64>, beats: Vec<&Event>| {
+    let mut out: BTreeMap<(String, EntityId), Story> = BTreeMap::new();
+    let mut push = |pattern: &str, key: EntityId, title: String, ids: Vec<EntityId>, beats: Vec<&Event>| {
         if beats.is_empty() {
             return;
         }
@@ -234,13 +229,13 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
         if beats.len() < 2 {
             continue;
         }
-        match ent.kind.as_str() {
+        match ent.kind {
             // --- rise-fall / trials: a settlement raised high, then struck
-            "settlement" => {
-                let rises = beats.iter().filter(|b| fortune(&b.k) > 0).count();
+            EntityKind::Settlement => {
+                let rises = beats.iter().filter(|b| fortune(b.k) > 0).count();
                 let blows = beats
                     .iter()
-                    .filter(|b| fortune(&b.k) < 0 && weight(&b.k) >= 3)
+                    .filter(|b| fortune(b.k) < 0 && weight(b.k) >= 3)
                     .count();
                 if rises >= 1 && ent.until.is_some() {
                     push(
@@ -260,16 +255,20 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
                     );
                 }
                 // --- mine-curse: the strike, then the silence
-                let strike = beats.iter().position(|b| b.k == "discovery");
-                let spent = beats.iter().rposition(|b| b.k == "depletion");
+                let strike = beats.iter().position(|b| b.k == EventKind::Discovery);
+                let spent = beats.iter().rposition(|b| b.k == EventKind::Depletion);
                 if let (Some(a), Some(b)) = (strike, spent) {
                     if b > a && beats[b].m - beats[a].m <= 80 * 12 {
                         let arc: Vec<&Event> = beats[a..=b]
                             .iter()
                             .filter(|e| {
                                 matches!(
-                                    e.k.as_str(),
-                                    "discovery" | "depletion" | "found" | "growth" | "trade"
+                                    e.k,
+                                    EventKind::Discovery
+                                        | EventKind::Depletion
+                                        | EventKind::Found
+                                        | EventKind::Growth
+                                        | EventKind::Trade
                                 )
                             })
                             .copied()
@@ -287,7 +286,7 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
                 }
             }
             // --- tide-turned wars, marked by the epithet politics awards
-            "war" => {
+            EntityKind::War => {
                 if ent.epithets.iter().any(|e| e == "the Tide-Turned")
                     || reversal_count(&beats) >= 2
                 {
@@ -300,25 +299,25 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
                     );
                 }
             }
-            "person" => match ent.role.as_str() {
+            EntityKind::Person => match ent.role.as_str() {
                 // --- founder's dream: their camp grown into wonders
                 "founder" => {
-                    let mut sett: Option<i64> = None;
+                    let mut sett: Option<EntityId> = None;
                     for b in &beats {
-                        if b.k == "found" {
+                        if b.k == EventKind::Found {
                             sett = b
                                 .ids
                                 .iter()
                                 .copied()
-                                .find(|&i| reg.get(i).map(|x| x.kind == "settlement").unwrap_or(false));
+                                .find(|&i| reg.get(i).map(|x| x.kind == EntityKind::Settlement).unwrap_or(false));
                         }
                     }
                     if let Some(sid) = sett {
                         let sb = beats_of(sid);
-                        if sb.iter().any(|b| b.k == "wonder") {
+                        if sb.iter().any(|b| b.k == EventKind::Wonder) {
                             let mut arc = beats.clone();
                             arc.extend(sb.iter().filter(|b| {
-                                matches!(b.k.as_str(), "wonder" | "growth" | "found")
+                                matches!(b.k, EventKind::Wonder | EventKind::Growth | EventKind::Found)
                             }));
                             arc.sort_by_key(|e| e.m);
                             arc.dedup_by(|a, b| a.m == b.m && a.text == b.text);
@@ -347,9 +346,9 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
                 _ => {}
             },
             // --- restless crowns: three circlets in a hundred years
-            "culture" => {
+            EntityKind::Culture => {
                 let crowns: Vec<&&Event> =
-                    beats.iter().filter(|b| b.k == "ruler").collect();
+                    beats.iter().filter(|b| b.k == EventKind::Ruler).collect();
                 for w in crowns.windows(3) {
                     if w[2].m - w[0].m <= 100 * 12 {
                         push(
@@ -359,7 +358,7 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
                             vec![ent.id],
                             beats
                                 .iter()
-                                .filter(|b| matches!(b.k.as_str(), "ruler" | "realm" | "war"))
+                                .filter(|b| matches!(b.k, EventKind::Ruler | EventKind::Realm | EventKind::War))
                                 .copied()
                                 .collect(),
                         );
@@ -368,7 +367,7 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
                 }
             }
             // --- the relic's road: an artifact with a provenance (M6.3)
-            "artifact" => {
+            EntityKind::Artifact => {
                 if beats.len() >= 3 {
                     push(
                         "relic-road",
@@ -385,9 +384,9 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
 
     // --- the long rivalry: the same two peoples, war upon war
     // (kindle events carry [war, culture, culture] ids)
-    let mut pair_wars: BTreeMap<(i64, i64), Vec<i64>> = BTreeMap::new();
+    let mut pair_wars: BTreeMap<(EntityId, EntityId), Vec<EntityId>> = BTreeMap::new();
     for e in events {
-        if e.k == "war" && e.text.starts_with("War kindles") && e.ids.len() >= 3 {
+        if e.k == EventKind::War && e.text.starts_with("War kindles") && e.ids.len() >= 3 {
             let (a, b) = (e.ids[1].min(e.ids[2]), e.ids[1].max(e.ids[2]));
             pair_wars.entry((a, b)).or_default().push(e.ids[0]);
         }
@@ -409,7 +408,7 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
             if wb.len() > 2 {
                 if let Some(mid) = wb[1..wb.len() - 1]
                     .iter()
-                    .max_by_key(|e| (weight(&e.k), -e.m))
+                    .max_by_key(|e| (weight(e.k), -e.m))
                 {
                     arc.push(mid);
                 }
@@ -422,7 +421,7 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
         arc.dedup_by(|x, y| x.m == y.m && x.text == y.text);
         push(
             "rivalry",
-            a * 100_000 + b,
+            EntityId(a.0 * 100_000 + b.0),
             format!("The Long Rivalry of the {} and the {}", ca.name, cb.name),
             vec![*a, *b],
             arc,

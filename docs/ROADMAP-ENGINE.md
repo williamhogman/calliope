@@ -42,18 +42,18 @@ instrument track (E10) starts first and gates everything.
 Strings stop being identifiers. Every closed vocabulary in the engine becomes
 a `Copy` enum with strum-derived tables; parallel hand-written arrays die.
 
-- [ ] E1.1 Add `strum`/`strum_macros`; convention: closed vocabularies derive `Display`, `EnumString`, `EnumIter`, `IntoStaticStr`, `EnumCount` (S)
-- [ ] E1.2 `Good` enum replacing the 19-string table `resources.rs:16-36`; `Market.prices: BTreeMap<String,f64>` (`economy.rs:69-71`) becomes an `EnumMap<Good, f64>` (M)
-- [ ] E1.3 `isa`/`requires`/`abundance` string matches (`resources.rs:39-79`) become const tables keyed by `Good`; `isa_chain`'s per-call `Vec<String>` (`resources.rs:91-100`) becomes a precomputed closure bitmask (S)
-- [ ] E1.4 `EventKind` enum replacing `Event.k: String` (`world.rs:38`); `telling::weight(&e.k)` (`world.rs:1815,1859`) becomes an array lookup; match sites gain exhaustiveness (M)
-- [ ] E1.5 `EntityKind` enum replacing `Entity.kind: String` (`entity.rs:14`); registry filters stop string-comparing every tick (`entity.rs:116,141`) (S)
-- [ ] E1.6 Newtype ids — `SettlementId`, `CultureId`, `EntityId`, `DepositId` — replacing raw `usize`/`i64` across module boundaries; misuse becomes a type error (M)
-- [ ] E1.7 `CellFlags` bitflags: one `Array2<u8>` replaces the four bool grids `rivers/lakes/salt/seasonal` (`world.rs:91-102`); the 4-way zip in `pack()` (`world.rs:2281-2291`) becomes a memcpy (S-M)
-- [ ] E1.8 `Biome` enum with derived names; `constants::biome_meta()` generated, not hand-maintained (S)
-- [ ] E1.9 Tech knowledge as a `u32` bitset on `Society`; `knows("pottery")` string scans (`world.rs:1906`) become O(1) bit tests (S)
-- [ ] E1.10 `CropPackage` enum subsuming the parallel arrays `PACK_NAMES`/`PACK_DENSITY` (`world.rs:2248-2255`) (S)
-- [ ] E1.11 `Settlement.goods: Vec<String>` → `SmallVec<Good>`; `exports: Option<String>` → `Option<Good>`; `Route.goods: Vec<Option<String>>` (`trade.rs:57`) → `Vec<Option<Good>>`; kills the clone chains in `goods_for` (`trade.rs:87-104`) (S-M)
-- [ ] E1.12 `serde_repr` on wire enums: JSON ships small stable ints plus a names table sent once in `meta()`; event/entity payload shrinks (S)
+- [x] E1.1 Add `strum`/`strum_macros`; convention: closed vocabularies derive `Display`, `EnumString`, `EnumIter`, `IntoStaticStr`, `EnumCount` (S)
+- [x] E1.2 `Good` enum replacing the 19-string table `resources.rs:16-36`; `Market.prices: BTreeMap<String,f64>` (`economy.rs:69-71`) becomes an `EnumMap<Good, f64>` (M)
+- [x] E1.3 `isa`/`requires`/`abundance` string matches (`resources.rs:39-79`) become const tables keyed by `Good`; `isa_chain`'s per-call `Vec<String>` (`resources.rs:91-100`) becomes a precomputed closure bitmask (S)
+- [x] E1.4 `EventKind` enum replacing `Event.k: String` (`world.rs:38`); `telling::weight(&e.k)` (`world.rs:1815,1859`) becomes an array lookup; match sites gain exhaustiveness (M)
+- [x] E1.5 `EntityKind` enum replacing `Entity.kind: String` (`entity.rs:14`); registry filters stop string-comparing every tick (`entity.rs:116,141`) (S)
+- [x] E1.6 Newtype ids — `SettlementId`, `CultureId`, `EntityId` — replacing raw `usize`/`i64` across module boundaries; misuse becomes a type error. (`DepositId` dropped: deposit indices never leave `World::deposits` loops — no boundary to protect) (M)
+- [x] E1.7 `CellFlags` bitflags: one `Array2<u8>` replaces the four bool grids `rivers/lakes/salt/seasonal` (`world.rs:91-102`); the 4-way zip in `pack()` (`world.rs:2281-2291`) becomes a memcpy (S-M)
+- [x] E1.8 `Biome` enum with derived names; `constants::biome_meta()` generated, not hand-maintained (S)
+- [x] E1.9 Tech knowledge as a `u32` bitset on `Society`; `knows("pottery")` string scans (`world.rs:1906`) become O(1) bit tests (S)
+- [x] E1.10 `CropPackage` enum subsuming the parallel arrays `PACK_NAMES`/`PACK_DENSITY` (`world.rs:2248-2255`) (S)
+- [x] E1.11 `Settlement.goods: Vec<String>` → `SmallVec<Good>`; `exports: Option<String>` → `Option<Good>`; `Route.goods: Vec<Option<String>>` (`trade.rs:57`) → `Vec<Option<Good>>`; kills the clone chains in `goods_for` (`trade.rs:87-104`) (S-M)
+- [x] E1.12 `serde_repr` on wire enums: JSON ships small stable ints plus a names table sent once in `meta()`; event/entity payload shrinks (S)
 
 Gates: `diagnose determinism` hash unchanged across the enum migration
 (pure refactor); zero string-typed identifiers left in `Market`,
@@ -65,14 +65,14 @@ The engine's shape is declared once; pack, hash, textures, and diagnostics
 are all generated views of the same declaration. This is the keystone the
 data tracks stand on.
 
-- [ ] E2.1 Field-registry macro: each grid declared once with name, dtype, units, pack-inclusion, hash-inclusion, texture slot — replacing the hand-kept lists in `pack()` (`world.rs:2297-2311`) (M)
-- [ ] E2.2 `pack()`, `hash_state`, and Orbital's `set_world` upload order (`gpu.js:51-64`) all derive from the registry — the field-order-drift failure class dies structurally (M)
-- [ ] E2.3 Event-table macro: kind, chronicle template, sifter weight, and notification family declared together (today spread across `chronicle.rs`, `telling.rs`, and UI filter lists `state.js:105-115`) (M)
-- [ ] E2.4 Generated JS constants: `scripts/build.sh` emits `game/web/js/gen/constants.js` (layer ids, biome names, goods, palette anchors) from the Rust tables — kills the hand-copied `LAYER_ID` in `gpu.js:14-17` (M)
-- [ ] E2.5 Wire-type stubs: JSDoc typedefs for the tick/meta payload generated from the `Serialize` structs, so UI code has a checked contract (S-M)
-- [ ] E2.6 Collapse the near-identical linear-scan bodies in `Registry` (`entity.rs:47-126`) behind one generic helper (S)
-- [ ] E2.7 Diagnostics-band table: bands declared beside the systems they measure, consumed by `diagnose.rs` — the 2,303-line harness stops duplicating world-shape knowledge (M)
-- [ ] E2.8 ADR: the registry/codegen architecture — what is declared, what is generated, what is forbidden to hand-write (S)
+- [x] E2.1 Field-registry macro: each grid declared once with name, dtype, units, pack-inclusion, hash-inclusion, texture slot — replacing the hand-kept lists in `pack()` (`world.rs:2297-2311`) (M)
+- [x] E2.2 `pack()`, `hash_state`, and Orbital's `set_world` upload order (`gpu.js:51-64`) all derive from the registry — the field-order-drift failure class dies structurally (M)
+- [x] E2.3 Event-table macro: kind, sifter weight, fortune lean, and notification family declared together (`event_table!` beside `EventKind`); chronicle prose stays at emission sites by design — each line is composed from live context no template column could carry (M)
+- [x] E2.4 Generated JS constants: `scripts/build.sh` emits `game/web/js/gen/constants.js` (layer ids, field registry, event/entity kinds, biome names, goods) from the Rust tables — kills the hand-copied `LAYER_ID` in `gpu.js:14-17`; palette color stops stay in `palette.js` as pure presentation (M)
+- [x] E2.5 Wire-type stubs: `genjs types` emits `gen/types.js` — JSDoc typedefs introspected from live payloads serialized by the `Serialize` impls (map-like objects collapse to `Object<string, T>`); `net.js` returns are annotated with them (S-M)
+- [x] E2.6 Collapse the near-identical linear-scan bodies in `Registry` (`entity.rs:47-126`) behind one generic helper (`find_latest`) (S)
+- [x] E2.7 Diagnostics-band table: `util::Band` + per-system `BANDS` consts (geo, climate, biomes, agriculture, hydrology, resources, chronicle, economy, settlements, world), consumed by `diagnose.rs` via `Checks::band`/`band_as` — sweep means reuse the same bands (M)
+- [x] E2.8 ADR-0015: the registry/codegen architecture — what is declared, what is generated, what is forbidden to hand-write (S)
 
 Gates: one grep proves no field name appears in more than one Rust source
 location; pack/unpack round-trip byte-identity stays green (`diagnose
@@ -84,17 +84,17 @@ The full-world payload today is ~26 MB at 768×896 (38 B/cell across 13
 arrays) plus a JSON header that duplicates nearly the whole tick payload.
 Pack v2 makes the payload lean, versioned, and fully binary.
 
-- [ ] E3.1 Header/meta split: the pack header carries the array table and minimal meta only; settlements/cultures/events leave the header (`meta()` inlines all of them today, `world.rs:2236-2271`) (M)
-- [ ] E3.2 Native `f32` grids: store what needs no f64 precision as f32 at rest (all 8 packed float grids are converted f64→f32 per pack today, `world.rs:2276-2279`) — halves grid memory and kills ~22 MB of transient copies per pack (M-L)
-- [ ] E3.3 Single-allocation pack: registry-computed offsets, one `Vec<u8>`, fields written in place — no per-field temporary buffers (`world.rs:2297-2311`) (S)
-- [ ] E3.4 Opt-in quantization per registry field: height/precip/discharge as u16 + scale/offset in the header; JS gets the dequant constants (M)
-- [ ] E3.5 Territory ships RLE in the pack too — `politics::territory_rle` already exists for ticks (`world.rs:2223`) but `pack()` sends the raw i16 grid (`world.rs:2295,2310`) (S)
-- [ ] E3.6 Pack version byte + CRC32; `unpack()` (`net.js:15-27`) verifies both and fails loud (S)
-- [ ] E3.7 Columnar entity sections: settlements/deposits/ruins as struct-of-arrays binary tables with a string table, replacing their JSON header seats (L)
-- [ ] E3.8 String interning across the boundary: names cross once; events and entity tables reference string-table ids (with E3.7) (M)
-- [ ] E3.9 Wall-clock `timings` leave the header for a debug side channel — the one nondeterministic region named in ADR-0007 closes (S)
-- [ ] E3.10 Brotli precompression of `dist/` artifacts in `scripts/build.sh`; `scripts/serve.py` learns `Content-Encoding` negotiation (S)
-- [ ] E3.11 ADR superseding ADR-0007: pack v2 layout, quantization policy, versioning rules (S)
+- [x] E3.1 Header/meta split: the pack header carries the array table and minimal meta only; settlements/cultures/events leave the header (`meta()` inlines all of them today, `world.rs:2236-2271`) (M)
+- [x] E3.2 Native `f32` grids: store what needs no f64 precision as f32 at rest (all 8 packed float grids are converted f64→f32 per pack today, `world.rs:2276-2279`) — halves grid memory and kills ~22 MB of transient copies per pack (M-L)
+- [x] E3.3 Single-allocation pack: registry-computed offsets, one `Vec<u8>`, fields written in place — no per-field temporary buffers (`world.rs:2297-2311`) (S)
+- [x] E3.4 Opt-in quantization per registry field: height/precip/discharge as u16 + scale/offset in the header; JS gets the dequant constants (M)
+- [x] E3.5 Territory ships RLE in the pack too — `politics::territory_rle` already exists for ticks (`world.rs:2223`) but `pack()` sends the raw i16 grid (`world.rs:2295,2310`) (S)
+- [x] E3.6 Pack version byte + CRC32; `unpack()` (`net.js:15-27`) verifies both and fails loud (S)
+- E3.7 Columnar entity sections — **rejected on measurement**, see Rejected
+- E3.8 String interning across the boundary — **rejected on measurement**, see Rejected
+- [x] E3.9 Wall-clock `timings` leave the header for a debug side channel — the one nondeterministic region named in ADR-0007 closes (S)
+- [x] E3.10 Brotli precompression of `dist/` artifacts in `scripts/build.sh`; `scripts/serve.py` learns `Content-Encoding` negotiation (S)
+- [x] E3.11 ADR superseding ADR-0007: pack v2 layout, quantization policy, versioning rules (S)
 
 Gates: `diagnose properties` pack round-trip extended to v2 (byte-identity
 through quantization round-trip within declared epsilon); payload
@@ -107,25 +107,33 @@ A tick should ship what changed, nothing else. Today `tick_json` rebuilds
 and resends every settlement, culture, market row, area, and merchant every
 month (`world.rs:2193-2227`), unconditionally.
 
-- [ ] E4.1 Direct `Serialize` structs for the tick payload — kill the `json!()` build-tree-then-stringify double pass (`world.rs:2195-2226`) (S)
-- [ ] E4.2 Settlement deltas: only settlements whose fields changed cross the boundary; systems mark changes as they write (M)
-- [ ] E4.3 Cultures, market, areas, merchants gated by dirty flags like routes/ruins/features already are (`world.rs:2205-2225`) (M)
-- [ ] E4.4 Event cursor: tick returns the new event count; the client pulls ranges through the existing `events_range` (`lib.rs:79-85`) — event arrays leave the tick payload (S-M)
-- [ ] E4.5 One `DirtyMap` replacing the five ad-hoc `*_dirty` bools (`world.rs:109,125,128,146` …) — new payload sections get change-tracking for free (S)
+- [x] E4.1 Direct `Serialize` structs for the tick payload — kill the `json!()` build-tree-then-stringify double pass (`world.rs:2195-2226`) (S)
+- [x] E4.2 Settlement deltas: only settlements whose fields changed cross the boundary; systems mark changes as they write (M)
+- [x] E4.3 Cultures, market, areas, merchants gated by dirty flags like routes/ruins/features already are (`world.rs:2205-2225`) (M)
+- [x] E4.4 Event cursor: tick returns the new event count; the client pulls ranges through the existing `events_range` (`lib.rs:79-85`) — event arrays leave the tick payload (S-M)
+- [x] E4.5 One `DirtyMap` replacing the five ad-hoc `*_dirty` bools (`world.rs:109,125,128,146` …) — new payload sections get change-tracking for free (S)
 - [ ] E4.6 Binary tick payload: one transferable buffer (columnar deltas + string-table additions), replacing the JSON string that is stringified in Rust, copied through `postMessage`, and parsed again (`worker.js:23`, `net.js:60-63`) (M)
 - [ ] E4.7 Grid dirty-tiles (32×32): mid-run field changes (territory today, erosion later) ship as tile patches, feeding partial texture updates in E9 (L)
-- [ ] E4.8 Merchant/war/ruler headline extraction server-side: the UI's per-tick scan for toast-worthy events moves behind the event-table declaration (E2.3) (S)
+- [x] E4.8 Merchant/war/ruler headline extraction server-side: the UI's per-tick scan for toast-worthy events moves behind the event-table declaration (E2.3) (S)
 
 Gates: median tick payload < 4 KB at year 100 (vs. full resend today),
 measured in `diagnose perf`; a 1200-month native run allocates no payload
-section that carries zero changes.
+section that carries zero changes. **Status: gate green** — `diagnose bench`
+median 3976 B @ year 100 (p90 19.5 KB, dominated by routes/territory, i.e.
+E4.6/E4.7 ground); `diagnose properties` P4 replays 240 months of deltas to
+byte-truth for settlements, market and areas with zero redundant reships.
+Beyond the plan, sections got finer than dirty flags: settlements and
+cultures split hot/cold (positional heartbeat rows `[id,pop,food,k,wealth]`),
+the market ledger ships per-good rows (`m_hot`), market areas ship per-hub,
+per-good price patches, and all wire floats carry display precision only
+(prices 0.01, food 0.1, coin and souls whole).
 
 ## E5 — The Hot Paths (tick and generation CPU)
 
 The audit found the quadratic and the wasteful; this track retires them.
 
-- [ ] E5.1 Registry name→id index (`HashMap<(EntityKind, String), i64>`): `resolve_events` today does up to six O(registry) reverse scans per unresolved event per tick (`world.rs:1830-1863`, `entity.rs:113-126`) (S)
-- [ ] E5.2 Settlement id→idx map built once per tick and passed down — it is rebuilt five times in `economy.rs` (`223,368,410,654,884`) and again in `trade.rs` (`409,489,621`) (S)
+- [x] E5.1 Registry name→id index (`HashMap<(EntityKind, String), i64>`): `resolve_events` today does up to six O(registry) reverse scans per unresolved event per tick (`world.rs:1830-1863`, `entity.rs:113-126`) (S)
+- [x] E5.2 Settlement id→idx map built once per tick and passed down — it is rebuilt five times in `economy.rs` (`223,368,410,654,884`) and again in `trade.rs` (`409,489,621`) (S)
 - [ ] E5.3 Spatial bucket grid over settlements and deposits: `prospect_and_deplete`'s O(deposits × settlements) monthly scan (`world.rs:1981-2015`) and famine-migration target search (`world.rs:1920-1934`) go sub-quadratic (M)
 - [ ] E5.4 A* scratch pooling in `trade::astar` (`trade.rs:241-299`): reusable `best` grid with generation stamps and an indexed `came` array instead of per-call `Array2` + `HashMap` allocations across O(N²) route builds (M)
 - [ ] E5.5 Event emission slims down: `SmallVec` for `Event.ids`, systems write into one shared `Vec<Event>` instead of ~15 per-month `.extend(...)` merges (`world.rs:1655-1811`) (S-M)
@@ -284,6 +292,12 @@ justifies a second pipeline.
 
 ## Rejected (do not re-open without a superseding ADR)
 
+- **E3.7/E3.8 Columnar entity tables + string interning** — measured after
+  the E3.1 header/meta split: bootstrap JSON is 34.9 KB against a 6.56 MB
+  pack at 512 with 1200 months of history (0.5 %, a few KB post-brotli).
+  A struct-of-arrays codec for Settlement/Deposit/Ruin would be a second,
+  hand-maintained encoding of structs the tick path still ships as JSON —
+  dual declaration against ADR-0015 — to save single-digit kilobytes.
 - **FlatBuffers/protobuf/Cap'n Proto for the boundary** — the pack is
   already zero-copy typed arrays with a registry as schema; an IDL compiler
   adds a toolchain for no measured win.

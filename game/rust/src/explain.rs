@@ -12,8 +12,10 @@
 
 use serde_json::{json, Value};
 
+use crate::ids::SettlementId;
 use crate::climate;
 use crate::economy::{base_value, demand_weight};
+use crate::resources::Good;
 use crate::society;
 use crate::world::World;
 
@@ -23,7 +25,7 @@ pub fn explain(world: &World, kind: &str, key: &str) -> String {
         "settlement" => key
             .parse::<i64>()
             .ok()
-            .and_then(|id| explain_settlement(world, id)),
+            .and_then(|id| explain_settlement(world, SettlementId(id))),
         "good" => explain_good(world, key),
         _ => None,
     };
@@ -36,16 +38,16 @@ pub fn explain(world: &World, kind: &str, key: &str) -> String {
 /// removed by one force, applied in the same order as `tick_month`.
 /// Random shocks (plague, storms, fire) are events, not terms — the ledger
 /// shows the deterministic expectation for the current month.
-fn explain_settlement(world: &World, id: i64) -> Option<Value> {
+fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
     let s = world.settlements.iter().find(|s| s.id == id)?;
     let md = world
         .societies
-        .get(s.culture)
+        .get(s.culture.idx())
         .map(society::mods_for)
         .unwrap_or_default();
     let (y, x) = (s.y as usize, s.x as usize);
     let month = world.month.rem_euclid(12);
-    let t_now = climate::month_temperature(world.tmean[[y, x]], world.tamp[[y, x]], month);
+    let t_now = climate::month_temperature(world.tmean[[y, x]] as f64, world.tamp[[y, x]] as f64, month);
     let pop = s.pop as f64;
 
     // -- multiplier chain, identical to tick_month (world.rs)
@@ -113,7 +115,8 @@ fn explain_settlement(world: &World, id: i64) -> Option<Value> {
 /// Price ledger: base worth from rarity, the scarcity premium supply and
 /// demand would set today, and the inertia/shock residue between that
 /// target and the smoothed market price. Rows sum to the current price.
-fn explain_good(world: &World, good: &str) -> Option<Value> {
+fn explain_good(world: &World, key: &str) -> Option<Value> {
+    let good: Good = key.parse().ok()?;
     // supply and demand exactly as update_prices computes them (economy.rs)
     let mut supply = 0.0f64;
     let mut worked_by = 0usize;
@@ -122,36 +125,37 @@ fn explain_good(world: &World, good: &str) -> Option<Value> {
     for s in &world.settlements {
         total_pop += s.pop;
         total_wealth += s.wealth;
-        for (i, g) in s.goods.iter().enumerate() {
+        for (i, &g) in s.goods.iter().enumerate() {
             if g == good {
                 supply += (s.pop as f64 / 1000.0) * 0.7f64.powi(i as i32);
                 worked_by += 1;
             }
         }
     }
-    if !world.market.prices.contains_key(good) && worked_by == 0 {
+    if !world.market.contains(good) && worked_by == 0 {
         return None; // not a good this world knows
     }
     let luxury = (total_wealth / (total_pop.max(1) as f64) / 4.0).min(0.5);
 
     // relative scarcity: pressure measured against the market's geometric
     // mean, exactly as `economy::update_prices` does it.
-    let mut pressures: Vec<f64> = Vec::new();
-    let mut own_pressure = None;
-    let mut supplies: std::collections::BTreeMap<String, f64> =
-        std::collections::BTreeMap::new();
+    let mut supplies: enum_map::EnumMap<Good, Option<f64>> = enum_map::EnumMap::default();
     for s in &world.settlements {
-        for (i, g) in s.goods.iter().enumerate() {
-            *supplies.entry(g.clone()).or_insert(0.0) +=
+        for (i, &g) in s.goods.iter().enumerate() {
+            *supplies[g].get_or_insert(0.0) +=
                 (s.pop as f64 / 1000.0) * 0.7f64.powi(i as i32);
         }
     }
+    let mut pressures: Vec<f64> = Vec::new();
+    let mut own_pressure = None;
     for (g, sup) in &supplies {
-        let p = (demand_weight(g, luxury) + 0.02) / (sup + 0.02);
-        if g == good {
-            own_pressure = Some(p);
+        if let Some(sup) = sup {
+            let p = (demand_weight(g, luxury) + 0.02) / (sup + 0.02);
+            if g == good {
+                own_pressure = Some(p);
+            }
+            pressures.push(p);
         }
-        pressures.push(p);
     }
     if pressures.is_empty() {
         return None;
