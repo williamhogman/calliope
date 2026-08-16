@@ -362,7 +362,7 @@ export function Outliner(a) {
       ${I.chevL()}
       ${() => (unseen() > 0 ? html`<span class="badge">+${unseen()}</span>` : "")}
     </button>
-    <aside class=${() => {
+    <section aria-label="Almanac" class=${() => {
       let cls = "outliner";
       if (isMobile()) cls += sheet() === "outliner" ? " as-sheet open" : " as-sheet";
       else if (!outlinerOpen()) cls += " closed";
@@ -384,5 +384,5 @@ export function Outliner(a) {
           onClick=${() => { setOutlinerOpen(false); persistUi(); }}>${I.chevR()}</button>
       </div>
       ${body}
-    </aside>`;
+    </section>`;
 }
