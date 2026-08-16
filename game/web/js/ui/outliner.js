@@ -6,7 +6,7 @@ import html from "solid-js/html";
 
 import {
   world, settlements, cultures, wars, market, areas, merchants,
-  events, month, selection,
+  events, month, selection, settlementsById,
   stories, entities, artifacts, legendMode, setLegendMode,
   outlinerOpen, setOutlinerOpen, outlinerTab, setOutlinerTab,
   placeSort, setPlaceSort, pins, togglePin, persistUi,
@@ -18,6 +18,8 @@ import {
   patternMeta, entityKind,
 } from "./config.js";
 import { I } from "./icons.js";
+import { each, eachIdx } from "./list.js";
+import { roveTabs } from "./focus.js";
 import { settlementCss } from "../palette.js";
 
 const monthsOf = () => world()?.header.months || FALLBACK_MONTHS;
@@ -43,18 +45,22 @@ function PlacesTab(a) {
     return list;
   });
   const [cap, setCap] = createSignal(60);
+  const shown = createMemo(() => sorted().slice(0, cap()));
   const colorOf = (s) => (cultures() || [])[s.culture]?.color || settlementCss(s.id);
+  // E8.2 — keyed on settlement identity: a tick that patches three towns
+  // re-renders three rows; the rest keep their DOM.
   return html`<div class="ol-tabbody">
     <div class="ol-toolbar">
       <div class="seg tiny">
         ${[["pop", "Souls"], ["name", "Name"], ["tier", "Rank"]].map(
           ([id, label]) => html`<button class=${() => (placeSort() === id ? "active" : "")}
+            aria-pressed=${() => String(placeSort() === id)}
             onClick=${() => { setPlaceSort(id); persistUi(); }}>${label}</button>`)}
       </div>
       <span class="ol-count">${() => settlements().length}</span>
     </div>
     <div class="ol-list">
-      ${() => sorted().slice(0, cap()).map((s) => html`<div
+      ${each(shown, (s) => html`<div
         class=${() => "ol-row" + (selection()?.kind === "settlement" && selection()?.id === s.id ? " picked" : "")}
         onClick=${() => a.select({ kind: "settlement", id: s.id, fly: true })}>
         <span class="s-dot" style=${`background:${colorOf(s)}`}></span>
@@ -63,6 +69,7 @@ function PlacesTab(a) {
         <span class="s-pop">${fmt(s.pop)}</span>
         <button class=${() => "pin-btn" + (pins().has(s.id) ? " on" : "")}
           title="Pin to top" aria-label="Pin"
+          aria-pressed=${() => String(pins().has(s.id))}
           onClick=${(e) => { e.stopPropagation(); togglePin(s.id); }}>
           ${() => (pins().has(s.id) ? I.pinOn() : I.pin())}
         </button>
@@ -86,24 +93,26 @@ function PeoplesTab(a) {
     }).sort((x, y) => y.pop - x.pop);
   });
   const atWar = (id) => (wars() || []).some((w) => w.a === id || w.b === id);
+  // E8.2 — position-keyed: the row objects are rebuilt per tick, so Index
+  // updates text in place instead of remaking DOM.
   return html`<div class="ol-tabbody">
     ${() => ((wars() || []).length
-      ? html`<div class="ol-wars">${(wars() || []).map((w) => {
-          const cs = cultures() || [];
-          return html`<button class="war-banner" onClick=${() => a.select({ kind: "war", id: w.name })}>
-            \u2694 ${w.name} \u2014 ${cs[w.a]?.people || "?"} against ${cs[w.b]?.people || "?"}
+      ? html`<div class="ol-wars">${eachIdx(() => wars() || [], (w) => {
+          const side = (id) => (cultures() || [])[id]?.people || "?";
+          return html`<button class="war-banner" onClick=${() => a.select({ kind: "war", id: w().name })}>
+            \u2694 ${() => w().name} \u2014 ${() => side(w().a)} against ${() => side(w().b)}
           </button>`;
         })}</div>`
       : "")}
     <div class="ol-list">
-      ${() => rows().map((c) => html`<div
-        class=${() => "ol-row tall" + (selection()?.kind === "culture" && selection()?.id === c.id ? " picked" : "")}
-        onClick=${() => a.select({ kind: "culture", id: c.id })}>
-        <span class="s-dot" style=${`background:${c.color}`}></span>
+      ${eachIdx(rows, (c) => html`<div
+        class=${() => "ol-row tall" + (selection()?.kind === "culture" && selection()?.id === c().id ? " picked" : "")}
+        onClick=${() => a.select({ kind: "culture", id: c().id })}>
+        <span class="s-dot" style=${() => `background:${c().color}`}></span>
         <span class="c-body">
-          <span class="c-name">${c.people}${atWar(c.id) ? html` <span class="war-mark">\u2694</span>` : ""}</span>
-          <span class="c-sub dim">${c.polity || ""}${c.era ? ` \u00b7 ${c.era}` : ""}${c.ruler ? ` \u00b7 ${c.ruler}` : ""}</span>
-          <span class="c-sub dim">${c.n} holding${c.n === 1 ? "" : "s"} \u00b7 ${fmt(c.pop)} souls \u00b7 ${fmt(c.treasury || 0)} coin</span>
+          <span class="c-name">${() => c().people}${() => (atWar(c().id) ? html` <span class="war-mark">\u2694</span>` : "")}</span>
+          <span class="c-sub dim">${() => `${c().polity || ""}${c().era ? ` \u00b7 ${c().era}` : ""}${c().ruler ? ` \u00b7 ${c().ruler}` : ""}`}</span>
+          <span class="c-sub dim">${() => `${c().n} holding${c().n === 1 ? "" : "s"} \u00b7 ${fmt(c().pop)} souls \u00b7 ${fmt(c().treasury || 0)} coin`}</span>
         </span>
       </div>`)}
       ${() => (!rows().length ? html`<div class="ol-empty dim">No peoples yet \u2014 the first camps are forming.</div>` : "")}
@@ -118,39 +127,39 @@ function MarketTab(a) {
     [...(market() || [])].sort((x, y) => y.p - x.p));
   const spread = () => areas()?.spread || [];
   const traders = createMemo(() =>
-    [...(merchants() || [])].sort((x, y) => (y.alive - x.alive) || (y.wealth - x.wealth)));
-  const hubById = (id) => settlements().find((s) => s.id === id);
+    [...(merchants() || [])].sort((x, y) => (y.alive - x.alive) || (y.wealth - x.wealth)).slice(0, 8));
+  const hubById = (id) => settlementsById().get(id);
   return html`<div class="ol-tabbody">
     <div class="ol-list">
       ${() => (spread().length ? html`<div class="ol-sect dim">Widest price gaps</div>` : "")}
-      ${() => spread().map((r) => html`<div class="ol-row gap"
-        onClick=${() => a.select({ kind: "good", id: r.g })}>
-        <span class="swatch" style=${`background:${world()?.header.resources?.[r.g]?.color || "#8a8fa0"}`}></span>
-        <span class="s-name">${r.g}</span>
-        <span class="c-sub dim gap-route">${r.lo.hub} ${r.lo.p.toFixed(1)} \u2192 ${r.hi.hub} ${r.hi.p.toFixed(1)}</span>
-        <span class="m-price">\u00d7${r.ratio.toFixed(1)}</span>
+      ${eachIdx(spread, (r) => html`<div class="ol-row gap"
+        onClick=${() => a.select({ kind: "good", id: r().g })}>
+        <span class="swatch" style=${() => `background:${world()?.header.resources?.[r().g]?.color || "#8a8fa0"}`}></span>
+        <span class="s-name">${() => r().g}</span>
+        <span class="c-sub dim gap-route">${() => `${r().lo.hub} ${r().lo.p.toFixed(1)} \u2192 ${r().hi.hub} ${r().hi.p.toFixed(1)}`}</span>
+        <span class="m-price">${() => `\u00d7${r().ratio.toFixed(1)}`}</span>
       </div>`)}
       ${() => (spread().length ? html`<div class="ol-sect dim">All goods \u00b7 world mean</div>` : "")}
-      ${() => rows().map((r) => {
-        const meta = world()?.header.resources?.[r.g];
-        const t = r.t > 0.02 ? "up" : r.t < -0.02 ? "down" : "";
-        return html`<div class=${() => "ol-row" + (selection()?.kind === "good" && selection()?.id === r.g ? " picked" : "")}
-          onClick=${() => a.select({ kind: "good", id: r.g })}>
-          <span class="swatch" style=${`background:${meta?.color || "#8a8fa0"}`}></span>
-          <span class="s-name">${r.g}</span>
-          <span class=${"m-trend " + t}>${t === "up" ? "\u25b2" : t === "down" ? "\u25bc" : "\u00b7"}</span>
-          <span class="m-price">${r.p.toFixed(2)}</span>
+      ${eachIdx(rows, (r) => {
+        const meta = () => world()?.header.resources?.[r().g];
+        const t = () => (r().t > 0.02 ? "up" : r().t < -0.02 ? "down" : "");
+        return html`<div class=${() => "ol-row" + (selection()?.kind === "good" && selection()?.id === r().g ? " picked" : "")}
+          onClick=${() => a.select({ kind: "good", id: r().g })}>
+          <span class="swatch" style=${() => `background:${meta()?.color || "#8a8fa0"}`}></span>
+          <span class="s-name">${() => r().g}</span>
+          <span class=${() => "m-trend " + t()}>${() => (t() === "up" ? "\u25b2" : t() === "down" ? "\u25bc" : "\u00b7")}</span>
+          <span class="m-price">${() => r().p.toFixed(2)}</span>
         </div>`;
       })}
       ${() => (!rows().length ? html`<div class="ol-empty dim">The first caravans are still loading.</div>` : "")}
       ${() => (traders().length ? html`<div class="ol-sect dim">Merchants on the roads</div>` : "")}
-      ${() => traders().slice(0, 8).map((m) => {
-        const home = hubById(m.home);
-        return html`<div class=${"ol-row" + (m.alive ? "" : " gone")}
-          onClick=${() => home && a.select({ kind: "settlement", id: home.id, fly: true })}>
-          <span class="s-name">${m.name}</span>
-          <span class="c-sub dim">${home ? `of ${home.name}` : ""}${m.alive ? "" : ` \u00b7 ${m.fate || "gone"}`}</span>
-          <span class="m-price">${fmt(Math.round(m.wealth))}</span>
+      ${eachIdx(traders, (m) => {
+        const home = () => hubById(m().home);
+        return html`<div class=${() => "ol-row" + (m().alive ? "" : " gone")}
+          onClick=${() => { const h = home(); if (h) a.select({ kind: "settlement", id: h.id, fly: true }); }}>
+          <span class="s-name">${() => m().name}</span>
+          <span class="c-sub dim">${() => `${home() ? `of ${home().name}` : ""}${m().alive ? "" : ` \u00b7 ${m().fate || "gone"}`}`}</span>
+          <span class="m-price">${() => fmt(Math.round(m().wealth))}</span>
         </div>`;
       })}
     </div>
@@ -175,6 +184,11 @@ function ChronicleTab(a) {
     }
     return out;
   });
+  // E8.3 — the feed is a window over the filtered log: DOM is capped, and
+  // because rows are keyed on the event objects (which persist for the
+  // world's whole life), a tick prepends its few new rows and leaves the
+  // rest of the window's DOM untouched.
+  const shown = createMemo(() => filtered().slice(0, cap()));
   // reading the chronicle clears the unseen badge
   createEffect(() => {
     if (outlinerTab() === "chronicle" && (outlinerOpen() || sheet() === "outliner")) {
@@ -187,8 +201,10 @@ function ChronicleTab(a) {
       <div class="chron-filters">
         ${EVENT_FAMILIES.map(([id, label]) => html`<button
           class=${() => "chip" + (chronFilter[id] ? " on" : "")}
+          aria-pressed=${() => String(!!chronFilter[id])}
           onClick=${() => flip(id)}>${label}</button>`)}
         <button class=${() => "chip fireside" + (legendMode() === "songs" ? " on" : "")}
+          aria-pressed=${() => String(legendMode() === "songs")}
           title="Read the fireside telling \u2014 numbers blur into song (M6.9)"
           onClick=${() => { setLegendMode(legendMode() === "songs" ? "plain" : "songs"); persistUi(); }}>
           \u266a Fireside</button>
@@ -198,7 +214,7 @@ function ChronicleTab(a) {
         onInput=${(e) => setChronQuery(e.target.value)} />
     </div>
     <div class="ol-list chron">
-      ${() => filtered().slice(0, cap()).map((e) => {
+      ${each(shown, (e) => {
         const months = monthsOf();
         const target = a.locateEvent(e);
         return html`<div class=${"event" + (target ? " clickable" : "")}
@@ -247,20 +263,25 @@ function LegendsTab(a) {
     return [...list].sort((x, y) =>
       (CAST_ORDER[x.kind] ?? 9) - (CAST_ORDER[y.kind] ?? 9) || y.since - x.since);
   });
+  const castShown = createMemo(() => cast().slice(0, cap()));
   const relics = createMemo(() =>
     [...(artifacts() || [])].sort((x, y) => (x.lost - y.lost) || (x.made - y.made)));
-  const holderName = (id) => settlements().find((s) => s.id === id)?.name;
+  const holderName = (id) => settlementsById().get(id)?.name;
   const isPicked = (s) =>
     selection()?.kind === "story" && selection()?.story?.pattern === s.pattern
     && selection()?.story?.title === s.title;
   const setMode = (m) => { setLegendMode(m); persistUi(); };
+  // E8.2 — the sift returns fresh JSON each pass, so these lists are
+  // position-keyed: rows update their text in place across sifts.
   return html`<div class="ol-tabbody">
     <div class="ol-toolbar">
       <div class="seg tiny">
         <button class=${() => (legendMode() === "plain" ? "active" : "")}
+          aria-pressed=${() => String(legendMode() === "plain")}
           title="The chronicle as it happened"
           onClick=${() => setMode("plain")}>As it was</button>
         <button class=${() => (legendMode() === "songs" ? "active" : "")}
+          aria-pressed=${() => String(legendMode() === "songs")}
           title="The fireside telling \u2014 numbers blur, songs embroider"
           onClick=${() => setMode("songs")}>As sung</button>
       </div>
@@ -268,40 +289,40 @@ function LegendsTab(a) {
     </div>
     <div class="ol-list">
       ${() => (stories().length ? html`<div class="ol-sect dim">Sagas the sifter found</div>` : "")}
-      ${() => stories().map((s) => html`<div
-        class=${() => "ol-row tall saga" + (isPicked(s) ? " picked" : "")}
-        onClick=${() => a.select({ kind: "story", story: s })}>
-        <span class="s-dot" style=${`background:${patternMeta(s.pattern).color}`}></span>
+      ${eachIdx(stories, (s) => html`<div
+        class=${() => "ol-row tall saga" + (isPicked(s()) ? " picked" : "")}
+        onClick=${() => a.select({ kind: "story", story: s() })}>
+        <span class="s-dot" style=${() => `background:${patternMeta(s().pattern).color}`}></span>
         <span class="c-body">
-          <span class="c-name">${s.title}</span>
-          <span class="c-sub dim">${patternMeta(s.pattern).label}
-            \u00b7 Y${s.y0}${s.y1 !== s.y0 ? `\u2013${s.y1}` : ""}
-            \u00b7 ${s.beats.length} beat${s.beats.length === 1 ? "" : "s"}</span>
+          <span class="c-name">${() => s().title}</span>
+          <span class="c-sub dim">${() => `${patternMeta(s().pattern).label}
+            \u00b7 Y${s().y0}${s().y1 !== s().y0 ? `\u2013${s().y1}` : ""}
+            \u00b7 ${s().beats.length} beat${s().beats.length === 1 ? "" : "s"}`}</span>
         </span>
       </div>`)}
       ${() => (!stories().length
         ? html`<div class="ol-empty dim">No sagas yet \u2014 the sifter wants years, wars and reversals. Let time pass.</div>`
         : "")}
       ${() => (relics().length ? html`<div class="ol-sect dim">Relics & their keepers</div>` : "")}
-      ${() => relics().map((r) => html`<div
-        class=${() => "ol-row" + (r.lost ? " gone" : "")
-          + (selection()?.kind === "entity" && selection()?.id === r.ent ? " picked" : "")}
-        onClick=${() => a.select({ kind: "entity", id: r.ent, fly: !r.lost })}>
+      ${eachIdx(relics, (r) => html`<div
+        class=${() => "ol-row" + (r().lost ? " gone" : "")
+          + (selection()?.kind === "entity" && selection()?.id === r().ent ? " picked" : "")}
+        onClick=${() => a.select({ kind: "entity", id: r().ent, fly: !r().lost })}>
         <span class="s-dot" style=${`background:${entityKind("artifact").color}`}></span>
-        <span class="s-name">${r.name}</span>
-        <span class="c-sub dim">${r.lost ? "lost" : holderName(r.holder) ? `at ${holderName(r.holder)}` : "\u2014"}</span>
+        <span class="s-name">${() => r().name}</span>
+        <span class="c-sub dim">${() => (r().lost ? "lost" : holderName(r().holder) ? `at ${holderName(r().holder)}` : "\u2014")}</span>
       </div>`)}
       <div class="ol-sect dim cast-head">The cast
         <input class="chron-search cast-search" type="search" placeholder="search the cast\u2026"
           value=${castQ()} onInput=${(e) => setCastQ(e.target.value)} />
       </div>
-      ${() => cast().slice(0, cap()).map((e) => html`<div
-        class=${() => "ol-row" + (selection()?.kind === "entity" && selection()?.id === e.id ? " picked" : "")}
-        onClick=${() => a.select({ kind: "entity", id: e.id })}>
-        <span class="s-dot" style=${`background:${entityKind(e.kind).color}`}></span>
-        <span class=${"s-name" + (e.until != null ? " dim" : "")}>${e.name}</span>
-        <span class="s-tier">${e.role || entityKind(e.kind).label}</span>
-        <span class="s-pop">${e.until != null ? "\u2020" : `Y${Math.floor(e.since / 12) + 1}`}</span>
+      ${eachIdx(castShown, (e) => html`<div
+        class=${() => "ol-row" + (selection()?.kind === "entity" && selection()?.id === e().id ? " picked" : "")}
+        onClick=${() => a.select({ kind: "entity", id: e().id })}>
+        <span class="s-dot" style=${() => `background:${entityKind(e().kind).color}`}></span>
+        <span class=${() => "s-name" + (e().until != null ? " dim" : "")}>${() => e().name}</span>
+        <span class="s-tier">${() => e().role || entityKind(e().kind).label}</span>
+        <span class="s-pop">${() => (e().until != null ? "\u2020" : `Y${Math.floor(e().since / 12) + 1}`)}</span>
       </div>`)}
       ${() => (cast().length > cap()
         ? html`<button class="more-btn" onClick=${() => setCap(cap() + 60)}>
@@ -347,9 +368,11 @@ export function Outliner(a) {
       else if (!outlinerOpen()) cls += " closed";
       return cls;
     }}>
-      <div class="ol-tabs">
+      <div class="ol-tabs" role="tablist" aria-label="Almanac"
+        ref=${(el) => roveTabs(el)}>
         ${TABS.map(([id, label, icon]) => html`<button
           class=${() => "ol-tab" + (outlinerTab() === id ? " active" : "")}
+          role="tab" aria-selected=${() => String(outlinerTab() === id)}
           title=${label} onClick=${() => pick(id)}>
           ${icon()}<span>${label}</span>
           ${() => (id === "chronicle" && unseen() > 0 && outlinerTab() !== "chronicle"

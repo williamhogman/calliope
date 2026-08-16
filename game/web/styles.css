@@ -1316,3 +1316,17 @@ input { font: inherit; color: inherit; }
 
 /* veiled chronicle entries: the telling admits it does not know */
 .e-text.veiled { font-style: italic; opacity: 0.72; }
+
+/* E8.11 — stillness for those who ask for it: the star stops twinkling,
+   sheets and toasts arrive without theatre, nothing loops forever. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* E8.12 — overlay/alert options are real buttons now; keep the row shape. */
+button.option { width: 100%; text-align: left; }

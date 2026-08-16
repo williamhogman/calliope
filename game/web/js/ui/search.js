@@ -11,12 +11,13 @@ import {
 import { LAYERS, fmt, patternMeta, entityKind } from "./config.js";
 import { I } from "./icons.js";
 
-function score(name, q) {
-  const n = name.toLowerCase();
-  if (n === q) return 0;
-  if (n.startsWith(q)) return 1;
-  const idx = n.indexOf(q);
-  if (idx > 0 && (n[idx - 1] === " " || n[idx - 1] === "'")) return 2;
+// Score against a pre-lowercased name (E8.9): 0 exact, 1 prefix, 2 word
+// start, 3 substring, -1 no match.
+function score(lname, q) {
+  if (lname === q) return 0;
+  if (lname.startsWith(q)) return 1;
+  const idx = lname.indexOf(q);
+  if (idx > 0 && (lname[idx - 1] === " " || lname[idx - 1] === "'")) return 2;
   if (idx >= 0) return 3;
   return -1;
 }
@@ -34,56 +35,63 @@ export function Search(a) {
     }
   });
 
-  const results = createMemo(() => {
-    const query = q().trim().toLowerCase();
+  // E8.9 — the candidate index is a memo over the world data: it rebuilds
+  // when settlements/features/market/telling change, never per keystroke.
+  // Names are lowercased once here; a keystroke only scores and sorts.
+  const index = createMemo(() => {
     const out = [];
-    if (!query) {
-      out.push({ group: "Commands", label: playing() ? "Pause time" : "Let time flow", hint: "space", run: () => a.playPause() });
-      out.push({ group: "Commands", label: "Step one month", hint: "n", run: () => a.step() });
-      out.push({ group: "Commands", label: "Fit the world", hint: "f", run: () => a.fitView() });
-      for (const [id, label] of LAYERS.slice(0, 4)) {
-        out.push({ group: "Lenses", label: `Lens: ${label}`, run: () => a.setLayer(id) });
-      }
-      return out;
-    }
-    const push = (group, label, sub, sc, run, color) => {
-      if (sc < 0) return;
-      out.push({ group, label, sub, sc, run, color });
-    };
+    const add = (group, label, sub, run, color) =>
+      out.push({ group, label, lname: label.toLowerCase(), sub, run, color });
     for (const s of settlements()) {
-      push("Places", s.name, `${s.tier} \u00b7 ${fmt(s.pop)} souls`, score(s.name, query),
+      add("Places", s.name, `${s.tier} \u00b7 ${fmt(s.pop)} souls`,
         () => a.select({ kind: "settlement", id: s.id, fly: true }),
         (cultures() || [])[s.culture]?.color);
     }
     const feats = world()?.header.features || [];
     feats.forEach((f, i) => {
-      push("Geography", f.name, f.t, score(f.name, query),
-        () => a.select({ kind: "feature", id: i, fly: true }));
+      add("Geography", f.name, f.t, () => a.select({ kind: "feature", id: i, fly: true }));
     });
     for (const c of cultures() || []) {
-      push("Peoples", c.people, c.polity || "people", score(c.people, query),
+      add("Peoples", c.people, c.polity || "people",
         () => a.select({ kind: "culture", id: c.id }), c.color);
     }
     for (const r of market() || []) {
-      push("Goods", r.g, `${r.p.toFixed(2)} coin`, score(r.g, query),
+      add("Goods", r.g, `${r.p.toFixed(2)} coin`,
         () => a.select({ kind: "good", id: r.g }),
         world()?.header.resources?.[r.g]?.color);
     }
     // the telling: sagas and the cast — persons, relics, wars, ruins (M6.6)
     for (const s of stories() || []) {
-      push("Sagas", s.title, `${patternMeta(s.pattern).label} \u00b7 Y${s.y0}\u2013${s.y1}`,
-        score(s.title, query),
+      add("Sagas", s.title, `${patternMeta(s.pattern).label} \u00b7 Y${s.y0}\u2013${s.y1}`,
         () => a.select({ kind: "story", story: s }), patternMeta(s.pattern).color);
     }
     for (const en of entities() || []) {
       if (!["person", "artifact", "war", "ruin"].includes(en.kind)) continue;
-      push("The cast", en.name,
+      add("The cast", en.name,
         `${en.role || entityKind(en.kind).label}${en.until != null ? " \u00b7 \u2020" : ""}`,
-        score(en.name, query),
         () => a.select({ kind: "entity", id: en.id, fly: true }), entityKind(en.kind).color);
     }
     for (const [id, label] of LAYERS) {
-      push("Lenses", `Lens: ${label}`, "", score(label, query), () => a.setLayer(id));
+      add("Lenses", `Lens: ${label}`, "", () => a.setLayer(id));
+    }
+    return out;
+  });
+
+  const results = createMemo(() => {
+    const query = q().trim().toLowerCase();
+    if (!query) {
+      return [
+        { group: "Commands", label: playing() ? "Pause time" : "Let time flow", hint: "space", run: () => a.playPause() },
+        { group: "Commands", label: "Step one month", hint: "n", run: () => a.step() },
+        { group: "Commands", label: "Fit the world", hint: "f", run: () => a.fitView() },
+        ...LAYERS.slice(0, 4).map(([id, label]) =>
+          ({ group: "Lenses", label: `Lens: ${label}`, run: () => a.setLayer(id) })),
+      ];
+    }
+    const out = [];
+    for (const c of index()) {
+      const sc = score(c.lname, query);
+      if (sc >= 0) out.push({ ...c, sc });
     }
     out.sort((x, y) => x.sc - y.sc || x.label.length - y.label.length);
     return out.slice(0, 12);
