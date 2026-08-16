@@ -121,16 +121,20 @@ JSD oatmeal matrix with min/mean collapse alarm) — both in `report.sh`.
 Feel milestone from `research/SYNTHESIS-FEEL.md` (dockets 12-15): let
 things die and leave marks, let names carry time, let the telling withhold.
 
-- [ ] M9.1 Settlement death & ruins: abandonment (war, depletion, famine) leaves named ruin entities on the map (M)
-- [ ] M9.2 Hydronym conservatism + bounded conquest name-layers: rivers keep the oldest culture's names; conquest renames settlements inside the conquered polygon only (S-M)
-- [ ] M9.3 Age-keyed name erosion with stored compositional etymology, glossed in the inspector (S)
-- [ ] M9.4 History marks the map: battle sites, war-renamed features, disused routes fading (M)
-- [ ] M9.5 Berúthiel emissions + disputed/unresolved chronicle entries, bounded share (S)
+- [x] M9.1 Settlement death & ruins: abandonment (war, depletion, famine) leaves named ruin entities on the map (M)
+- [x] M9.2 Hydronym conservatism + bounded conquest name-layers: rivers keep the oldest culture's names; conquest renames settlements inside the conquered polygon only (S-M)
+- [x] M9.3 Age-keyed name erosion with stored compositional etymology, glossed in the inspector (S)
+- [x] M9.4 History marks the map: battle sites, war-renamed features, disused routes fading (M)
+- [x] M9.5 Berúthiel emissions + disputed/unresolved chronicle entries, bounded share (S)
 
 Gates: mature worlds carry ruins across the sweep (≥ 1 per century after
 year 100); river names stable through 100 % of border changes; every
 emitted name carries an etymology; withheld/disputed entries within a
 2-8 % band; full diagnostics suite stays green.
+Runner: `diagnose patina` (ruin cadence, hydronym stability, etymology
+coverage, veiled share, death-spiral invariants) — in `report.sh`.
+Live evidence: 300 y browser run at seed 777 — 25 ruins with strata-glossed
+cards, failing-town notices, faded old ways, veiled entries in the feed.
 
 ## Ready (calibration queue)
 
@@ -144,6 +148,24 @@ pass (each is a WARN, not a gate failure):
 - On 60 y quick runs only: median town spacing ~67 km (band 15–30) and
   wealth~pop β ~0.73 (target ≈1.15) — re-measure after M5 market areas
   before tuning; long runs pass.
+
+Findings from the M9 closure evidence (live 300 y run, seed 777):
+
+- Tier-change chatter: towns straddling a size threshold emit
+  grew/dwindled events repeatedly within a year (Kalliikos, Koropia at
+  y300). Add hysteresis (or a per-town cooldown) to tier-transition
+  events in `world.rs`; new check: no town posts opposing tier events
+  within N months.
+- Duplicate myth beats: the same temple-raising myth fired twice for
+  Koropia in one year. Add a per-settlement recent-beat dedup in
+  `chronicle.rs`; check: no identical (subject, template) pair within
+  a 24-month window.
+- Native↔WASM trajectory drift: 300 y at seed 777 yields 21 ruins
+  native vs 25 in the browser. Per-platform determinism holds
+  (ADR-0003 gates native reruns), but libm float differences diverge
+  long trajectories across platforms. Decide: pin math to a software
+  libm for bit-identity, or write an ADR scoping determinism to
+  per-platform reruns.
 
 ## Later / research
 
