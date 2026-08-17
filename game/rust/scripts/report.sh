@@ -106,6 +106,43 @@ WASM="../web/js/wasm/calliope_bg.wasm"
 } > "$OUT/wasm.txt"
 echo "-- wasm size -> wasm.txt"
 
+# ---- module-dependency lint (E11.8) ----------------------------------------
+# Leaf modules must not import `world` — the import DAG stays acyclic by
+# check, not convention. Allowed to speak of World: the orchestrator itself,
+# its impl-extension modules (pack/snapshot/famine/prospecting/explain),
+# the system lattice, and the bins. Everything else is a leaf: it may use
+# `event` (the wire vocabulary), `state` (the walls) and its sibling leaves.
+{
+  echo "========================================================================"
+  echo " CALLIOPE DIAGNOSTIC · MODULE DAG                       E11.8 lint"
+  echo "========================================================================"
+  ALLOWED="lib.rs world.rs systems.rs pack.rs snapshot.rs famine.rs prospecting.rs explain.rs"
+  bad=""
+  for f in src/*.rs; do
+    b="$(basename "$f")"
+    case " $ALLOWED " in *" $b "*) continue ;; esac
+    hits=$(grep -n 'crate::world' "$f" || true)
+    if [ -n "$hits" ]; then
+      bad="$bad$b:
+$hits
+"
+    fi
+  done
+  leaves=$(ls src/*.rs | wc -l | tr -d ' ')
+  echo " scanned $leaves modules · allowed world-importers: $ALLOWED"
+  echo
+  echo "---- checks ----------------------------------------------------------"
+  if [ -z "$bad" ]; then
+    echo "[PASS] leaf modules import event/state, never world    (E11.8: import DAG acyclic by check)"
+  else
+    echo "[FAIL] leaf modules importing crate::world             (E11.8: break the edge or bless the module)"
+    printf '%s\n' "$bad"
+  fi
+  echo "CHECKS: see row above"
+} > "$OUT/moddag.txt"
+echo "-- module DAG lint -> moddag.txt"
+
+
 # ---- browser probes (E10.5 boot · E10.7 long tasks · E9.10 GL drill) ------
 # Real Chromium against the running dev server; skips itself when the
 # server is down so the native harness stays self-contained.
