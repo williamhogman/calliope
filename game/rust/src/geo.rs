@@ -200,4 +200,7 @@ pub const BANDS: &[Band] = &[
     Band { name: "small isles+islets", sweet: (10.0, 380.0), hard: (3.0, 1900.0), target: "sweet 10–380 · hard 3–1900" },
     Band { name: "mountain share of land (h>0.5)", sweet: (0.02, 0.14), hard: (0.005, 0.22), target: "sweet 2–14% · hard 0.5–22%" },
     Band { name: "coastline crenulation", sweet: (0.02, 0.30), hard: (0.012, 0.50), target: "sweet 0.02–0.30 at 4 km cells" },
+    Band { name: "ERA occupancy / seed", sweet: (0.45, 1.0), hard: (0.3, 1.0), target: "M8.3: seeds spread across the plates" },
+    Band { name: "oatmeal min/mean ratio", sweet: (0.05, 1.0), hard: (0.02, 1.0), target: "M8.4: no two worlds are the same bowl" },
+    Band { name: "oatmeal mean distance", sweet: (0.04, 0.75), hard: (0.02, 0.9), target: "M8.4: the family resembles, never repeats" },
 ];

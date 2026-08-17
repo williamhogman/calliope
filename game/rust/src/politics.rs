@@ -1435,3 +1435,11 @@ pub fn war_name_bank() -> &'static [&'static str] {
 // naming is pulled in transitively via culture::secede
 #[allow(unused_imports)]
 use naming as _naming;
+
+// ---------------------------------------------------------------- bands
+
+/// Diagnostics bands (E11.6): how much of the wild the banners may claim.
+pub const BANDS: &[crate::util::Band] = &[
+    crate::util::Band { name: "land under banners", sweet: (0.05, 0.85), hard: (0.01, 0.98), target: "M4.1: realms claim some — never all — of the wild" },
+    crate::util::Band { name: "largest realm pop share", sweet: (0.1, 0.75), hard: (0.02, 0.92), target: "M4 gate: no runaway single empire" },
+];

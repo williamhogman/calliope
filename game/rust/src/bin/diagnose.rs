@@ -565,7 +565,7 @@ fn cmd_climate(seed: i64, size: usize) {
     c.band("tropical monsoon amplitude", trop_m, format!("{:.2}", trop_m));
     c.want("monsoon lives in the tropics", trop_m > mid_m, format!("{:.2} vs {:.2}", trop_m, mid_m), "ITCZ march beats continental swing");
     c.band("arable share of land", arable, pct(arable));
-    c.range("pastoral share of land", pshare(4), pct(pshare(4)), (0.02, 0.45), (0.005, 0.65), "M2.1: the dry steppe carries herds");
+    c.band("pastoral share of land", pshare(4), pct(pshare(4)));
     c.want("rice hugs the water", pk[2] == 0 || pk[2] < pk[1] + pk[3], format!("rice {} vs wheat+maize {}", pk[2], pk[1] + pk[3]), "paddies are the exception, not the rule");
     c.print();
 }
@@ -771,7 +771,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     let finite_ok = w.peoples.settlements.iter().all(|s| s.wealth.is_finite() && s.pop >= 0) && w.economy.market.iter_some().all(|(_, p)| p.is_finite());
 
     let mut c = Checks::default();
-    c.range("population growth ×", growth, format!("{:.2}×", growth), (2.0, 1200.0), (1.05, 3000.0), "M2 crop-package K: filled worlds run ~10⁶ souls from tiny dawns");
+    c.band_as("population growth ×", "century growth", growth, format!("{:.2}×", growth));
     if years >= 100 {
         // pacing: the world should still be becoming in its second half,
         // not sitting on a saturated plateau for a century.
@@ -815,7 +815,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             sx += xr; sy += yr; sxx += xr * xr; sxy += xr * yr;
         }
         let slope = (n * sxy - sx * sy) / (n * sxx - sx * sx);
-        c.range("rank-size slope (Zipf)", slope, format!("{:.2} over {} towns", slope, pops.len()), (-1.3, -0.8), (-1.75, -0.5), "M2.3 gate: −1.3…−0.8");
+        c.band("rank-size slope (Zipf)", slope, format!("{:.2} over {} towns", slope, pops.len()));
     }
 
     // ---- M2.5 spacing: median nearest-neighbour distance in km ----
@@ -835,13 +835,13 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     if !nn.is_empty() {
         nn.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let med = nn[nn.len() / 2];
-        c.range("median town spacing", med, format!("{:.0} km", med), (14.0, 48.0), (8.0, 120.0), "M2.5: market-town band ~15–30 km in settled cores");
+        c.band("median town spacing", med, format!("{:.0} km", med));
     }
 
     // ---- M2.6 famine: dry years starve somewhere, but not everywhere ----
     if years >= 100 {
         let per_c = log.famines as f64 * 100.0 / years.max(1) as f64;
-        c.range("famine events per century", per_c, format!("{:.1}", per_c), (1.0, 60.0), (0.0, 150.0), "M2.6: the rains must fail sometimes");
+        c.band("famine events per century", per_c, format!("{:.1}", per_c));
     }
 
     // ---- M3 gates: words and ways ----
@@ -864,7 +864,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         }
         if audited > 0 {
             let share = hits as f64 / audited as f64;
-            c.range("toponyms classify to culture", share, pct(share), (0.9, 1.0), (0.8, 1.0), "M3 gate: sampled toponyms ≥ 90%");
+            c.band("toponyms classify to culture", share, pct(share));
         }
 
         // M3.3 gloss coverage: every fragment of every bank carries a gloss.
@@ -975,7 +975,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         }
         let owned_share = owned as f64 / land_cells.max(1) as f64;
         c.must("territory owners valid", bad == 0, format!("{} bad cells", bad), "M4.1: every owned cell names a live culture");
-        c.range("land under banners", owned_share, pct(owned_share), (0.05, 0.85), (0.01, 0.98), "M4.1: realms claim some — never all — of the wild");
+        c.band("land under banners", owned_share, pct(owned_share));
 
         if years >= 100 {
             c.want("wars kindle", log.wars >= 1, format!("{}", log.wars), "M4: a century without war is a broken game");
@@ -991,7 +991,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 }
                 by_c.values().max().copied().unwrap_or(0) as f64 / total.max(1) as f64
             };
-            c.range("largest realm pop share", top_share, pct(top_share), (0.1, 0.75), (0.02, 0.92), "M4 gate: no runaway single empire");
+            c.band("largest realm pop share", top_share, pct(top_share));
             let _ = pol_last;
         }
         if years >= 140 {
@@ -1024,7 +1024,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             }
             if !ratios.is_empty() {
                 let mean = ratios.iter().sum::<f64>() / ratios.len() as f64;
-                c.range("inter-area price divergence", mean, format!("×{:.2} mean spread", mean), (1.03, 3.0), (1.0, 6.0), "M5.2 gate: local markets disagree, but not madly");
+                c.band("inter-area price divergence", mean, format!("×{:.2} mean spread", mean));
             }
         }
         if years >= 100 {
@@ -1057,7 +1057,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             }
             if xs.len() >= 12 {
                 let corr = pearson(&xs, &ys);
-                c.range("gravity-model correlation", corr, format!("r={:.2} over {} routes", corr, xs.len()), (0.30, 1.0), (0.10, 1.0), "M5.4 gate: big close pairs carry the trade");
+                c.band("gravity-model correlation", corr, format!("r={:.2} over {} routes", corr, xs.len()));
             }
         }
     }
@@ -1203,7 +1203,7 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     println!("towns listing each good: {}", goods_census.iter().map(|(g, n)| format!("{} {}", g, n)).collect::<Vec<_>>().join(" · "));
     if !known.is_empty() {
         let share = worked as f64 / known.len() as f64;
-        c.range("known seams worked", share, pct(share), (0.35, 1.0), (0.10, 1.0), "found ore must reach the market, not rust in the hills");
+        c.band("known seams worked", share, pct(share));
     }
 
     // ---- M2.4 Bettencourt: β from ln(wealth) ~ β·ln(pop) across towns ----
@@ -1218,19 +1218,19 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
             sx += xr; sy += yr; sxx += xr * xr; sxy += xr * yr;
         }
         let beta = (n * sxy - sx * sy) / (n * sxx - sx * sx);
-        c.range("wealth~pop scaling β", beta, format!("{:.2} over {} towns", beta, pts.len()), (0.90, 1.60), (0.50, 2.10), "M2.4: superlinear output, target ≈1.15");
+        c.band("wealth~pop scaling β", beta, format!("{:.2} over {} towns", beta, pts.len()));
     }
 
     // ---- M2.7 price ratios vs the medieval envelope ----
     if let (Some(&pg), Some(&pi_), Some(&pt)) = (means.get("grain"), means.get("iron"), means.get("timber")) {
         let ig = pi_ / pg.max(1e-9);
-        c.range("iron/grain price ratio", ig, format!("{:.1}×", ig), (1.5, 14.0), (0.8, 40.0), "M2.7: metal dear, bread cheap");
+        c.band("iron/grain price ratio", ig, format!("{:.1}×", ig));
         let ok = pg < pi_ && pt < pi_;
         c.want("staples cheaper than metal", ok, format!("grain {:.2} · timber {:.2} · iron {:.2}", pg, pt, pi_), "the ordering of the price lists holds");
     }
     if let (Some(&pg), Some(&pau)) = (means.get("grain"), means.get("gold")) {
         let r = pau / pg.max(1e-9);
-        c.range("gold/grain price ratio", r, format!("{:.1}×", r), (2.5, 80.0), (1.2, 300.0), "M2.7: the precious envelope");
+        c.band("gold/grain price ratio", r, format!("{:.1}×", r));
     }
     c.print();
 }
@@ -1343,10 +1343,10 @@ fn cmd_telling(seed: i64, size: usize, years: usize) {
     let mut c = Checks::default();
     c.must("every event carries an id", with_ids == evs.len(), pct(with_ids as f64 / n as f64), "M6.1 gate: ids = 100%");
     c.must("every carried id is valid", bad_ids == 0, format!("{} bad", bad_ids), "ids index the registry");
-    c.range("events mappable (coords)", with_xy as f64 / n as f64, pct(with_xy as f64 / n as f64), (0.65, 1.0), (0.45, 1.0), "most entries can fly the camera");
+    c.band("events mappable (coords)", with_xy as f64 / n as f64, pct(with_xy as f64 / n as f64));
     c.must("loud events carry a legend", loud_legend == loud, format!("{}/{}", loud_legend, loud), "M6.9: two-layer telling on weight ≥ 3");
     c.must("closed entities carry a fate", closed_unfated == 0, format!("{} unfated", closed_unfated), "every ending is written");
-    c.range("stories per century", per_century, format!("{:.1}", per_century), (5.0, 48.0), (2.0, 60.0), "M6.5 gate: the sifter yields");
+    c.band("stories per century", per_century, format!("{:.1}", per_century));
     c.must("sifter deterministic", sift_det, if sift_det { "identical".into() } else { "DIVERGED".into() }, "same log ⇒ same stories");
     c.must("no duplicate stories", dup_titles == 0, format!("{} dups", dup_titles), "dedup bounds hold");
     c.want("a reversal story found", stories.iter().any(|s| matches!(s.pattern.as_str(), "rise-fall" | "tide-turned" | "mine-curse")), "yes".into(), "M6.7: fortunes turn on the record");
@@ -1463,22 +1463,8 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
     let total_worn: usize = rows.iter().map(|r| r.worn).sum();
 
     let mut c = Checks::default();
-    c.range(
-        "ruins per century (after y100)",
-        ruin_rate,
-        format!("{:.2}", ruin_rate),
-        (1.0, 12.0),
-        (0.5, 20.0),
-        "M9.1 gate: mature worlds carry ruins",
-    );
-    c.range(
-        "withheld share of the chronicle",
-        veil_share,
-        pct(veil_share),
-        (0.02, 0.08),
-        (0.015, 0.10),
-        "M9.5 gate: 2-8% of entries veiled",
-    );
+    c.band("ruins per century (after y100)", ruin_rate, format!("{:.2}", ruin_rate));
+    c.band("withheld share of the chronicle", veil_share, pct(veil_share));
     c.must(
         "hydronyms conserved",
         rows.iter().all(|r| r.rivers_intact),
@@ -1964,7 +1950,7 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
     let zipfs: Vec<f64> = rows.iter().map(|r| r.zipf).filter(|z| z.is_finite()).collect();
     if !zipfs.is_empty() {
         let mz = zipfs.iter().sum::<f64>() / zipfs.len() as f64;
-        c.range("mean rank-size slope", mz, format!("{:.2} over {} seeds", mz, zipfs.len()), (-1.3, -0.8), (-1.9, -0.45), "M2.3 gate: Zipf holds across the sweep");
+        c.band("mean rank-size slope", mz, format!("{:.2} over {} seeds", mz, zipfs.len()));
     }
     c.print();
 }
@@ -2701,15 +2687,12 @@ fn cmd_era(size: usize, years: usize, nseeds: usize, base: i64) {
     c.must("relief varies", spread(&mountain) > 0.01, format!("Δ{:.3}", spread(&mountain)), "M8.3: not one mountain recipe");
     c.must("towns vary", spread(&setts) >= 2.0, format!("Δ{:.0}", spread(&setts)), "M8.3: history diverges");
     let occ_mean = (occ1 + occ2 + occ3 + occ4) as f64 / 4.0 / n as f64;
-    c.range("ERA occupancy / seed", occ_mean, format!("{:.2}", occ_mean), (0.45, 1.0), (0.3, 1.0),
-        "M8.3: seeds spread across the plates");
+    c.band("ERA occupancy / seed", occ_mean, format!("{:.2}", occ_mean));
     // Collapse alarm: a duplicated pair drives min/mean toward 0 regardless
     // of how many seeds are sampled (min alone shrinks with pair count).
     // Healthy generator reads ~0.10-0.19 across 8-16 seeds; mean ~0.05-0.07.
-    c.range("oatmeal min/mean ratio", ratio, format!("{:.3}", ratio), (0.05, 1.0), (0.02, 1.0),
-        "M8.4: no two worlds are the same bowl");
-    c.range("oatmeal mean distance", mean_d, format!("{:.4}", mean_d), (0.04, 0.75), (0.02, 0.9),
-        "M8.4: the family resembles, never repeats");
+    c.band("oatmeal min/mean ratio", ratio, format!("{:.3}", ratio));
+    c.band("oatmeal mean distance", mean_d, format!("{:.4}", mean_d));
     c.print();
 }
 

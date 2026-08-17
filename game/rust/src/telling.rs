@@ -447,3 +447,10 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
     stories.truncate(48);
     stories
 }
+
+// ---------------------------------------------------------------- bands
+
+/// Diagnostics bands (E11.6): the sifter must yield, not flood.
+pub const BANDS: &[crate::util::Band] = &[
+    crate::util::Band { name: "stories per century", sweet: (5.0, 48.0), hard: (2.0, 60.0), target: "M6.5 gate: the sifter yields" },
+];

@@ -77,4 +77,5 @@ pub const BANDS: &[Band] = &[
     Band { name: "tundra+ice share of land", sweet: (0.05, 0.30), hard: (0.01, 0.45), target: "sweet 5–30% · hard 1–45%" },
     Band { name: "forest share of land", sweet: (0.25, 0.60), hard: (0.15, 0.75), target: "sweet 25–60% · hard 15–75%" },
     Band { name: "grass+savanna share of land", sweet: (0.10, 0.45), hard: (0.04, 0.60), target: "sweet 10–45% · hard 4–60%" },
+    Band { name: "pastoral share of land", sweet: (0.02, 0.45), hard: (0.005, 0.65), target: "M2.1: the dry steppe carries herds" },
 ];

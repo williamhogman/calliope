@@ -1005,3 +1005,10 @@ pub fn exonym_pass(
     }
     out
 }
+
+// ---------------------------------------------------------------- bands
+
+/// Diagnostics bands (E11.6): the tongue must own its toponyms.
+pub const BANDS: &[crate::util::Band] = &[
+    crate::util::Band { name: "toponyms classify to culture", sweet: (0.9, 1.0), hard: (0.8, 1.0), target: "M3 gate: sampled toponyms ≥ 90%" },
+];

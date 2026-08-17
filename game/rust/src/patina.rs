@@ -152,3 +152,11 @@ pub fn ruin_why(cause: &str) -> &'static str {
         _ => "it dwindled year by year until the last hearth went cold",
     }
 }
+
+// ---------------------------------------------------------------- bands
+
+/// Diagnostics bands (E11.6): the residue budget of mature worlds.
+pub const BANDS: &[crate::util::Band] = &[
+    crate::util::Band { name: "ruins per century (after y100)", sweet: (1.0, 12.0), hard: (0.5, 20.0), target: "M9.1 gate: mature worlds carry ruins" },
+    crate::util::Band { name: "withheld share of the chronicle", sweet: (0.02, 0.08), hard: (0.015, 0.10), target: "M9.5 gate: 2-8% of entries veiled" },
+];

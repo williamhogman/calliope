@@ -211,4 +211,5 @@ use crate::util::Band;
 /// Diagnostics bands (E2.7): where fields can feed a city.
 pub const BANDS: &[Band] = &[
     Band { name: "arable share of land", sweet: (0.15, 0.65), hard: (0.06, 0.85), target: "M2.1: wheat+rice+maize belts cover the good land" },
+    Band { name: "famine events per century", sweet: (1.0, 60.0), hard: (0.0, 150.0), target: "M2.6: the rains must fail sometimes" },
 ];

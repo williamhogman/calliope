@@ -774,3 +774,10 @@ pub fn bridge_components(
         recount_connections(settlements, routes);
     }
 }
+
+// ---------------------------------------------------------------- bands
+
+/// Diagnostics bands (E11.6): the gravity of big close pairs.
+pub const BANDS: &[crate::util::Band] = &[
+    crate::util::Band { name: "gravity-model correlation", sweet: (0.30, 1.0), hard: (0.10, 1.0), target: "M5.4 gate: big close pairs carry the trade" },
+];

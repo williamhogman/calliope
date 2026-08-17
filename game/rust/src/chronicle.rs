@@ -435,4 +435,5 @@ use crate::state::{Chronicle, Peoples};
 /// Diagnostics bands (E2.7): the pace of the telling.
 pub const BANDS: &[Band] = &[
     Band { name: "events per year", sweet: (2.0, 40.0), hard: (0.5, 100.0), target: "sweet 2–40 · hard 0.5–100" },
+    Band { name: "events mappable (coords)", sweet: (0.65, 1.0), hard: (0.45, 1.0), target: "most entries can fly the camera" },
 ];

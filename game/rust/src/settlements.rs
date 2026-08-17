@@ -420,4 +420,7 @@ use crate::util::Band;
 /// Diagnostics bands (E2.7): how the towns grow.
 pub const BANDS: &[Band] = &[
     Band { name: "century growth", sweet: (2.0, 1200.0), hard: (1.05, 3000.0), target: "M2 crop-package K: sweet 2–1200×" },
+    Band { name: "rank-size slope (Zipf)", sweet: (-1.3, -0.8), hard: (-1.75, -0.5), target: "M2.3 gate: −1.3…−0.8" },
+    Band { name: "median town spacing", sweet: (14.0, 48.0), hard: (8.0, 120.0), target: "M2.5: market-town band ~15–30 km in settled cores" },
+    Band { name: "mean rank-size slope", sweet: (-1.3, -0.8), hard: (-1.9, -0.45), target: "M2.3 gate: Zipf holds across the sweep" },
 ];

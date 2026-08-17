@@ -1105,4 +1105,8 @@ use crate::state::{Economy, Peoples};
 pub const BANDS: &[Band] = &[
     Band { name: "max pinned price share", sweet: (0.0, 0.25), hard: (0.0, 0.55), target: "sweet ≤25% · hard ≤55%" },
     Band { name: "wealth gini", sweet: (0.20, 0.80), hard: (0.05, 0.95), target: "sweet 0.20–0.80 — some inequality, no monopoly" },
+    Band { name: "inter-area price divergence", sweet: (1.03, 3.0), hard: (1.0, 6.0), target: "M5.2 gate: local markets disagree, but not madly" },
+    Band { name: "wealth~pop scaling β", sweet: (0.90, 1.60), hard: (0.50, 2.10), target: "M2.4: superlinear output, target ≈1.15" },
+    Band { name: "iron/grain price ratio", sweet: (1.5, 14.0), hard: (0.8, 40.0), target: "M2.7: metal dear, bread cheap" },
+    Band { name: "gold/grain price ratio", sweet: (2.5, 80.0), hard: (1.2, 300.0), target: "M2.7: the precious envelope" },
 ];

@@ -631,4 +631,5 @@ use crate::util::Band;
 pub const BANDS: &[Band] = &[
     Band { name: "deposits per 1000 land cells", sweet: (1.0, 6.0), hard: (0.5, 12.0), target: "sweet 1–6 · hard 0.5–12" },
     Band { name: "mineral hidden share at dawn", sweet: (0.45, 0.85), hard: (0.25, 0.95), target: "sweet 45–85% — leave an age of prospectors" },
+    Band { name: "known seams worked", sweet: (0.35, 1.0), hard: (0.10, 1.0), target: "found ore must reach the market, not rust in the hills" },
 ];
