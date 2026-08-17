@@ -44,6 +44,7 @@ use crate::patina::{self, Ruin};
 use crate::politics::{self, Politics};
 use crate::resources::{self, Deposit};
 use crate::settlements::{self, Settlement};
+use crate::snapshot::SentCache;
 use crate::society::{self, Society};
 use crate::telling;
 use crate::trade::{self, Route};
@@ -294,18 +295,18 @@ pub struct World {
 
     rng: Pcg64Mcg,
     taken: HashSet<String>,
-    chron: ChronicleState,
+    pub(crate) chron: ChronicleState,
     /// Statecraft: wars, opinion, dread, solidarity, vassals (M4).
     pub politics: Politics,
     /// Influence-map territory: owner culture per cell, −1 wilderness (M4.1).
     pub territory: Array2<i16>,
     /// E4.5 — which wire sections must reship on the next tick.
-    dirty: Dirty,
+    pub(crate) dirty: Dirty,
     /// E4.2/E4.3 — hashes of the last-shipped JSON per wire surface.
-    sent: SentCache,
+    pub(crate) sent: SentCache,
     /// E5.8 — reused serialization scratch for the tick payload; keeps its
     /// high-water capacity so `tick_json` stops paying growth reallocations.
-    wire_buf: Vec<u8>,
+    pub(crate) wire_buf: Vec<u8>,
     /// Deterministic drought field over (space × year) — the famine die (M2.6).
     drought: Perlin3,
     /// Last year grain was shock-priced by famine, to spike at most once a year.

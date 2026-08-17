@@ -4,6 +4,7 @@
 //! bootstrap (E3.1), and the `SentCache` that decides what reships.
 //! Moved verbatim out of `world.rs`; wire bytes are unchanged.
 
+use serde::Serialize;
 use serde_json::{json, Value};
 use strum::IntoEnumIterator;
 
@@ -11,17 +12,19 @@ use crate::constants;
 use crate::economy;
 use crate::entity::EntityKind;
 use crate::politics;
-use crate::resources::Deposit;
+use crate::agriculture;
+use crate::resources::{self, Deposit};
+use crate::society;
 use crate::settlements::{self, Settlement};
 use crate::util::{now_ms, round2, round3};
-use crate::world::{EventKind, World};
+use crate::world::{headline_worthy, Dirty, EventKind, World};
 
 /// E4.2/E4.3 — FNV hashes of the last-shipped JSON per wire surface; a
 /// section crosses the boundary only when its bytes moved. Seeded by
 /// `prime_sent()` to the freshly generated world, which is exactly what
 /// `bootstrap()` ships.
 #[derive(Default)]
-struct SentCache {
+pub(crate) struct SentCache {
     /// (settlement id, cold-form hash, heartbeat quanta), engine order.
     /// The cold form zeroes the monthly heartbeat (pop/food/k/wealth); the
     /// quanta are the heartbeat at wire precision (pop · food×10 · k ·
@@ -515,7 +518,7 @@ impl World {
     /// E4.2/E4.3 — seed the delta baseline to the freshly generated world,
     /// which is exactly what `bootstrap()` ships; the first tick then
     /// carries only what actually moved after month 0.
-    fn prime_sent(&mut self) {
+    pub(crate) fn prime_sent(&mut self) {
         self.sent.settlements = self
             .settlements
             .iter()
