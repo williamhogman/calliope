@@ -113,7 +113,7 @@ month (`world.rs:2193-2227`), unconditionally.
 - [x] E4.4 Event cursor: tick returns the new event count; the client pulls ranges through the existing `events_range` (`lib.rs:79-85`) — event arrays leave the tick payload (S-M)
 - [x] E4.5 One `DirtyMap` replacing the five ad-hoc `*_dirty` bools (`world.rs:109,125,128,146` …) — new payload sections get change-tracking for free (S)
 - [x] E4.6 Binary tick payload — **rejected on measurement** (ADR-0017), see Rejected: main-thread parse is 0.080 ms median per tick, 0.15 % of tick wall time at year 100
-- [ ] E4.7 Grid dirty-tiles (32×32): mid-run field changes (territory today, erosion later) ship as tile patches, feeding partial texture updates in E9 (L)
+- [x] E4.7 Grid dirty-tiles (32×32): territory ships as dirty-tile patches against the last-sent baseline; both encodings are built and the byte-smaller one ships (measured: diffuse yearly growth compresses better as full RLE, local conquests win as tiles); identical grids ship nothing; client applies tiles straight into the live grid with row-band damage (L)
 - [x] E4.8 Merchant/war/ruler headline extraction server-side: the UI's per-tick scan for toast-worthy events moves behind the event-table declaration (E2.3) (S)
 
 Gates: median tick payload < 4 KB at year 100 (vs. full resend today),
