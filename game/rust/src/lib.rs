@@ -16,6 +16,7 @@ pub mod economy;
 pub mod entity;
 pub mod erosion;
 pub mod explain;
+pub mod famine;
 pub mod geo;
 pub mod hydrology;
 pub mod ids;
@@ -25,6 +26,7 @@ pub mod noisegen;
 pub mod pack;
 pub mod patina;
 pub mod politics;
+pub mod prospecting;
 
 #[cfg(target_arch = "wasm32")]
 pub mod render;
