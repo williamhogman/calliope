@@ -1889,6 +1889,48 @@ impl World {
         (sink.events, sink.founded, sink.deposits_changed)
     }
 
+    /// Native-only per-system profiler (E11.7): the same driver as `tick`,
+    /// but each system's wall time and call count accumulate into slices
+    /// parallel to `systems::SYSTEMS`. Timing reads touch neither the RNG
+    /// nor any state, so a profiled run stays byte-identical to a plain one.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn tick_profiled(
+        &mut self,
+        months: i64,
+        totals: &mut [f64],
+        calls: &mut [u64],
+    ) -> (Vec<Event>, bool, bool) {
+        assert_eq!(totals.len(), SYSTEMS.len());
+        assert_eq!(calls.len(), SYSTEMS.len());
+        let months = months.clamp(1, 240).max(1);
+        let mut sink = EventSink::new();
+        let mut sidx = std::collections::HashMap::new();
+        for _ in 0..months {
+            sink.begin_month();
+            self.month += 1;
+            let month = self.month;
+            let mut ctx = SimCtx { world: self, sidx };
+            for (i, sys) in SYSTEMS.iter().enumerate() {
+                if sys.cadence().due(month) {
+                    let t = std::time::Instant::now();
+                    sys.run(&mut ctx, &mut sink);
+                    totals[i] += t.elapsed().as_secs_f64();
+                    calls[i] += 1;
+                }
+            }
+            sidx = ctx.sidx;
+        }
+        if sink.founded {
+            self.dirty.mark(Dirty::ROUTES);
+        }
+        if sink.deposits_changed {
+            self.dirty.mark(Dirty::DEPOSITS);
+        }
+        self.chronicle.events.extend(sink.events.iter().cloned());
+        (sink.events, sink.founded, sink.deposits_changed)
+    }
+
+
     /// The second reading of the month's events (M6): any entry whose
     /// subject the registry knows gets its ids back-filled, any entry
     /// without a map anchor inherits its subject's, and the loudest
