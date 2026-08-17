@@ -376,7 +376,7 @@ directly on the prologue's M10–M13 (peoples/realms/dynasties) and M6.2
 - M155 Purges and exiles: the losing faction pays in banishment, and remembers
 
 **Q11 — The plot.** The usurper is a person with backers.
-- M156 Conspiracies: recruitment, secrecy, resolve
+- M156 Conspiracies: backers recruited, secrecy strained, resolve tested to the knife's edge
 - M157 Assassination attempts with consequences either way
 - M158 Plot discovery, trials, and the chronicle beats they earn
 
