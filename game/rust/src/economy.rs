@@ -25,12 +25,11 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::ids::{CultureId, EntityId, SettlementId};
-use crate::culture::Culture;
 use crate::entity::Registry;
 use crate::naming;
 use crate::resources::{Abundance, Good, GoodSet};
 use crate::settlements::Settlement;
-use crate::society::{self, Society, TechId};
+use crate::society::{self, TechId};
 use crate::trade::Route;
 use crate::util::round2;
 use crate::world::EventKind;
