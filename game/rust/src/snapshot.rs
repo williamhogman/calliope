@@ -45,6 +45,10 @@ pub(crate) struct SentCache {
     areas_of: u64,
     /// Hash of the price-spread rows.
     areas_spread: u64,
+    /// E4.7 — the territory grid exactly as the client last received it
+    /// (pack at dawn, then every shipped patch); tile diffs run against
+    /// this, never against a guess.
+    territory: ndarray::Array2<i16>,
 }
 
 impl World {
@@ -240,6 +244,8 @@ impl World {
             ruins: Option<Box<RawValue>>,
             #[serde(skip_serializing_if = "Option::is_none")]
             territory: Option<Box<RawValue>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            territory_tiles: Option<Box<RawValue>>,
         }
 
         fn raw(s: String) -> Option<Box<RawValue>> {
@@ -453,6 +459,33 @@ impl World {
             }
         };
 
+        // E4.7 — territory crosses as dirty 32×32 tile patches against the
+        // last-shipped grid: a recompute that moved no border ships nothing,
+        // a border skirmish ships a few tiles, an upheaval touching more
+        // than 35% of tiles falls back to the full RLE the client speaks.
+        let (terr_full, terr_tiles) = if self.dirty.take(Dirty::TERRITORY) {
+            let cur = &self.fields.territory;
+            let full = || raw(serde_json::to_string(&politics::territory_rle(cur)).unwrap());
+            if self.sent.territory.dim() == cur.dim() {
+                match politics::territory_tile_patch(&self.sent.territory, cur, 32) {
+                    None => (None, None), // redrawn, but every border held
+                    Some((patch, changed, total)) if changed * 100 <= total * 35 => {
+                        self.sent.territory = cur.clone();
+                        (None, raw(patch.to_string()))
+                    }
+                    Some(_) => {
+                        self.sent.territory = cur.clone();
+                        (full(), None)
+                    }
+                }
+            } else {
+                self.sent.territory = cur.clone();
+                (full(), None)
+            }
+        } else {
+            (None, None)
+        };
+
         let dep = self.dirty.take(Dirty::DEPOSITS);
         let payload = Payload {
             month: self.month,
@@ -501,11 +534,8 @@ impl World {
             } else {
                 None
             },
-            territory: if self.dirty.take(Dirty::TERRITORY) {
-                raw(serde_json::to_string(&politics::territory_rle(&self.fields.territory)).unwrap())
-            } else {
-                None
-            },
+            territory: terr_full,
+            territory_tiles: terr_tiles,
         };
         // E5.8 — serialize into the reused scratch (high-water capacity,
         // zero growth reallocations), then hand back one exact-size copy.
@@ -518,6 +548,7 @@ impl World {
     /// which is exactly what `bootstrap()` ships; the first tick then
     /// carries only what actually moved after month 0.
     pub(crate) fn prime_sent(&mut self) {
+        self.sent.territory = self.fields.territory.clone();
         self.sent.settlements = self
             .peoples.settlements
             .iter()

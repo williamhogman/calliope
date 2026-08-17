@@ -402,6 +402,74 @@ pub fn territory_rle(t: &Array2<i16>) -> Vec<i32> {
     out
 }
 
+/// E4.7 — dirty 32×32 tiles between the last-shipped and current grids.
+/// `None` when the grids are identical; otherwise the JSON patch
+/// `{"tw":N,"tiles":[[tx,ty,[run,val,…]],…]}` plus (changed, total) tile
+/// counts so the caller can fall back to full RLE on upheavals. Each
+/// tile's RLE is row-major inside the tile, same [run, value, …] code
+/// the full grid uses.
+pub fn territory_tile_patch(
+    prev: &Array2<i16>,
+    cur: &Array2<i16>,
+    tile: usize,
+) -> Option<(serde_json::Value, usize, usize)> {
+    debug_assert_eq!(prev.dim(), cur.dim());
+    let (h, w) = cur.dim();
+    let tx_n = w.div_ceil(tile);
+    let ty_n = h.div_ceil(tile);
+    let mut tiles: Vec<serde_json::Value> = Vec::new();
+    for ty in 0..ty_n {
+        for tx in 0..tx_n {
+            let (x0, y0) = (tx * tile, ty * tile);
+            let (x1, y1) = ((x0 + tile).min(w), (y0 + tile).min(h));
+            let mut differs = false;
+            'scan: for y in y0..y1 {
+                for x in x0..x1 {
+                    if prev[[y, x]] != cur[[y, x]] {
+                        differs = true;
+                        break 'scan;
+                    }
+                }
+            }
+            if !differs {
+                continue;
+            }
+            let mut rle: Vec<i32> = Vec::new();
+            let mut run = 0i32;
+            let mut cv = i16::MIN;
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let v = cur[[y, x]];
+                    if v == cv {
+                        run += 1;
+                    } else {
+                        if run > 0 {
+                            rle.push(run);
+                            rle.push(cv as i32);
+                        }
+                        cv = v;
+                        run = 1;
+                    }
+                }
+            }
+            if run > 0 {
+                rle.push(run);
+                rle.push(cv as i32);
+            }
+            tiles.push(serde_json::json!([tx, ty, rle]));
+        }
+    }
+    if tiles.is_empty() {
+        return None;
+    }
+    let changed = tiles.len();
+    Some((
+        serde_json::json!({ "tw": tile, "tiles": tiles }),
+        changed,
+        tx_n * ty_n,
+    ))
+}
+
 // ---------------------------------------------------------------- monthly
 
 /// One month of statecraft. Returns (events, borders_changed).
@@ -1443,3 +1511,65 @@ pub const BANDS: &[crate::util::Band] = &[
     crate::util::Band { name: "land under banners", sweet: (0.05, 0.85), hard: (0.01, 0.98), target: "M4.1: realms claim some — never all — of the wild" },
     crate::util::Band { name: "largest realm pop share", sweet: (0.1, 0.75), hard: (0.02, 0.92), target: "M4 gate: no runaway single empire" },
 ];
+
+#[cfg(test)]
+mod tile_patch_tests {
+    use super::*;
+
+    fn apply(prev: &Array2<i16>, patch: &serde_json::Value) -> Array2<i16> {
+        let mut out = prev.clone();
+        let (h, w) = out.dim();
+        let tw = patch["tw"].as_u64().unwrap() as usize;
+        for t in patch["tiles"].as_array().unwrap() {
+            let tx = t[0].as_u64().unwrap() as usize;
+            let ty = t[1].as_u64().unwrap() as usize;
+            let rle: Vec<i64> = t[2].as_array().unwrap().iter().map(|v| v.as_i64().unwrap()).collect();
+            let (x0, y0) = (tx * tw, ty * tw);
+            let t_w = tw.min(w - x0);
+            let t_h = tw.min(h - y0);
+            let mut j = 0usize;
+            for k in (0..rle.len()).step_by(2) {
+                for _ in 0..rle[k] {
+                    assert!(j < t_w * t_h, "rle overruns the tile");
+                    out[[y0 + j / t_w, x0 + j % t_w]] = rle[k + 1] as i16;
+                    j += 1;
+                }
+            }
+            assert_eq!(j, t_w * t_h, "rle must cover the whole tile");
+        }
+        out
+    }
+
+    #[test]
+    fn roundtrip_borders_and_edges() {
+        // 70×90: ragged edge tiles both ways at tile=32
+        let mut prev = Array2::from_elem((70, 90), -1i16);
+        for y in 10..40 {
+            for x in 20..60 {
+                prev[[y, x]] = 3;
+            }
+        }
+        let mut cur = prev.clone();
+        // a border shift, a new enclave in a ragged corner tile, a loss
+        for y in 30..45 {
+            for x in 55..70 {
+                cur[[y, x]] = 5;
+            }
+        }
+        cur[[69, 89]] = 7;
+        for y in 10..14 {
+            for x in 20..24 {
+                cur[[y, x]] = -1;
+            }
+        }
+        let (patch, changed, total) = territory_tile_patch(&prev, &cur, 32).unwrap();
+        assert!(changed < total, "a local shift must not dirty every tile");
+        assert_eq!(apply(&prev, &patch), cur, "patch over prev must equal cur");
+    }
+
+    #[test]
+    fn identical_grids_ship_nothing() {
+        let g = Array2::from_elem((64, 64), 2i16);
+        assert!(territory_tile_patch(&g, &g.clone(), 32).is_none());
+    }
+}
