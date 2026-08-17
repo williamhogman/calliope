@@ -207,7 +207,7 @@ export function decodeTerritory(R, rle) {
     i += run;
   }
   const prev = R.ownerIsCulture ? R.territoryOwner : null;
-  let rows = null;
+  let rows = { y0: 0, y1: R.h }; // no previous grid: the whole map is the band
   if (prev && prev.length === owner.length) {
     let lo = -1, hi = -1;
     for (let j = 0; j < owner.length; j++) {
@@ -230,17 +230,14 @@ export function decodeTerritory(R, rle) {
   R.ownerIsCulture = true;
   R.tintEpoch++;
   R._polDirty = true;
-  R._compRows = mergeRows(R._compRows, rows, R.h);
-  R._tintRows = mergeRows(R._tintRows, rows, R.h);
+  R._compRows = mergeRows(R._compRows, rows);
+  R._tintRows = mergeRows(R._tintRows, rows);
 }
 
-// null band = "everything"; merging with anything stays "everything".
-function mergeRows(a, b, H) {
-  if (a === undefined) return b ?? { y0: 0, y1: H };
-  if (a === null || b === null || b === undefined) {
-    return a && b === undefined ? a : (b === null || a === null ? { y0: 0, y1: H } : a);
-  }
-  return { y0: Math.min(a.y0, b.y0), y1: Math.max(a.y1, b.y1) };
+// undefined = nothing pending; otherwise a row band (full map = {0, H}).
+function mergeRows(cur, add) {
+  if (!cur) return add;
+  return { y0: Math.min(cur.y0, add.y0), y1: Math.max(cur.y1, add.y1) };
 }
 
 export function territoryGrid(R, version) {
