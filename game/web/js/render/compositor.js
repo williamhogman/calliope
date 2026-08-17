@@ -352,7 +352,7 @@ export function composite(R, state) {
   }
   // E9.9 — when only a territory band moved, recompute just those rows
   const partial = base === R.cacheKeyBase && layer === "political" &&
-    R._img && R._compRows !== undefined && R._compRows !== null;
+    !!R._img && !!R._compRows;
   const rows = partial ? R._compRows : null;
   R.cacheKeyBase = base;
   R.cacheVersion = vKey;
