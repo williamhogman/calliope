@@ -1,9 +1,12 @@
 //! Prospecting and depletion — the discovery economy (ADR-0011), a module
 //! like its peers (E11.2). Moved verbatim out of `world.rs`.
 
+use crate::economy;
 use crate::resources;
+use crate::society;
 use crate::settlements;
 use crate::trade;
+use crate::util::round2;
 use crate::world::{Event, EventKind, World};
 
 impl World {
