@@ -1,5 +1,6 @@
 // Pan/zoom controller (CSS-pixel space). One pointer pans, two pinch-zoom,
-// wheel zooms around the cursor.
+// wheel zooms around the cursor. Any user input cancels a camera flight
+// immediately (E9.7) — the map always answers the hand on it.
 
 export class View {
   constructor(canvas, onChange) {
@@ -11,10 +12,12 @@ export class View {
     this.minScale = 0.5;
     this.maxScale = 48;
     this.worldSize = 512;
+    this.flying = false; // true while a flyTo animation is in charge
     this._bind();
   }
 
   fit(worldW, worldH = worldW) {
+    this.cancelFlight();
     this.worldSize = Math.max(worldW, worldH);
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
@@ -36,6 +39,7 @@ export class View {
   }
 
   centerOn(wx, wy, scale) {
+    this.cancelFlight();
     if (scale) this.scale = Math.max(this.minScale, Math.min(this.maxScale, scale));
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
@@ -54,6 +58,7 @@ export class View {
     const to = { tx: w / 2 - wx * s1, ty: h / 2 - wy * s1, s: s1 };
     const t0 = performance.now();
     const ease = (t) => 1 - Math.pow(1 - t, 3);
+    this.flying = true;
     const tick = (now) => {
       const t = Math.min(1, (now - t0) / ms);
       const k = ease(t);
@@ -65,11 +70,15 @@ export class View {
       this.ty = from.ty + (to.ty - from.ty) * kk;
       this.onChange?.();
       if (t < 1) this._flight = requestAnimationFrame(tick);
+      else this.flying = false;
     };
     this._flight = requestAnimationFrame(tick);
   }
 
-  cancelFlight() { cancelAnimationFrame(this._flight); }
+  cancelFlight() {
+    cancelAnimationFrame(this._flight);
+    this.flying = false;
+  }
 
   _zoomAt(px, py, factor) {
     const ns = Math.max(this.minScale, Math.min(this.maxScale, this.scale * factor));
@@ -83,42 +92,43 @@ export class View {
 
   _bind() {
     const c = this.canvas;
-    const pts = new Map(); // pointerId -> {x, y}
-    let lastX = 0, lastY = 0; // single-pointer pan anchor
-    let pinch = null; // {mx, my, dist} of the previous two-finger frame
-
-    const midOf = () => {
-      const [a, b] = [...pts.values()];
-      return {
-        mx: (a.x + b.x) / 2,
-        my: (a.y + b.y) / 2,
-        dist: Math.hypot(a.x - b.x, a.y - b.y),
-      };
-    };
+    // Two-slot pointer tracking (E9.8): the pan/pinch math only ever cares
+    // about the first two pointers, so they live in plain fields — no Map
+    // spread, no per-move allocation.
+    let id1 = -1, x1 = 0, y1 = 0;
+    let id2 = -1, x2 = 0, y2 = 0;
+    let lastX = 0, lastY = 0;      // single-pointer pan anchor
+    let pmx = 0, pmy = 0, pdist = 0; // previous two-finger frame
+    let pinching = false;
 
     c.addEventListener("pointerdown", (e) => {
-      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pts.size === 1) {
-        lastX = e.clientX;
-        lastY = e.clientY;
+      this.cancelFlight(); // the hand on the map outranks the camera (E9.7)
+      if (id1 < 0) {
+        id1 = e.pointerId; x1 = e.clientX; y1 = e.clientY;
+        lastX = e.clientX; lastY = e.clientY;
         c.classList.add("dragging");
-      } else if (pts.size === 2) {
-        pinch = midOf();
-      }
+      } else if (id2 < 0 && e.pointerId !== id1) {
+        id2 = e.pointerId; x2 = e.clientX; y2 = e.clientY;
+        pmx = (x1 + x2) / 2; pmy = (y1 + y2) / 2;
+        pdist = Math.hypot(x1 - x2, y1 - y2);
+        pinching = true;
+      } // third and later pointers are ignored, as before
       try { c.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     });
 
     c.addEventListener("pointermove", (e) => {
-      if (!pts.has(e.pointerId)) return;
-      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pts.size >= 2 && pinch) {
-        const m = midOf();
-        if (pinch.dist > 0 && m.dist > 0) this._zoomAt(pinch.mx, pinch.my, m.dist / pinch.dist);
-        this.tx += m.mx - pinch.mx;
-        this.ty += m.my - pinch.my;
-        pinch = m;
+      if (e.pointerId === id1) { x1 = e.clientX; y1 = e.clientY; }
+      else if (e.pointerId === id2) { x2 = e.clientX; y2 = e.clientY; }
+      else return;
+      if (pinching) {
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        const dist = Math.hypot(x1 - x2, y1 - y2);
+        if (pdist > 0 && dist > 0) this._zoomAt(pmx, pmy, dist / pdist);
+        this.tx += mx - pmx;
+        this.ty += my - pmy;
+        pmx = mx; pmy = my; pdist = dist;
         this.onChange?.();
-      } else if (pts.size === 1) {
+      } else if (e.pointerId === id1) {
         this.tx += e.clientX - lastX;
         this.ty += e.clientY - lastY;
         lastX = e.clientX;
@@ -128,28 +138,29 @@ export class View {
     });
 
     const up = (e) => {
-      pts.delete(e.pointerId);
-      if (pts.size === 1) {
-        // one finger lifted mid-pinch: hand off to a smooth single-finger pan
-        const p = [...pts.values()][0];
-        lastX = p.x;
-        lastY = p.y;
-        pinch = null;
-      } else if (pts.size === 0) {
-        pinch = null;
-        c.classList.remove("dragging");
-      }
+      if (e.pointerId === id1) {
+        // promote the second finger to a smooth single-finger pan
+        id1 = id2; x1 = x2; y1 = y2;
+        id2 = -1;
+      } else if (e.pointerId === id2) {
+        id2 = -1;
+      } else return;
+      pinching = false;
+      if (id1 >= 0) { lastX = x1; lastY = y1; }
+      else c.classList.remove("dragging");
     };
     c.addEventListener("pointerup", up);
     c.addEventListener("pointercancel", up);
 
     c.addEventListener("wheel", (e) => {
       e.preventDefault();
+      this.cancelFlight();
       const factor = Math.exp(-e.deltaY * 0.0016);
       this._zoomAt(e.clientX, e.clientY, factor);
     }, { passive: false });
 
     c.addEventListener("dblclick", (e) => {
+      this.cancelFlight();
       this._zoomAt(e.clientX, e.clientY, 1.8);
     });
   }

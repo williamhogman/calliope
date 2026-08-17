@@ -37,7 +37,8 @@ input { font: inherit; color: inherit; }
 .neg { color: var(--neg); }
 .desktop-only { display: flex; }
 
-#gl {
+#gl,
+#anim {
   position: fixed;
   inset: 0;
   width: 100%;
