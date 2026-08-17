@@ -66,7 +66,7 @@ societies at year 150:
   Thesaiaians            kingdom    the High Age   20 arts · treasury    23342 · lore  43997
 
 ---- checks ----------------------------------------------------------
-[PASS] population growth ×                        1187.15×   (M2 crop-package K: filled worlds run ~10⁶ souls from tiny dawns)
+[PASS] population growth ×                        1187.15×   (M2 crop-package K: sweet 2–1200×)
 [PASS] still growing at half-run              22% of final   (pop at half-run ≤92% of final)
 [PASS] settlements grew                             16→103   (colonies should outnumber the dawn towns)
 [PASS] dry-country towns exist                   10 of 103   (≥1 town beyond fresh water by the century mark)

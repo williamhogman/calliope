@@ -64,7 +64,7 @@ societies at year 150:
   Ulfvikfolk             kingdom    the High Age   19 arts · treasury     5518 · lore  23804
 
 ---- checks ----------------------------------------------------------
-[PASS] population growth ×                        1063.28×   (M2 crop-package K: filled worlds run ~10⁶ souls from tiny dawns)
+[PASS] population growth ×                        1063.28×   (M2 crop-package K: sweet 2–1200×)
 [PASS] still growing at half-run              19% of final   (pop at half-run ≤92% of final)
 [PASS] settlements grew                             16→104   (colonies should outnumber the dawn towns)
 [PASS] dry-country towns exist                   11 of 104   (≥1 town beyond fresh water by the century mark)
