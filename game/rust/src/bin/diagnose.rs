@@ -72,6 +72,7 @@ use calliope::naming;
 use calliope::ndimage;
 use calliope::resources;
 use calliope::society;
+use calliope::systems::{Cadence, SYSTEMS};
 use calliope::telling;
 use calliope::util::{band as band_spec, quantile};
 use calliope::world::{Event, World};
@@ -2696,6 +2697,100 @@ fn cmd_era(size: usize, years: usize, nseeds: usize, base: i64) {
     c.print();
 }
 
+// ================================================================ systems
+
+/// E11.7 — profile the system lattice on a real grown world: where the
+/// month's milliseconds go, which walls each system writes, and what an
+/// ECS scheduler could therefore ever hope to parallelise.
+fn cmd_systems(seed: i64, size: usize, years: usize) {
+    header("SYSTEM LATTICE", &format!("seed {seed} · {size}² · {years}y"));
+
+    // Walls each system writes, by inspection of systems.rs bodies.
+    // P=peoples · E=economy · C=chronicle · G=grids · D=deposits ·
+    // N=names/features · R=draws the one rng stream · –=scratch only.
+    // A system is SERIAL if it writes Peoples or draws the RNG: the single
+    // PCG stream is a total order — determinism law makes it unsplittable.
+    const ACCESS: &[(&str, &str, bool)] = &[
+        ("towns", "P·R", true),
+        ("famine", "P·R", true),
+        ("colonize", "P·R", true),
+        ("prospect", "D·R", true),
+        ("rush-camps", "P·D·R", true),
+        ("goods", "P", true),
+        ("exonyms", "N·R", true),
+        ("society", "P·R", true),
+        ("census", "–", false),
+        ("market-areas", "E", false),
+        ("crafts", "P·R", true),
+        ("economy", "E·P·R", true),
+        ("merchants", "E·P·C·R", true),
+        ("statecraft", "P·C·G·R", true),
+        ("patina", "P·C·N·R", true),
+        ("territory", "G", false),
+        ("chronicle", "C·P·R", true),
+        ("relics", "C·R", true),
+        ("second-reading", "C", false),
+        ("veil", "C", false),
+        ("heat", "–", false),
+    ];
+
+    let mut w = World::generate(seed, size);
+    let mut totals = vec![0.0f64; SYSTEMS.len()];
+    let mut calls = vec![0u64; SYSTEMS.len()];
+    let months = (years * 12) as i64;
+    let t0 = Instant::now();
+    let mut left = months;
+    while left > 0 {
+        let step = left.min(240);
+        w.tick_profiled(step, &mut totals, &mut calls);
+        left -= step;
+    }
+    let wall = t0.elapsed().as_secs_f64();
+    let insystem: f64 = totals.iter().sum();
+    let overhead = (wall - insystem).max(0.0);
+
+    println!(" {years}y ticked in {:.0} ms · {} towns · {} events", wall * 1000.0,
+        w.peoples.settlements.len(), w.chronicle.events.len());
+    println!();
+    println!(" {:<16} {:>8} {:>6} {:>10} {:>7}   {:<10} {}", "system", "cadence", "calls", "total ms", "share", "writes", "serial");
+    let mut serial_time = 0.0f64;
+    for (i, sys) in SYSTEMS.iter().enumerate() {
+        let cad = match sys.cadence() {
+            Cadence::Monthly => "monthly".to_string(),
+            Cadence::EveryN { n, .. } => format!("1/{n}mo"),
+        };
+        let (aname, walls, serial) = ACCESS[i];
+        debug_assert_eq!(aname, sys.name());
+        if serial {
+            serial_time += totals[i];
+        }
+        println!(" {:<16} {:>8} {:>6} {:>10.1} {:>6.1}%   {:<10} {}",
+            sys.name(), cad, calls[i], totals[i] * 1000.0,
+            100.0 * totals[i] / insystem.max(1e-9), walls,
+            if serial { "yes" } else { "-" });
+    }
+    println!(" {:<16} {:>8} {:>6} {:>10.1} {:>6.1}%   (dispatch + clock)", "driver", "", "", overhead * 1000.0, 100.0 * overhead / wall.max(1e-9));
+
+    // Amdahl on the measured workload: even a perfect scheduler that runs
+    // every non-serial system for free is bounded by the serial fraction.
+    let serial_share = serial_time / insystem.max(1e-9);
+    let ceiling = 1.0 / serial_share.max(1e-9);
+    println!();
+    println!(" serial fraction (writes Peoples or draws rng): {:.1}% of in-system time", 100.0 * serial_share);
+    println!(" ⇒ ECS parallel-scheduling ceiling (Amdahl): {:.3}× — before scheduler cost", ceiling);
+
+    let mut c = Checks::default();
+    let names_match = SYSTEMS.iter().zip(ACCESS).all(|(s, a)| s.name() == a.0)
+        && SYSTEMS.len() == ACCESS.len();
+    c.must("access table covers the lattice", names_match,
+        format!("{}/{}", ACCESS.len(), SYSTEMS.len()), "E11.7: the analysis names every system");
+    c.must("driver overhead is noise", overhead / wall.max(1e-9) < 0.05,
+        format!("{:.2}%", 100.0 * overhead / wall.max(1e-9)), "the hand-rolled lattice costs <5% dispatch");
+    c.want("ECS parallel ceiling stays low", ceiling <= 1.5,
+        format!("{:.3}×", ceiling), "ADR-0015: re-open the bevy_ecs question if this rises");
+    c.print();
+}
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     let cmd = a.get(1).map(|s| s.as_str()).unwrap_or("help");
@@ -2729,6 +2824,7 @@ fn main() {
         "telling" => cmd_telling(num(2, 12345), sized(3, 512), num(4, 150) as usize),
         "determinism" => cmd_determinism(num(2, 12345), sized(3, 512), num(4, 120)),
         "bench" => cmd_bench(),
+        "systems" => cmd_systems(num(2, 12345), sized(3, 512), num(4, 150) as usize),
         "perf" => {
             let size = sized(2, 512);
             let mut seeds: Vec<i64> = a.get(3..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
@@ -2766,12 +2862,12 @@ fn main() {
             cmd_patina(size, years, seeds);
         }
         _ => {
-            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina> [args]");
+            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems> [args]");
             println!("  terrain|climate|hydro|resources  <seed=12345> <size=512>");
             println!("  civ <seed> <size> <years=120> · economy <seed> <size> <years=80> · telling <seed> <size> <years=150>");
             println!("  determinism <seed> <size> <months=120> · bench · perf <size=512> <seeds…> · sweep <size> <years> <seeds…>");
             println!("  properties <size=512> <years=60> <seeds…> · era <size=256> <years=60> <n=16> <base=12345>");
-            println!("  patina <size=512> <years=300> <seeds…>");
+            println!("  patina <size=512> <years=300> <seeds…> · systems <seed=12345> <size=512> <years=150>");
         }
     }
 }
