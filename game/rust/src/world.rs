@@ -262,10 +262,10 @@ pub struct World {
     route_idle: Vec<u16>,
     /// M6.4 — narrative heat: decaying sum of the month's weighted events;
     /// quiet years reach for omens, loud years let the wars speak.
-    heat: f64,
+    pub(crate) heat: f64,
 
     pub(crate) rng: Pcg64Mcg,
-    taken: HashSet<String>,
+    pub(crate) taken: HashSet<String>,
     /// Statecraft: wars, opinion, dread, solidarity, vassals (M4).
     pub politics: Politics,
     /// E4.5 — which wire sections must reship on the next tick.
