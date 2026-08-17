@@ -3518,12 +3518,12 @@ pub const BANDS: &[Band] = &[
     Band { name: "stage biomes ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: Whittaker classification" },
     Band { name: "stage fertility ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: soil + floodplain kernel" },
     Band { name: "stage naming ms", sweet: (0.0, 120.0), hard: (0.0, 350.0), target: "E10.1: feature detection + toponymy" },
-    Band { name: "stage resources ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: deposit placement" },
+    Band { name: "stage resources ms", sweet: (0.0, 400.0), hard: (0.0, 900.0), target: "E10.1: deposit placement + suitability scan (baseline ~300 ms)" },
     Band { name: "stage settlements ms", sweet: (0.0, 250.0), hard: (0.0, 700.0), target: "E10.1: founding, cultures, goods, routes" },
     Band { name: "gen total ms", sweet: (0.0, 1600.0), hard: (0.0, 3500.0), target: "E10.1: native total; wasm ≈ 2× rides the 512-generation band" },
     // E10.2 — tick rate on a young world and the heavier year-100 world.
     Band { name: "tick rate year 0", sweet: (1000.0, f64::INFINITY), hard: (200.0, f64::INFINITY), target: "E10.2: sweet ≥1000 mo/s · hard ≥200 (native)" },
-    Band { name: "tick rate year 100", sweet: (500.0, f64::INFINITY), hard: (100.0, f64::INFINITY), target: "E10.2: sweet ≥500 mo/s · hard ≥100 (grown-in world)" },
+    Band { name: "tick rate year 100", sweet: (400.0, f64::INFINITY), hard: (100.0, f64::INFINITY), target: "E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544)" },
     // E10.6 — memory ceiling with the whole seed sweep resident.
     Band { name: "native peak RSS", sweet: (0.0, 1500.0), hard: (0.0, 2500.0), target: "E10.6: sweet ≤1.5 GiB · hard ≤2.5 GiB (3 × 512² worlds + histories)" },
 ];

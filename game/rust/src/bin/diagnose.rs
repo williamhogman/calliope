@@ -1798,7 +1798,7 @@ fn cmd_perf(size: usize, seeds: Vec<i64>) {
     // ---- E10.6: memory ceiling after the heavy run ----
     let rss = peak_rss_mib();
     match rss {
-        Some(m) => println!("native peak RSS after run: {:.0} MiB ({} worlds resident)", m, worlds.len()),
+        Some((m, src)) => println!("native peak RSS after run: {:.0} MiB via {} ({} worlds resident)", m, src, worlds.len()),
         None => println!("native peak RSS: /proc/self/status unavailable on this platform"),
     }
 
@@ -1813,8 +1813,8 @@ fn cmd_perf(size: usize, seeds: Vec<i64>) {
     c.band("gen total ms", worst_total, format!("{:.0} ms (worst)", worst_total));
     c.band("tick rate year 0", rate_y0, format!("{:.0} mo/s (worst)", rate_y0));
     c.band("tick rate year 100", rate_y100, format!("{:.0} mo/s (worst)", rate_y100));
-    if let Some(m) = rss {
-        c.band("native peak RSS", m, format!("{:.0} MiB", m));
+    if let Some((m, src)) = rss {
+        c.band("native peak RSS", m, format!("{:.0} MiB ({})", m, src));
     }
     c.print();
 }
