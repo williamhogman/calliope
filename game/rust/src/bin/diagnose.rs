@@ -2247,10 +2247,10 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         // ---- M8.2 metamorphic: more rain must not shrink the rivers
         let dry = World::generate(seed, size);
         let wet = World::generate_scaled(seed, size, 1.25);
-        let rc_dry = dry.flags.iter().filter(|&&f| f & CellFlags::RIVER.bits() != 0).count();
-        let rc_wet = wet.flags.iter().filter(|&&f| f & CellFlags::RIVER.bits() != 0).count();
-        let q_dry: f64 = dry.discharge.iter().map(|&v| v as f64).sum();
-        let q_wet: f64 = wet.discharge.iter().map(|&v| v as f64).sum();
+        let rc_dry = dry.fields.flags.iter().filter(|&&f| f & CellFlags::RIVER.bits() != 0).count();
+        let rc_wet = wet.fields.flags.iter().filter(|&&f| f & CellFlags::RIVER.bits() != 0).count();
+        let q_dry: f64 = dry.fields.discharge.iter().map(|&v| v as f64).sum();
+        let q_wet: f64 = wet.fields.discharge.iter().map(|&v| v as f64).sum();
         println!("seed {:>6}: rain ×1.25 ⇒ river cells {} → {} · discharge {:.0} → {:.0}",
             seed, rc_dry, rc_wet, q_dry, q_wet);
         c.must(&format!("rain↑ ⇒ rivers not↓ ({})", seed), rc_wet >= rc_dry,
