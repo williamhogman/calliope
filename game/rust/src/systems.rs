@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use crate::economy;
 use crate::naming;
-use crate::settlements::SettlementId;
+use crate::ids::SettlementId;
 use crate::society;
 use crate::telling;
 use crate::trade;
