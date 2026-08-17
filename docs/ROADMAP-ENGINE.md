@@ -223,16 +223,16 @@ zero console errors across the sweep.
 Damage-driven by default, partial uploads, decoupled overlay cadence — the
 renderer stops paying full price for quiet frames.
 
-- [ ] E9.1 Damage-driven GPU frames: `gpuLive` continuous mode (`main.js:117,132`) becomes opt-in for animated states (water visible at depth, flight, playback); idle map = zero GPU frames (S-M)
-- [ ] E9.2 Partial tint updates: territory RLE patches update only changed texture rows instead of the full-canvas `set_tint` re-upload per political change (`gpu.js:66-71`) (M)
-- [ ] E9.3 Overlay cadence split: routes/winds animation stops forcing `dirty = true` every frame during playback (`main.js:164`) — vector overlay redraws on its own clock (M)
-- [ ] E9.4 Split `render.js` (1,359 lines) into compositor, label/collision, and marker/route modules — the per-frame path becomes auditable (M)
-- [ ] E9.5 Label layout cache: placement + collision computed on zoom-bucket/set changes, cached; per-frame work is blit-only (labels currently stroke+fill every dirty frame, `render.js:1002-1194`) (M)
-- [ ] E9.6 Picking decoupled from render cadence: `labelBoxes` produced by the layout pass, not the draw call (`picking.js:51-56`) — hit-testing stays correct even on skipped frames (S)
-- [ ] E9.7 `flyTo` yields to the user: any pointer/wheel input cancels the flight immediately (`view.js:48-70,74-128`) (S)
-- [ ] E9.8 Pointer-move allocation removal: `midOf`'s Map-spread per pinch event (`view.js:90-97`) becomes two-slot arithmetic (S)
-- [ ] E9.9 CPU fallback compositor gains dirty-region `putImageData` — the no-GPU path stops full-canvas blits per change (`render.js:508,654`) (M)
-- [ ] E9.10 Context-loss drill: scripted WebGL context loss + restore in Playwright, proving the `recreateGpuOnGl` path (`gpu.js:28-33`) end-to-end, on a schedule (M)
+- [x] E9.1 Damage-driven GPU frames: `gpuLive` continuous mode (`main.js:117,132`) becomes opt-in for animated states (water visible at depth, flight, playback); idle map = zero GPU frames (S-M)
+- [x] E9.2 Partial tint updates: territory RLE patches update only changed texture rows instead of the full-canvas `set_tint` re-upload per political change (`gpu.js:66-71`) (M)
+- [x] E9.3 Overlay cadence split: routes/winds animation stops forcing `dirty = true` every frame during playback (`main.js:164`) — vector overlay redraws on its own clock (M)
+- [x] E9.4 Split `render.js` (1,359 lines) into compositor, label/collision, and marker/route modules — the per-frame path becomes auditable (M)
+- [x] E9.5 Label layout cache: placement + collision computed on zoom-bucket/set changes, cached; per-frame work is blit-only (labels currently stroke+fill every dirty frame, `render.js:1002-1194`) (M)
+- [x] E9.6 Picking decoupled from render cadence: `labelBoxes` produced by the layout pass, not the draw call (`picking.js:51-56`) — hit-testing stays correct even on skipped frames (S)
+- [x] E9.7 `flyTo` yields to the user: any pointer/wheel input cancels the flight immediately (`view.js:48-70,74-128`) (S)
+- [x] E9.8 Pointer-move allocation removal: `midOf`'s Map-spread per pinch event (`view.js:90-97`) becomes two-slot arithmetic (S)
+- [x] E9.9 CPU fallback compositor gains dirty-region `putImageData` — the no-GPU path stops full-canvas blits per change (`render.js:508,654`) (M)
+- [x] E9.10 Context-loss drill: scripted WebGL context loss + restore in Playwright, proving the `recreateGpuOnGl` path (`gpu.js:28-33`) end-to-end, on a schedule (M)
 
 Gates: idle-map GPU frame count = 0 over 10 s (probe); playback at speed 3
 holds 60 fps CSS-frame budget on the probe machine; context-loss drill
@@ -243,14 +243,14 @@ green in `report.sh`'s browser section.
 Perf claims become banded checks, like every other claim in this project.
 This track starts first; every other track lands against its gates.
 
-- [ ] E10.1 `diagnose perf`: per-stage generation budgets (bands per stage, not just the 400 ms total), asserted across the seed sweep (S)
-- [ ] E10.2 Tick-rate band: native months/minute at year-0 and year-100 worlds — pacing regressions caught the month they land (S)
-- [ ] E10.3 Payload meter: pack bytes/cell and median tick-payload bytes as banded metrics, printed in `game/reports/bench.txt` (S)
-- [ ] E10.4 Wasm size budget check in `report.sh` (with E6.4) (S)
-- [ ] E10.5 Browser boot probe: Playwright script measuring cold load → engine ready → first rendered frame, banded, alongside `atlas-check.py` (M)
-- [ ] E10.6 Memory ceiling checks: native peak RSS and wasm memory pages after a 1200-month run, banded (S-M)
-- [ ] E10.7 Long-task audit: PerformanceObserver during 100 months of speed-3 playback; band on main-thread tasks > 50 ms (M)
-- [ ] E10.8 Perf history: `bench.txt` appends dated rows so drift across weeks is visible, not just pass/fail (S)
+- [x] E10.1 `diagnose perf`: per-stage generation budgets (bands per stage, not just the 400 ms total), asserted across the seed sweep (S)
+- [x] E10.2 Tick-rate band: native months/minute at year-0 and year-100 worlds — pacing regressions caught the month they land (S)
+- [x] E10.3 Payload meter: pack bytes/cell and median tick-payload bytes as banded metrics, printed in `game/reports/bench.txt` (S)
+- [x] E10.4 Wasm size budget check in `report.sh` (with E6.4) (S)
+- [x] E10.5 Browser boot probe: Playwright script measuring cold load → engine ready → first rendered frame, banded, alongside `atlas-check.py` (M)
+- [x] E10.6 Memory ceiling checks: native peak RSS and wasm memory pages after a 1200-month run, banded (S-M)
+- [x] E10.7 Long-task audit: PerformanceObserver during 100 months of speed-3 playback; band on main-thread tasks > 50 ms (M)
+- [x] E10.8 Perf history: `bench.txt` appends dated rows so drift across weeks is visible, not just pass/fail (S)
 
 Gates: `report.sh` gains a `perf` section that runs in under 3 minutes;
 all bands hold across the standard 3-seed sweep.
@@ -283,7 +283,7 @@ lands alone in under a session:
 - E5.6 artifact slice clone and E5.7 merchant key clones: pure waste, zero risk.
 - E7.1 generation stamps + E7.2 timeouts: closes the stale-response bug class before it is ever observed.
 - E8.5 popHistory ring buffer and E8.6 `batch()` per tick: two-line Solid wins.
-- E9.7 flyTo yield: one guard, immediate feel improvement.
+- Resources stage costs ~300 ms of the ~1.1 s generation — second only to terrain (perf.txt, E10.1 baseline). Profile deposit placement's suitability scan; a cheap candidate-mask pass likely halves it.
 
 ## Later / research
 
