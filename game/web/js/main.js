@@ -25,7 +25,7 @@ import { initGpu } from "./gpu-audit.js";
 // ---------- shared context ----------
 
 const canvas = document.getElementById("map");
-const renderer = new Renderer(canvas);
+const renderer = new Renderer(canvas, document.getElementById("anim"));
 
 const ctx = {
   canvas,

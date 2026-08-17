@@ -46,9 +46,10 @@ export function pick(world, view, renderer, px, py, opts = {}) {
     }
   }
 
-  // 3. feature labels — the renderer remembers where names were drawn
+  // 3. feature labels — the cached label layout translated to the live
+  // view (E9.6), correct even on frames the render loop skipped
   if (opts.labelsOn) {
-    for (const lb of renderer.labelBoxes || []) {
+    for (const lb of renderer.labelBoxesAt?.(view) || []) {
       if (px >= lb.x0 && px <= lb.x1 && py >= lb.y0 && py <= lb.y1) {
         return { kind: "feature", id: lb.index };
       }
