@@ -1704,12 +1704,20 @@ fn cmd_bench() {
 // The band is checked against the WORST seed, not the mean — a budget that
 // only holds on the friendly seed is not a budget.
 
-/// Peak resident set in MiB from /proc/self/status (Linux); None elsewhere.
-fn peak_rss_mib() -> Option<f64> {
+/// Resident set in MiB from /proc/self/status: VmHWM (true peak) where the
+/// kernel exposes it, else VmRSS measured at the heaviest moment — sandboxes
+/// (gVisor et al.) mask VmHWM, and end-of-run VmRSS with every world still
+/// resident is the honest available ceiling there.
+fn peak_rss_mib() -> Option<(f64, &'static str)> {
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
-    let line = status.lines().find(|l| l.starts_with("VmHWM:"))?;
-    let kb: f64 = line.split_whitespace().nth(1)?.parse().ok()?;
-    Some(kb / 1024.0)
+    for (key, label) in [("VmHWM:", "VmHWM peak"), ("VmRSS:", "VmRSS at peak load")] {
+        if let Some(line) = status.lines().find(|l| l.starts_with(key)) {
+            if let Some(kb) = line.split_whitespace().nth(1).and_then(|v| v.parse::<f64>().ok()) {
+                return Some((kb / 1024.0, label));
+            }
+        }
+    }
+    None
 }
 
 fn cmd_perf(size: usize, seeds: Vec<i64>) {
