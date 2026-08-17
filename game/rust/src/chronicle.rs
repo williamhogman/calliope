@@ -211,17 +211,17 @@ pub fn founding_myths(
 /// 1 when the world is already loud with war and famine.
 #[allow(clippy::too_many_arguments)]
 pub fn monthly(
-    state: &mut ChronicleState,
-    rng: &mut Pcg64Mcg,
-    taken: &mut HashSet<String>,
-    month_abs: i64,
-    settlements: &mut [Settlement],
-    cultures: &[Culture],
+    record: &mut Chronicle,
+    peoples: &mut Peoples,
     features: &[Feature],
     world_name: &str,
-    reg: &mut Registry,
+    taken: &mut HashSet<String>,
+    month_abs: i64,
+    rng: &mut Pcg64Mcg,
     pace: f64,
 ) -> Vec<Event> {
+    let Chronicle { state, registry: reg, .. } = record;
+    let Peoples { settlements, cultures, .. } = peoples;
     let mut events = Vec::new();
     if cultures.is_empty() {
         return events;

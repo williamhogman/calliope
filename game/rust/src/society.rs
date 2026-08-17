@@ -308,13 +308,12 @@ fn reachable_kinds(cid: CultureId, settlements: &[Settlement], deposits: &[Depos
 
 /// Lore accumulates, arts are discovered, ages dawn, polities ascend.
 pub fn monthly(
-    socs: &mut [Society],
-    settlements: &[Settlement],
+    peoples: &mut Peoples,
     deposits: &[Deposit],
-    cultures: &[Culture],
     month_abs: i64,
     rng: &mut Pcg64Mcg,
 ) -> Vec<Event> {
+    let Peoples { settlements, cultures, societies: socs } = peoples;
     let mut events = Vec::new();
     for si in 0..socs.len() {
         let cid = CultureId(socs[si].culture);

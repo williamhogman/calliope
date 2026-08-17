@@ -407,16 +407,15 @@ pub fn territory_rle(t: &Array2<i16>) -> Vec<i32> {
 #[allow(clippy::too_many_arguments)]
 pub fn monthly(
     pol: &mut Politics,
-    chron: &mut ChronicleState,
-    rng: &mut Pcg64Mcg,
+    record: &mut Chronicle,
+    peoples: &mut Peoples,
+    territory: &Array2<i16>,
     taken: &mut HashSet<String>,
     month: i64,
-    settlements: &mut Vec<Settlement>,
-    cultures: &mut Vec<Culture>,
-    socs: &mut Vec<Society>,
-    territory: &Array2<i16>,
-    reg: &mut Registry,
+    rng: &mut Pcg64Mcg,
 ) -> (Vec<Event>, bool) {
+    let Chronicle { state: chron, registry: reg, .. } = record;
+    let Peoples { settlements, cultures, societies: socs } = peoples;
     let mut events = Vec::new();
     let mut borders_changed = false;
     let n = cultures.len();

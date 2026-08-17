@@ -60,16 +60,15 @@ const CAP: usize = 8;
 /// has already logged this month — sacks and transfers move the relics.
 #[allow(clippy::too_many_arguments)]
 pub fn monthly(
-    arts: &mut Vec<Artifact>,
-    reg: &mut Registry,
+    record: &mut Chronicle,
     month_evs: &[Event],
-    settlements: &[Settlement],
-    cultures: &[Culture],
-    socs: &[Society],
+    peoples: &Peoples,
     taken: &mut HashSet<String>,
     month: i64,
     rng: &mut Pcg64Mcg,
 ) -> Vec<Event> {
+    let Chronicle { artifacts: arts, registry: reg, .. } = record;
+    let Peoples { settlements, cultures, societies: socs } = peoples;
     let mut events = Vec::new();
 
     // --- the forging: a settled age, a full treasury, a master smith

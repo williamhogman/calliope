@@ -548,12 +548,12 @@ const FORGE_LIT: [&str; 3] = [
 /// Towns with ore, fuel, hands and the art work it into finished goods.
 /// Returns chronicle lines for forges newly lit or newly gone cold.
 pub fn craft_pass(
-    settlements: &mut [Settlement],
-    socs: &[Society],
+    peoples: &mut Peoples,
     areas: &MarketAreas,
     month_abs: i64,
     rng: &mut Pcg64Mcg,
 ) -> Vec<Event> {
+    let Peoples { settlements, societies: socs, .. } = peoples;
     let mut events = Vec::new();
     // Inputs are sourced from the whole MARKET AREA, not just the town's
     // own pits — that is what the market carve is for (M5.2). A forge town
@@ -669,18 +669,17 @@ const MERCHANT_CAP: usize = 10;
 /// it is dear, take their cut and leave both prices a little closer.
 #[allow(clippy::too_many_arguments)]
 pub fn merchant_pass(
-    merchants: &mut Vec<Merchant>,
-    settlements: &mut [Settlement],
-    areas: &mut MarketAreas,
+    eco: &mut Economy,
+    peoples: &mut Peoples,
     routes: &[Route],
-    socs: &[Society],
-    cultures: &[Culture],
     taken: &mut HashSet<String>,
     month_abs: i64,
     rng: &mut Pcg64Mcg,
     reg: &mut Registry,
     by_id: &HashMap<SettlementId, usize>,
 ) -> Vec<Event> {
+    let Economy { merchants, areas, .. } = eco;
+    let Peoples { settlements, cultures, societies: socs } = peoples;
     let mut events = Vec::new();
     if areas.markets.len() < 2 {
         return events;
@@ -892,16 +891,15 @@ const GUILD_WORKS: [&str; 3] = [
 /// `route_flow` is filled with this month's realized flow per route —
 /// the harness checks it against the gravity model (M5.4).
 pub fn monthly(
-    settlements: &mut [Settlement],
+    eco: &mut Economy,
+    peoples: &mut Peoples,
     routes: &[Route],
-    market: &mut Market,
-    areas: &mut MarketAreas,
-    route_flow: &mut Vec<f64>,
-    socs: &mut [Society],
     month_abs: i64,
     rng: &mut Pcg64Mcg,
     by_id: &HashMap<SettlementId, usize>,
 ) -> Vec<Event> {
+    let Economy { market, areas, route_flow, .. } = eco;
+    let Peoples { settlements, societies: socs, .. } = peoples;
     let mut events = Vec::new();
     update_prices(market, settlements);
     update_area_prices(areas, settlements, market);
