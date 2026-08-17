@@ -24,11 +24,23 @@ export function initGpu(ctx) {
   let warmupUntil = 0;
   const armWarmup = () => { warmupUntil = performance.now() + 9000; };
 
+  // Context loss is silent (E9.10 drill finding): a lost WebGL context
+  // throws nothing — GL calls become no-ops and the imagery just freezes.
+  // The event is the only tell, so every canvas the engine adopts gets a
+  // listener that routes straight into the recovery path.
+  function armLossWatch(c) {
+    c.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault(); // we recover on a fresh canvas, not via restore
+      if (renderer.gpu) handleGpuFrameError(new Error("WebGL context lost"));
+    }, { once: true });
+  }
+
   // GPU imagery: bring up the Rust wgpu engine (WebGPU, else WebGL2).
   // If no adapter exists the CPU compositor stays in charge.
   createGpu(glCanvas)
     .then((gpu) => {
       renderer.gpu = gpu;
+      if (gpu.backend() !== "webgpu") armLossWatch(glCanvas);
       const w = world();
       if (w) gpu.setWorld(w);
       armWarmup();
