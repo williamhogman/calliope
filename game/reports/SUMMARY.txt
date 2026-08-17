@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-17 00:31 UTC
+mode: full · size: 512 · generated: 2026-08-17 01:05 UTC
 
-totals: 304 pass · 2 warn · 0 fail
+totals: 305 pass · 2 warn · 0 fail
 
 -- bench.txt
    all checks pass
@@ -43,6 +43,9 @@ totals: 304 pass · 2 warn · 0 fail
    all checks pass
 
 -- hydro-90210.txt
+   all checks pass
+
+-- moddag.txt
    all checks pass
 
 -- patina.txt

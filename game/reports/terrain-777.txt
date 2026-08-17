@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 777 · 640x512
 ========================================================================
-world: "Belrin" · generated in 1152 ms
+world: "Belrin" · generated in 1120 ms
 land: 104130 cells of 327680 (31.8%) · 1666080 km²
 hypsometry (land h): p5 0.018 · p25 0.108 · p50 0.237 · p75 0.375 · p95 0.534 · max 0.699
 bathymetry (sea h): p5 -0.593 · p50 -0.365 · p95 -0.035
