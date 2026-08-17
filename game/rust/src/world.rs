@@ -815,9 +815,9 @@ impl GenBuilder {
         world.widen(size / 8);
         // The dawn's own entries join the telling: subjects resolved to
         // registry ids, coordinates backfilled, great deeds legendized (M6).
-        let mut dawn = std::mem::take(&mut world.events);
+        let mut dawn = std::mem::take(&mut world.chronicle.events);
         world.resolve_events(0, &mut dawn);
-        world.events = dawn;
+        world.chronicle.events = dawn;
         // The first political map: who holds what, before any drum beats.
         world.recompute_territory();
         world.dirty.clear(Dirty::TERRITORY); // ships with the pack, not the first tick
@@ -847,12 +847,12 @@ impl World {
 
     /// M4.1 — redraw the influence map after borders move or towns grow.
     pub fn recompute_territory(&mut self) {
-        self.territory = politics::influence_map(
-            &self.height,
-            &self.settlements,
-            &self.societies,
+        self.fields.territory = politics::influence_map(
+            &self.fields.height,
+            &self.peoples.settlements,
+            &self.peoples.societies,
             &self.politics.asab,
-            self.cultures.len(),
+            self.peoples.cultures.len(),
         );
         self.dirty.mark(Dirty::TERRITORY);
     }
@@ -864,7 +864,7 @@ impl World {
         if pad == 0 {
             return;
         }
-        let (h, w) = self.height.dim();
+        let (h, w) = self.fields.height.dim();
         let p = pad as isize;
 
         /// Widen any copyable grid: interior cells shift east by `pad`,
@@ -902,21 +902,21 @@ impl World {
         }
 
         // Bathymetry: slide from the coastal edge down toward open deep sea.
-        self.height = grow(&self.height, pad, |e, t| {
+        self.fields.height = grow(&self.fields.height, pad, |e, t| {
             let shelf = e.min(-0.03);
             let deep = (-0.62_f32).min(e);
             shelf + (deep - shelf) * t as f32
         });
         // Climate margins keep zonal continuity by extending the edge column.
-        self.tmean = grow(&self.tmean, pad, |e, _| e);
-        self.tamp = grow(&self.tamp, pad, |e, _| e);
-        self.precip = grow(&self.precip, pad, |e, _| e);
-        self.discharge = grow(&self.discharge, pad, |_, _| 0.0);
-        self.fertility = grow(&self.fertility, pad, |_, _| 0.0);
+        self.fields.tmean = grow(&self.fields.tmean, pad, |e, _| e);
+        self.fields.tamp = grow(&self.fields.tamp, pad, |e, _| e);
+        self.fields.precip = grow(&self.fields.precip, pad, |e, _| e);
+        self.fields.discharge = grow(&self.fields.discharge, pad, |_, _| 0.0);
+        self.fields.fertility = grow(&self.fields.fertility, pad, |_, _| 0.0);
         self.site_score = grow(&self.site_score, pad, |_, _| 0.0);
         self.food_grid = grow(&self.food_grid, pad, |_, _| 0.0);
-        self.biomes = {
-            let a = &self.biomes;
+        self.fields.biomes = {
+            let a = &self.fields.biomes;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
                 let xi = x as isize - p;
                 if xi >= 0 && (xi as usize) < w {
@@ -926,8 +926,8 @@ impl World {
                 }
             })
         };
-        self.crops = {
-            let a = &self.crops;
+        self.fields.crops = {
+            let a = &self.fields.crops;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
                 let xi = x as isize - p;
                 if xi >= 0 && (xi as usize) < w {
@@ -937,8 +937,8 @@ impl World {
                 }
             })
         };
-        self.flags = {
-            let a = &self.flags;
+        self.fields.flags = {
+            let a = &self.fields.flags;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
                 let xi = x as isize - p;
                 if xi >= 0 && (xi as usize) < w {
@@ -950,10 +950,10 @@ impl World {
         };
         self.near_fresh = grow_bool(&self.near_fresh, pad);
         self.coast = grow_bool(&self.coast, pad);
-        self.pamp = grow(&self.pamp, pad, |e, _| e);
-        self.flow_amp = grow(&self.flow_amp, pad, |_, _| 0.0);
-        self.strahler = {
-            let a = &self.strahler;
+        self.fields.pamp = grow(&self.fields.pamp, pad, |e, _| e);
+        self.fields.flow_amp = grow(&self.fields.flow_amp, pad, |_, _| 0.0);
+        self.fields.strahler = {
+            let a = &self.fields.strahler;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
                 let xi = x as isize - p;
                 if xi >= 0 && (xi as usize) < w {
@@ -989,7 +989,7 @@ impl World {
 
         // Everything with an x slides east.
         let shift = pad as i64;
-        for s in self.settlements.iter_mut() {
+        for s in self.peoples.settlements.iter_mut() {
             s.x += shift;
         }
         for d in self.deposits.iter_mut() {
@@ -1003,8 +1003,8 @@ impl World {
                 pt[0] += shift;
             }
         }
-        self.registry.shift_x(shift);
-        for e in self.events.iter_mut() {
+        self.chronicle.registry.shift_x(shift);
+        for e in self.chronicle.events.iter_mut() {
             if e.x >= 0 {
                 e.x += shift;
             }
@@ -1017,26 +1017,26 @@ impl World {
         let mut events = Vec::new();
         let month = month_abs.rem_euclid(12);
         let mods: Vec<society::Mods> =
-            self.societies.iter().map(society::mods_for).collect();
+            self.peoples.societies.iter().map(society::mods_for).collect();
         // M2.3: the seat of kings — each culture's greatest town keeps a
         // court, and courts import: grain barges, tribute, hungry retinues.
         // The head of the rank-size curve is political as much as economic.
         let mut seat: Vec<usize> = Vec::new();
-        for (i, s) in self.settlements.iter().enumerate() {
+        for (i, s) in self.peoples.settlements.iter().enumerate() {
             while seat.len() <= s.culture.0 {
                 seat.push(usize::MAX);
             }
             if seat[s.culture.idx()] == usize::MAX
-                || s.pop > self.settlements[seat[s.culture.idx()]].pop
+                || s.pop > self.peoples.settlements[seat[s.culture.idx()]].pop
             {
                 seat[s.culture.idx()] = i;
             }
         }
-        for (si, s) in self.settlements.iter_mut().enumerate() {
+        for (si, s) in self.peoples.settlements.iter_mut().enumerate() {
             let md = mods.get(s.culture.idx()).cloned().unwrap_or_default();
             let (y, x) = (s.y as usize, s.x as usize);
             let t_now =
-                climate::month_temperature(self.tmean[[y, x]] as f64, self.tamp[[y, x]] as f64, month);
+                climate::month_temperature(self.fields.tmean[[y, x]] as f64, self.fields.tamp[[y, x]] as f64, month);
             // NOTE: this growth chain is mirrored by explain.rs — change both.
             // ~6%/yr at best: the world should still be filling in at year
             // 100, not saturated by year 45 with a century of flat plateau.
@@ -1052,8 +1052,8 @@ impl World {
             // M2.2: capacity from the crop package + arts. Single formula
             // site (settlements::capacity_at); explain.rs reads stored s.k.
             let mut k = settlements::capacity_at(
-                &self.crops,
-                &self.fertility,
+                &self.fields.crops,
+                &self.fields.fertility,
                 y,
                 x,
                 s.coastal,
@@ -1096,7 +1096,7 @@ impl World {
                 });
             }
             // the earth shakes in the high country — dressed stone stands longer
-            if self.height[[y, x]] > 0.42 && pop > 120 && self.rng.gen::<f64>() < 0.0012 {
+            if self.fields.height[[y, x]] > 0.42 && pop > 120 && self.rng.gen::<f64>() < 0.0012 {
                 let loss =
                     ((pop as f64 * self.rng.gen_range(0.03..0.09) * md.defense) as i64).max(3);
                 pop -= loss;
@@ -1110,7 +1110,7 @@ impl World {
             }
             // fire leaps the rooftops in the dry season — stone burns slower
             if (5..=7).contains(&month)
-                && self.precip[[y, x]] < 700.0
+                && self.fields.precip[[y, x]] < 700.0
                 && pop > 350
                 && self.rng.gen::<f64>() < 0.0025
             {
@@ -1239,10 +1239,10 @@ impl World {
                     });
                     // rising tier: something worth singing about may be raised
                     let wonders = chronicle::wonder_for(
-                        &mut self.chron,
+                        &mut self.chronicle.state,
                         &mut self.rng,
                         s,
-                        &self.cultures,
+                        &self.peoples.cultures,
                         month_abs,
                     );
                     events.extend(wonders);
@@ -1276,7 +1276,7 @@ impl World {
             if !d.r.is_mineral() {
                 continue;
             }
-            let claimed = self.settlements.iter().any(|s| {
+            let claimed = self.peoples.settlements.iter().any(|s| {
                 let r = settlements::work_radius(s.pop);
                 let dx = (d.x - s.x) as f64;
                 let dy = (d.y - s.y) as f64;
@@ -1286,10 +1286,10 @@ impl World {
                 continue;
             }
             // far ore must out-pull farmland or nobody ever leaves the plough
-            let worth = self.market.price(d.r) * d.rich * 2.2;
+            let worth = self.economy.market.price(d.r) * d.rich * 2.2;
             for yy in (d.y - R).max(0)..=(d.y + R).min(h as i64 - 1) {
                 for xx in (d.x - R).max(0)..=(d.x + R).min(w as i64 - 1) {
-                    if self.height[[yy as usize, xx as usize]] < 0.0 {
+                    if self.fields.height[[yy as usize, xx as usize]] < 0.0 {
                         continue; // no camps on the water
                     }
                     let dist = (((yy - d.y).pow(2) + (xx - d.x).pow(2)) as f64).sqrt();
@@ -1309,26 +1309,26 @@ impl World {
         let mut events = Vec::new();
         let mut founded = false;
         let mut pull: Option<Array2<f64>> = None;
-        let initial = self.settlements.len();
+        let initial = self.peoples.settlements.len();
         let mods_v: Vec<society::Mods> =
-            self.societies.iter().map(society::mods_for).collect();
+            self.peoples.societies.iter().map(society::mods_for).collect();
         // ore-led ventures may spill past the cap into a reserved band:
         // the seams don't care that the census is full.
         let hard_cap = self.max_settlements + self.max_settlements / 4;
         for pi in 0..initial {
-            if self.settlements.len() >= hard_cap {
+            if self.peoples.settlements.len() >= hard_cap {
                 break;
             }
             let (ppop, pcap, pname) = {
-                let p = &self.settlements[pi];
+                let p = &self.peoples.settlements[pi];
                 // the hunger for land is measured against what the LAND
                 // carries — not the import-lifted ceiling stored in s.k
                 // (hub and court terms), which would gate colonists on
                 // grain barges that feed the city just fine.
                 let md = mods_v.get(p.culture.idx()).cloned().unwrap_or_default();
                 let kland = settlements::capacity_at(
-                    &self.crops,
-                    &self.fertility,
+                    &self.fields.crops,
+                    &self.fields.fertility,
                     p.y as usize,
                     p.x as usize,
                     p.coastal,
@@ -1348,7 +1348,7 @@ impl World {
                 pull = Some(self.resource_pull());
             }
             let site = {
-                let parent = self.settlements[pi].clone();
+                let parent = self.peoples.settlements[pi].clone();
                 let range = self
                     .societies
                     .get(parent.culture.idx())
@@ -1357,7 +1357,7 @@ impl World {
                 settlements::colony_site(
                     &self.site_score,
                     pull.as_ref().unwrap(),
-                    &self.settlements,
+                    &self.peoples.settlements,
                     &parent,
                     3600.0 * range * range,
                 )
@@ -1366,17 +1366,17 @@ impl World {
             // an ore-led venture: the seams called louder than the soil
             let ore_led = pull.as_ref().unwrap()[[y, x]] > self.site_score[[y, x]].max(0.0);
             // past the soft cap only miners still sail
-            if self.settlements.len() >= self.max_settlements && !ore_led {
+            if self.peoples.settlements.len() >= self.max_settlements && !ore_led {
                 continue;
             }
             let migrants = ((ppop as f64 * self.rng.gen_range(0.08..0.14)) as i64).max(40);
-            self.settlements[pi].pop = (ppop - migrants).max(60);
-            let cid = self.settlements[pi].culture;
+            self.peoples.settlements[pi].pop = (ppop - migrants).max(60);
+            let cid = self.peoples.settlements[pi].culture;
             let idx = self.found_settlement(y, x, migrants, cid);
             founded = true;
-            let name = self.settlements[idx].name.clone();
-            let coastal = self.settlements[idx].coastal;
-            let river = self.settlements[idx].river;
+            let name = self.peoples.settlements[idx].name.clone();
+            let coastal = self.peoples.settlements[idx].coastal;
+            let river = self.peoples.settlements[idx].river;
             let text = if ore_led {
                 format!(
                     "Settlers out of {} drive the mining camp of {} into hungry country — the seams there outweigh the thin soil.",
@@ -1407,13 +1407,13 @@ impl World {
     /// culture's style, list its goods, size its land, and wire it into
     /// the trade web. Shared by colonists and rush camps alike.
     fn found_settlement(&mut self, y: usize, x: usize, migrants: i64, cid: CultureId) -> usize {
-        let style = if !self.cultures.is_empty() {
-            self.cultures[cid.0].style.clone()
+        let style = if !self.peoples.cultures.is_empty() {
+            self.peoples.cultures[cid.0].style.clone()
         } else {
             "hellenic".to_string()
         };
         let coined = naming::coin(&mut self.rng, &style, &mut self.taken);
-        let new_id = SettlementId(self.settlements.iter().map(|o| o.id.0).max().unwrap_or(-1) + 1);
+        let new_id = SettlementId(self.peoples.settlements.iter().map(|o| o.id.0).max().unwrap_or(-1) + 1);
         let mut s = Settlement {
             id: new_id,
             name: coined.word.clone(),
@@ -1423,7 +1423,7 @@ impl World {
             tier: settlements::tier(migrants),
             food: settlements::site_food(
                 &self.food_grid,
-                &self.fertility,
+                &self.fields.fertility,
                 &self.near_fresh,
                 &self.coast,
                 y,
@@ -1447,15 +1447,15 @@ impl World {
             failing: false,
             ail: 0,
         };
-        trade::goods_for(&mut s, &self.deposits, &self.fertility);
+        trade::goods_for(&mut s, &self.deposits, &self.fields.fertility);
         let mdc = self
             .societies
             .get(cid.0)
             .map(society::mods_for)
             .unwrap_or_default();
         s.k = round2(settlements::capacity_at(
-            &self.crops,
-            &self.fertility,
+            &self.fields.crops,
+            &self.fields.fertility,
             y,
             x,
             s.coastal,
@@ -1463,23 +1463,23 @@ impl World {
             mdc.kaplan,
             mdc.capacity,
         ));
-        self.settlements.push(s);
-        let idx = self.settlements.len() - 1;
+        self.peoples.settlements.push(s);
+        let idx = self.peoples.settlements.len() - 1;
         // the new town enters the telling (M6.1)
         {
-            let t = &self.settlements[idx];
-            self.registry
+            let t = &self.peoples.settlements[idx];
+            self.chronicle.registry
                 .add(EntityKind::Settlement, &t.name, self.month, Some(t.culture), t.x, t.y);
         }
         trade::connect_settlement(
             idx,
-            &mut self.settlements,
+            &mut self.peoples.settlements,
             &mut self.routes,
             &self.trade,
-            &self.height,
-            &self.flags,
-            &self.discharge,
-            &self.flow_amp,
+            &self.fields.height,
+            &self.fields.flags,
+            &self.fields.discharge,
+            &self.fields.flow_amp,
         );
         idx
     }
@@ -1497,7 +1497,7 @@ impl World {
         let hard_cap = self.max_settlements + self.max_settlements / 4;
         let (rows, cols) = self.site_score.dim();
         for di in 0..self.deposits.len() {
-            if self.settlements.len() >= hard_cap {
+            if self.peoples.settlements.len() >= hard_cap {
                 break;
             }
             let d = &self.deposits[di];
@@ -1508,7 +1508,7 @@ impl World {
                 continue;
             }
             // a claimed seam already has crews — no rush to a worked pit
-            let claimed = self.settlements.iter().any(|s| {
+            let claimed = self.peoples.settlements.iter().any(|s| {
                 let r = settlements::work_radius(s.pop);
                 let dx = (d.x - s.x) as f64;
                 let dy = (d.y - s.y) as f64;
@@ -1518,7 +1518,7 @@ impl World {
                 continue;
             }
             // the pull of the price: dearer metal, richer seam, faster rush
-            let worth = (self.market.price(d.r) * d.rich / 2.0).clamp(0.2, 3.0);
+            let worth = (self.economy.market.price(d.r) * d.rich / 2.0).clamp(0.2, 3.0);
             let (dx0, dy0) = (d.x, d.y);
             let kind = d.r;
             if self.rng.gen::<f64>() >= 0.0045 * worth {
@@ -1532,10 +1532,10 @@ impl World {
             let mut site: Option<(usize, usize)> = None;
             for yy in (dy0 - R).max(0)..=(dy0 + R).min(rows as i64 - 1) {
                 for xx in (dx0 - R).max(0)..=(dx0 + R).min(cols as i64 - 1) {
-                    if self.height[[yy as usize, xx as usize]] < 0.0 {
+                    if self.fields.height[[yy as usize, xx as usize]] < 0.0 {
                         continue;
                     }
-                    let clear = self.settlements.iter().all(|o| {
+                    let clear = self.peoples.settlements.iter().all(|o| {
                         let ddy = yy as f64 - o.y as f64;
                         let ddx = xx as f64 - o.x as f64;
                         ddy * ddy + ddx * ddx >= min_d2
@@ -1552,23 +1552,23 @@ impl World {
             }
             let Some((y, x)) = site else { continue };
             // souls from the nearest town — every rush empties somebody's inn
-            let Some(src) = (0..self.settlements.len()).min_by_key(|&i| {
-                let s = &self.settlements[i];
+            let Some(src) = (0..self.peoples.settlements.len()).min_by_key(|&i| {
+                let s = &self.peoples.settlements[i];
                 (s.x - dx0).pow(2) + (s.y - dy0).pow(2)
             }) else {
                 continue;
             };
-            let spop = self.settlements[src].pop;
+            let spop = self.peoples.settlements[src].pop;
             if spop < 240 {
                 continue;
             }
             let migrants = ((spop as f64 * 0.08) as i64).clamp(60, 240);
-            self.settlements[src].pop = spop - migrants;
-            let cid = self.settlements[src].culture;
-            let sname = self.settlements[src].name.clone();
+            self.peoples.settlements[src].pop = spop - migrants;
+            let cid = self.peoples.settlements[src].culture;
+            let sname = self.peoples.settlements[src].name.clone();
             let idx = self.found_settlement(y, x, migrants, cid);
             founded = true;
-            let name = self.settlements[idx].name.clone();
+            let name = self.peoples.settlements[idx].name.clone();
             events.push(Event {
                 m: month_abs,
                 s: name.clone(),
@@ -1605,20 +1605,20 @@ impl World {
             self.erosion_pass(month_abs, &mut evs);
         }
         // Berúthiel emissions (M9.5): rare, anchored, never explained.
-        if !self.settlements.is_empty() && self.rng.gen::<f64>() < 0.007 {
-            let i = self.rng.gen_range(0..self.settlements.len());
+        if !self.peoples.settlements.is_empty() && self.rng.gen::<f64>() < 0.007 {
+            let i = self.rng.gen_range(0..self.peoples.settlements.len());
             let (name, people, x, y) = {
-                let s = &self.settlements[i];
+                let s = &self.peoples.settlements[i];
                 (
                     s.name.clone(),
-                    self.cultures[s.culture.idx()].people.clone(),
+                    self.peoples.cultures[s.culture.idx()].people.clone(),
                     s.x,
                     s.y,
                 )
             };
             let t = patina::UNEXPLAINED
                 [self.rng.gen_range(0..patina::UNEXPLAINED.len())];
-            let ent = self.registry.find_alive(EntityKind::Settlement, x, y);
+            let ent = self.chronicle.registry.find_alive(EntityKind::Settlement, x, y);
             evs.push(Event {
                 m: month_abs,
                 s: name.clone(),
@@ -1647,8 +1647,8 @@ impl World {
                 continue;
             }
             self.taken.insert(name.clone());
-            let people = self.cultures[winner.0].people.clone();
-            let eid = self.registry.add(EntityKind::Feature, &name, m, Some(winner), x, y);
+            let people = self.peoples.cultures[winner.0].people.clone();
+            let eid = self.chronicle.registry.add(EntityKind::Feature, &name, m, Some(winner), x, y);
             self.features.push(Feature {
                 t: "battlefield".to_string(),
                 name: name.clone(),
@@ -1686,33 +1686,33 @@ impl World {
         }
         let ids = std::mem::take(&mut self.politics.transfers);
         for sid in ids {
-            let Some(i) = self.settlements.iter().position(|s| s.id == sid) else {
+            let Some(i) = self.peoples.settlements.iter().position(|s| s.id == sid) else {
                 continue;
             };
-            let to = self.settlements[i].culture;
+            let to = self.peoples.settlements[i].culture;
             // a people does not rename what already speaks its tongue,
             // and a place carries at most two former names (bounded strata)
-            if self.settlements[i].namer == to || self.settlements[i].formerly.len() >= 2 {
+            if self.peoples.settlements[i].namer == to || self.peoples.settlements[i].formerly.len() >= 2 {
                 continue;
             }
             if self.rng.gen::<f64>() >= 0.35 {
                 continue;
             }
-            let style = self.cultures[to.0].style.clone();
+            let style = self.peoples.cultures[to.0].style.clone();
             let coined = naming::coin(&mut self.rng, &style, &mut self.taken);
-            let old = self.settlements[i].name.clone();
-            let people = self.cultures[to.0].people.clone();
-            let (x, y) = (self.settlements[i].x, self.settlements[i].y);
+            let old = self.peoples.settlements[i].name.clone();
+            let people = self.peoples.cultures[to.0].people.clone();
+            let (x, y) = (self.peoples.settlements[i].x, self.peoples.settlements[i].y);
             {
-                let s = &mut self.settlements[i];
+                let s = &mut self.peoples.settlements[i];
                 s.formerly.push(old.clone());
                 s.name = coined.word.clone();
                 s.ety = coined.ety.clone();
                 s.namer = to;
             }
-            let ent = self.registry.find_alive(EntityKind::Settlement, x, y);
+            let ent = self.chronicle.registry.find_alive(EntityKind::Settlement, x, y);
             if let Some(id) = ent {
-                self.registry.rename(id, &coined.word);
+                self.chronicle.registry.rename(id, &coined.word);
             }
             evs.push(Event {
                 m: month_abs,
@@ -1736,16 +1736,16 @@ impl World {
     /// ruin, its entity is closed, its routes are cut, and the web is
     /// re-knit so the one-component property (M8.1) holds.
     fn abandonment_pass(&mut self, month_abs: i64, evs: &mut Vec<Event>) {
-        for s in self.settlements.iter_mut() {
+        for s in self.peoples.settlements.iter_mut() {
             if s.pop > s.peak {
                 s.peak = s.pop;
             }
         }
-        if self.settlements.len() <= 6 {
+        if self.peoples.settlements.len() <= 6 {
             return;
         }
-        let mut counts = vec![0usize; self.cultures.len()];
-        for s in &self.settlements {
+        let mut counts = vec![0usize; self.peoples.cultures.len()];
+        for s in &self.peoples.settlements {
             counts[s.culture.idx()] += 1;
         }
         let besieged: HashSet<SettlementId> = self
@@ -1755,7 +1755,7 @@ impl World {
             .filter_map(|w| w.siege.as_ref().map(|sg| sg.target))
             .collect();
         let mut worst: Option<usize> = None;
-        for (i, s) in self.settlements.iter().enumerate() {
+        for (i, s) in self.peoples.settlements.iter().enumerate() {
             if month_abs - s.born < 240 {
                 continue; // twenty years' grace: young colonies struggle honestly
             }
@@ -1775,12 +1775,12 @@ impl World {
             if !(starving || hollowed || played_out || spent) {
                 continue;
             }
-            if worst.map_or(true, |w: usize| s.pop < self.settlements[w].pop) {
+            if worst.map_or(true, |w: usize| s.pop < self.peoples.settlements[w].pop) {
                 worst = Some(i);
             }
         }
         let Some(i) = worst else { return };
-        let dead = self.settlements[i].clone();
+        let dead = self.peoples.settlements[i].clone();
         let cause = if dead.goods.is_empty() && dead.exports.is_none() {
             "mines"
         } else if dead.fort > 0 && dead.pop * 3 < dead.peak {
@@ -1791,9 +1791,9 @@ impl World {
             "famine"
         };
         let why = patina::ruin_why(cause);
-        let ent = self.registry.find_alive(EntityKind::Settlement, dead.x, dead.y);
+        let ent = self.chronicle.registry.find_alive(EntityKind::Settlement, dead.x, dead.y);
         if let Some(id) = ent {
-            self.registry
+            self.chronicle.registry
                 .close(id, month_abs, &format!("abandoned — {}", why));
         }
         let ruin_name = format!("Ruins of {}", dead.name);
@@ -1807,7 +1807,7 @@ impl World {
             y: dead.y,
             since: month_abs,
             why: why.to_string(),
-            people: self.cultures[dead.culture.idx()].people.clone(),
+            people: self.peoples.cultures[dead.culture.idx()].people.clone(),
             ety: dead.ety.clone(),
             eid: rid,
         });
@@ -1820,11 +1820,11 @@ impl World {
             .collect();
         let mut k1 = keep.iter();
         self.routes.retain(|_| *k1.next().unwrap());
-        if self.route_flow.len() == keep.len() {
+        if self.economy.route_flow.len() == keep.len() {
             let mut k2 = keep.iter();
-            self.route_flow.retain(|_| *k2.next().unwrap());
+            self.economy.route_flow.retain(|_| *k2.next().unwrap());
         } else {
-            self.route_flow.clear();
+            self.economy.route_flow.clear();
         }
         if self.route_idle.len() == keep.len() {
             let mut k3 = keep.iter();
@@ -1832,29 +1832,29 @@ impl World {
         } else {
             self.route_idle.clear();
         }
-        self.settlements.remove(i);
+        self.peoples.settlements.remove(i);
         // re-knit the web: the one-component property must survive death
-        trade::recount_connections(&mut self.settlements, &self.routes);
+        trade::recount_connections(&mut self.peoples.settlements, &self.routes);
         trade::rescue_unconnected(
-            &mut self.settlements,
+            &mut self.peoples.settlements,
             &mut self.routes,
             &self.trade,
-            &self.height,
-            &self.flags,
-            &self.discharge,
-            &self.flow_amp,
+            &self.fields.height,
+            &self.fields.flags,
+            &self.fields.discharge,
+            &self.fields.flow_amp,
         );
         trade::bridge_components(
-            &mut self.settlements,
+            &mut self.peoples.settlements,
             &mut self.routes,
             &self.trade,
-            &self.height,
-            &self.flags,
-            &self.discharge,
-            &self.flow_amp,
+            &self.fields.height,
+            &self.fields.flags,
+            &self.fields.discharge,
+            &self.fields.flow_amp,
         );
-        trade::recount_connections(&mut self.settlements, &self.routes);
-        trade::mark_ports(&mut self.settlements, &self.routes);
+        trade::recount_connections(&mut self.peoples.settlements, &self.routes);
+        trade::mark_ports(&mut self.peoples.settlements, &self.routes);
         self.dirty.mark(Dirty::ROUTES);
         self.recompute_territory();
         evs.push(Event {
@@ -1875,12 +1875,12 @@ impl World {
     /// M9.4 — roads fall disused. A route that has carried nothing for a
     /// generation fades on the map (and wakes again if the wagons return).
     fn route_age_pass(&mut self, month_abs: i64, evs: &mut Vec<Event>) {
-        if self.route_flow.len() != self.routes.len() {
+        if self.economy.route_flow.len() != self.routes.len() {
             return; // ledgers momentarily out of step (new towns); next year
         }
         self.route_idle.resize(self.routes.len(), 0);
         for i in 0..self.routes.len() {
-            if self.route_flow[i] > 0.05 {
+            if self.economy.route_flow[i] > 0.05 {
                 self.route_idle[i] = 0;
                 if self.routes[i].old {
                     self.routes[i].old = false; // the wagons came back
@@ -1925,12 +1925,12 @@ impl World {
     fn erosion_pass(&mut self, month_abs: i64, evs: &mut Vec<Event>) {
         let seed = self.seed as u64;
         let mut done = 0;
-        for i in 0..self.settlements.len() {
+        for i in 0..self.peoples.settlements.len() {
             if done >= 2 {
                 break;
             }
             let (name, born, layers) = {
-                let s = &self.settlements[i];
+                let s = &self.peoples.settlements[i];
                 (s.name.clone(), s.born, s.formerly.len())
             };
             if month_abs - born < 960 || layers >= 2 {
@@ -1944,9 +1944,9 @@ impl World {
                 continue;
             }
             self.taken.insert(worn.clone());
-            let (x, y) = (self.settlements[i].x, self.settlements[i].y);
+            let (x, y) = (self.peoples.settlements[i].x, self.peoples.settlements[i].y);
             {
-                let s = &mut self.settlements[i];
+                let s = &mut self.peoples.settlements[i];
                 s.formerly.push(name.clone());
                 if !s.ety.is_empty() {
                     s.ety = format!("{}; worn from {}", s.ety, name);
@@ -1955,9 +1955,9 @@ impl World {
                 }
                 s.name = worn.clone();
             }
-            let ent = self.registry.find_alive(EntityKind::Settlement, x, y);
+            let ent = self.chronicle.registry.find_alive(EntityKind::Settlement, x, y);
             if let Some(id) = ent {
-                self.registry.rename(id, &worn);
+                self.chronicle.registry.rename(id, &worn);
             }
             evs.push(Event {
                 m: month_abs,
@@ -2080,15 +2080,15 @@ impl World {
             // grow with population, and a seam struck beyond yesterday's
             // reach must not rust in the hills once the town has grown to it
             if self.month.rem_euclid(12) == 0 {
-                trade::assign_goods(&mut self.settlements, &self.deposits, &self.fertility);
+                trade::assign_goods(&mut self.peoples.settlements, &self.deposits, &self.fields.fertility);
             }
             // once a decade the tongues catch up with the map: a people
             // spread near a named feature coins its own word for it (M3.4)
             if self.month.rem_euclid(120) == 0 {
                 let doubled = naming::exonym_pass(
                     &mut self.features,
-                    &self.settlements,
-                    &self.cultures,
+                    &self.peoples.settlements,
+                    &self.peoples.cultures,
                     &mut self.taken,
                     &mut self.rng,
                 );
@@ -2107,10 +2107,10 @@ impl World {
                 }
             }
             let soc_evs = society::monthly(
-                &mut self.societies,
-                &self.settlements,
+                &mut self.peoples.societies,
+                &self.peoples.settlements,
                 &self.deposits,
-                &self.cultures,
+                &self.peoples.cultures,
                 self.month,
                 &mut self.rng,
             );
@@ -2118,31 +2118,31 @@ impl World {
             // E5.2: one id→index map for every pass this month — settlement
             // membership is fixed from here to the end of the economy block
             // (the passes below take slices, which cannot grow or shrink)
-            let sidx = economy::sidx(&self.settlements);
+            let sidx = economy::sidx(&self.peoples.settlements);
             // M5.2: re-carve the market areas when towns appeared, and
             // refresh every other year as the route web thickens
-            if self.areas.area.len() != self.settlements.len()
+            if self.economy.areas.area.len() != self.peoples.settlements.len()
                 || self.month.rem_euclid(24) == 2
             {
-                self.areas =
-                    economy::build_areas(&self.settlements, &self.routes, Some(&self.areas), &sidx);
+                self.economy.areas =
+                    economy::build_areas(&self.peoples.settlements, &self.routes, Some(&self.economy.areas), &sidx);
             }
             // M5.1: forges light where ore, fuel, hands and the art meet
             let craft_evs = economy::craft_pass(
-                &mut self.settlements,
-                &self.societies,
-                &self.areas,
+                &mut self.peoples.settlements,
+                &self.peoples.societies,
+                &self.economy.areas,
                 self.month,
                 &mut self.rng,
             );
             new_events.extend(craft_evs);
             let eco_evs = economy::monthly(
-                &mut self.settlements,
+                &mut self.peoples.settlements,
                 &self.routes,
-                &mut self.market,
-                &mut self.areas,
-                &mut self.route_flow,
-                &mut self.societies,
+                &mut self.economy.market,
+                &mut self.economy.areas,
+                &mut self.economy.route_flow,
+                &mut self.peoples.societies,
                 self.month,
                 &mut self.rng,
                 &sidx,
@@ -2150,31 +2150,31 @@ impl World {
             new_events.extend(eco_evs);
             // M5.5: the merchants ride the widest gaps
             let mer_evs = economy::merchant_pass(
-                &mut self.merchants,
-                &mut self.settlements,
-                &mut self.areas,
+                &mut self.economy.merchants,
+                &mut self.peoples.settlements,
+                &mut self.economy.areas,
                 &self.routes,
-                &self.societies,
-                &self.cultures,
+                &self.peoples.societies,
+                &self.peoples.cultures,
                 &mut self.taken,
                 self.month,
                 &mut self.rng,
-                &mut self.registry,
+                &mut self.chronicle.registry,
                 &sidx,
             );
             new_events.extend(mer_evs);
             // statecraft: wars that move borders, dread, risings (M4)
             let (pol_evs, borders_changed) = politics::monthly(
                 &mut self.politics,
-                &mut self.chron,
+                &mut self.chronicle.state,
                 &mut self.rng,
                 &mut self.taken,
                 self.month,
-                &mut self.settlements,
-                &mut self.cultures,
-                &mut self.societies,
-                &self.territory,
-                &mut self.registry,
+                &mut self.peoples.settlements,
+                &mut self.peoples.cultures,
+                &mut self.peoples.societies,
+                &self.fields.territory,
+                &mut self.chronicle.registry,
             );
             new_events.extend(pol_evs);
             // the patina settles behind the drums: battlefields earn names,
@@ -2189,27 +2189,27 @@ impl World {
             // the human pulse, paced by how loud the world already is (M6.4)
             let pace = (1.30 - 0.22 * self.heat).clamp(0.55, 1.30);
             let chron_evs = chronicle::monthly(
-                &mut self.chron,
+                &mut self.chronicle.state,
                 &mut self.rng,
                 &mut self.taken,
                 self.month,
-                &mut self.settlements,
-                &self.cultures,
+                &mut self.peoples.settlements,
+                &self.peoples.cultures,
                 &self.features,
                 &self.world_name,
-                &mut self.registry,
+                &mut self.chronicle.registry,
                 pace,
             );
             new_events.extend(chron_evs);
             // the relics ride the month's tides: forged, plundered, lost
             // (M6.3) — read straight off the month's slice, no clone (E5.6)
             let art_evs = artifact::monthly(
-                &mut self.artifacts,
-                &mut self.registry,
+                &mut self.chronicle.artifacts,
+                &mut self.chronicle.registry,
                 &new_events[month_start..],
-                &self.settlements,
-                &self.cultures,
-                &self.societies,
+                &self.peoples.settlements,
+                &self.peoples.cultures,
+                &self.peoples.societies,
                 &mut self.taken,
                 self.month,
                 &mut self.rng,
@@ -2237,7 +2237,7 @@ impl World {
         }
         // the full log is the chronicle's memory — the sifter reads all of it,
         // and the client pages it with events_range (M6)
-        self.events.extend(new_events.iter().cloned());
+        self.chronicle.events.extend(new_events.iter().cloned());
         (new_events, founded, deposits_changed)
     }
 
@@ -2258,8 +2258,8 @@ impl World {
                     EntityKind::Feature,
                 ]
                 .iter()
-                .find_map(|&k| self.registry.find_kind(k, &e.s))
-                    .or_else(|| self.registry.find(&e.s));
+                .find_map(|&k| self.chronicle.registry.find_kind(k, &e.s))
+                    .or_else(|| self.chronicle.registry.find(&e.s));
                 if let Some(id) = found {
                     e.ids.push(id);
                 }
@@ -2269,13 +2269,13 @@ impl World {
                 // fall back to the one thing a rename never moves — its ground
                 let found = [EntityKind::Settlement, EntityKind::Ruin, EntityKind::Feature]
                     .iter()
-                    .find_map(|&k| self.registry.find_alive(k, e.x, e.y));
+                    .find_map(|&k| self.chronicle.registry.find_alive(k, e.x, e.y));
                 if let Some(id) = found {
                     e.ids.push(id);
                 }
             }
             if e.x < 0 {
-                if let Some(ent) = e.ids.first().and_then(|&id| self.registry.get(id)) {
+                if let Some(ent) = e.ids.first().and_then(|&id| self.chronicle.registry.get(id)) {
                     if ent.x >= 0 {
                         e.x = ent.x;
                         e.y = ent.y;
@@ -2294,9 +2294,9 @@ impl World {
 
 
     /// Boolean view of one `CellFlags` bit — offline tooling convenience;
-    /// hot paths test bits on `self.flags` directly.
+    /// hot paths test bits on `self.fields.flags` directly.
     pub fn mask(&self, f: CellFlags) -> Array2<bool> {
-        self.flags.mapv(|b| b & f.bits() != 0)
+        self.fields.flags.mapv(|b| b & f.bits() != 0)
     }
 
     // The field registry itself is declared once, below `pack()`, via the
