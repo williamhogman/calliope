@@ -10,7 +10,7 @@
 import { hexRgb, settlementColor } from "./palette.js";
 import {
   buildShade, buildSatellite, monthTemp, composite,
-  decodeTerritory, territoryGrid, cultureOf, tintRgba,
+  decodeTerritory, applyTerritoryTiles, territoryGrid, cultureOf, tintRgba,
 } from "./render/compositor.js";
 import { drawLabels, labelBoxesAt } from "./render/labels.js";
 import {
@@ -100,6 +100,7 @@ export class Renderer {
   }
 
   setTerritory(rle) { decodeTerritory(this, rle); }
+  applyTerritoryTiles(patch) { applyTerritoryTiles(this, patch); }
   territory(version) { return territoryGrid(this, version); }
   tintRgba(version) { return tintRgba(this, version); }
   monthTemp(month) { return monthTemp(this, month); }

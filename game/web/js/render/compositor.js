@@ -234,6 +234,37 @@ export function decodeTerritory(R, rle) {
   R._tintRows = mergeRows(R._tintRows, rows);
 }
 
+// E4.7 — apply dirty 32×32 tile patches straight into the live grid.
+// The damage band falls out of the tile coords: no full-grid diff, and
+// the tint/composite rebuilds stay confined to the touched rows (E9.2).
+export function applyTerritoryTiles(R, patch) {
+  const owner = R.ownerIsCulture ? R.territoryOwner : null;
+  if (!owner || !patch || !patch.tiles || !patch.tiles.length) return;
+  const W = R.w, H = R.h, tw = patch.tw || 32;
+  let lo = H, hi = 0;
+  for (const [tx, ty, rle] of patch.tiles) {
+    const x0 = tx * tw, y0 = ty * tw;
+    const tW = Math.min(tw, W - x0), tH = Math.min(tw, H - y0);
+    let j = 0;
+    for (let k = 0; k + 1 < rle.length; k += 2) {
+      let run = rle[k];
+      const v = rle[k + 1];
+      while (run-- > 0 && j < tW * tH) {
+        owner[(y0 + ((j / tW) | 0)) * W + x0 + (j % tW)] = v;
+        j++;
+      }
+    }
+    if (y0 < lo) lo = y0;
+    if (y0 + tH > hi) hi = y0 + tH;
+  }
+  // border shading reads one row around a cell — widen the band by one
+  const rows = { y0: Math.max(0, lo - 1), y1: Math.min(H, hi + 1) };
+  R.tintEpoch++;
+  R._polDirty = true;
+  R._compRows = mergeRows(R._compRows, rows);
+  R._tintRows = mergeRows(R._tintRows, rows);
+}
+
 // undefined = nothing pending; otherwise a row band (full map = {0, H}).
 function mergeRows(cur, add) {
   if (!cur) return add;

@@ -265,8 +265,11 @@ export async function advance(months) {
         setRuins(res.ruins);
       }
       if (res.territory) {
-        // borders moved: the engine redrew the political map (M4.1)
+        // borders moved wholesale: the engine redrew the political map (M4.1)
         ctx.renderer.setTerritory(res.territory);
+      } else if (res.territory_tiles) {
+        // borders moved locally: dirty 32×32 tiles patch the live grid (E4.7)
+        ctx.renderer.applyTerritoryTiles(res.territory_tiles);
       }
       if (res.events?.length) {
         setEvents([...events(), ...res.events]);
