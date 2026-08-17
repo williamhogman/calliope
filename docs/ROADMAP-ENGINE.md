@@ -267,7 +267,7 @@ walls, not one room.
 - [x] E11.4 System trait: `fn run(&mut SimCtx, &mut EventSink)` with declared cadence (monthly/yearly/on-event); the tick loop becomes an ordered system list instead of 170 inline lines (`world.rs:1646-1823`) (M)
 - [x] E11.5 `EventSink` replaces the fifteen `new_events.extend(...)` merge points — systems emit, the sink orders and stamps (S-M)
 - [x] E11.6 `diagnose.rs` (2,303 lines) reorganized around the registry (E2.7): checks live beside band declarations, the harness shrinks to plumbing (M)
-- [ ] E11.7 `bevy_ecs` evaluation ADR: measure the hand-rolled system lattice against bevy_ecs scheduling on real tick workloads; adopt or reject with numbers, not taste (M)
+- [x] E11.7 `bevy_ecs` evaluation ADR: measure the hand-rolled system lattice against bevy_ecs scheduling on real tick workloads; adopt or reject with numbers, not taste (M)
 - [x] E11.8 Module-dependency lint in `report.sh`: leaf modules must not import `world`; the import DAG stays acyclic by check, not convention (S)
 
 Gates: determinism hash byte-stable through every structural move; no

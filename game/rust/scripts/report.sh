@@ -75,6 +75,7 @@ run "sweep.txt" sweep $SWEEP
 run "properties.txt" properties $PROPS
 run "era.txt" era $ERA
 run "patina.txt" patina $PATINA
+run "systems.txt" systems "${SEEDS[0]}" "$SIZE" "$CIV_YEARS"
 
 # ---- wasm size budget (E10.4/E6.4) ----------------------------------------
 # The shipped binary is a build artifact, not a source claim — measure the
