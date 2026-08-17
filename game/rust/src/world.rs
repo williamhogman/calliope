@@ -239,64 +239,33 @@ pub struct World {
     pub width: usize, // grid columns after ocean margins are added
     pub month: i64,
 
-    // E3.2 — the eight float grids live as f32 at rest: generation math
-    // runs in f64 (geo → climate → hydrology → biomes → agriculture), the
-    // result is stored once as f32, and every human-stage consumer
-    // (naming, resources, settlements, trade, economy) reads f32. Halves
-    // grid memory and makes pack() a straight memcpy per field.
-    pub height: Array2<f32>,
-    pub tmean: Array2<f32>,
-    pub tamp: Array2<f32>,
-    pub precip: Array2<f32>,
-    pub discharge: Array2<f32>,
-    pub fertility: Array2<f32>,
-    pub biomes: Array2<u8>,
-    /// Crop package per cell (M2.1): 0 wild · 1 wheat · 2 rice · 3 maize · 4 pastoral.
-    pub crops: Array2<u8>,
-    /// Per-cell `CellFlags` bits: river / lake / salt / seasonal.
-    pub flags: Array2<u8>,
-    /// Signed monsoon share of the year's rain (positive peaks month 0).
-    pub pamp: Array2<f32>,
-    /// Signed seasonal discharge swing per cell, -1..1.
-    pub flow_amp: Array2<f32>,
-    /// Strahler stream order, 0 off-river.
-    pub strahler: Array2<u8>,
+    // E11.3 — the load-bearing walls: state lives in four sub-structs so
+    // subsystems can borrow disjoint walls instead of eight loose params.
+    /// The land itself — every per-cell grid (E3.2: f32 at rest).
+    pub fields: Fields,
+    /// The peoples — settlements, cultures, societies.
+    pub peoples: Peoples,
+    /// The coin — market, areas, merchants, realized route flow.
+    pub economy: Economy,
+    /// The record — events, registry, artifacts, dynastic state.
+    pub chronicle: Chronicle,
 
     pub deposits: Vec<Deposit>,
-    pub settlements: Vec<Settlement>,
-    pub cultures: Vec<Culture>,
     pub features: Vec<Feature>,
     pub routes: Vec<Route>,
-    pub events: Vec<Event>,
     pub world_name: String,
-    pub societies: Vec<Society>,
-    pub market: Market,
-    /// M5.2 — the route web carved into market areas, each with its own
-    /// price list; rebuilt when towns are founded and refreshed yearly.
-    pub areas: economy::MarketAreas,
-    /// M5.5 — named traders riding the price gaps between areas.
-    pub merchants: Vec<economy::Merchant>,
-    /// Last month's realized flow per route (gravity cross-check, M5.4).
-    pub route_flow: Vec<f64>,
     /// M9.1 — where towns died: named remains on the map.
     pub ruins: Vec<Ruin>,
     /// Years each route has gone without realized flow (M9.4).
     route_idle: Vec<u16>,
-    /// M6.1 — the chronicle's cast: every named thing, one stable id.
-    pub registry: Registry,
-    /// M6.3 — relics with provenance: forged, plundered, lost, found.
-    pub artifacts: Vec<artifact::Artifact>,
     /// M6.4 — narrative heat: decaying sum of the month's weighted events;
     /// quiet years reach for omens, loud years let the wars speak.
     heat: f64,
 
     pub(crate) rng: Pcg64Mcg,
     taken: HashSet<String>,
-    pub(crate) chron: ChronicleState,
     /// Statecraft: wars, opinion, dread, solidarity, vassals (M4).
     pub politics: Politics,
-    /// Influence-map territory: owner culture per cell, −1 wilderness (M4.1).
-    pub territory: Array2<i16>,
     /// E4.5 — which wire sections must reship on the next tick.
     pub(crate) dirty: Dirty,
     /// E4.2/E4.3 — hashes of the last-shipped JSON per wire surface.
