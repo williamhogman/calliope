@@ -2281,6 +2281,13 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
             .map(|r| (r["g"].as_str().unwrap().to_string(), r.clone()))
             .collect();
 
+        // territory shadow (E4.7): the client decodes the dawn grid from
+        // the pack header, then merges full RLE re-ships and 32×32 tile
+        // patches as they arrive — whichever the engine judged smaller.
+        let mut terr_shadow = w.fields.territory.clone();
+        let mut terr_full_ships = 0usize;
+        let mut terr_tile_ships = 0usize;
+
         const BLOCKS: [&str; 4] = ["cultures", "c_hot", "wars", "merchants"];
         let mut last_block: BTreeMap<&str, String> = BTreeMap::new();
         let mut reships = 0usize;
@@ -2345,6 +2352,47 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
                     shadow.remove(&id.as_i64().unwrap());
                 }
             }
+            // territory (E4.7): full RLE replaces the grid, tile patches
+            // land in place; both must leave the shadow equal to truth
+            if let Some(rle) = t.get("territory").and_then(|v| v.as_array()) {
+                terr_full_ships += 1;
+                let flat = terr_shadow.as_slice_mut().unwrap();
+                let mut i = 0usize;
+                let mut k = 0usize;
+                while k + 1 < rle.len() {
+                    let run = rle[k].as_i64().unwrap() as usize;
+                    let val = rle[k + 1].as_i64().unwrap() as i16;
+                    flat[i..i + run].fill(val);
+                    i += run;
+                    k += 2;
+                }
+                assert_eq!(i, flat.len(), "territory RLE must cover the grid");
+            } else if let Some(p) = t.get("territory_tiles") {
+                terr_tile_ships += 1;
+                let (h, wd) = terr_shadow.dim();
+                let tw = p["tw"].as_u64().unwrap() as usize;
+                for tile in p["tiles"].as_array().unwrap() {
+                    let tx = tile[0].as_u64().unwrap() as usize;
+                    let ty = tile[1].as_u64().unwrap() as usize;
+                    let (x0, y0) = (tx * tw, ty * tw);
+                    let (t_w, t_h) = (tw.min(wd - x0), tw.min(h - y0));
+                    let mut j = 0usize;
+                    let rle = tile[2].as_array().unwrap();
+                    let mut k = 0usize;
+                    while k + 1 < rle.len() {
+                        let mut run = rle[k].as_i64().unwrap();
+                        let val = rle[k + 1].as_i64().unwrap() as i16;
+                        while run > 0 {
+                            terr_shadow[[y0 + j / t_w, x0 + j % t_w]] = val;
+                            j += 1;
+                            run -= 1;
+                        }
+                        k += 2;
+                    }
+                    assert_eq!(j, t_w * t_h, "tile RLE must cover its tile");
+                }
+            }
+
             // the market ledger (E4.3): full replace on good-set change,
             // else m_hot rows merge by good — unchanged rows are waste
             if let Some(m) = t.get("market").and_then(|v| v.as_array()) {
@@ -2425,6 +2473,14 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
             format!("{} goods", market_truth.len()), "E4.3: merge(bootstrap, m_hot) = engine ledger");
         c.must(&format!("area prices replay to truth ({})", seed), areas_shadow == areas_truth,
             format!("{} hubs", areas_truth.len()), "E4.3: per-good hub patches rebuild the areas");
+        println!(
+            "seed {:>6}: territory over {} months · {} full ships · {} tile ships",
+            seed, months, terr_full_ships, terr_tile_ships
+        );
+        c.must(&format!("territory replays to truth ({})", seed),
+            terr_shadow == w.fields.territory,
+            format!("{} full · {} tiles", terr_full_ships, terr_tile_ships),
+            "E4.7: full RLE and tile patches must leave the client's grid exactly the engine's");
         c.must(&format!("no unchanged section reships ({})", seed), reships == 0,
             format!("{} reships", reships), "E4.2/E4.3: a section crosses only when it moved");
         c.must(&format!("event cursor tiles the log ({})", seed), cursor_breaks == 0
