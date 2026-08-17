@@ -23,7 +23,6 @@ bitflags::bitflags! {
 }
 
 use crate::agriculture;
-use crate::artifact;
 use crate::biomes as biomes_mod;
 use crate::chronicle::{self, ChronicleState};
 use crate::climate;
