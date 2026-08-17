@@ -8,7 +8,6 @@ use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 use smallvec::{smallvec, SmallVec};
 
-use strum::IntoEnumIterator;
 
 bitflags::bitflags! {
     /// Per-cell water flags (E1.7) — one byte per cell, stored directly in

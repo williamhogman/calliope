@@ -1615,7 +1615,7 @@ fn cmd_bench() {
     let mut w = World::generate(4242, 512);
     let towns0 = w.settlements.len();
     let mut window_ms: Vec<f64> = Vec::with_capacity(5);
-    let mut alloc_window: Option<u64> = None;
+    let alloc_window: Option<u64> = None;
     for _i in 0..5 {
         #[cfg(feature = "alloc-count")]
         let a0 = alloc_count::count();
