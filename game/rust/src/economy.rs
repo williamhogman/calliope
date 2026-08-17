@@ -1100,6 +1100,7 @@ fn capitalize(s: &str) -> String {
 // ---------------------------------------------------------------- bands
 
 use crate::util::Band;
+use crate::state::{Economy, Peoples};
 
 /// Diagnostics bands (E2.7): prices and the spread of wealth.
 pub const BANDS: &[Band] = &[

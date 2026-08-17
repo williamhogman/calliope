@@ -430,6 +430,7 @@ pub fn wonder_for(
 // ---------------------------------------------------------------- bands
 
 use crate::util::Band;
+use crate::state::{Chronicle, Peoples};
 
 /// Diagnostics bands (E2.7): the pace of the telling.
 pub const BANDS: &[Band] = &[

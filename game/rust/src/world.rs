@@ -2083,14 +2083,8 @@ impl World {
                     });
                 }
             }
-            let soc_evs = society::monthly(
-                &mut self.peoples.societies,
-                &self.peoples.settlements,
-                &self.deposits,
-                &self.peoples.cultures,
-                self.month,
-                &mut self.rng,
-            );
+            let soc_evs =
+                society::monthly(&mut self.peoples, &self.deposits, self.month, &mut self.rng);
             new_events.extend(soc_evs);
             // E5.2: one id→index map for every pass this month — settlement
             // membership is fixed from here to the end of the economy block
@@ -2106,20 +2100,16 @@ impl World {
             }
             // M5.1: forges light where ore, fuel, hands and the art meet
             let craft_evs = economy::craft_pass(
-                &mut self.peoples.settlements,
-                &self.peoples.societies,
+                &mut self.peoples,
                 &self.economy.areas,
                 self.month,
                 &mut self.rng,
             );
             new_events.extend(craft_evs);
             let eco_evs = economy::monthly(
-                &mut self.peoples.settlements,
+                &mut self.economy,
+                &mut self.peoples,
                 &self.routes,
-                &mut self.economy.market,
-                &mut self.economy.areas,
-                &mut self.economy.route_flow,
-                &mut self.peoples.societies,
                 self.month,
                 &mut self.rng,
                 &sidx,
@@ -2127,12 +2117,9 @@ impl World {
             new_events.extend(eco_evs);
             // M5.5: the merchants ride the widest gaps
             let mer_evs = economy::merchant_pass(
-                &mut self.economy.merchants,
-                &mut self.peoples.settlements,
-                &mut self.economy.areas,
+                &mut self.economy,
+                &mut self.peoples,
                 &self.routes,
-                &self.peoples.societies,
-                &self.peoples.cultures,
                 &mut self.taken,
                 self.month,
                 &mut self.rng,
@@ -2143,15 +2130,12 @@ impl World {
             // statecraft: wars that move borders, dread, risings (M4)
             let (pol_evs, borders_changed) = politics::monthly(
                 &mut self.politics,
-                &mut self.chronicle.state,
-                &mut self.rng,
+                &mut self.chronicle,
+                &mut self.peoples,
+                &self.fields.territory,
                 &mut self.taken,
                 self.month,
-                &mut self.peoples.settlements,
-                &mut self.peoples.cultures,
-                &mut self.peoples.societies,
-                &self.fields.territory,
-                &mut self.chronicle.registry,
+                &mut self.rng,
             );
             new_events.extend(pol_evs);
             // the patina settles behind the drums: battlefields earn names,
@@ -2166,27 +2150,22 @@ impl World {
             // the human pulse, paced by how loud the world already is (M6.4)
             let pace = (1.30 - 0.22 * self.heat).clamp(0.55, 1.30);
             let chron_evs = chronicle::monthly(
-                &mut self.chronicle.state,
-                &mut self.rng,
-                &mut self.taken,
-                self.month,
-                &mut self.peoples.settlements,
-                &self.peoples.cultures,
+                &mut self.chronicle,
+                &mut self.peoples,
                 &self.features,
                 &self.world_name,
-                &mut self.chronicle.registry,
+                &mut self.taken,
+                self.month,
+                &mut self.rng,
                 pace,
             );
             new_events.extend(chron_evs);
             // the relics ride the month's tides: forged, plundered, lost
             // (M6.3) — read straight off the month's slice, no clone (E5.6)
             let art_evs = artifact::monthly(
-                &mut self.chronicle.artifacts,
-                &mut self.chronicle.registry,
+                &mut self.chronicle,
                 &new_events[month_start..],
-                &self.peoples.settlements,
-                &self.peoples.cultures,
-                &self.peoples.societies,
+                &self.peoples,
                 &mut self.taken,
                 self.month,
                 &mut self.rng,

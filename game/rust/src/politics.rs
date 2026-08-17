@@ -27,6 +27,7 @@ use crate::society::{self, Society};
 use crate::util::round2;
 use crate::world::EventKind;
 use crate::world::Event;
+use crate::state::{Chronicle, Peoples};
 
 // ---------------------------------------------------------------- tuning
 

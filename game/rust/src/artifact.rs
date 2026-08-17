@@ -20,6 +20,7 @@ use crate::settlements::Settlement;
 use crate::society::Society;
 use crate::world::EventKind;
 use crate::world::Event;
+use crate::state::{Chronicle, Peoples};
 
 #[derive(Serialize, Clone)]
 pub struct Artifact {
