@@ -118,12 +118,12 @@ month (`world.rs:2193-2227`), unconditionally.
 
 Gates: median tick payload < 4 KB at year 100 (vs. full resend today),
 measured in `diagnose perf`; a 1200-month native run allocates no payload
-section that carries zero changes. **Status: gate green** — `diagnose bench`
-median 3976 B @ year 100 (p90 19.5 KB, dominated by routes/territory, i.e.
-E4.6/E4.7 ground); `diagnose properties` P4 replays 240 months of deltas to
-byte-truth for settlements, market and areas with zero redundant reships.
-Beyond the plan, sections got finer than dirty flags: settlements and
-cultures split hot/cold (positional heartbeat rows `[id,pop,food,k,wealth]`),
+section that carries zero changes. **Status: gate green — track complete** —
+`diagnose bench` median 3950 B @ year 100 (p90 20.0 KB, dominated by routes);
+`diagnose properties` P4 replays 240 months of deltas to byte-truth for
+settlements, market, areas and the territory grid with zero redundant
+reships. Beyond the plan, sections got finer than dirty flags: settlements
+and cultures split hot/cold (positional heartbeat rows `[id,pop,food,k,wealth]`),
 the market ledger ships per-good rows (`m_hot`), market areas ship per-hub,
 per-good price patches, and all wire floats carry display precision only
 (prices 0.01, food 0.1, coin and souls whole).
