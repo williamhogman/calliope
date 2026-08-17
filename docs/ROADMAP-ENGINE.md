@@ -261,9 +261,9 @@ all bands hold across the standard 3-seed sweep.
 tick loop, serialization, and domain logic. The lattice needs load-bearing
 walls, not one room.
 
-- [ ] E11.1 Serialization out: `pack.rs` (binary) and `snapshot.rs` (JSON meta/tick assembly) leave `world.rs` (`world.rs:2193-2343`) (M)
-- [ ] E11.2 Domain logic out: famine (`world.rs:1871-1965`) and prospecting (`world.rs:1969-2015`) become modules like their peers (S-M)
-- [ ] E11.3 State split: `World` decomposes into `Fields` (grids), `Peoples` (settlements/cultures/societies), `Economy` (market/areas/merchants), `Chronicle` (events/registry/artifacts) — subsystem signatures take one sub-struct instead of eight loose params (`world.rs:1730-1739`) (L)
+- [x] E11.1 Serialization out: `pack.rs` (binary) and `snapshot.rs` (JSON meta/tick assembly) leave `world.rs` (`world.rs:2193-2343`) (M)
+- [x] E11.2 Domain logic out: famine (`world.rs:1871-1965`) and prospecting (`world.rs:1969-2015`) become modules like their peers (S-M)
+- [x] E11.3 State split: `World` decomposes into `Fields` (grids), `Peoples` (settlements/cultures/societies), `Economy` (market/areas/merchants), `Chronicle` (events/registry/artifacts) — subsystem signatures take one sub-struct instead of eight loose params (`world.rs:1730-1739`) (L)
 - [ ] E11.4 System trait: `fn run(&mut SimCtx, &mut EventSink)` with declared cadence (monthly/yearly/on-event); the tick loop becomes an ordered system list instead of 170 inline lines (`world.rs:1646-1823`) (M)
 - [ ] E11.5 `EventSink` replaces the fifteen `new_events.extend(...)` merge points — systems emit, the sink orders and stamps (S-M)
 - [ ] E11.6 `diagnose.rs` (2,303 lines) reorganized around the registry (E2.7): checks live beside band declarations, the harness shrinks to plumbing (M)
