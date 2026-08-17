@@ -41,7 +41,7 @@ pub fn explain(world: &World, kind: &str, key: &str) -> String {
 fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
     let s = world.peoples.settlements.iter().find(|s| s.id == id)?;
     let md = world
-        .societies
+        .peoples.societies
         .get(s.culture.idx())
         .map(society::mods_for)
         .unwrap_or_default();

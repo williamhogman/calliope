@@ -179,7 +179,7 @@ impl WasmWorld {
     pub fn entity_log(&self, id: i64) -> String {
         let evs: Vec<&world::Event> = self
             .inner
-            .events
+            .chronicle.events
             .iter()
             .filter(|e| e.ids.contains(&ids::EntityId(id)))
             .collect();

@@ -167,7 +167,7 @@ impl World {
             let kind = self.deposits[di].r;
             let (dx0, dy0) = (self.deposits[di].x, self.deposits[di].y);
             let near_i = self
-                .settlements
+                .peoples.settlements
                 .iter()
                 .enumerate()
                 .min_by_key(|(_, s)| (s.x - dx0).pow(2) + (s.y - dy0).pow(2))

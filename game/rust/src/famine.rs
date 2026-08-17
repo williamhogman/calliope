@@ -52,7 +52,7 @@ impl World {
             worst = worst.max(shortfall);
             // granaries (pottery) blunt a failed year
             let granary = if self
-                .societies
+                .peoples.societies
                 .get(culture.0)
                 .map_or(false, |so| so.knows(society::TechId::Pottery))
             {

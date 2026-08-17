@@ -279,7 +279,7 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
     let mut log = RunLog::default();
     let mut last_m = w.month;
     let god_names: Vec<String> = w
-        .cultures
+        .peoples.cultures
         .iter()
         .flat_map(|c| c.pantheon.iter().map(|g| g.name.clone()))
         .collect();
@@ -620,7 +620,7 @@ fn cmd_hydro(seed: i64, size: usize) {
     let salt_cells = salt.iter().filter(|&&s| s).count();
     let salt_comp = ndimage::label(&salt, true).areas.len();
     let famp: Vec<f64> = w
-        .flow_amp
+        .fields.flow_amp
         .iter()
         .zip(rivers.iter())
         .filter(|(_, &r)| r)
@@ -889,7 +889,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let mut seen: BTreeSet<&str> = BTreeSet::new();
         let mut dups = 0usize;
         for n in w
-            .settlements
+            .peoples.settlements
             .iter()
             .map(|s| s.name.as_str())
             .chain(w.features.iter().map(|f| f.name.as_str()))
@@ -1029,7 +1029,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         }
         if years >= 100 {
             let crafts = w
-                .settlements
+                .peoples.settlements
                 .iter()
                 .filter(|s| s.goods.iter().any(|g| g.is_craft()))
                 .count();
@@ -1405,7 +1405,7 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
             .all(|f| f.formerly.is_empty());
         let strata_over = w.peoples.settlements.iter().filter(|s| s.formerly.len() > 2).count();
         let ungloseed = w
-            .settlements
+            .peoples.settlements
             .iter()
             .filter(|s| !s.formerly.is_empty() && s.ety.is_empty())
             .count()
@@ -2407,13 +2407,13 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
             }
         }
         let truth: BTreeMap<i64, serde_json::Value> = w
-            .settlements
+            .peoples.settlements
             .iter()
             .map(|s| (s.id.0, serde_json::to_value(s).unwrap()))
             .collect();
         let replay_ok = shadow == truth;
         let market_truth: BTreeMap<String, serde_json::Value> = w
-            .market
+            .economy.market
             .snapshot()
             .as_array()
             .unwrap()

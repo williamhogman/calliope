@@ -80,7 +80,7 @@ fn main() {
     }
     println!("border land cells: {} (must be 0)", border_land);
     let delta_towns: Vec<&str> = w
-        .settlements
+        .peoples.settlements
         .iter()
         .filter(|s| {
             w.features.iter().any(|f| {
@@ -185,7 +185,7 @@ fn main() {
         pops.sort_unstable();
         let median = pops[pops.len() / 2];
         let mut ratios: Vec<f64> = w
-            .settlements
+            .peoples.settlements
             .iter()
             .filter(|s| s.peak > 0)
             .map(|s| s.pop as f64 / s.peak as f64)

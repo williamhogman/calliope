@@ -42,6 +42,7 @@ use crate::politics::{self, Politics};
 use crate::resources::{self, Deposit};
 use crate::settlements::{self, Settlement};
 use crate::snapshot::SentCache;
+use crate::state::{Chronicle, Economy, Fields, Peoples};
 use crate::society::{self, Society};
 use crate::telling;
 use crate::trade::{self, Route};
@@ -1326,7 +1327,7 @@ impl World {
             let site = {
                 let parent = self.peoples.settlements[pi].clone();
                 let range = self
-                    .societies
+                    .peoples.societies
                     .get(parent.culture.idx())
                     .map(|so| society::mods_for(so).colony_range)
                     .unwrap_or(1.0);
@@ -1425,7 +1426,7 @@ impl World {
         };
         trade::goods_for(&mut s, &self.deposits, &self.fields.fertility);
         let mdc = self
-            .societies
+            .peoples.societies
             .get(cid.0)
             .map(society::mods_for)
             .unwrap_or_default();
@@ -1774,7 +1775,7 @@ impl World {
         }
         let ruin_name = format!("Ruins of {}", dead.name);
         let rid = self
-            .registry
+            .chronicle.registry
             .add(EntityKind::Ruin, &ruin_name, month_abs, Some(dead.culture), dead.x, dead.y);
         self.ruins.push(Ruin {
             name: ruin_name.clone(),
@@ -1869,12 +1870,12 @@ impl World {
                 self.routes[i].old = true;
                 self.dirty.mark(Dirty::ROUTES);
                 let an = self
-                    .settlements
+                    .peoples.settlements
                     .iter()
                     .find(|s| s.id == self.routes[i].a)
                     .map(|s| s.name.clone());
                 let bn = self
-                    .settlements
+                    .peoples.settlements
                     .iter()
                     .find(|s| s.id == self.routes[i].b)
                     .map(|s| s.name.clone());

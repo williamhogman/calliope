@@ -56,7 +56,7 @@ impl World {
     /// Cultures with ruler, era, polity, arts and treasury attached.
     fn cultures_json(&self) -> Value {
         let arr: Vec<Value> = self
-            .cultures
+            .peoples.cultures
             .iter()
             .map(|c| {
                 let mut v = serde_json::to_value(c).unwrap();
@@ -519,7 +519,7 @@ impl World {
     /// carries only what actually moved after month 0.
     pub(crate) fn prime_sent(&mut self) {
         self.sent.settlements = self
-            .settlements
+            .peoples.settlements
             .iter()
             .map(|s| {
                 (
@@ -542,7 +542,7 @@ impl World {
             crate::util::fnv1a64(serde_json::to_string(&self.economy.merchants).unwrap().as_bytes()),
         ];
         self.sent.market_rows = self
-            .market
+            .economy.market
             .snapshot()
             .as_array()
             .unwrap()
