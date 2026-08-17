@@ -13,8 +13,8 @@ use crate::ids::CultureId;
 use crate::culture::Culture;
 use crate::resources::{Deposit, Good, GoodSet};
 use crate::settlements::{territory_radius, Settlement};
-use crate::world::EventKind;
-use crate::world::Event;
+use crate::event::EventKind;
+use crate::event::Event;
 use crate::state::Peoples;
 
 pub const ERAS: [&str; 4] = [

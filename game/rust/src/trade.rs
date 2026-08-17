@@ -12,7 +12,7 @@ use ndarray::Array2;
 use serde::Serialize;
 
 use crate::ids::SettlementId;
-use crate::world::CellFlags;
+use crate::state::CellFlags;
 use crate::constants as gc;
 use crate::hydrology::{DIST, N8};
 use crate::ndimage;

@@ -507,3 +507,34 @@ impl System for Heat {
         w.heat = w.heat * 0.94 + (m_heat as f64 / 6.0) * 0.06;
     }
 }
+
+// ---------------------------------------------------------------- bands
+
+use crate::util::Band;
+
+/// Diagnostics bands (E2.7): the engine's speed and wire budget.
+pub const BANDS: &[Band] = &[
+    Band { name: "512 generation time", sweet: (0.0, 3000.0), hard: (0.0, 8000.0), target: "sweet ≤3s · hard ≤8s (wasm ≈ 2× native)" },
+    Band { name: "tick rate", sweet: (100.0, f64::INFINITY), hard: (25.0, f64::INFINITY), target: "sweet ≥100 mo/s · hard ≥25" },
+    Band { name: "pack bytes per cell", sweet: (0.0, 21.0), hard: (0.0, 24.0), target: "sweet ≤21 · hard ≤24 (8×u16 + 4×u8 = 20 B/cell + header)" },
+    Band { name: "median tick payload", sweet: (0.0, 4096.0), hard: (0.0, 16384.0), target: "sweet ≤4 KB · hard ≤16 KB (E4: ship what changed)" },
+    Band { name: "allocations per month", sweet: (0.0, 350.0), hard: (0.0, 1500.0), target: "sweet ≤350 · hard ≤1500 (baseline 183/mo — deterministic per seed, E5.10)" },
+    // E10.1 — per-stage generation budgets at 512, native release ms,
+    // asserted against the WORST seed of the sweep (a budget that only
+    // holds on the friendly seed is not a budget).
+    Band { name: "stage terrain ms", sweet: (0.0, 400.0), hard: (0.0, 900.0), target: "E10.1: plate+plume noise, warp, falloff" },
+    Band { name: "stage erosion ms", sweet: (0.0, 500.0), hard: (0.0, 1200.0), target: "E10.1: thermal+fluvial passes" },
+    Band { name: "stage climate ms", sweet: (0.0, 200.0), hard: (0.0, 500.0), target: "E10.1: temperature, advection precip" },
+    Band { name: "stage hydrology ms", sweet: (0.0, 250.0), hard: (0.0, 600.0), target: "E10.1: D8 routing, accumulation, lakes" },
+    Band { name: "stage biomes ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: Whittaker classification" },
+    Band { name: "stage fertility ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: soil + floodplain kernel" },
+    Band { name: "stage naming ms", sweet: (0.0, 120.0), hard: (0.0, 350.0), target: "E10.1: feature detection + toponymy" },
+    Band { name: "stage resources ms", sweet: (0.0, 400.0), hard: (0.0, 900.0), target: "E10.1: deposit placement + suitability scan (baseline ~300 ms)" },
+    Band { name: "stage settlements ms", sweet: (0.0, 250.0), hard: (0.0, 700.0), target: "E10.1: founding, cultures, goods, routes" },
+    Band { name: "gen total ms", sweet: (0.0, 1600.0), hard: (0.0, 3500.0), target: "E10.1: native total; wasm ≈ 2× rides the 512-generation band" },
+    // E10.2 — tick rate on a young world and the heavier year-100 world.
+    Band { name: "tick rate year 0", sweet: (1000.0, f64::INFINITY), hard: (200.0, f64::INFINITY), target: "E10.2: sweet ≥1000 mo/s · hard ≥200 (native)" },
+    Band { name: "tick rate year 100", sweet: (400.0, f64::INFINITY), hard: (100.0, f64::INFINITY), target: "E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544)" },
+    // E10.6 — memory ceiling with the whole seed sweep resident.
+    Band { name: "native peak RSS", sweet: (0.0, 1500.0), hard: (0.0, 2500.0), target: "E10.6: sweet ≤1.5 GiB · hard ≤2.5 GiB (3 × 512² worlds + histories)" },
+];

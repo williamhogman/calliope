@@ -7,6 +7,20 @@
 
 use ndarray::Array2;
 
+bitflags::bitflags! {
+    /// Per-cell water flags (E1.7) — one byte per cell, stored directly in
+    /// `World.flags` and shipped verbatim in the pack (bit layout is the
+    /// wire contract the JS client already reads).
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    pub struct CellFlags: u8 {
+        const RIVER    = 1 << 0;
+        const LAKE     = 1 << 1;
+        const SALT     = 1 << 2;
+        const SEASONAL = 1 << 3;
+    }
+}
+
+
 use crate::artifact::Artifact;
 use crate::chronicle::ChronicleState;
 use crate::culture::Culture;
@@ -14,7 +28,7 @@ use crate::economy::{Market, MarketAreas, Merchant};
 use crate::entity::Registry;
 use crate::settlements::Settlement;
 use crate::society::Society;
-use crate::world::Event;
+use crate::event::Event;
 
 /// The land itself — every per-cell grid (E3.2: f32 at rest).
 pub struct Fields {

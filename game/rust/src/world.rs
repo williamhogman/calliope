@@ -9,18 +9,6 @@ use serde::Serialize;
 use smallvec::{smallvec, SmallVec};
 
 
-bitflags::bitflags! {
-    /// Per-cell water flags (E1.7) — one byte per cell, stored directly in
-    /// `World.flags` and shipped verbatim in the pack (bit layout is the
-    /// wire contract the JS client already reads).
-    #[derive(Clone, Copy, PartialEq, Eq)]
-    pub struct CellFlags: u8 {
-        const RIVER    = 1 << 0;
-        const LAKE     = 1 << 1;
-        const SALT     = 1 << 2;
-        const SEASONAL = 1 << 3;
-    }
-}
 
 use crate::agriculture;
 use crate::biomes as biomes_mod;
@@ -42,152 +30,13 @@ use crate::resources::{self, Deposit};
 use crate::settlements::{self, Settlement};
 use crate::snapshot::SentCache;
 use crate::state::{Chronicle, Economy, Fields, Peoples};
+pub use crate::event::{headline_worthy, Event, EventIds, EventKind};
+pub use crate::state::CellFlags;
 use crate::systems::{EventSink, SimCtx, SYSTEMS};
 use crate::society::{self};
 use crate::telling;
 use crate::trade::{self, Route};
 use crate::util::{now_ms, round2};
-
-/// Closed vocabulary of chronicle event kinds (E1.4). Displayed and
-/// serialized as the same lowercase names the strings used, so the wire
-/// format and the determinism hash are unchanged.
-#[derive(
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Debug,
-    serde_repr::Serialize_repr,
-    strum::Display,
-    strum::EnumString,
-    strum::IntoStaticStr,
-    strum::EnumCount,
-    strum::EnumIter,
-)]
-#[strum(serialize_all = "lowercase")]
-#[repr(u8)]
-pub enum EventKind {
-    Depletion,
-    Disaster,
-    Discovery,
-    Economy,
-    Famine,
-    Festival,
-    Found,
-    Growth,
-    Myth,
-    Nature,
-    Omen,
-    Realm,
-    Ruler,
-    Society,
-    Tech,
-    Trade,
-    War,
-    Wonder,
-}
-
-impl EventKind {
-    pub fn name(self) -> &'static str {
-        self.into()
-    }
-}
-
-/// E2.3 — the event table: every kind's notification family, telling
-/// weight (M6.5) and fortune lean (M6.7) declared in one row. `telling.rs`
-/// and the generated JS constants (E2.4) both read this table. The
-/// chronicle's prose intentionally stays at the emission sites in
-/// `chronicle.rs` — each line is composed from live context (names, goods,
-/// tallies) that no static template column could carry.
-macro_rules! event_table {
-    ($($kind:ident => family $fam:ident, weight $w:literal, fortune $f:literal;)+) => {
-        impl EventKind {
-            /// Filter/notification family: realm · war · economy · myth · nature.
-            pub fn family(self) -> &'static str {
-                match self { $(EventKind::$kind => stringify!($fam),)+ }
-            }
-            /// How loudly this kind rings down the years (M6.5).
-            pub fn weight(self) -> i32 {
-                match self { $(EventKind::$kind => $w,)+ }
-            }
-            /// Which way fortune leans for the subject: +1 rising, −1
-            /// falling, 0 flat — the reversal detector counts sign changes.
-            pub fn fortune(self) -> i32 {
-                match self { $(EventKind::$kind => $f,)+ }
-            }
-        }
-    };
-}
-
-event_table! {
-    Depletion => family economy, weight 2, fortune -1;
-    Disaster  => family nature,  weight 4, fortune -1;
-    Discovery => family economy, weight 2, fortune 1;
-    Economy   => family economy, weight 1, fortune 0;
-    Famine    => family nature,  weight 3, fortune -1;
-    Festival  => family myth,    weight 1, fortune 1;
-    Found     => family realm,   weight 2, fortune 1;
-    Growth    => family realm,   weight 1, fortune 1;
-    Myth      => family myth,    weight 1, fortune 0;
-    Nature    => family nature,  weight 1, fortune 0;
-    Omen      => family myth,    weight 1, fortune 0;
-    Realm     => family realm,   weight 3, fortune 0;
-    Ruler     => family realm,   weight 2, fortune 0;
-    Society   => family realm,   weight 1, fortune 0;
-    Tech      => family realm,   weight 2, fortune 1;
-    Trade     => family economy, weight 1, fortune 0;
-    War       => family war,     weight 3, fortune -1;
-    Wonder    => family realm,   weight 2, fortune 1;
-}
-
-/// E5.5 — inline storage for the common 0–2 entity ids per event.
-pub type EventIds = SmallVec<[EntityId; 2]>;
-
-#[derive(Serialize, Clone)]
-pub struct Event {
-    pub m: i64,
-    pub s: String,
-    pub k: EventKind,
-    pub text: String,
-    /// Entities this event speaks of (M6.1); the first id is the subject.
-    /// E5.5 — SmallVec: most events name 0–2 entities, so the ids ride
-    /// inline in the Event with no heap allocation; wire format unchanged.
-    #[serde(skip_serializing_if = "SmallVec::is_empty")]
-    pub ids: EventIds,
-    /// Map anchor for fly-to, in grid cells; -1 = nowhere in particular.
-    #[serde(skip_serializing_if = "neg")]
-    pub x: i64,
-    #[serde(skip_serializing_if = "neg")]
-    pub y: i64,
-    /// The mythologized rendering of great deeds (M6.9); empty = none.
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub legend: String,
-    /// Withheld or disputed (M9.5): the telling admits it does not know.
-    #[serde(skip_serializing_if = "std::ops::Not::not", default)]
-    pub veiled: bool,
-}
-
-fn neg(v: &i64) -> bool {
-    *v < 0
-}
-
-/// E4.8 — kinds worth a toast, picked engine-side; the client applies its
-/// own notification-family preferences on top.
-pub fn headline_worthy(k: EventKind) -> bool {
-    matches!(
-        k,
-        EventKind::War
-            | EventKind::Found
-            | EventKind::Ruler
-            | EventKind::Wonder
-            | EventKind::Disaster
-            | EventKind::Discovery
-            | EventKind::Depletion
-            | EventKind::Society
-            | EventKind::Tech
-            | EventKind::Myth
-    )
-}
 
 /// E4.5 — one seat for "this wire section must reship on the next tick".
 /// Systems mark bits as they change state; `tick_json` takes them.
@@ -216,23 +65,6 @@ impl Dirty {
 }
 
 
-impl Default for Event {
-    fn default() -> Self {
-        Event {
-            m: 0,
-            s: String::new(),
-            // never observed: every construction site sets `k` explicitly
-            // (audited — 26 `..Default::default()` sites, all override it)
-            k: EventKind::Growth,
-            text: String::new(),
-            ids: SmallVec::new(),
-            x: -1,
-            y: -1,
-            legend: String::new(),
-            veiled: false,
-        }
-    }
-}
 
 pub struct World {
     pub seed: i64,
@@ -2127,29 +1959,3 @@ impl World {
 
 use crate::util::Band;
 
-/// Diagnostics bands (E2.7): the engine's speed and wire budget.
-pub const BANDS: &[Band] = &[
-    Band { name: "512 generation time", sweet: (0.0, 3000.0), hard: (0.0, 8000.0), target: "sweet ≤3s · hard ≤8s (wasm ≈ 2× native)" },
-    Band { name: "tick rate", sweet: (100.0, f64::INFINITY), hard: (25.0, f64::INFINITY), target: "sweet ≥100 mo/s · hard ≥25" },
-    Band { name: "pack bytes per cell", sweet: (0.0, 21.0), hard: (0.0, 24.0), target: "sweet ≤21 · hard ≤24 (8×u16 + 4×u8 = 20 B/cell + header)" },
-    Band { name: "median tick payload", sweet: (0.0, 4096.0), hard: (0.0, 16384.0), target: "sweet ≤4 KB · hard ≤16 KB (E4: ship what changed)" },
-    Band { name: "allocations per month", sweet: (0.0, 350.0), hard: (0.0, 1500.0), target: "sweet ≤350 · hard ≤1500 (baseline 183/mo — deterministic per seed, E5.10)" },
-    // E10.1 — per-stage generation budgets at 512, native release ms,
-    // asserted against the WORST seed of the sweep (a budget that only
-    // holds on the friendly seed is not a budget).
-    Band { name: "stage terrain ms", sweet: (0.0, 400.0), hard: (0.0, 900.0), target: "E10.1: plate+plume noise, warp, falloff" },
-    Band { name: "stage erosion ms", sweet: (0.0, 500.0), hard: (0.0, 1200.0), target: "E10.1: thermal+fluvial passes" },
-    Band { name: "stage climate ms", sweet: (0.0, 200.0), hard: (0.0, 500.0), target: "E10.1: temperature, advection precip" },
-    Band { name: "stage hydrology ms", sweet: (0.0, 250.0), hard: (0.0, 600.0), target: "E10.1: D8 routing, accumulation, lakes" },
-    Band { name: "stage biomes ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: Whittaker classification" },
-    Band { name: "stage fertility ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: soil + floodplain kernel" },
-    Band { name: "stage naming ms", sweet: (0.0, 120.0), hard: (0.0, 350.0), target: "E10.1: feature detection + toponymy" },
-    Band { name: "stage resources ms", sweet: (0.0, 400.0), hard: (0.0, 900.0), target: "E10.1: deposit placement + suitability scan (baseline ~300 ms)" },
-    Band { name: "stage settlements ms", sweet: (0.0, 250.0), hard: (0.0, 700.0), target: "E10.1: founding, cultures, goods, routes" },
-    Band { name: "gen total ms", sweet: (0.0, 1600.0), hard: (0.0, 3500.0), target: "E10.1: native total; wasm ≈ 2× rides the 512-generation band" },
-    // E10.2 — tick rate on a young world and the heavier year-100 world.
-    Band { name: "tick rate year 0", sweet: (1000.0, f64::INFINITY), hard: (200.0, f64::INFINITY), target: "E10.2: sweet ≥1000 mo/s · hard ≥200 (native)" },
-    Band { name: "tick rate year 100", sweet: (400.0, f64::INFINITY), hard: (100.0, f64::INFINITY), target: "E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544)" },
-    // E10.6 — memory ceiling with the whole seed sweep resident.
-    Band { name: "native peak RSS", sweet: (0.0, 1500.0), hard: (0.0, 2500.0), target: "E10.6: sweet ≤1.5 GiB · hard ≤2.5 GiB (3 × 512² worlds + histories)" },
-];

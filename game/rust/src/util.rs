@@ -90,7 +90,7 @@ pub fn all_bands() -> impl Iterator<Item = &'static Band> {
         .chain(crate::chronicle::BANDS)
         .chain(crate::economy::BANDS)
         .chain(crate::settlements::BANDS)
-        .chain(crate::world::BANDS)
+        .chain(crate::systems::BANDS)
 }
 
 /// Look one band up by name; an unknown name is a programmer error.

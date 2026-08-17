@@ -25,8 +25,8 @@ use crate::naming;
 use crate::settlements::Settlement;
 use crate::society::{self, Society};
 use crate::util::round2;
-use crate::world::EventKind;
-use crate::world::Event;
+use crate::event::EventKind;
+use crate::event::Event;
 use crate::state::{Chronicle, Peoples};
 
 // ---------------------------------------------------------------- tuning

@@ -14,8 +14,8 @@ use serde::Serialize;
 
 use crate::ids::{CultureId, EntityId, SettlementId};
 use crate::entity::EntityKind;
-use crate::world::EventKind;
-use crate::world::Event;
+use crate::event::EventKind;
+use crate::event::Event;
 use crate::state::{Chronicle, Peoples};
 
 #[derive(Serialize, Clone)]

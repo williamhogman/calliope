@@ -15,6 +15,7 @@ pub mod culture;
 pub mod economy;
 pub mod entity;
 pub mod erosion;
+pub mod event;
 pub mod explain;
 pub mod famine;
 pub mod geo;

@@ -32,8 +32,8 @@ use crate::settlements::Settlement;
 use crate::society::{self, TechId};
 use crate::trade::Route;
 use crate::util::round2;
-use crate::world::EventKind;
-use crate::world::Event;
+use crate::event::EventKind;
+use crate::event::Event;
 
 /// Base worth of one unit of a good, from its rarity in the world.
 pub fn base_value(good: Good) -> f64 {
