@@ -2737,6 +2737,14 @@ fn main() {
         "telling" => cmd_telling(num(2, 12345), sized(3, 512), num(4, 150) as usize),
         "determinism" => cmd_determinism(num(2, 12345), sized(3, 512), num(4, 120)),
         "bench" => cmd_bench(),
+        "perf" => {
+            let size = sized(2, 512);
+            let mut seeds: Vec<i64> = a.get(3..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 90210];
+            }
+            cmd_perf(size, seeds);
+        }
         "sweep" => {
             let size = sized(2, 512);
             let years = num(3, 100) as usize;
@@ -2766,10 +2774,10 @@ fn main() {
             cmd_patina(size, years, seeds);
         }
         _ => {
-            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|sweep|properties|era|patina> [args]");
+            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina> [args]");
             println!("  terrain|climate|hydro|resources  <seed=12345> <size=512>");
             println!("  civ <seed> <size> <years=120> · economy <seed> <size> <years=80> · telling <seed> <size> <years=150>");
-            println!("  determinism <seed> <size> <months=120> · bench · sweep <size> <years> <seeds…>");
+            println!("  determinism <seed> <size> <months=120> · bench · perf <size=512> <seeds…> · sweep <size> <years> <seeds…>");
             println!("  properties <size=512> <years=60> <seeds…> · era <size=256> <years=60> <n=16> <base=12345>");
             println!("  patina <size=512> <years=300> <seeds…>");
         }
