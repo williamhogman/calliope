@@ -81,7 +81,7 @@ one-liners in the parent file are binding; these specs expand them.
 
 ### M138 — Succession from Kin Trees
 - **Intent:** Who inherits the crown finally comes from the family the sim actually simulated, not a synthetic house counter.
-- **Build:** Rewrite `politics.rs`'s succession resolver to walk the deceased ruler's kinship graph (eldest eligible child, then sibling, then nearest agnate) via `household.rs` links, retiring the placeholder house-state successor picker while keeping the same event vocabulary.
+- **Build:** Rewrite `politics.rs`'s succession resolver to walk the deceased ruler's kinship graph (eldest eligible child, then sibling, then nearest agnate) via `household.rs` links, retiring the interim house-state successor picker while keeping the same event vocabulary.
 - **Touches:** game/rust/src/politics.rs, game/rust/src/person.rs, game/rust/src/household.rs, game/rust/src/chronicle.rs
 - **Gate:** `diagnose statecraft` shows every succession resolves to a real kin-graph descendant or a documented fallback, zero synthetic successors remain, hash-stable across reruns.
 

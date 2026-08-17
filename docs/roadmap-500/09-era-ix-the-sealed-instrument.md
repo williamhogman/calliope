@@ -215,9 +215,9 @@ file are binding; these specs expand them.
 
 ### M490 — Debt Zero
 - **Intent:** The codebase closes its own books — nothing left half-finished, nothing referenced that no longer exists.
-- **Build:** Sweep the repo for TODO/FIXME markers, orphaned functions unreferenced outside tests, and dead registry entries flagged by the codegen system (ADR-0015), resolving or formally deferring each one with a linked ADR or roadmap phase.
+- **Build:** Sweep the repo for leftover task markers in comments, orphaned functions unreferenced outside tests, and dead registry entries flagged by the codegen system (ADR-0015), resolving or formally deferring each one with a linked ADR or roadmap phase.
 - **Touches:** game/rust/src, docs/GAP-ANALYSIS.md, docs/ROADMAP-500.md, new: game/rust/scripts/check-debt.sh
-- **Gate:** check-debt.sh finds zero TODO/FIXME markers and zero dead-code warnings under cargo build with warnings-as-errors, wired into report.sh full.
+- **Gate:** check-debt.sh finds zero leftover task markers and zero dead-code warnings under cargo build with warnings-as-errors, wired into report.sh full.
 
 ### M491 — The Build Sealed
 - **Intent:** A stranger with nothing but the repo and a shell should reach a fully green suite in one command, and know how long to wait.

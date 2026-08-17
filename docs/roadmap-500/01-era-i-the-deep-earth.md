@@ -169,7 +169,7 @@ in the parent file are binding; these specs expand them.
 - **Touches:** game/rust/src/climate.rs, game/rust/src/currents.rs, game/rust/src/bin/diagnose.rs
 - **Gate:** `diagnose climate` desert-share band (12–28% of land) and new cold-current-desert subcheck both pass across the full seed sweep.
 
-### M43 — Tides
+### M43 — The Tides
 - **Intent:** The shore should breathe daily, not just seasonally, with a range that answers to the shape of its sea.
 - **Build:** Derive a tidal-range field from basin geometry (enclosed-sea amplification, open-coast damping) using a simplified resonance heuristic keyed to basin width and depth, then mark tidal-flat and estuary cells where range and low-slope coastal gradient coincide.
 - **Touches:** game/rust/src/geo.rs, game/rust/src/hydrology.rs, new: game/rust/src/tides.rs, game/rust/src/landform.rs
@@ -247,7 +247,7 @@ in the parent file are binding; these specs expand them.
 - **Touches:** game/rust/src/hydrology.rs, game/rust/src/settlements.rs, game/rust/src/biomes.rs, game/rust/src/economy.rs
 - **Gate:** `diagnose civ` shows zero arid-biome settlements founded without qualifying water access (surface, spring, oasis, or well tech) across the full seed sweep.
 
-### M56 — Karst
+### M56 — Karst Country
 - **Intent:** Limestone country behaves like limestone country: rivers vanish, caves hollow, and the surface tells on the rock beneath.
 - **Build:** Add a karst pass triggered on limestone rock-province cells (M18) that generates sinkhole clusters via a Poisson-disk-seeded dissolution model scaled by precipitation, marks disappearing-river segments where a stream crosses into karst terrain and re-emerges downstream as a spring, and tags qualifying caves for later chronicle/ruin hooks.
 - **Touches:** game/rust/src/geo.rs, game/rust/src/hydrology.rs, game/rust/src/biomes.rs
