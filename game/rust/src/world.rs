@@ -43,6 +43,7 @@ use crate::resources::{self, Deposit};
 use crate::settlements::{self, Settlement};
 use crate::snapshot::SentCache;
 use crate::state::{Chronicle, Economy, Fields, Peoples};
+use crate::systems::{EventSink, SimCtx, SYSTEMS};
 use crate::society::{self};
 use crate::telling;
 use crate::trade::{self, Route};
@@ -990,7 +991,7 @@ impl World {
     }
 
     /// One month of growth for every settlement; returns events.
-    fn tick_month(&mut self, month_abs: i64) -> Vec<Event> {
+    pub(crate) fn tick_month(&mut self, month_abs: i64) -> Vec<Event> {
         let mut events = Vec::new();
         let month = month_abs.rem_euclid(12);
         let mods: Vec<society::Mods> =
@@ -1282,7 +1283,7 @@ impl World {
         pull
     }
 
-    fn try_colonize(&mut self, month_abs: i64) -> (Vec<Event>, bool) {
+    pub(crate) fn try_colonize(&mut self, month_abs: i64) -> (Vec<Event>, bool) {
         let mut events = Vec::new();
         let mut founded = false;
         let mut pull: Option<Array2<f64>> = None;
@@ -1467,7 +1468,7 @@ impl World {
     /// peopled from the nearest town. This is the channel that reaches
     /// ore struck by far ventures in country no crowded parent would
     /// ever pick: found metal must reach the market, not rust in the hills.
-    fn try_rush_camps(&mut self, month_abs: i64) -> (Vec<Event>, bool) {
+    pub(crate) fn try_rush_camps(&mut self, month_abs: i64) -> (Vec<Event>, bool) {
         use rand::Rng;
         let mut events = Vec::new();
         let mut founded = false;
@@ -1568,7 +1569,7 @@ impl World {
     /// the dying are gathered to ruin and the idle roads counted; twice a
     /// century speech wears the oldest names smooth; and rarely the world
     /// does something it will never explain.
-    fn patina_pass(&mut self, month_abs: i64) -> Vec<Event> {
+    pub(crate) fn patina_pass(&mut self, month_abs: i64) -> Vec<Event> {
         let mut evs: Vec<Event> = Vec::new();
         self.drain_battle_marks(month_abs, &mut evs);
         self.drain_conquest_renames(month_abs, &mut evs);
@@ -1994,7 +1995,7 @@ impl World {
     /// M9.5 — the withheld. A bounded share of the quieter entries close
     /// on an admission that the record does not know. Deterministic per
     /// event text; the 2–8 % band is enforced by the harness.
-    fn veil_pass(&mut self, events: &mut [Event], from: usize) {
+    pub(crate) fn veil_pass(&mut self, events: &mut [Event], from: usize) {
         let seed = self.seed as u64;
         for e in events[from..].iter_mut() {
             if e.veiled {
@@ -2025,176 +2026,37 @@ impl World {
         }
     }
 
+    /// Advance the world by `months`. The month itself is the ordered
+    /// system list in `systems.rs` (E11.4) — this is only the driver:
+    /// wind the clock, run what is due, ship the flags to the wire.
     pub fn tick(&mut self, months: i64) -> (Vec<Event>, bool, bool) {
         let months = months.clamp(1, 240).max(1);
-        let mut new_events: Vec<Event> = Vec::new();
-        let mut founded = false;
-        let mut deposits_changed = false;
+        let mut sink = EventSink::new();
+        let mut sidx = std::collections::HashMap::new();
         for _ in 0..months {
-            let month_start = new_events.len();
+            sink.begin_month();
             self.month += 1;
-            let evs = self.tick_month(self.month);
-            new_events.extend(evs);
-            let fam_evs = self.famine_pass(self.month);
-            new_events.extend(fam_evs);
-            let (col_evs, did) = self.try_colonize(self.month);
-            if did {
-                founded = true;
-                new_events.extend(col_evs);
-            }
-            let (pr_evs, dep_changed) = self.prospect_and_deplete(self.month);
-            if dep_changed {
-                deposits_changed = true;
-            }
-            new_events.extend(pr_evs);
-            // rushes ride behind the strikes: unworked seams call their own camps
-            let (rush_evs, rush_founded) = self.try_rush_camps(self.month);
-            if rush_founded {
-                founded = true;
-            }
-            new_events.extend(rush_evs);
-            // once a year every town re-reads its hinterland: territories
-            // grow with population, and a seam struck beyond yesterday's
-            // reach must not rust in the hills once the town has grown to it
-            if self.month.rem_euclid(12) == 0 {
-                trade::assign_goods(&mut self.peoples.settlements, &self.deposits, &self.fields.fertility);
-            }
-            // once a decade the tongues catch up with the map: a people
-            // spread near a named feature coins its own word for it (M3.4)
-            if self.month.rem_euclid(120) == 0 {
-                let doubled = naming::exonym_pass(
-                    &mut self.features,
-                    &self.peoples.settlements,
-                    &self.peoples.cultures,
-                    &mut self.taken,
-                    &mut self.rng,
-                );
-                for (fname, people, alt) in doubled {
-                    self.dirty.mark(Dirty::FEATURES);
-                    new_events.push(Event {
-                        m: self.month,
-                        s: fname.clone(),
-                        k: EventKind::Society,
-                        text: format!(
-                            "Spread now into that country, the {} keep their own word for {} — in their tongue it is {}.",
-                            people, fname, alt
-                        ),
-                        ..Default::default()
-                    });
+            let month = self.month;
+            let mut ctx = SimCtx { world: self, sidx };
+            for sys in SYSTEMS {
+                if sys.cadence().due(month) {
+                    sys.run(&mut ctx, &mut sink);
                 }
             }
-            let soc_evs =
-                society::monthly(&mut self.peoples, &self.deposits, self.month, &mut self.rng);
-            new_events.extend(soc_evs);
-            // E5.2: one id→index map for every pass this month — settlement
-            // membership is fixed from here to the end of the economy block
-            // (the passes below take slices, which cannot grow or shrink)
-            let sidx = economy::sidx(&self.peoples.settlements);
-            // M5.2: re-carve the market areas when towns appeared, and
-            // refresh every other year as the route web thickens
-            if self.economy.areas.area.len() != self.peoples.settlements.len()
-                || self.month.rem_euclid(24) == 2
-            {
-                self.economy.areas =
-                    economy::build_areas(&self.peoples.settlements, &self.routes, Some(&self.economy.areas), &sidx);
-            }
-            // M5.1: forges light where ore, fuel, hands and the art meet
-            let craft_evs = economy::craft_pass(
-                &mut self.peoples,
-                &self.economy.areas,
-                self.month,
-                &mut self.rng,
-            );
-            new_events.extend(craft_evs);
-            let eco_evs = economy::monthly(
-                &mut self.economy,
-                &mut self.peoples,
-                &self.routes,
-                self.month,
-                &mut self.rng,
-                &sidx,
-            );
-            new_events.extend(eco_evs);
-            // M5.5: the merchants ride the widest gaps
-            let mer_evs = economy::merchant_pass(
-                &mut self.economy,
-                &mut self.peoples,
-                &self.routes,
-                &mut self.taken,
-                self.month,
-                &mut self.rng,
-                &mut self.chronicle.registry,
-                &sidx,
-            );
-            new_events.extend(mer_evs);
-            // statecraft: wars that move borders, dread, risings (M4)
-            let (pol_evs, borders_changed) = politics::monthly(
-                &mut self.politics,
-                &mut self.chronicle,
-                &mut self.peoples,
-                &self.fields.territory,
-                &mut self.taken,
-                self.month,
-                &mut self.rng,
-            );
-            new_events.extend(pol_evs);
-            // the patina settles behind the drums: battlefields earn names,
-            // conquerors rename, towns die to ruin, roads fade, names wear (M9)
-            let pat_evs = self.patina_pass(self.month);
-            new_events.extend(pat_evs);
-            // redraw the political map when land changed hands, and once a
-            // year regardless — growing towns push their reach outward
-            if borders_changed || self.month.rem_euclid(12) == 6 {
-                self.recompute_territory();
-            }
-            // the human pulse, paced by how loud the world already is (M6.4)
-            let pace = (1.30 - 0.22 * self.heat).clamp(0.55, 1.30);
-            let chron_evs = chronicle::monthly(
-                &mut self.chronicle,
-                &mut self.peoples,
-                &self.features,
-                &self.world_name,
-                &mut self.taken,
-                self.month,
-                &mut self.rng,
-                pace,
-            );
-            new_events.extend(chron_evs);
-            // the relics ride the month's tides: forged, plundered, lost
-            // (M6.3) — read straight off the month's slice, no clone (E5.6)
-            let art_evs = artifact::monthly(
-                &mut self.chronicle,
-                &new_events[month_start..],
-                &self.peoples,
-                &mut self.taken,
-                self.month,
-                &mut self.rng,
-            );
-            new_events.extend(art_evs);
-            // second reading: back-fill ids, anchor coordinates, and let
-            // the great deeds pass into legend (M6.1, M6.9)
-            self.resolve_events(month_start, &mut new_events);
-            // third reading: the record admits what it does not know (M9.5)
-            self.veil_pass(&mut new_events, month_start);
-            // narrative heat: the month's weighted noise, slowly cooling (M6.4)
-            let m_heat: i32 = new_events[month_start..]
-                .iter()
-                .map(|e| telling::weight(e.k) - 1)
-                .sum();
-            self.heat = self.heat * 0.94 + (m_heat as f64 / 6.0) * 0.06;
+            sidx = ctx.sidx;
         }
         // change tracking for the wire (E4.5): foundings reship routes,
         // strikes and dead mines reship the mineral ledger
-        if founded {
+        if sink.founded {
             self.dirty.mark(Dirty::ROUTES);
         }
-        if deposits_changed {
+        if sink.deposits_changed {
             self.dirty.mark(Dirty::DEPOSITS);
         }
         // the full log is the chronicle's memory — the sifter reads all of it,
         // and the client pages it with events_range (M6)
-        self.chronicle.events.extend(new_events.iter().cloned());
-        (new_events, founded, deposits_changed)
+        self.chronicle.events.extend(sink.events.iter().cloned());
+        (sink.events, sink.founded, sink.deposits_changed)
     }
 
     /// The second reading of the month's events (M6): any entry whose
@@ -2202,7 +2064,7 @@ impl World {
     /// without a map anchor inherits its subject's, and the loudest
     /// entries pass into legend (M6.9). Purely derived — no rng, no
     /// state change beyond the event fields and mention counters.
-    fn resolve_events(&mut self, from: usize, events: &mut [Event]) {
+    pub(crate) fn resolve_events(&mut self, from: usize, events: &mut [Event]) {
         for e in events[from..].iter_mut() {
             if e.ids.is_empty() {
                 let found = [
