@@ -276,14 +276,12 @@ tick order printed by `diagnose` and asserted stable.
 
 ## Ready (start here)
 
-Quick wins with outsized ratios, extracted from the tracks above — each
-lands alone in under a session:
+Discovered while building the tracks above — each lands alone in under a
+session:
 
-- E6.2 `panic = "abort"` + E6.3 explicit wasm-opt: two config lines against a 3.0 MB binary.
-- E5.6 artifact slice clone and E5.7 merchant key clones: pure waste, zero risk.
-- E7.1 generation stamps + E7.2 timeouts: closes the stale-response bug class before it is ever observed.
-- E8.5 popHistory ring buffer and E8.6 `batch()` per tick: two-line Solid wins.
-- Resources stage costs ~300 ms of the ~1.1 s generation — second only to terrain (perf.txt, E10.1 baseline). Profile deposit placement's suitability scan; a cheap candidate-mask pass likely halves it.
+- Resources stage costs 238 ms of the ~1.0 s generation at 512² — second only to terrain 273 ms (bench.txt stage breakdown). Profile deposit placement's suitability scan; a cheap candidate-mask pass likely halves it.
+- Field-generic tile patches: `territory_tile_patch` is `i16`-specific; when mid-run field edits land (erosion, patina), generalize the differ + client band plumbing over the element type — the wire form, min-size selection and P4 replay harness are already field-agnostic in shape.
+- Territory wire density at 768²: the yearly diffuse redraw ships ~12 KB of JSON RLE; if it scales poorly, measure a delta-vs-baseline RLE (`[pos, run, val]` for differing runs only) against both current forms before adopting anything.
 
 ## Later / research
 

@@ -16,6 +16,7 @@ seed  90210: 18 towns · 27 routes · 0 isolated · 1 components
 seed  90210: rain ×1.25 ⇒ river cells 4657 → 5632 · discharge 1809945 → 2390435
 
 seed  12345: 240 months of deltas · 19 towns replayed · 0 reships · 0 cursor breaks
+seed  12345: territory over 240 months · 15 full ships · 8 tile ships
 
 
 ---- checks ----------------------------------------------------------
@@ -58,6 +59,7 @@ seed  12345: 240 months of deltas · 19 towns replayed · 0 reships · 0 cursor 
 [PASS] tick deltas replay to truth (12345)        19 towns   (E4.2: merge(bootstrap, deltas) = engine state)
 [PASS] market replays to truth (12345)             8 goods   (E4.3: merge(bootstrap, m_hot) = engine ledger)
 [PASS] area prices replay to truth (12345)          1 hubs   (E4.3: per-good hub patches rebuild the areas)
+[PASS] territory replays to truth (12345)   15 full · 8 tiles   (E4.7: full RLE and tile patches must leave the client's grid exactly the engine's)
 [PASS] no unchanged section reships (12345)      0 reships   (E4.2/E4.3: a section crosses only when it moved)
 [PASS] event cursor tiles the log (12345)            → 200   (E4.4: ranges concatenate without gap or overlap)
-CHECKS: 41 pass · 0 warn · 0 fail
+CHECKS: 42 pass · 0 warn · 0 fail
