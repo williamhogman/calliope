@@ -73,6 +73,7 @@ export function initGpu(ctx) {
   function adoptFreshGl({ gpu: g, canvas: fresh }) {
     glCanvas = fresh;
     renderer.gpu = g;
+    armLossWatch(fresh); // the recovered canvas can die too
     const w = world();
     if (w) g.setWorld(w);
     armWarmup();
