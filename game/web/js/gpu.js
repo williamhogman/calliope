@@ -64,13 +64,24 @@ class GpuEngine {
     this.hasWorld = true;
     this.hasTint = false;
     this.tintVersion = -1;
+    this._tw = W;
     this._month = world.header.month || 0;
   }
 
-  setTint(rgba, version) {
+  // Political tint upload. When only a row band changed (E9.2) and the
+  // engine supports it, upload just those texture rows; a fresh engine or
+  // a fresh world always takes the full texture first.
+  setTint(rgba, version, rows = null) {
     if (version === this.tintVersion) return;
     this.tintVersion = version;
-    this.orbital.set_tint(rgba);
+    if (rows && this.hasTint && typeof this.orbital.set_tint_rows === "function") {
+      this.orbital.set_tint_rows(
+        rows.y0,
+        rgba.subarray(rows.y0 * this._tw * 4, rows.y1 * this._tw * 4),
+      );
+    } else {
+      this.orbital.set_tint(rgba);
+    }
     this.hasTint = true;
   }
 
