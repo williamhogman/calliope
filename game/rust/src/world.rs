@@ -5,8 +5,7 @@ use std::collections::HashSet;
 use ndarray::Array2;
 use rand::Rng;
 use rand_pcg::Pcg64Mcg;
-use serde::Serialize;
-use smallvec::{smallvec, SmallVec};
+use smallvec::smallvec;
 
 
 
@@ -1957,5 +1956,4 @@ impl World {
 
 // ---------------------------------------------------------------- bands
 
-use crate::util::Band;
 
