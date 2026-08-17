@@ -460,27 +460,30 @@ impl World {
         };
 
         // E4.7 — territory crosses as dirty 32×32 tile patches against the
-        // last-shipped grid: a recompute that moved no border ships nothing,
-        // a border skirmish ships a few tiles, an upheaval touching more
-        // than 35% of tiles falls back to the full RLE the client speaks.
+        // last-shipped grid. A recompute that moved no border ships nothing
+        // at all. Otherwise both encodings are built and the smaller one
+        // ships — measured on real runs, diffuse yearly growth compresses
+        // better as full-grid RLE while local conquests win as tiles, and
+        // bytes on the wire are the only judge that matters.
         let (terr_full, terr_tiles) = if self.dirty.take(Dirty::TERRITORY) {
             let cur = &self.fields.territory;
-            let full = || raw(serde_json::to_string(&politics::territory_rle(cur)).unwrap());
+            let full_s = serde_json::to_string(&politics::territory_rle(cur)).unwrap();
             if self.sent.territory.dim() == cur.dim() {
                 match politics::territory_tile_patch(&self.sent.territory, cur, 32) {
                     None => (None, None), // redrawn, but every border held
-                    Some((patch, changed, total)) if changed * 100 <= total * 35 => {
+                    Some((patch, _, _)) => {
                         self.sent.territory = cur.clone();
-                        (None, raw(patch.to_string()))
-                    }
-                    Some(_) => {
-                        self.sent.territory = cur.clone();
-                        (full(), None)
+                        let patch_s = patch.to_string();
+                        if patch_s.len() < full_s.len() {
+                            (None, raw(patch_s))
+                        } else {
+                            (raw(full_s), None)
+                        }
                     }
                 }
             } else {
                 self.sent.territory = cur.clone();
-                (full(), None)
+                (raw(full_s), None)
             }
         } else {
             (None, None)
