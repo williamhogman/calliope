@@ -1,0 +1,2 @@
+# date · mode · gen512 ms · tick mo/s · pack B/cell · tick payload B · wasm MiB
+2026-08-17 00:31 · full  · gen 1137ms · tick 2305 mo/s · pack 20.0 B/cell · payload 3976 B · wasm 2.87 MiB
