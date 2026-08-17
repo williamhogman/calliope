@@ -5,7 +5,6 @@
 use crate::agriculture;
 use crate::resources;
 use crate::society;
-use crate::settlements;
 use crate::world::{Event, EventKind, World};
 
 impl World {
