@@ -1762,7 +1762,7 @@ fn cmd_perf(size: usize, seeds: Vec<i64>) {
     let mut rate_y0 = f64::INFINITY;
     let mut rate_y100 = f64::INFINITY;
     for (i, w) in worlds.iter_mut().enumerate() {
-        let mut windows = |w: &mut World| -> f64 {
+        let windows = |w: &mut World| -> f64 {
             let mut ms: Vec<f64> = (0..3)
                 .map(|_| {
                     let t = Instant::now();
