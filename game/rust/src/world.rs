@@ -6,7 +6,6 @@ use ndarray::Array2;
 use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
-use serde_json::{json, Value};
 use smallvec::{smallvec, SmallVec};
 
 use strum::IntoEnumIterator;
@@ -29,7 +28,6 @@ use crate::artifact;
 use crate::biomes as biomes_mod;
 use crate::chronicle::{self, ChronicleState};
 use crate::climate;
-use crate::constants;
 use crate::culture::{self, Culture};
 use crate::economy::{self, Market};
 use crate::entity::EntityKind;
@@ -48,7 +46,7 @@ use crate::snapshot::SentCache;
 use crate::society::{self, Society};
 use crate::telling;
 use crate::trade::{self, Route};
-use crate::util::{now_ms, round2, round3};
+use crate::util::{now_ms, round2};
 
 /// Closed vocabulary of chronicle event kinds (E1.4). Displayed and
 /// serialized as the same lowercase names the strings used, so the wire

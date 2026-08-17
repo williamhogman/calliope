@@ -10,13 +10,12 @@ use strum::IntoEnumIterator;
 
 use crate::constants;
 use crate::economy;
-use crate::entity::EntityKind;
 use crate::politics;
 use crate::agriculture;
 use crate::resources::{self, Deposit};
 use crate::society;
-use crate::settlements::{self, Settlement};
-use crate::util::{now_ms, round2, round3};
+use crate::settlements::Settlement;
+use crate::util::{round2, round3};
 use crate::world::{headline_worthy, Dirty, EventKind, World};
 
 /// E4.2/E4.3 — FNV hashes of the last-shipped JSON per wire surface; a
