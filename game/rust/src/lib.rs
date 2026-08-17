@@ -22,6 +22,7 @@ pub mod ids;
 pub mod naming;
 pub mod ndimage;
 pub mod noisegen;
+pub mod pack;
 pub mod patina;
 pub mod politics;
 
@@ -29,6 +30,7 @@ pub mod politics;
 pub mod render;
 pub mod resources;
 pub mod settlements;
+pub mod snapshot;
 pub mod society;
 pub mod telling;
 pub mod trade;
