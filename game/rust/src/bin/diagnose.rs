@@ -1694,6 +1694,123 @@ fn cmd_bench() {
     c.print();
 }
 
+// ================================================================= perf
+//
+// E10 — Proof of Speed. Perf claims become banded checks like every other
+// claim in this project:
+//   E10.1 per-stage generation budgets, asserted across the seed sweep
+//   E10.2 tick-rate bands at a year-0 world and a year-100 world
+//   E10.6 native peak RSS ceiling after the 100-year run
+// The band is checked against the WORST seed, not the mean — a budget that
+// only holds on the friendly seed is not a budget.
+
+/// Peak resident set in MiB from /proc/self/status (Linux); None elsewhere.
+fn peak_rss_mib() -> Option<f64> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let line = status.lines().find(|l| l.starts_with("VmHWM:"))?;
+    let kb: f64 = line.split_whitespace().nth(1)?.parse().ok()?;
+    Some(kb / 1024.0)
+}
+
+fn cmd_perf(size: usize, seeds: Vec<i64>) {
+    header("PERF", &format!("size {} · {} seeds · native release", size, seeds.len()));
+
+    const STAGES: &[&str] = &[
+        "terrain", "erosion", "climate", "hydrology", "biomes",
+        "fertility", "naming", "resources", "settlements",
+    ];
+
+    // ---- E10.1: per-stage generation budgets ----
+    let mut worst: BTreeMap<&str, f64> = BTreeMap::new();
+    let mut worst_total = 0.0f64;
+    println!("per-stage generation (ms):");
+    print!("  {:<8}", "seed");
+    for s in STAGES {
+        print!(" {:>10}", s);
+    }
+    println!(" {:>8}", "total");
+    let mut worlds: Vec<World> = Vec::new();
+    for &seed in &seeds {
+        let w = World::generate(seed, size);
+        print!("  {:<8}", seed);
+        let mut total = 0.0;
+        for s in STAGES {
+            let ms = w
+                .timings
+                .iter()
+                .find(|(n, _)| n == s)
+                .map(|(_, v)| *v)
+                .unwrap_or(0.0);
+            let e = worst.entry(s).or_insert(0.0);
+            if ms > *e {
+                *e = ms;
+            }
+            print!(" {:>10.0}", ms);
+        }
+        if let Some((_, t)) = w.timings.iter().find(|(n, _)| *n == "total") {
+            total = *t;
+        }
+        worst_total = worst_total.max(total);
+        println!(" {:>8.0}", total);
+        worlds.push(w);
+    }
+
+    // ---- E10.2: tick rate on a young world and an old one ----
+    // Year 0: the world as a player first meets it. Year 100: towns, roads,
+    // markets, chronicle all grown in — the heavier steady state a long
+    // sitting actually pays for. Median of 3 windows kills timer noise.
+    let mut rate_y0 = f64::INFINITY;
+    let mut rate_y100 = f64::INFINITY;
+    for (i, w) in worlds.iter_mut().enumerate() {
+        let mut windows = |w: &mut World| -> f64 {
+            let mut ms: Vec<f64> = (0..3)
+                .map(|_| {
+                    let t = Instant::now();
+                    w.tick(240);
+                    t.elapsed().as_secs_f64() * 1000.0
+                })
+                .collect();
+            ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            240.0 / (ms[1] / 1000.0)
+        };
+        let r0 = windows(w); // months 0–720
+        w.tick(1200 - w.month.min(1200)); // grow to year 100
+        let r100 = windows(w); // months 1200–1920
+        println!(
+            "tick rate seed {}: year-0 {:.0} mo/s · year-100 {:.0} mo/s ({} towns)",
+            seeds[i],
+            r0,
+            r100,
+            w.settlements.len()
+        );
+        rate_y0 = rate_y0.min(r0);
+        rate_y100 = rate_y100.min(r100);
+    }
+
+    // ---- E10.6: memory ceiling after the heavy run ----
+    let rss = peak_rss_mib();
+    match rss {
+        Some(m) => println!("native peak RSS after run: {:.0} MiB ({} worlds resident)", m, worlds.len()),
+        None => println!("native peak RSS: /proc/self/status unavailable on this platform"),
+    }
+
+    let mut c = Checks::default();
+    for s in STAGES {
+        c.band(
+            &format!("stage {} ms", s),
+            worst[s],
+            format!("{:.0} ms (worst of {} seeds)", worst[s], seeds.len()),
+        );
+    }
+    c.band("gen total ms", worst_total, format!("{:.0} ms (worst)", worst_total));
+    c.band("tick rate year 0", rate_y0, format!("{:.0} mo/s (worst)", rate_y0));
+    c.band("tick rate year 100", rate_y100, format!("{:.0} mo/s (worst)", rate_y100));
+    if let Some(m) = rss {
+        c.band("native peak RSS", m, format!("{:.0} MiB", m));
+    }
+    c.print();
+}
+
 // ================================================================ sweep
 
 fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
