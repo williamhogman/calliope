@@ -94,6 +94,17 @@ gap analysis (`GAP-ANALYSIS.md`) measures against. Module paths refer to
 - Name time (M9.2–M9.3): hydronym conservatism through conquest, bounded
   conquest renaming inside the conquered polygon, age-keyed name erosion
   with stored compositional etymology and `formerly` strata.
+- Kindred and crown (M12): a kinship score between peoples (style family,
+  secession lineage, pantheon overlap, co-residence months) gates and
+  scales everything below. Towns under a kindred crown drift toward it
+  over ~2–3 generations (faster on roads and shared market areas, slower
+  past admin reach); below kinship 0.20 the minority stands and remembers
+  — exonym/endonym doubling on the crown's rolls (M12.5) — until
+  co-residence itself raises the pair over the line. Distant colonies
+  sunder into daughter peoples; kindred minorities long under one crown
+  fuse into the majority, leaving loanword strata and gods in the shared
+  pantheon. Kindred realms with warm courts and a shared threat join by
+  compact or oath (`politics.rs::union_pass`).
 - **Not present:** sound-change language families, myth drift
   (Later/research).
 
@@ -133,6 +144,17 @@ gap analysis (`GAP-ANALYSIS.md`) measures against. Module paths refer to
   (M4.3); siege state machine with fortification as treasury sink (M4.4).
 - Legitimacy/asabiyyah: frontier surge, ~3-4-generation decay,
   rebellion/fragmentation rolls (M4.5).
+- The unrest ladder (M11): a 0..1 per-realm gauge fed by weak crowns,
+  guttered asabiyyah, hunger, war weariness and holdings beyond the
+  tier's administrative reach; vents by severity — riots, charters
+  (law-code concessions: treasury down, legitimacy up), palace coups
+  (new house, same borders, usurper epithets), and secession only when
+  the rebels are of another people or beyond the crown's reach (M11.4).
+  A death on a low-legitimacy throne opens a months-long war of the
+  circlet among named claimants, resolved internally (M11.3); ousted
+  houses are remembered, and a returning claimant triggers a
+  Restoration. Honeymoon and calm-window hysteresis stop monthly
+  convulsions (M11.6).
 - Battle sites mark the map; conquest renames only within the conquered
   polygon (M9.2, M9.4).
 

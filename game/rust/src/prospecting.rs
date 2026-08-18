@@ -38,7 +38,7 @@ impl World {
         for (si, s) in self.peoples.settlements.iter().enumerate() {
             let reach = settlements::territory_radius(s.pop)
                 * 2.4
-                * mods.get(s.culture.idx()).map(|m| m.prospecting).unwrap_or(1.0);
+                * mods.get(s.people.idx()).map(|m| m.prospecting).unwrap_or(1.0);
             let reach = reach.max(1e-9);
             deposit_buckets.candidates(s.x as f64, s.y as f64, 3.5 * reach + 1.0, &mut cand);
             for &di in &cand {
@@ -124,6 +124,10 @@ impl World {
                 s: sname,
                 k: EventKind::Discovery,
                 text,
+                // anchor the ground (M9.2): a same-tick rename must not
+                // orphan the entry
+                x: self.peoples.settlements[si].x,
+                y: self.peoples.settlements[si].y,
                 ..Default::default()
             });
             self.refresh_goods_near(di);
@@ -140,7 +144,10 @@ impl World {
             deposit_buckets.candidates(s.x as f64, s.y as f64, r + 1.0, &mut cand);
             for &di in &cand {
                 let d = &self.deposits[di];
-                if !d.known || d.left <= 0.0 || !s.goods.iter().any(|g| *g == d.r) {
+                // M14.8 — wild grounds (left < 0, alive) now count crews
+                // too: their pressure drives the stock, not the reserve.
+                // Mineral sums are untouched, so totals stay float-identical.
+                if !d.live() || !s.goods.iter().any(|g| *g == d.r) {
                     continue;
                 }
                 let dx = (d.x - s.x) as f64;
@@ -150,6 +157,11 @@ impl World {
                 }
             }
         }
+        // M15.6 — defensive re-size: the meters are pure bookkeeping and
+        // deposits are only ever created at generation, so this fires once.
+        if self.flows.extracted.len() != self.deposits.len() {
+            self.flows = resources::Flows::for_deposits(self.deposits.len());
+        }
         let mut spent: Vec<usize> = Vec::new();
         for di in 0..self.deposits.len() {
             let crews = crews_by[di];
@@ -157,10 +169,16 @@ impl World {
                 continue;
             }
             let d = &mut self.deposits[di];
+            if d.left < 0.0 {
+                continue; // renewables spend stock, not reserve (M14.8)
+            }
+            let before = d.left;
             d.left = round2((d.left - crews).max(0.0));
+            let drawn = before - d.left;
             if d.left == 0.0 {
                 spent.push(di);
             }
+            self.flows.extracted[di] += drawn; // M15.6 flow meter
         }
         for di in spent {
             changed = true;
@@ -191,11 +209,190 @@ impl World {
                     "The last good ore comes up from the {} pits near {}; the galleries fall silent.",
                     kind, near
                 ),
+                // the pit itself is the ground — present even when no
+                // settlement stands near
+                x: dx0,
+                y: dy0,
                 ..Default::default()
             });
             self.refresh_goods_near(di);
         }
+
+        // --- M14.8 — the wild stocks breathe. Timber, fish and game carry
+        // memory: logistic regrowth against this month's harvest pressure,
+        // with a hysteresis latch so the chronicle speaks at the thresholds
+        // and not every month. Collapse withdraws the good (live() says no)
+        // until the stock stands past half again; a stripped timber ground
+        // marks the biome map and recovery unmarks it.
+        for di in 0..self.deposits.len() {
+            let d = &self.deposits[di];
+            let rate = match resources::regrow_rate(d.r) {
+                Some(r) => r,
+                None => continue,
+            };
+            if !d.known {
+                continue;
+            }
+            let pressure = 0.0025 * crews_by[di];
+            let d = &mut self.deposits[di];
+            let s0 = d.stock;
+            let next = (s0 + rate * s0 * (1.0 - s0) - pressure).clamp(0.0, 1.0);
+            d.stock = (next * 1e4).round() / 1e4;
+            let (phase, stock, kind, dx0, dy0) = (d.phase, d.stock, d.r, d.x, d.y);
+            self.flows.dstock[di] += stock - s0; // M15.6 flow meter
+            // latch transitions — at most one per ground per month
+            let transition: Option<u8> = match phase {
+                0 if stock <= 0.06 => Some(2),
+                0 if stock < 0.35 => Some(1),
+                1 if stock <= 0.06 => Some(2),
+                1 if stock >= 0.60 => Some(0),
+                2 if stock >= 0.50 => Some(0),
+                _ => None,
+            };
+            let Some(to) = transition else { continue };
+            let near_i = self
+                .peoples
+                .settlements
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, s)| (s.x - dx0).pow(2) + (s.y - dy0).pow(2))
+                .map(|(i, _)| i);
+            let near = near_i
+                .map(|i| self.peoples.settlements[i].name.clone())
+                .unwrap_or_else(|| "the wilds".to_string());
+            use resources::Good;
+            let text = {
+                match (kind, to) {
+                    (Good::Timber, 1) => format!("The old groves near {near} go over to stumps; the loggers walk farther every year."),
+                    (Good::Timber, 2) => format!("The last tall timber falls near {near}; bare hills stand where the forest stood."),
+                    (Good::Timber, 0) => format!("Green returns to the logged-out hills near {near}; the woods stand tall again."),
+                    (Good::Fish, 1) => format!("The shoals off {near} come up thin; the nets rise half empty."),
+                    (Good::Fish, 2) => format!("The fishery off {near} fails; the boats turn home empty."),
+                    (Good::Fish, 0) => format!("The shoals return off {near}; the water silvers again."),
+                    (_, 1) => format!("The trap-lines near {near} run empty more seasons than not."),
+                    (_, 2) => format!("The game is hunted out of the country around {near}."),
+                    _ => format!("Game moves back into the country around {near}."),
+                }
+            };
+            match to {
+                1 => {
+                    self.deposits[di].phase = 1;
+                    if let Some(i) = near_i {
+                        let ka = self.economy.areas.area_of(i);
+                        if let Some(mk) = self.economy.areas.markets.get_mut(ka) {
+                            mk.shock(kind, 1.12);
+                        }
+                    }
+                    if kind == Good::Timber {
+                        self.mark_timber_scar(di, 2);
+                    }
+                    events.push(Event {
+                        m: month_abs,
+                        s: near,
+                        k: EventKind::Depletion,
+                        text: text.clone(),
+                        x: dx0,
+                        y: dy0,
+                        ..Default::default()
+                    });
+                }
+                2 => {
+                    self.deposits[di].phase = 2;
+                    changed = true;
+                    self.economy.market.shock(kind, 1.18);
+                    if let Some(i) = near_i {
+                        let ka = self.economy.areas.area_of(i);
+                        if let Some(mk) = self.economy.areas.markets.get_mut(ka) {
+                            mk.shock(kind, 1.30);
+                        }
+                    }
+                    if kind == Good::Timber {
+                        self.mark_timber_scar(di, 4);
+                    }
+                    events.push(Event {
+                        m: month_abs,
+                        s: near,
+                        k: EventKind::Depletion,
+                        text: text.clone(),
+                        x: dx0,
+                        y: dy0,
+                        ..Default::default()
+                    });
+                    self.refresh_goods_near(di);
+                }
+                _ => {
+                    let was_collapsed = phase == 2;
+                    self.deposits[di].phase = 0;
+                    if kind == Good::Timber {
+                        self.restore_timber_scar(di);
+                    }
+                    if was_collapsed {
+                        changed = true;
+                        events.push(Event {
+                            m: month_abs,
+                            s: near,
+                            k: EventKind::Discovery,
+                            text: text.clone(),
+                            x: dx0,
+                            y: dy0,
+                            ..Default::default()
+                        });
+                        self.refresh_goods_near(di);
+                    }
+                }
+            }
+        }
         (events, changed)
+    }
+
+    /// M14.8 — a stripped timber ground shows on the map: forest-family
+    /// biome cells within `radius` of the deposit go over to grassland,
+    /// with the original code remembered in `self.scars` for restoration.
+    fn mark_timber_scar(&mut self, di: usize, radius: i64) {
+        use crate::constants as gc;
+        let forest = |b: u8| {
+            b == gc::WOODLAND
+                || b == gc::BOREAL_FOREST
+                || b == gc::SEASONAL_RAIN_FOREST
+                || b == gc::TEMPERATE_RAIN_FOREST
+                || b == gc::TROPICAL_RAIN_FOREST
+        };
+        let (cy, cx) = (self.deposits[di].y, self.deposits[di].x);
+        let (rows, cols) = self.fields.biomes.dim();
+        for dy in -radius..=radius {
+            for dx in -radius..=radius {
+                if dy * dy + dx * dx > radius * radius {
+                    continue;
+                }
+                let (y, x) = (cy + dy, cx + dx);
+                if y < 0 || x < 0 || y as usize >= rows || x as usize >= cols {
+                    continue;
+                }
+                let (yu, xu) = (y as usize, x as usize);
+                let b = self.fields.biomes[[yu, xu]];
+                if forest(b) {
+                    self.scars.push((di, y, x, b));
+                    self.fields.biomes[[yu, xu]] = gc::GRASSLAND;
+                    self.dirty.mark(crate::world::Dirty::DEPOSITS);
+                }
+            }
+        }
+    }
+
+    /// M14.8 — recovery unmarks: every remembered cell of this ground's
+    /// scar gets its original biome back.
+    fn restore_timber_scar(&mut self, di: usize) {
+        let mut i = 0;
+        while i < self.scars.len() {
+            let (sdi, y, x, orig) = self.scars[i];
+            if sdi == di {
+                self.fields.biomes[[y as usize, x as usize]] = orig;
+                self.dirty.mark(crate::world::Dirty::DEPOSITS);
+                self.scars.remove(i);
+            } else {
+                i += 1;
+            }
+        }
     }
 
     /// Re-list goods for every settlement whose hinterland covers deposit `di`.

@@ -30,10 +30,17 @@ pub(crate) struct SentCache {
     /// wealth×10), so a town ships a per-field patch only when a value the
     /// client can actually see has moved (E4.2).
     settlements: Vec<(i64, u64, [i64; 4])>,
-    /// cultures · wars · merchants (full-form hashes).
+    /// realm-heartbeat · wars · merchants (full-form hashes).
     blocks: [u64; 3],
-    /// Cold-form hash of the cultures block (heartbeat stripped).
+    /// Hash of the peoples block (ADR-0018: slow axis, plain gate).
     cultures_cold: u64,
+    /// Hash of the civilizations block (M13: derived tier, yearly clock).
+    civs_cold: u64,
+    /// Cold-form hash of the realms block (heartbeat stripped).
+    realms_cold: u64,
+    /// Hash of the people-axis influence RLE (M10.6) — reships whole
+    /// when any people border moved; it moves on generational clocks.
+    peoples_rle: u64,
     /// Per-good market row hashes — the ledger reships whole only when
     /// the set of priced goods changes (E4.3).
     market_rows: Vec<(String, u64)>,
@@ -57,49 +64,119 @@ impl World {
         self.deposits.iter().filter(|d| d.known).collect()
     }
 
-    /// Cultures with ruler, era, polity, arts and treasury attached.
+    /// Peoples with era, polity and arts attached (ADR-0018: the slow
+    /// axis — tongue, gods, knowledge; no coin, no crown).
     fn cultures_json(&self) -> Value {
         let arr: Vec<Value> = self
-            .peoples.cultures
+            .peoples.peoples
             .iter()
             .map(|c| {
                 let mut v = serde_json::to_value(c).unwrap();
-                let polity = self.peoples.societies.get(c.id.0).map(|s| s.polity).unwrap_or(0);
-                if let Some(r) = self.chronicle.state.rulers.iter().find(|r| r.culture == c.id) {
-                    let title = society::RULER_TITLES[polity];
-                    v["ruler"] = if title.is_empty() {
-                        json!(r.title())
-                    } else {
-                        json!(format!("{} {}", title, r.title()))
-                    };
-                }
                 if let Some(soc) = self.peoples.societies.get(c.id.0) {
                     v["era"] = json!(society::ERAS[soc.era]);
                     v["polity"] = json!(society::POLITIES[soc.polity]);
-                    v["treasury"] = json!(round2(soc.treasury));
-                    let names: Vec<&'static str> = soc
+                    v["techs"] = json!(soc
                         .techs
                         .iter()
                         .map(|&id| society::tech(id).name)
-                        .collect();
-                    v["techs"] = json!(names);
+                        .collect::<Vec<&'static str>>());
                 }
-                // statecraft readouts (M4): solidarity, the crown's standing,
-                // whose leash they wear, and whether the realm still stands
-                if let Some(a) = self.politics.asab.get(c.id.0) {
-                    v["asab"] = json!(round2(*a));
-                }
-                if let Some(l) = self.politics.legit.get(c.id.0) {
-                    v["legit"] = json!(round2(*l));
-                }
-                if let Some(Some(suz)) = self.politics.vassal_of.get(c.id.0) {
-                    v["vassal_of"] = json!(self.peoples.cultures[suz.0].people.clone());
-                }
-                v["alive"] = json!(politics::alive(&self.peoples.settlements, c.id));
+                // how many hearths still keep the tongue
+                v["towns"] = json!(self
+                    .peoples.settlements
+                    .iter()
+                    .filter(|s| s.people == c.id)
+                    .count());
                 v
             })
             .collect();
         Value::Array(arr)
+    }
+
+    /// Civilizations for the wire (M13/ADR-0019) — the serialized rows
+    /// plus display joins the client would otherwise recompute: member
+    /// demonyms, member realm names, hearth count.
+    fn civs_json(&self) -> Value {
+        let arr: Vec<Value> = self
+            .peoples
+            .civs
+            .iter()
+            .map(|c| {
+                let mut v = serde_json::to_value(c).unwrap();
+                v["folk"] = json!(c
+                    .peoples
+                    .iter()
+                    .filter_map(|p| self.peoples.peoples.get(p.idx()))
+                    .map(|p| p.people.clone())
+                    .collect::<Vec<String>>());
+                let members: Vec<String> = self
+                    .peoples
+                    .realms
+                    .iter()
+                    .filter(|r| r.alive && c.peoples.contains(&r.people))
+                    .filter(|r| self.peoples.settlements.iter().any(|s| s.realm == r.id))
+                    .map(|r| r.name.clone())
+                    .collect();
+                v["towns"] = json!(self
+                    .peoples
+                    .settlements
+                    .iter()
+                    .filter(|s| c.peoples.contains(&s.people))
+                    .count());
+                v["members"] = json!(members);
+                v
+            })
+            .collect();
+        Value::Array(arr)
+    }
+
+
+    /// One realm row for the wire (ADR-0018: the political axis). With
+    /// the heartbeat (treasury/asab/legit) for full blocks; without it
+    /// for the cold gate.
+    fn realm_row(&self, i: usize, with_heartbeat: bool) -> Value {
+        let r = &self.peoples.realms[i];
+        let mut v = serde_json::to_value(r).unwrap();
+        if !with_heartbeat {
+            v.as_object_mut().unwrap().remove("treasury");
+        } else {
+            v["treasury"] = json!(round2(r.treasury));
+            if let Some(a) = self.politics.asab.get(i) {
+                v["asab"] = json!(round2(*a));
+            }
+            if let Some(l) = self.politics.legit.get(i) {
+                v["legit"] = json!(round2(*l));
+            }
+            if let Some(u) = self.politics.unrest.get(i) {
+                v["unrest"] = json!(round2(*u));
+            }
+        }
+        let polity = self
+            .peoples.societies
+            .get(r.people.idx())
+            .map(|s| s.polity)
+            .unwrap_or(0);
+        if let Some(ru) = self.chronicle.state.rulers.iter().find(|ru| ru.realm == r.id) {
+            let title = society::RULER_TITLES[polity];
+            v["ruler"] = if title.is_empty() {
+                json!(ru.title())
+            } else {
+                json!(format!("{} {}", title, ru.title()))
+            };
+        }
+        if let Some(Some(suz)) = self.politics.vassal_of.get(i) {
+            v["vassal_of"] = json!(self.peoples.realms[suz.0].name.clone());
+        }
+        v
+    }
+
+    /// Realms with ruler, vassalage and the statecraft heartbeat.
+    fn realms_json(&self) -> Value {
+        Value::Array(
+            (0..self.peoples.realms.len())
+                .map(|i| self.realm_row(i, true))
+                .collect(),
+        )
     }
 
     /// E4.2 hot/cold split, town side: the monthly heartbeat zeroed out.
@@ -132,56 +209,50 @@ impl World {
         (id, cold, pbits)
     }
 
+    /// The area block's identity: the settlement→area vector AND the hub
+    /// ids. A hub re-election can leave "of" byte-identical while the hub
+    /// set changes — gate on "of" alone and the client keeps the dead hub
+    /// forever (E4.3 replay divergence).
+    fn areas_set_hash(areas_v: &Value) -> u64 {
+        let mut src = areas_v["of"].to_string();
+        if let Some(hubs) = areas_v["hubs"].as_array() {
+            for h in hubs {
+                src.push('|');
+                src.push_str(&h["id"].to_string());
+            }
+        }
+        crate::util::fnv1a64(src.as_bytes())
+    }
 
-    /// E4.2 hot/cold split, culture side, built in one pass (E5.12):
+
+
+    /// E4.2 hot/cold split, realm side, built in one pass (E5.12):
     /// (cold string, hot patch rows). treasury/asab/legit are the
     /// heartbeat; the cold rows carry everything else. The full block is
-    /// only assembled (`cultures_json`) on the rare tick the cold half
-    /// actually moved — succession, era, polity, tech, vassalage — instead
-    /// of being built, cloned and stripped every single month.
-    /// serde_json maps are BTreeMaps, so key order (and thus every byte
-    /// and hash) is identical to the old build-then-strip path.
-    fn cultures_cold_hot(&self) -> (String, String) {
-        let mut cold: Vec<Value> = Vec::with_capacity(self.peoples.cultures.len());
+    /// only assembled (`realms_json`) on the rare tick the cold half
+    /// actually moved — succession, secession, conquest, vassalage —
+    /// instead of being built, cloned and stripped every single month.
+    fn realms_cold_hot(&self) -> (String, String) {
+        let mut cold: Vec<Value> = Vec::with_capacity(self.peoples.realms.len());
         let mut rows: Vec<Value> = Vec::new();
-        for (i, c) in self.peoples.cultures.iter().enumerate() {
-            let mut v = serde_json::to_value(c).unwrap();
-            let polity = self.peoples.societies.get(c.id.0).map(|s| s.polity).unwrap_or(0);
-            if let Some(r) = self.chronicle.state.rulers.iter().find(|r| r.culture == c.id) {
-                let title = society::RULER_TITLES[polity];
-                v["ruler"] = if title.is_empty() {
-                    json!(r.title())
-                } else {
-                    json!(format!("{} {}", title, r.title()))
-                };
-            }
+        for i in 0..self.peoples.realms.len() {
+            cold.push(self.realm_row(i, false));
+            let r = &self.peoples.realms[i];
             let mut row = serde_json::Map::new();
             row.insert("i".into(), json!(i));
-            if let Some(soc) = self.peoples.societies.get(c.id.0) {
-                v["era"] = json!(society::ERAS[soc.era]);
-                v["polity"] = json!(society::POLITIES[soc.polity]);
-                row.insert("treasury".into(), json!(round2(soc.treasury)));
-                let names: Vec<&'static str> = soc
-                    .techs
-                    .iter()
-                    .map(|&id| society::tech(id).name)
-                    .collect();
-                v["techs"] = json!(names);
-            }
-            if let Some(a) = self.politics.asab.get(c.id.0) {
+            row.insert("treasury".into(), json!(round2(r.treasury)));
+            if let Some(a) = self.politics.asab.get(i) {
                 row.insert("asab".into(), json!(round2(*a)));
             }
-            if let Some(l) = self.politics.legit.get(c.id.0) {
+            if let Some(l) = self.politics.legit.get(i) {
                 row.insert("legit".into(), json!(round2(*l)));
             }
-            if let Some(Some(suz)) = self.politics.vassal_of.get(c.id.0) {
-                v["vassal_of"] = json!(self.peoples.cultures[suz.0].people.clone());
+            if let Some(u) = self.politics.unrest.get(i) {
+                row.insert("unrest".into(), json!(round2(*u)));
             }
-            v["alive"] = json!(politics::alive(&self.peoples.settlements, c.id));
             if row.len() > 1 {
                 rows.push(Value::Object(row));
             }
-            cold.push(v);
         }
         (
             Value::Array(cold).to_string(),
@@ -215,12 +286,26 @@ impl World {
             /// pop/food/k/wealth — merged over the held object client-side.
             #[serde(skip_serializing_if = "Option::is_none")]
             s_hot: Option<Box<RawValue>>,
+            /// Peoples block (ADR-0018 slow axis) — reships whole on the
+            /// rare tick its content moved (era, tech, divergence, death).
             #[serde(skip_serializing_if = "Option::is_none")]
             cultures: Option<Box<RawValue>>,
-            /// Heartbeat patches for cultures (treasury/asab/legit), by
+            /// Civilizations block (M13 derived tier) — yearly clock,
+            /// whole-block gate like the peoples.
+            #[serde(skip_serializing_if = "Option::is_none")]
+            civs: Option<Box<RawValue>>,
+            /// Realms block (ADR-0018 political axis) — cold form: name,
+            /// house, seat, ruler, vassalage, alive.
+            #[serde(skip_serializing_if = "Option::is_none")]
+            realms: Option<Box<RawValue>>,
+            /// Heartbeat patches for realms (treasury/asab/legit), by
             /// array index — ships when only the heartbeat moved (E4.2).
             #[serde(skip_serializing_if = "Option::is_none")]
-            c_hot: Option<Box<RawValue>>,
+            r_hot: Option<Box<RawValue>>,
+            /// People-axis influence grid as RLE (M10.6) — generational
+            /// clock; reships whole when any people border moved.
+            #[serde(skip_serializing_if = "Option::is_none")]
+            peoples: Option<Box<RawValue>>,
             #[serde(skip_serializing_if = "Option::is_none")]
             wars: Option<Box<RawValue>>,
             #[serde(skip_serializing_if = "Option::is_none")]
@@ -325,22 +410,55 @@ impl World {
 
         // E4.3 — whole blocks gated by content hash: serialized once for
         // the gate, reused verbatim as the wire bytes when they moved.
-        // Cultures get the hot/cold split (E4.2), gated on the two halves
-        // directly (E5.12): full block moved ⟺ cold moved ∨ hot moved, so
-        // the full string is only built on the rare cold-change tick.
-        // blocks[0] carries the hot-rows hash; cultures_cold the cold hash.
-        let (cul_cold, cul_hot) = self.cultures_cold_hot();
-        let cul_cold_h = crate::util::fnv1a64(cul_cold.as_bytes());
-        let cul_hot_h = crate::util::fnv1a64(cul_hot.as_bytes());
-        let mut cultures = None;
-        let mut c_hot = None;
-        if self.sent.cultures_cold != cul_cold_h {
-            cultures = raw(self.cultures_json().to_string());
-        } else if self.sent.blocks[0] != cul_hot_h {
-            c_hot = raw(cul_hot);
+        // Peoples move on generational clocks, so a plain whole-block gate
+        // is enough. Realms get the hot/cold split (E4.2), gated on the
+        // two halves directly (E5.12): full block moved ⟺ cold moved ∨
+        // hot moved, so the full string is only built on the rare
+        // cold-change tick. blocks[0] carries the realm hot-rows hash;
+        // realms_cold the cold hash.
+        let cul_s = self.cultures_json().to_string();
+        let cul_h = crate::util::fnv1a64(cul_s.as_bytes());
+        let cultures = if self.sent.cultures_cold != cul_h {
+            self.sent.cultures_cold = cul_h;
+            raw(cul_s)
+        } else {
+            None
+        };
+
+        // M13 — same slow-clock gate for the derived tier.
+        let civ_s = self.civs_json().to_string();
+        let civ_h = crate::util::fnv1a64(civ_s.as_bytes());
+        let civs = if self.sent.civs_cold != civ_h {
+            self.sent.civs_cold = civ_h;
+            raw(civ_s)
+        } else {
+            None
+        };
+
+        let (rlm_cold, rlm_hot) = self.realms_cold_hot();
+        let rlm_cold_h = crate::util::fnv1a64(rlm_cold.as_bytes());
+        let rlm_hot_h = crate::util::fnv1a64(rlm_hot.as_bytes());
+        let mut realms = None;
+        let mut r_hot = None;
+        if self.sent.realms_cold != rlm_cold_h {
+            realms = raw(self.realms_json().to_string());
+        } else if self.sent.blocks[0] != rlm_hot_h {
+            r_hot = raw(rlm_hot);
         }
-        self.sent.blocks[0] = cul_hot_h;
-        self.sent.cultures_cold = cul_cold_h;
+        self.sent.blocks[0] = rlm_hot_h;
+        self.sent.realms_cold = rlm_cold_h;
+
+        // M10.6 — the people-axis influence grid, whole-block RLE gated by
+        // hash: assimilation and divergence move it a few times a century.
+        let peo_s = serde_json::to_string(&politics::territory_rle(&self.fields.peoples_map))
+            .unwrap();
+        let peo_h = crate::util::fnv1a64(peo_s.as_bytes());
+        let peoples = if self.sent.peoples_rle != peo_h {
+            self.sent.peoples_rle = peo_h;
+            raw(peo_s)
+        } else {
+            None
+        };
 
         let block_strings = [
             serde_json::to_string(&self.politics.wars).unwrap(),
@@ -407,7 +525,7 @@ impl World {
         // its full row; a hub where only prices moved ships {id, p: {only
         // the goods that moved}}; spread rows ride along when they moved.
         let areas_v = economy::areas_json(&self.economy.areas, &self.peoples.settlements);
-        let of_h = crate::util::fnv1a64(areas_v["of"].to_string().as_bytes());
+        let of_h = Self::areas_set_hash(&areas_v);
         let spread_s = areas_v["spread"].to_string();
         let spread_h = crate::util::fnv1a64(spread_s.as_bytes());
         let hubs_v = areas_v["hubs"].as_array().unwrap();
@@ -506,7 +624,10 @@ impl World {
                 raw(format!("[{}]", hot.join(",")))
             },
             cultures,
-            c_hot,
+            civs,
+            realms,
+            r_hot,
+            peoples,
             wars,
             market,
             m_hot,
@@ -568,10 +689,19 @@ impl World {
                 )
             })
             .collect();
-        let (cul_cold, cul_hot) = self.cultures_cold_hot();
-        self.sent.cultures_cold = crate::util::fnv1a64(cul_cold.as_bytes());
+        self.sent.cultures_cold =
+            crate::util::fnv1a64(self.cultures_json().to_string().as_bytes());
+        self.sent.civs_cold =
+            crate::util::fnv1a64(self.civs_json().to_string().as_bytes());
+        let (rlm_cold, rlm_hot) = self.realms_cold_hot();
+        self.sent.realms_cold = crate::util::fnv1a64(rlm_cold.as_bytes());
+        self.sent.peoples_rle = crate::util::fnv1a64(
+            serde_json::to_string(&politics::territory_rle(&self.fields.peoples_map))
+                .unwrap()
+                .as_bytes(),
+        );
         self.sent.blocks = [
-            crate::util::fnv1a64(cul_hot.as_bytes()),
+            crate::util::fnv1a64(rlm_hot.as_bytes()),
             crate::util::fnv1a64(serde_json::to_string(&self.politics.wars).unwrap().as_bytes()),
             crate::util::fnv1a64(serde_json::to_string(&self.economy.merchants).unwrap().as_bytes()),
         ];
@@ -589,7 +719,7 @@ impl World {
             })
             .collect();
         let areas_v = economy::areas_json(&self.economy.areas, &self.peoples.settlements);
-        self.sent.areas_of = crate::util::fnv1a64(areas_v["of"].to_string().as_bytes());
+        self.sent.areas_of = Self::areas_set_hash(&areas_v);
         self.sent.areas_spread =
             crate::util::fnv1a64(areas_v["spread"].to_string().as_bytes());
         self.sent.areas_hubs = areas_v["hubs"]
@@ -622,6 +752,9 @@ impl World {
             "deposits_hidden": self.deposits.iter().filter(|d| !d.known).count(),
             "settlements": self.peoples.settlements,
             "cultures": self.cultures_json(),
+            "civs": self.civs_json(),
+            "realms": self.realms_json(),
+            "peoples": politics::territory_rle(&self.fields.peoples_map),
             "features": self.features,
             "routes": self.routes,
             "ruins": self.ruins,

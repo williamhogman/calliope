@@ -12,7 +12,7 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
-use crate::ids::{CultureId, EntityId, SettlementId};
+use crate::ids::{EntityId, PeopleId, RealmId, SettlementId};
 use crate::entity::EntityKind;
 use crate::event::EventKind;
 use crate::event::Event;
@@ -27,10 +27,11 @@ pub struct Artifact {
     pub kind: String,
     /// Settlement id whose treasury holds it; −1 while lost.
     pub holder: SettlementId,
-    /// Culture whose smiths wrought it.
-    pub maker: CultureId,
-    /// Culture that keeps it now (drifts with conquest).
-    pub keeper: CultureId,
+    /// People whose smiths wrought it (the maker never changes).
+    pub maker: PeopleId,
+    /// Crown that keeps it now — spoils follow banners, so the keeper
+    /// drifts with conquest (ADR-0018: realm axis).
+    pub keeper: RealmId,
     pub made: i64,
     pub lost: bool,
 }
@@ -65,15 +66,18 @@ pub fn monthly(
     rng: &mut Pcg64Mcg,
 ) -> Vec<Event> {
     let Chronicle { artifacts: arts, registry: reg, .. } = record;
-    let Peoples { settlements, cultures, societies: socs } = peoples;
+    let Peoples { settlements, peoples: cultures, realms, societies: socs, .. } = peoples;
     let mut events = Vec::new();
 
-    // --- the forging: a settled age, a full treasury, a master smith
-    if arts.len() < CAP && month.rem_euclid(7) == 3 {
+    // --- the forging: a settled age, a full treasury, a master smith.
+    // Monuments (M13.2, raised by the civ pass) don't count against the
+    // relic cap — stone is not treasure.
+    let relics = arts.iter().filter(|a| a.kind != "monument").count();
+    if relics < CAP && month.rem_euclid(7) == 3 {
         for (ci, cu) in cultures.iter().enumerate() {
-            let cid = CultureId(ci);
+            let cid = PeopleId(ci);
             let Some(so) = socs.get(ci) else { continue };
-            if so.era < 2 || so.treasury < 60.0 {
+            if so.era < 2 {
                 continue;
             }
             if rng.gen::<f64>() >= 0.035 {
@@ -81,11 +85,15 @@ pub fn monthly(
             }
             let Some(home) = settlements
                 .iter()
-                .filter(|s| s.culture == cid)
+                .filter(|s| s.people == cid)
                 .max_by_key(|s| s.pop)
             else {
                 continue;
             };
+            // the crown over the smiths' town must be able to pay for it
+            if realms.get(home.realm.0).map(|r| r.treasury).unwrap_or(0.0) < 60.0 {
+                continue;
+            }
             let kind = KINDS[rng.gen_range(0..KINDS.len())];
             // named for a god one time in three, else for a phrase of song
             let name = if rng.gen::<f64>() < 0.33 && !cu.pantheon.is_empty() {
@@ -124,7 +132,7 @@ pub fn monthly(
                 kind: kind.to_lowercase(),
                 holder: home.id,
                 maker: cid,
-                keeper: cid,
+                keeper: home.realm,
                 made: month,
                 lost: false,
             });
@@ -134,14 +142,22 @@ pub fn monthly(
 
     // --- the wandering
     for ai in 0..arts.len() {
+        // Monuments (M13.2) are architecture, not treasure: they never
+        // surface on a trader's cloth, vanish in sacks, or walk out of a
+        // treasury. Their keeper still drifts with conquest below, and a
+        // dead town leaves them standing among their own ruins.
+        let monument = arts[ai].kind == "monument";
         if arts[ai].lost {
+            if monument {
+                continue; // fallen stone stays fallen
+            }
             // lost things surface on a trader's cloth, in the fullness of time
             if rng.gen::<f64>() < 0.0009 && !settlements.is_empty() {
                 let si = rng.gen_range(0..settlements.len());
                 let s = &settlements[si];
                 arts[ai].lost = false;
                 arts[ai].holder = s.id;
-                arts[ai].keeper = s.culture;
+                arts[ai].keeper = s.realm;
                 let name = arts[ai].name.clone();
                 reg.relocate(arts[ai].ent, s.x, s.y);
                 events.push(Event {
@@ -162,34 +178,62 @@ pub fn monthly(
         }
 
         let Some(town) = settlements.iter().find(|s| s.id == arts[ai].holder) else {
-            // the town is gone from the map; the relic goes into the dark
+            // the town is gone from the map; the relic goes into the dark —
+            // a monument instead stands over the ruin, and the record says so
             arts[ai].lost = true;
             arts[ai].holder = SettlementId(-1);
+            if monument {
+                let name = arts[ai].name.clone();
+                events.push(Event {
+                    m: month,
+                    s: name.clone(),
+                    k: EventKind::Myth,
+                    text: format!(
+                        "The town beneath {} is gone, but the stone still stands — shepherds fold their flocks in its shadow and cannot read the dedication.",
+                        name
+                    ),
+                    ids: smallvec![arts[ai].ent],
+                    ..Default::default()
+                });
+            }
             continue;
         };
 
         // conquest: the keeper's banner changed over the treasury
-        if town.culture != arts[ai].keeper {
+        if town.realm != arts[ai].keeper {
             let old = arts[ai].keeper;
-            arts[ai].keeper = town.culture;
-            let people = cultures
-                .get(town.culture.idx())
-                .map(|c| c.people.clone())
+            arts[ai].keeper = town.realm;
+            let new_banner = realms
+                .get(town.realm.0)
+                .map(|r| r.name.clone())
                 .unwrap_or_default();
-            let old_people = cultures.get(old.idx()).map(|c| c.people.clone()).unwrap_or_default();
+            let old_banner = realms.get(old.0).map(|r| r.name.clone()).unwrap_or_default();
+            let text = if monument {
+                format!(
+                    "The banners of {} now fly from {} — the conquerors of {} chisel their own dedication beside the old one.",
+                    new_banner, arts[ai].name, town.name
+                )
+            } else {
+                format!(
+                    "With {} fallen, {} passes from {} into the hands of {} — spoils worth more than the walls.",
+                    town.name, arts[ai].name, old_banner, new_banner
+                )
+            };
             events.push(Event {
                 m: month,
                 s: arts[ai].name.clone(),
                 k: EventKind::Myth,
-                text: format!(
-                    "With {} fallen, {} passes from the {} into the hands of the {} — spoils worth more than the walls.",
-                    town.name, arts[ai].name, old_people, people
-                ),
+                text,
                 ids: smallvec![arts[ai].ent],
                 x: town.x,
                 y: town.y,
                 ..Default::default()
             });
+            continue;
+        }
+
+        // stone does not vanish in sacks or walk out of treasuries
+        if monument {
             continue;
         }
 

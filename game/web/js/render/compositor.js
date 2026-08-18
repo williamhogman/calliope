@@ -206,7 +206,7 @@ export function decodeTerritory(R, rle) {
     if (v >= 0) owner.fill(v, i, i + run);
     i += run;
   }
-  const prev = R.ownerIsCulture ? R.territoryOwner : null;
+  const prev = R.ownerIsRealm ? R.territoryOwner : null;
   let rows = { y0: 0, y1: R.h }; // no previous grid: the whole map is the band
   if (prev && prev.length === owner.length) {
     let lo = -1, hi = -1;
@@ -227,7 +227,7 @@ export function decodeTerritory(R, rle) {
     rows = { y0, y1 };
   }
   R.territoryOwner = owner;
-  R.ownerIsCulture = true;
+  R.ownerIsRealm = true;
   R.tintEpoch++;
   R._polDirty = true;
   R._compRows = mergeRows(R._compRows, rows);
@@ -238,7 +238,7 @@ export function decodeTerritory(R, rle) {
 // The damage band falls out of the tile coords: no full-grid diff, and
 // the tint/composite rebuilds stay confined to the touched rows (E9.2).
 export function applyTerritoryTiles(R, patch) {
-  const owner = R.ownerIsCulture ? R.territoryOwner : null;
+  const owner = R.ownerIsRealm ? R.territoryOwner : null;
   if (!owner || !patch || !patch.tiles || !patch.tiles.length) return;
   const W = R.w, H = R.h, tw = patch.tw || 32;
   let lo = H, hi = 0;
@@ -305,15 +305,71 @@ export function territoryGrid(R, version) {
   return owner;
 }
 
-export function cultureOf(R) {
-  // settlement id -> culture id (settlements can be added by colonisation)
+export function realmOfSettlement(R) {
+  // settlement id -> realm id (the pre-politics fallback grid stores
+  // settlement ids; the banner they fly resolves through this map)
   const map = [];
-  for (const s of R.world.header.settlements) map[s.id] = s.culture ?? 0;
+  for (const s of R.world.header.settlements) map[s.id] = s.realm ?? 0;
   return map;
 }
 
-// political tint as an RGBA texture for the GPU path: culture colour with
-// alpha for interior/edge, and a bright opaque frontier between cultures.
+// ---------- the people-axis influence grid (M10.6) --------------------------
+
+// Decode the peoples_map RLE ([run, value, …] row-major) into a live grid.
+// It moves on generational clocks (assimilation, divergence, merging), so a
+// whole-grid decode per arrival is cheap and no damage bands are needed.
+export function decodePeoples(R, rle) {
+  if (!rle || !rle.length) { return; }
+  const owner = new Int16Array(R.w * R.h).fill(-1);
+  let i = 0;
+  for (let k = 0; k + 1 < rle.length; k += 2) {
+    const run = rle[k], v = rle[k + 1];
+    if (v >= 0) owner.fill(v, i, i + run);
+    i += run;
+  }
+  R.peoplesOwner = owner;
+  R.peoplesEpoch = (R.peoplesEpoch || 0) + 1;
+  R._pTintCache = null;
+}
+
+// People-axis tint texture for the GPU path: people colour, quiet interior,
+// bright frontier where two tongues meet. Cached per peoplesEpoch — the
+// grid reships a few times a century, so a full rebuild is the simple truth.
+export function peopleTintRgba(R) {
+  if (R._pTintCache && R._pTintCache.epoch === R.peoplesEpoch) return R._pTintCache.data;
+  const W = R.w, H = R.h;
+  const data = new Uint8Array(W * H * 4);
+  const owner = R.peoplesOwner;
+  if (owner) {
+    const rgb = R.peopleRgb || [];
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x, o = i * 4;
+        const ow = owner[i];
+        if (ow < 0) continue;
+        const c = rgb[ow] || [220, 200, 140];
+        const left = x > 0 ? owner[i - 1] : ow;
+        const up = y > 0 ? owner[i - W] : ow;
+        const right = x < W - 1 ? owner[i + 1] : ow;
+        const down = y < H - 1 ? owner[i + W] : ow;
+        if (left !== ow || up !== ow || right !== ow || down !== ow) {
+          data[o] = Math.min(255, c[0] * 1.18 + 30);
+          data[o + 1] = Math.min(255, c[1] * 1.18 + 30);
+          data[o + 2] = Math.min(255, c[2] * 1.18 + 30);
+          data[o + 3] = 255;
+        } else {
+          data[o] = c[0]; data[o + 1] = c[1]; data[o + 2] = c[2];
+          data[o + 3] = 82;
+        }
+      }
+    }
+  }
+  R._pTintCache = { epoch: R.peoplesEpoch, data };
+  return data;
+}
+
+// political tint as an RGBA texture for the GPU path: realm colour with
+// alpha for interior/edge, and a bright opaque frontier between realms.
 // With the engine grid, only the dirty row band is rebuilt (E9.2).
 export function tintRgba(R, version) {
   const W = R.w, H = R.h;
@@ -323,15 +379,15 @@ export function tintRgba(R, version) {
     if (!engine && R._tintCache.version === version) return R._tintCache.data;
   }
   const owner = territoryGrid(R, version);
-  const cultOf = engine ? null : cultureOf(R);
-  const cRgb = R.cultureRgb;
+  const realmOf = engine ? null : realmOfSettlement(R);
+  const cRgb = R.realmRgb;
   const partial = engine && R._tintCache && R._tintRows &&
     R._tintCache.data.length === W * H * 4;
   const data = partial ? R._tintCache.data : new Uint8Array(W * H * 4);
   const y0 = partial ? R._tintRows.y0 : 0;
   const y1 = partial ? R._tintRows.y1 : H;
-  const asC = R.ownerIsCulture;
-  const cidOf = (oo) => (oo >= 0 ? (asC ? oo : (cultOf[oo] ?? 0)) : -1);
+  const asR = R.ownerIsRealm;
+  const cidOf = (oo) => (oo >= 0 ? (asR ? oo : (realmOf[oo] ?? 0)) : -1);
   for (let y = y0; y < y1; y++) {
     for (let x = 0; x < W; x++) {
       const i = y * W + x, o = i * 4;
@@ -344,10 +400,10 @@ export function tintRgba(R, version) {
       const right = x < W - 1 ? owner[i + 1] : ow;
       const down = y < H - 1 ? owner[i + W] : ow;
       const settBorder = left !== ow || up !== ow || right !== ow || down !== ow;
-      const cultBorder = settBorder && (
+      const realmBorder = settBorder && (
         cidOf(left) !== cid || cidOf(up) !== cid ||
         cidOf(right) !== cid || cidOf(down) !== cid);
-      if (cultBorder) {
+      if (realmBorder) {
         data[o] = Math.min(255, c[0] * 1.18 + 30);
         data[o + 1] = Math.min(255, c[1] * 1.18 + 30);
         data[o + 2] = Math.min(255, c[2] * 1.18 + 30);
@@ -373,7 +429,8 @@ export function composite(R, state) {
     layer, overlays.rivers, overlays.snow, overlays.hillshade,
     monthDependent ? ((month % 12) + 12) % 12 : "-",
   ].join("|");
-  const vKey = layer === "political" ? version : "-";
+  const vKey = layer === "political" ? version
+    : layer === "culture" ? "p" + (R.peoplesEpoch || 0) : "-";
   if (base === R.cacheKeyBase && vKey === R.cacheVersion) return;
 
   const engine = !!R.territoryOwner;
@@ -403,9 +460,12 @@ export function composite(R, state) {
   const dLogMax = R.dischargeLogMax || 1;
   const sat = R.sat;
 
-  let cultOf = null;
-  if (owner) cultOf = cultureOf(R);
-  const cRgb = R.cultureRgb;
+  let realmOf = null;
+  if (owner) realmOf = realmOfSettlement(R);
+  const cRgb = R.realmRgb;
+  // M10.6 — the culture lens paints the people-axis grid with people colours
+  const pOwner = layer === "culture" ? R.peoplesOwner : null;
+  const pRgb = R.peopleRgb || [];
 
   const yStart = rows ? rows.y0 : 0;
   const yEnd = rows ? rows.y1 : H;
@@ -419,7 +479,7 @@ export function composite(R, state) {
       const isWater = sea || lake;
       let r, g, b;
 
-      if (layer === "biomes" || layer === "political") {
+      if (layer === "biomes" || layer === "political" || layer === "culture") {
         const o3 = i * 3;
         r = sat[o3]; g = sat[o3 + 1]; b = sat[o3 + 2];
         if (layer === "political") {
@@ -430,8 +490,8 @@ export function composite(R, state) {
           b = (b * 0.52 + lum * 0.48) * 0.84;
           const ow = owner[i];
           if (ow >= 0) {
-            const asC = R.ownerIsCulture;
-            const cidOf = (oo) => (oo >= 0 ? (asC ? oo : (cultOf[oo] ?? 0)) : -1);
+            const asR = R.ownerIsRealm;
+            const cidOf = (oo) => (oo >= 0 ? (asR ? oo : (realmOf[oo] ?? 0)) : -1);
             const cid = cidOf(ow);
             const c = cRgb[cid] || [220, 200, 140];
             const left = x > 0 ? owner[i - 1] : ow;
@@ -439,10 +499,10 @@ export function composite(R, state) {
             const right = x < W - 1 ? owner[i + 1] : ow;
             const down = y < H - 1 ? owner[i + W] : ow;
             const settBorder = left !== ow || up !== ow || right !== ow || down !== ow;
-            const cultBorder = settBorder && (
+            const realmBorder = settBorder && (
               cidOf(left) !== cid || cidOf(up) !== cid ||
               cidOf(right) !== cid || cidOf(down) !== cid);
-            if (cultBorder) {
+            if (realmBorder) {
               // a crisp bright frontier, like a boundary drawn on imagery
               r = Math.min(255, c[0] * 1.18 + 30);
               g = Math.min(255, c[1] * 1.18 + 30);
@@ -452,6 +512,29 @@ export function composite(R, state) {
               r = r * (1 - a) + c[0] * a;
               g = g * (1 - a) + c[1] * a;
               b = b * (1 - a) + c[2] * a;
+            }
+          }
+        } else if (layer === "culture" && pOwner) {
+          // M10.6 — whose tongue is spoken here, over muted imagery
+          const lum = 0.3 * r + 0.59 * g + 0.11 * b;
+          r = (r * 0.52 + lum * 0.48) * 0.84;
+          g = (g * 0.52 + lum * 0.48) * 0.84;
+          b = (b * 0.52 + lum * 0.48) * 0.84;
+          const ow = pOwner[i];
+          if (ow >= 0) {
+            const c = pRgb[ow] || [220, 200, 140];
+            const left = x > 0 ? pOwner[i - 1] : ow;
+            const up = y > 0 ? pOwner[i - W] : ow;
+            const right = x < W - 1 ? pOwner[i + 1] : ow;
+            const down = y < H - 1 ? pOwner[i + W] : ow;
+            if (left !== ow || up !== ow || right !== ow || down !== ow) {
+              r = Math.min(255, c[0] * 1.18 + 30);
+              g = Math.min(255, c[1] * 1.18 + 30);
+              b = Math.min(255, c[2] * 1.18 + 30);
+            } else {
+              r = r * 0.68 + c[0] * 0.32;
+              g = g * 0.68 + c[1] * 0.32;
+              b = b * 0.68 + c[2] * 0.32;
             }
           }
         }

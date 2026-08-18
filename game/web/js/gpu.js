@@ -102,16 +102,19 @@ class GpuEngine {
     const diff = state.month - this._month;
     this._month += Math.abs(diff) > 24 ? diff : diff * Math.min(1, dt * 3.2);
 
+    // M10.6 — the culture lens rides the political shader path: same muted
+    // satellite + tint texture, but the texture holds the people-axis tint.
+    const tinted = state.layer === "political" || state.layer === "culture";
     this.orbital.render(
       pw, ph, cssW, cssH,
       view.tx, view.ty, view.scale,
-      LAYER_ID[state.layer] ?? 0,
+      LAYER_ID[state.layer === "culture" ? "political" : state.layer] ?? 0,
       this._month,
       (now - this._t0) / 1000,
       state.overlays.rivers ? 1 : 0,
       state.overlays.snow ? 1 : 0,
       state.overlays.hillshade ? 1 : 0,
-      this.hasTint && state.layer === "political" ? 1 : 0,
+      this.hasTint && tinted ? 1 : 0,
     );
   }
 }

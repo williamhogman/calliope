@@ -60,3 +60,10 @@ MADR-lite. See [`template.md`](template.md). Sections:
 | [0014](0014-ocean-frame-falloff.md) | Ocean-frame falloff: no clipped landmasses | Accepted (backfilled) |
 | [0015](0015-registry-codegen-architecture.md) | Registries and codegen as the single declaration point | Accepted |
 | [0016](0016-pack-v2-quantized-crc-payload.md) | Pack v2: quantized, checksummed, header/meta split | Accepted |
+| [0017](0017-json-tick-lane-retained.md) | JSON tick lane retained; no binary tick payload | Accepted |
+| [0018](0018-people-realm-axis-split.md) | People and Realm are separate axes | Accepted |
+| [0019](0019-civilization-derived-tier.md) | Civilizations as a derived tier over peoples and realms | Amended by 0020 |
+| [0020](0020-overstretch-as-span-of-control.md) | Overstretch as span of control, not population mass | Accepted |
+| [0021](0021-goods-ontology-as-data.md) | The goods ontology as one declarative table | Accepted |
+| [0022](0022-hand-rolled-lattice-over-bevy-ecs.md) | Hand-rolled system lattice, not bevy_ecs | Accepted (renumbered from 0015) |
+| [0023](0023-no-sab-field-mirror.md) | No shared-memory field mirror; transferables stay the lane | Accepted (renumbered from 0015) |

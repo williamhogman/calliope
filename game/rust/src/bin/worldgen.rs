@@ -38,7 +38,7 @@ fn main() {
         known,
         w.deposits.len() - known,
         w.peoples.settlements.len(),
-        w.peoples.cultures.len(),
+        w.peoples.peoples.len(),
         w.features.len(),
         w.routes.len()
     );
@@ -147,19 +147,25 @@ fn main() {
             w.routes.len(),
             all_events
         );
-        for (soc, c) in w.peoples.societies.iter().zip(w.peoples.cultures.iter()) {
+        for (soc, c) in w.peoples.societies.iter().zip(w.peoples.peoples.iter()) {
             println!(
-                "  {}: {} \u{b7} {} \u{b7} {} arts \u{b7} treasury {:.0} \u{b7} lore {:.0}",
+                "  {}: {} \u{b7} {} \u{b7} {} arts \u{b7} lore {:.0}",
                 c.people,
                 calliope::society::POLITIES[soc.polity],
                 calliope::society::ERAS[soc.era],
                 soc.techs.len(),
-                soc.treasury,
                 soc.knowledge
             );
             if !soc.techs.is_empty() {
                 println!("    arts: {}", soc.techs.iter().map(|t| t.to_string()).collect::<Vec<_>>().join(", "));
             }
+        }
+        // ADR-0018 — the crowns hold the coin now, not the tongues
+        for r in w.peoples.realms.iter().filter(|r| r.alive) {
+            println!(
+                "  crown {} ({}) \u{b7} treasury {:.0}",
+                r.name, r.house, r.treasury
+            );
         }
         if let serde_json::Value::Array(rows) = w.economy.market.snapshot() {
             let tops: Vec<String> = rows

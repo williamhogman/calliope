@@ -6,7 +6,7 @@ import { pick } from "./picking.js";
 import { inspectCell } from "./inspect.js";
 import { advance, playPause, fitView } from "./sim.js";
 import {
-  world, entities, settlementsById, cultures,
+  world, entities, settlementsById, cultures, realms,
   selection, setSelection, setHoverTip,
   overlays, setLayer, searchOpen, setSearchOpen, closePopovers,
   overlaysOpen, setOverlaysOpen, legendOpen, setLegendOpen,
@@ -119,12 +119,13 @@ function wirePointer() {
       });
       if (hit?.kind === "settlement") {
         const s = settlementsById().get(hit.id);
-        const c = (cultures() || [])[s?.culture];
+        const c = (cultures() || [])[s?.people];
+        const r = (realms() || [])[s?.realm];
         if (s) {
           setHoverTip({
             px: e.clientX, py: e.clientY,
             title: s.name,
-            sub: `${s.tier}${c ? ` of the ${c.people}` : ""} \u00b7 ${s.pop.toLocaleString("en-US")} souls`,
+            sub: `${s.tier}${c ? ` of the ${c.people}` : ""}${r ? ` \u00b7 ${r.name}` : ""} \u00b7 ${s.pop.toLocaleString("en-US")} souls`,
             line: "click to inspect",
           });
           return;

@@ -5,7 +5,7 @@ import { createMemo, createSignal, createEffect } from "solid-js";
 import html from "solid-js/html";
 
 import {
-  world, settlements, cultures, wars, market, areas, merchants,
+  world, settlements, cultures, realms, civs, wars, market, areas, merchants,
   events, month, selection, settlementsById,
   stories, entities, artifacts, legendMode, setLegendMode,
   outlinerOpen, setOutlinerOpen, outlinerTab, setOutlinerTab,
@@ -15,7 +15,7 @@ import {
 } from "./state.js";
 import {
   EVENT_FAMILIES, eventColor, eventFamily, FALLBACK_MONTHS, fmt,
-  patternMeta, entityKind,
+  patternMeta, entityKind, civStage,
 } from "./config.js";
 import { I } from "./icons.js";
 import { each, eachIdx } from "./list.js";
@@ -46,7 +46,7 @@ function PlacesTab(a) {
   });
   const [cap, setCap] = createSignal(60);
   const shown = createMemo(() => sorted().slice(0, cap()));
-  const colorOf = (s) => (cultures() || [])[s.culture]?.color || settlementCss(s.id);
+  const colorOf = (s) => (realms() || [])[s.realm]?.color || settlementCss(s.id);
   // E8.2 — keyed on settlement identity: a tick that patches three towns
   // re-renders three rows; the rest keep their DOM.
   return html`<div class="ol-tabbody">
@@ -82,40 +82,86 @@ function PlacesTab(a) {
   </div>`;
 }
 
-// ---------------------------------------------------------------- peoples
+// ------------------------------------------------------- powers (ADR-0018)
+// Two rosters in one tab: the crowns (realms — coin, wars, holdings) and
+// beneath them the tongues (peoples — era, arts, hearths).
 
 function PeoplesTab(a) {
-  const rows = createMemo(() => {
+  const realmRows = createMemo(() => {
     const setts = settlements();
-    return (cultures() || []).map((c) => {
-      const mine = setts.filter((s) => s.culture === c.id);
-      return { ...c, n: mine.length, pop: mine.reduce((acc, s) => acc + s.pop, 0) };
-    }).sort((x, y) => y.pop - x.pop);
+    return (realms() || [])
+      .filter((r) => r.alive)
+      .map((r) => {
+        const mine = setts.filter((s) => s.realm === r.id);
+        return { ...r, n: mine.length, pop: mine.reduce((acc, s) => acc + s.pop, 0) };
+      })
+      .sort((x, y) => y.pop - x.pop);
   });
+  const peopleRows = createMemo(() => {
+    const setts = settlements();
+    return (cultures() || [])
+      .filter((c) => c.alive !== false)
+      .map((c) => {
+        const mine = setts.filter((s) => s.people === c.id);
+        return { ...c, n: mine.length, pop: mine.reduce((acc, s) => acc + s.pop, 0) };
+      })
+      .sort((x, y) => y.pop - x.pop);
+  });
+  // M13.1 — the derived tier above both rosters: standing civilizations,
+  // largest first; interregna sink but stay visible while the record runs.
+  const civRows = createMemo(() =>
+    (civs() || [])
+      .filter((c) => c.alive)
+      .sort((x, y) => (x.stage === "interregnum") - (y.stage === "interregnum") || y.towns - x.towns));
   const atWar = (id) => (wars() || []).some((w) => w.a === id || w.b === id);
   // E8.2 — position-keyed: the row objects are rebuilt per tick, so Index
   // updates text in place instead of remaking DOM.
   return html`<div class="ol-tabbody">
     ${() => ((wars() || []).length
       ? html`<div class="ol-wars">${eachIdx(() => wars() || [], (w) => {
-          const side = (id) => (cultures() || [])[id]?.people || "?";
+          const side = (id) => (realms() || [])[id]?.name || "?";
           return html`<button class="war-banner" onClick=${() => a.select({ kind: "war", id: w().name })}>
             \u2694 ${() => w().name} \u2014 ${() => side(w().a)} against ${() => side(w().b)}
           </button>`;
         })}</div>`
       : "")}
     <div class="ol-list">
-      ${eachIdx(rows, (c) => html`<div
+      ${() => (civRows().length ? html`<div class="ol-section dim">Civilizations</div>` : "")}
+      ${eachIdx(civRows, (c) => html`<div
+        class=${() => "ol-row tall" + (selection()?.kind === "civ" && selection()?.id === c().id ? " picked" : "")}
+        onClick=${() => a.select({ kind: "civ", id: c().id })}>
+        <span class="s-dot" style=${() => `background:${civStage(c().stage).color}`}></span>
+        <span class="c-body">
+          <span class="c-name">${() => c().name}<span class="stage-chip"
+            style=${() => `color:${civStage(c().stage).color}`}>${() => civStage(c().stage).label}</span></span>
+          <span class="c-sub dim">${() => (c().hegemony ? c().hegemony : (c().folk || []).join(" \u00b7 "))}</span>
+          <span class="c-sub dim">${() => `${c().crowns} crown${c().crowns === 1 ? "" : "s"} \u00b7 ${c().towns} town${c().towns === 1 ? "" : "s"}${c().golden_ages ? ` \u00b7 ${c().golden_ages} golden age${c().golden_ages === 1 ? "" : "s"}` : ""}`}</span>
+        </span>
+      </div>`)}
+      <div class="ol-section dim">Crowns</div>
+      ${eachIdx(realmRows, (r) => html`<div
+        class=${() => "ol-row tall" + (selection()?.kind === "realm" && selection()?.id === r().id ? " picked" : "")}
+        onClick=${() => a.select({ kind: "realm", id: r().id })}>
+        <span class="s-dot" style=${() => `background:${r().color}`}></span>
+        <span class="c-body">
+          <span class="c-name">${() => r().name}${() => (atWar(r().id) ? html` <span class="war-mark">\u2694</span>` : "")}</span>
+          <span class="c-sub dim">${() => `${r().house}${r().ruler ? ` \u00b7 ${r().ruler}` : ""}${r().vassal_of ? ` \u00b7 sworn to ${r().vassal_of}` : ""}`}</span>
+          <span class="c-sub dim">${() => `${r().n} holding${r().n === 1 ? "" : "s"} \u00b7 ${fmt(r().pop)} souls \u00b7 ${fmt(r().treasury || 0)} coin`}</span>
+        </span>
+      </div>`)}
+      ${() => (!realmRows().length ? html`<div class="ol-empty dim">No crowns yet \u2014 the first banners are being sewn.</div>` : "")}
+      <div class="ol-section dim">Tongues</div>
+      ${eachIdx(peopleRows, (c) => html`<div
         class=${() => "ol-row tall" + (selection()?.kind === "culture" && selection()?.id === c().id ? " picked" : "")}
         onClick=${() => a.select({ kind: "culture", id: c().id })}>
         <span class="s-dot" style=${() => `background:${c().color}`}></span>
         <span class="c-body">
-          <span class="c-name">${() => c().people}${() => (atWar(c().id) ? html` <span class="war-mark">\u2694</span>` : "")}</span>
-          <span class="c-sub dim">${() => `${c().polity || ""}${c().era ? ` \u00b7 ${c().era}` : ""}${c().ruler ? ` \u00b7 ${c().ruler}` : ""}`}</span>
-          <span class="c-sub dim">${() => `${c().n} holding${c().n === 1 ? "" : "s"} \u00b7 ${fmt(c().pop)} souls \u00b7 ${fmt(c().treasury || 0)} coin`}</span>
+          <span class="c-name">${() => c().people}</span>
+          <span class="c-sub dim">${() => `${c().polity || ""}${c().era ? ` \u00b7 ${c().era}` : ""}`}</span>
+          <span class="c-sub dim">${() => `${c().n} hearth${c().n === 1 ? "" : "s"} \u00b7 ${fmt(c().pop)} souls \u00b7 ${(c().techs || []).length} arts`}</span>
         </span>
       </div>`)}
-      ${() => (!rows().length ? html`<div class="ol-empty dim">No peoples yet \u2014 the first camps are forming.</div>` : "")}
+      ${() => (!peopleRows().length ? html`<div class="ol-empty dim">No peoples yet \u2014 the first camps are forming.</div>` : "")}
     </div>
   </div>`;
 }
@@ -338,7 +384,7 @@ function LegendsTab(a) {
 
 const TABS = [
   ["places", "Places", I.place],
-  ["peoples", "Peoples", I.people],
+  ["peoples", "Powers", I.crown],
   ["market", "Market", I.market],
   ["chronicle", "Chronicle", I.book],
   ["legends", "Legends", I.quill],

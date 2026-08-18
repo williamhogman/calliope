@@ -143,14 +143,29 @@ export function inspectCell(cx, cy) {
     }
   }
 
+  // ADR-0018 — both axes read at the cell: whose banner rules (realm) and
+  // whose tongue is spoken (people). They differ where conquest outran
+  // assimilation, and the difference is the story (M10.6).
   let territory = null;
-  const cid = ctx.renderer.ownerCultureAt(i);
-  if (cid >= 0) {
-    const c = (w.header.cultures || [])[cid];
-    if (c) {
-      territory = c.vassal_of
-        ? `Lands of the ${c.people} \u00b7 sworn to the ${c.vassal_of}`
-        : `Lands of the ${c.people}`;
+  const rid = ctx.renderer.ownerRealmAt(i);
+  if (rid >= 0) {
+    const r = (w.header.realms || [])[rid];
+    if (r) {
+      territory = r.vassal_of
+        ? `Under the banners of ${r.name} \u00b7 sworn to ${r.vassal_of}`
+        : `Under the banners of ${r.name}`;
+    }
+  }
+  let folk = null;
+  const pid = ctx.renderer.peopleAt(i);
+  if (pid >= 0) {
+    const p = (w.header.cultures || [])[pid];
+    if (p) {
+      const crown = rid >= 0 ? (w.header.realms || [])[rid] : null;
+      const foreign = crown && crown.people !== pid;
+      folk = foreign
+        ? `The folk here keep the ${p.people} tongue under a foreign crown`
+        : `The ${p.people} tongue is spoken here`;
     }
   }
 
@@ -180,6 +195,7 @@ export function inspectCell(cx, cy) {
     frozen,
     resources: resources.slice(0, 3),
     territory,
+    folk,
     place: nearestFeature(w, cx, cy, h < 0),
     notes: cellNotes(w, cx, cy, i, h, isWater),
   };

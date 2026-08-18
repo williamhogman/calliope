@@ -107,6 +107,38 @@ WASM="../web/js/wasm/calliope_bg.wasm"
 } > "$OUT/wasm.txt"
 echo "-- wasm size -> wasm.txt"
 
+# ---- the assay (M15) -------------------------------------------------------
+# Property-proofs over the resource path: ontology forest, placement laws,
+# price clamps, metamorphic market checks, conservation meters, hostile
+# unpack. proptest hunts for the world that breaks a law; one failing case
+# is a [FAIL] with its seed in the log. Panic override: the release profile
+# ships panic=abort (E6.2), but the test harness must unwind to report —
+# and the cdylib+rlib pair would otherwise collide on one rlib path.
+echo "-- assay (property proofs) -> assay.txt"
+{
+  echo "========================================================================"
+  echo " CALLIOPE DIAGNOSTIC · ASSAY                    M15 property proofs"
+  echo "========================================================================"
+  if command -v cargo >/dev/null 2>&1; then
+    ASSAY_CMD=(cargo test --release --test assay)
+  else
+    ASSAY_CMD=(nix shell nixpkgs#rustc nixpkgs#cargo -c cargo test --release --test assay)
+  fi
+  if CARGO_PROFILE_RELEASE_PANIC=unwind "${ASSAY_CMD[@]}" > /tmp/assay-out.txt 2>&1; then
+    grep -E '^test |^test result' /tmp/assay-out.txt | sed 's/^/ /'
+    echo
+    echo "---- checks ----------------------------------------------------------"
+    N=$(grep -c '^test .* \.\.\. ok$' /tmp/assay-out.txt || true)
+    echo "[PASS] property lanes green                              ($N proofs — M15)"
+  else
+    tail -40 /tmp/assay-out.txt | sed 's/^/ /'
+    echo
+    echo "---- checks ----------------------------------------------------------"
+    echo "[FAIL] property lane broken                              (M15: a law found its counterexample — read above)"
+  fi
+  echo "CHECKS: see row above"
+} > "$OUT/assay.txt"
+
 # ---- module-dependency lint (E11.8) ----------------------------------------
 # Leaf modules must not import `world` — the import DAG stays acyclic by
 # check, not convention. Allowed to speak of World: the orchestrator itself,

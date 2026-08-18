@@ -5,8 +5,8 @@ import { createMemo, createSignal, createEffect } from "solid-js";
 import html from "solid-js/html";
 
 import {
-  world, settlements, cultures, market, searchOpen, setSearchOpen, playing,
-  stories, entities,
+  world, settlements, cultures, realms, market, searchOpen, setSearchOpen,
+  playing, stories, entities,
 } from "./state.js";
 import { LAYERS, fmt, patternMeta, entityKind } from "./config.js";
 import { I } from "./icons.js";
@@ -45,13 +45,20 @@ export function Search(a) {
     for (const s of settlements()) {
       add("Places", s.name, `${s.tier} \u00b7 ${fmt(s.pop)} souls`,
         () => a.select({ kind: "settlement", id: s.id, fly: true }),
-        (cultures() || [])[s.culture]?.color);
+        (realms() || [])[s.realm]?.color);
     }
     const feats = world()?.header.features || [];
     feats.forEach((f, i) => {
       add("Geography", f.name, f.t, () => a.select({ kind: "feature", id: i, fly: true }));
     });
+    // ADR-0018 — both axes searchable: crowns (political) and tongues.
+    for (const r of realms() || []) {
+      if (!r.alive) continue;
+      add("Crowns", r.name, r.ruler || r.house || "realm",
+        () => a.select({ kind: "realm", id: r.id }), r.color);
+    }
     for (const c of cultures() || []) {
+      if (c.alive === false) continue;
       add("Peoples", c.people, c.polity || "people",
         () => a.select({ kind: "culture", id: c.id }), c.color);
     }

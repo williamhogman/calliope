@@ -4,7 +4,7 @@
 //! sifted, browsed and cross-linked (M6). Deterministic: ids are handed
 //! out in creation order, no wall-clock anywhere.
 
-use crate::ids::{CultureId, EntityId};
+use crate::ids::{PeopleId, EntityId};
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -34,6 +34,12 @@ pub enum EntityKind {
     Settlement,
     War,
     World,
+    /// ADR-0018 — a crown: appended after `World` so every existing
+    /// kind keeps its wire number.
+    Realm,
+    /// M13/ADR-0019 — the derived tier: a family of kindred peoples and
+    /// the realms that carry them. Appended last; wire numbers hold.
+    Civilization,
 }
 
 impl EntityKind {
@@ -54,7 +60,7 @@ pub struct Entity {
     pub until: Option<i64>,
     /// Owning / home culture, when it has one.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub culture: Option<CultureId>,
+    pub culture: Option<PeopleId>,
     /// Persons: "general" | "prospector" | "founder" | "merchant" | "ruler".
     #[serde(skip_serializing_if = "String::is_empty")]
     pub role: String,
@@ -92,7 +98,7 @@ impl Registry {
         kind: EntityKind,
         name: &str,
         since: i64,
-        culture: Option<CultureId>,
+        culture: Option<PeopleId>,
         x: i64,
         y: i64,
     ) -> EntityId {
@@ -123,7 +129,7 @@ impl Registry {
         name: &str,
         role: &str,
         since: i64,
-        culture: Option<CultureId>,
+        culture: Option<PeopleId>,
     ) -> EntityId {
         let id = self.add(EntityKind::Person, name, since, culture, -1, -1);
         self.items[id.idx()].role = role.to_string();

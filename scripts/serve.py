@@ -30,7 +30,7 @@ class Handler(SimpleHTTPRequestHandler):
         # E7.8 — cross-origin isolation: every asset is same-origin, so the
         # strict pair costs nothing and unlocks SharedArrayBuffer +
         # high-resolution timers for dev profiling. Production hosting sets
-        # its own headers; nothing shipped depends on isolation (ADR-0015).
+        # its own headers; nothing shipped depends on isolation (ADR-0023).
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         super().end_headers()

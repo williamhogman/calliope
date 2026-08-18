@@ -8,7 +8,14 @@ import { createStore } from "solid-js/store";
 
 export const [world, setWorld] = createSignal(null); // {header, arrays}
 export const [settlements, setSettlements] = createSignal([]);
+// ADR-0018 — the two axes: `cultures` holds the peoples rows (tongue, gods,
+// era, arts — the wire key stays "cultures"), `realms` the political rows
+// (crown, ruler, treasury, vassalage).
 export const [cultures, setCultures] = createSignal([]);
+export const [realms, setRealms] = createSignal([]);
+// M13/ADR-0019 — the derived tier above both axes: named civilizations
+// with their arc stage, drivers and member rosters.
+export const [civs, setCivs] = createSignal([]);
 export const [wars, setWars] = createSignal([]);
 // M9.1 — what remains of towns that died: [{name, of, x, y, since, why, people, ety, eid}]
 export const [ruins, setRuins] = createSignal([]);
@@ -68,7 +75,7 @@ export const [overlays, setOverlays] = createStore({
 });
 
 // Selection: one entity of any kind holds the inspector dock.
-// {kind: "settlement"|"culture"|"cell"|"deposit"|"feature"|"war"|"good", ...}
+// {kind: "settlement"|"culture"|"realm"|"cell"|"deposit"|"feature"|"war"|"good", ...}
 export const [selection, setSelection] = createSignal(null);
 
 // E8.8 — O(1) settlement lookup, shared by every consumer that used to

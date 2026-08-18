@@ -21,14 +21,26 @@ iron               9       0  0%    0.89        9       1363       54c
 silver             2       0  0%    0.80        2        792       74c
 gold               2       0  0%    0.79        2        653       74c
 mithril            1       0  0%    0.87        1       2346       68c
+salt               9       3 33%    0.88        8       1508       55c
+furs               3       3 100%    0.92        0     renews      106c
+grapes             3       3 100%    0.92        0     renews       50c
+spices             3       3 100%    0.91        0     renews        4c
+dyes               2       2 100%    0.87        0     renews       31c
+clay               2       2 100%    0.85        0     renews       67c
+marble             2       1 50%    0.85        2       2257       69c
+gems               2       0  0%    0.85        2        634       69c
 
-total deposits: 149 · 1.29 per 1000 land cells
-mineral seams hidden at dawn: 41 of 49 (83.7%)
+total deposits: 175 · 1.51 per 1000 land cells
+mineral seams hidden at dawn: 50 of 62 (80.6%)
 
 ---- checks ----------------------------------------------------------
-[PASS] deposits per 1000 land cells                   1.29   (sweet 1–6 · hard 0.5–12)
-[PASS] mineral hidden share at dawn                  83.7%   (sweet 45–85% — leave an age of prospectors)
+[PASS] deposits per 1000 land cells                   1.51   (sweet 1–6 · hard 0.5–12)
+[PASS] mineral hidden share at dawn                  80.6%   (sweet 45–85% — leave an age of prospectors)
 [PASS] essential kinds all present               0 missing   (everything except mithril/bananas should place)
 [PASS] gold placed                                     yes   (a world without gold has a dull late game)
 [PASS] mithril placed                                  yes   (the legendary seam should exist somewhere)
-CHECKS: 5 pass · 0 warn · 0 fail
+[PASS] coastal salt pan exists              1 pans · 8 rock seams   (M14.2: every world gets at least one renewing pan on an arid shore)
+[PASS] salt sources ≥2                                   9   (M14.2 floor: one source is a monopoly, not an economy)
+[PASS] pans known at dawn                           1 of 1   (a salt pan is plain to see — never hidden, never exhausted)
+[PASS] goods table agrees with closure flags 38 rows consistent   (M14.1: one declaration point — flags derive-checked against GOODS)
+CHECKS: 9 pass · 0 warn · 0 fail

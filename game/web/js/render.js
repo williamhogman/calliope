@@ -10,7 +10,8 @@
 import { hexRgb, settlementColor } from "./palette.js";
 import {
   buildShade, buildSatellite, monthTemp, composite,
-  decodeTerritory, applyTerritoryTiles, territoryGrid, cultureOf, tintRgba,
+  decodeTerritory, applyTerritoryTiles, territoryGrid, realmOfSettlement,
+  tintRgba, decodePeoples, peopleTintRgba,
 } from "./render/compositor.js";
 import { drawLabels, labelBoxesAt } from "./render/labels.js";
 import {
@@ -59,17 +60,24 @@ export class Renderer {
     this._labelLayout = null;
     this._riverPaths = new Map(); // curved-label courses, rebuilt per world
 
-    // Engine-authoritative political map (M4.1): owner culture per cell,
-    // −1 wilderness. Ships in the pack, updates arrive as RLE patches.
+    // Engine-authoritative political map (M4.1/ADR-0018): owner realm per
+    // cell, −1 wilderness. Ships in the pack, updates arrive as RLE patches.
     this.territoryOwner = world.arrays.territory || null;
-    this.ownerIsCulture = !!this.territoryOwner;
+    this.ownerIsRealm = !!this.territoryOwner;
 
     // biome palette by id
     this.biomePal = [];
     for (const b of world.header.biomes) this.biomePal[b.id] = b.color;
 
-    // culture colors
-    this.cultureRgb = (world.header.cultures || []).map((c) => hexRgb(c.color));
+    // the two axes' colours (ADR-0018): banners and tongues
+    this.realmRgb = (world.header.realms || []).map((c) => hexRgb(c.color));
+    this.peopleRgb = (world.header.cultures || []).map((c) => hexRgb(c.color));
+
+    // people-axis influence grid (M10.6), shipped as RLE in the bootstrap
+    this.peoplesOwner = null;
+    this.peoplesEpoch = 0;
+    this._pTintCache = null;
+    decodePeoples(this, world.header.peoples);
 
     buildShade(this);
 
@@ -103,21 +111,52 @@ export class Renderer {
   applyTerritoryTiles(patch) { applyTerritoryTiles(this, patch); }
   territory(version) { return territoryGrid(this, version); }
   tintRgba(version) { return tintRgba(this, version); }
+  peopleTint() { return peopleTintRgba(this); }
   monthTemp(month) { return monthTemp(this, month); }
   routePoint(route, t) { return routePoint(route, t); }
   composite(state) { composite(this, state); }
 
-  /// Culture that holds cell i, or −1 for wilderness — semantics-safe
-  /// across both the engine grid (culture ids) and the fallback (settlement ids).
-  ownerCultureAt(i) {
+  /// The people-axis grid moved (M10.6): assimilation, divergence, merging.
+  setPeoples(rle) { decodePeoples(this, rle); }
+
+  /// The realm roster reshipped (succession, secession, conquest): colours
+  /// may have gained rows, so the political tint rebuilds wholesale.
+  setRealmRoster(realms) {
+    this.realmRgb = (realms || []).map((c) => hexRgb(c.color));
+    this.tintEpoch++;
+    this._polDirty = true;
+    this._tintCache = null;
+    this._tintRows = undefined;
+    this._compRows = undefined;
+  }
+
+  /// The peoples roster reshipped (era, divergence, death): refresh tongues.
+  setPeopleRoster(cultures) {
+    this.peopleRgb = (cultures || []).map((c) => hexRgb(c.color));
+    this.peoplesEpoch = (this.peoplesEpoch || 0) + 1;
+    this._pTintCache = null;
+  }
+
+  /// Realm that holds cell i, or −1 for wilderness — semantics-safe across
+  /// both the engine grid (realm ids) and the fallback (settlement ids).
+  ownerRealmAt(i) {
     if (this.territoryOwner) return this.territoryOwner[i];
     const owner = this.territoryCache.owner;
     if (!owner || owner[i] < 0) return -1;
-    return cultureOf(this)[owner[i]] ?? -1;
+    return realmOfSettlement(this)[owner[i]] ?? -1;
   }
 
-  cultureColor(s) {
-    return this.cultureRgb[s.culture ?? 0] || settlementColor(s.id);
+  /// People whose tongue is spoken at cell i, −1 where none (M10.6).
+  peopleAt(i) {
+    return this.peoplesOwner ? this.peoplesOwner[i] : -1;
+  }
+
+  realmColor(s) {
+    return this.realmRgb[s.realm ?? 0] || settlementColor(s.id);
+  }
+
+  peopleColor(s) {
+    return this.peopleRgb[s.people ?? 0] || settlementColor(s.id);
   }
 
   // ---------- static annotation (damage frames only) ----------

@@ -24,6 +24,11 @@ strum = { version = "0.26", features = ["derive"] }
 enum-map = "2"
 smallvec = { version = "1", features = ["serde"] }
 
+[dev-dependencies]
+# M15.1 — the assay: property-proofs for the resource economy. Dev-only:
+# never in the wasm, never in the shipped binary.
+proptest = "1"
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3"
 getrandom = { version = "0.2", features = ["js"] }

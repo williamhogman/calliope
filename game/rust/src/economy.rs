@@ -16,7 +16,7 @@
 //! no wall-clock.
 
 use smallvec::smallvec;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use enum_map::EnumMap;
 use rand::Rng;
@@ -24,7 +24,7 @@ use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use crate::ids::{CultureId, EntityId, SettlementId};
+use crate::ids::{PeopleId, EntityId, SettlementId};
 use crate::entity::Registry;
 use crate::naming;
 use crate::resources::{Abundance, Good, GoodSet};
@@ -53,6 +53,14 @@ pub fn base_value(good: Good) -> f64 {
 pub(crate) fn demand_weight(good: Good, luxury: f64) -> f64 {
     if good.is_food() {
         1.15
+    } else if good == Good::Salt {
+        // M14.2: every table needs it, rich or poor — demand sits just
+        // under food and does not ride luxury; scarcity alone moves it
+        1.00
+    } else if good.is_luxury() {
+        // M14.3: furs and their kin — nothing but taste; the poor world
+        // barely wants them, the rich world cannot get enough
+        0.25 + 1.6 * luxury
     } else if good.is_craft() {
         // M5.1: finished goods are bought with surplus — a taste that
         // sharpens as the world grows rich
@@ -134,21 +142,42 @@ impl Market {
 /// mean, eased 25 % per month toward target. `catalogue`, when given, adds
 /// goods the members do NOT produce — in a local market a good nobody makes
 /// is dear, and that gap is exactly what the caravans live on (M5.2).
-fn compute_prices<'a, I>(market: &mut Market, members: I, catalogue: Option<GoodSet>)
-where
+fn compute_prices<'a, I>(
+    market: &mut Market,
+    members: I,
+    catalogue: Option<GoodSet>,
+    people_style: &[usize],
+) where
     I: Iterator<Item = &'a Settlement>,
 {
     let mut supply: EnumMap<Good, Option<f64>> = EnumMap::default();
     let mut total_pop: i64 = 0;
     let mut total_wealth = 0.0;
+    // M14.9 — who is buying: population by culture style, so the demand
+    // side can lean toward the tastes of the people actually here.
+    let mut pop_by_style = [0.0f64; crate::culture::N_STYLES];
     for s in members {
         total_pop += s.pop;
         total_wealth += s.wealth;
+        let sty = people_style.get(s.people.0).copied().unwrap_or(0);
+        pop_by_style[sty] += s.pop as f64;
         for (i, &g) in s.goods.iter().enumerate() {
             let w = (s.pop as f64 / 1000.0) * 0.7f64.powi(i as i32);
             *supply[g].get_or_insert(0.0) += w;
         }
     }
+    let style_pop: f64 = pop_by_style.iter().sum();
+    let mix = |g: Good| -> f64 {
+        if style_pop <= 0.0 {
+            return 1.0;
+        }
+        pop_by_style
+            .iter()
+            .enumerate()
+            .map(|(k, p)| p * crate::culture::taste(k, g))
+            .sum::<f64>()
+            / style_pop
+    };
     if let Some(cat) = catalogue {
         for g in cat.iter() {
             supply[g].get_or_insert(0.0);
@@ -162,7 +191,7 @@ where
     let mut n = 0usize;
     for (g, s) in &supply {
         if let Some(sv) = s {
-            let p = (demand_weight(g, luxury) + 0.02) / (sv + 0.02);
+            let p = (demand_weight(g, luxury) * mix(g) + 0.02) / (sv + 0.02);
             pressure[g] = Some(p);
             ln_sum += p.ln();
             n += 1;
@@ -177,7 +206,13 @@ where
     for (g, p) in &pressure {
         if let Some(p) = p {
             let base = base_value(g);
-            let target = (base * (p / gm).powf(0.55)).clamp(0.3 * base, 5.0 * base);
+            // M14.5 tuning — the scarcity ratio saturates BELOW the hard
+            // clamp (0.148^0.55 ≈ 0.35×, 16^0.55 ≈ 4.6×): a single-supplier
+            // good settles dear but off the pin, so the 0.3×/5× clamp is
+            // reachable only by shock(), and shocks decay. A pinned price
+            // is a dead signal; the economy gate counts them as mis-tuning.
+            let r = (p / gm).clamp(0.148, 16.0);
+            let target = (base * r.powf(0.55)).clamp(0.3 * base, 5.0 * base);
             let old = market.price(g);
             next[g] = Some(round2(0.75 * old + 0.25 * target));
         }
@@ -187,8 +222,8 @@ where
 
 /// Recompute WORLD prices from relative scarcity (the blended ledger the
 /// UI's market tab and explain.rs read).
-pub fn update_prices(market: &mut Market, settlements: &[Settlement]) {
-    compute_prices(market, settlements.iter(), None);
+pub fn update_prices(market: &mut Market, settlements: &[Settlement], people_style: &[usize]) {
+    compute_prices(market, settlements.iter(), None, people_style);
 }
 
 // ---------------------------------------------------------- market areas
@@ -374,8 +409,30 @@ pub fn build_areas(
 /// Every book is then anchored to the world blend: even a shut-in valley
 /// hears rumours of prices down the road, and itinerant peddlers ferry
 /// the basics long before the great caravans bother (M5.2).
-pub fn update_area_prices(areas: &mut MarketAreas, settlements: &[Settlement], world: &Market) {
-    const OPENNESS: f64 = 0.5; // how hard the world blend pulls on a local book
+pub fn update_area_prices(
+    areas: &mut MarketAreas,
+    settlements: &[Settlement],
+    world: &Market,
+    people_style: &[usize],
+) {
+    // M14.7 — the world anchor IS long-distance arbitrage in disguise, so
+    // how hard it pulls on a local book is a transport-class fact, not a
+    // constant: a "world price" only exists for goods that actually cross
+    // the world. Precious anchors hard (gold is gold everywhere), the
+    // everyday middle moderately, bulk barely (grain is priced by the
+    // valley that grew it), and fresh fruit — no salt cures it — hardly
+    // at all. This, not a painted ring, is where von Thünen lives.
+    let openness = |g: Good| -> f64 {
+        use crate::resources::Transport;
+        if g.perishable() && !crate::resources::salt_cured(g) {
+            return 0.05;
+        }
+        match g.transport() {
+            Transport::Bulk => 0.12,
+            Transport::Ordinary => 0.35,
+            Transport::Precious => 0.60,
+        }
+    };
     let catalogue: GoodSet = settlements
         .iter()
         .flat_map(|s| s.goods.iter().copied())
@@ -387,25 +444,80 @@ pub fn update_area_prices(areas: &mut MarketAreas, settlements: &[Settlement], w
             .filter(|(i, _)| areas.area.get(*i) == Some(&k))
             .map(|(_, s)| s)
             .collect();
-        compute_prices(&mut areas.markets[k], members.into_iter(), Some(catalogue));
+        compute_prices(&mut areas.markets[k], members.into_iter(), Some(catalogue), people_style);
         let mk = &mut areas.markets[k];
         for g in catalogue.iter() {
             if let Some(local) = mk.prices[g] {
                 let anchor = world.price(g);
-                mk.prices[g] = Some(round2(local + (anchor - local) * OPENNESS));
+                mk.prices[g] = Some(round2(local + (anchor - local) * openness(g)));
             }
         }
     }
 }
 
+/// M14.2 PRESERVES — the areas whose yards can salt a catch: any member
+/// town listing salt. Computed once per pass and shared by the border
+/// equalizer, the gravity lane and the merchants.
+pub fn areas_with_salt(areas: &MarketAreas, settlements: &[Settlement]) -> Vec<bool> {
+    let mut has = vec![false; areas.markets.len()];
+    for (i, s) in settlements.iter().enumerate() {
+        if s.goods.contains(&Good::Salt) {
+            if let Some(&k) = areas.area.get(i) {
+                if k < has.len() {
+                    has[k] = true;
+                }
+            }
+        }
+    }
+    has
+}
+
+/// M14.7 CARRIAGE — what fraction of a price gap a route can profitably
+/// carry, set by value density. Reach is measured in units of the median
+/// leg cost `c0` (scale-free, like the M5.4 attenuation): bulk pays
+/// freight per ton it cannot afford overland, precious shrugs at
+/// distance. Sea legs are ~9× cheaper per km in `Route::cost` (ADR-0010),
+/// so "bulk moves by water" falls out of the same number — a sea route
+/// of the same length simply costs less, and bulk's short reach covers
+/// it. Fresh fruit rots on the axle: no salt cures it (M14.2 gates the
+/// curable), so it trades next door or not at all.
+fn carriage(g: Good, cost: f64, c0: f64) -> f64 {
+    use crate::resources::Transport;
+    let reach = match g.transport() {
+        Transport::Bulk => 0.75 * c0,
+        Transport::Ordinary => 3.0 * c0,
+        Transport::Precious => 24.0 * c0,
+    };
+    let mut f = reach / (reach + cost.max(0.0));
+    if g.perishable() && !crate::resources::salt_cured(g) {
+        f *= 0.15;
+    }
+    f
+}
+
+/// The median leg cost — the distance unit every carriage reach is
+/// quoted in. Median, not mean: one heroic sea crossing must not
+/// re-price every cart on the map.
+fn median_cost(routes: &[Route]) -> f64 {
+    let mut cs: Vec<f64> = routes.iter().map(|r| r.cost.max(1.0)).collect();
+    if cs.is_empty() {
+        return 50.0;
+    }
+    cs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    cs[cs.len() / 2]
+}
+
 /// Every route that crosses an area border drags the two price books
-/// toward each other — trade equalizes what it touches (M5.3).
-fn equalize_along_routes(
+/// toward each other — trade equalizes what it touches (M5.3), at the
+/// rate the cargo class can actually pay for (M14.7).
+pub fn equalize_along_routes(
     areas: &mut MarketAreas,
     settlements: &[Settlement],
     routes: &[Route],
     by_id: &HashMap<SettlementId, usize>,
+    salted: &[bool],
 ) {
+    let c0 = median_cost(routes);
     for r in routes {
         let (Some(&ia), Some(&ib)) = (by_id.get(&r.a), by_id.get(&r.b)) else {
             continue;
@@ -414,7 +526,7 @@ fn equalize_along_routes(
         if ka == kb || ka >= areas.markets.len() || kb >= areas.markets.len() {
             continue;
         }
-        let rate = 0.05 * r.w.min(1.0);
+        let rate0 = 0.05 * r.w.min(1.0);
         let goods: GoodSet = settlements[ia]
             .goods
             .iter()
@@ -422,6 +534,17 @@ fn equalize_along_routes(
             .copied()
             .collect();
         for g in goods.iter() {
+            // M14.2 PRESERVES — fresh catch spoils at the area border;
+            // with a salting yard on either side it travels like any ware
+            if crate::resources::salt_cured(g)
+                && !(salted.get(ka).copied().unwrap_or(false)
+                    || salted.get(kb).copied().unwrap_or(false))
+            {
+                continue;
+            }
+            // M14.7 — equalization runs at the rate the cargo class pays
+            // for: grain converges along cheap water, gold across the map
+            let rate = rate0 * carriage(g, r.cost, c0);
             let pa = areas.markets[ka].price(g);
             let pb = areas.markets[kb].price(g);
             let mid = 0.5 * (pa + pb);
@@ -520,22 +643,31 @@ pub fn areas_json(areas: &MarketAreas, settlements: &[Settlement]) -> Value {
 // ---------------------------------------------------------------- recipes
 
 /// M5.1 — what the workshops turn ore into, and what it takes.
-struct Recipe {
-    out: Good,
+pub struct Recipe {
+    pub out: Good,
     /// any one of these arts unlocks the craft
-    tech_any: &'static [TechId],
+    pub tech_any: &'static [TechId],
     /// workforce gate: no finished goods from a hamlet
-    min_pop: i64,
+    pub min_pop: i64,
     /// any one of these among the town's goods feeds the forge
-    ore_any: &'static [Good],
+    pub ore_any: &'static [Good],
     /// the forge burns coal or charcoal (timber)
-    needs_fuel: bool,
+    pub needs_fuel: bool,
 }
 
-const RECIPES: [Recipe; 3] = [
+pub const RECIPES: [Recipe; 8] = [
     Recipe { out: Good::Tools, tech_any: &[TechId::Bronze, TechId::Iron], min_pop: 1200, ore_any: &[Good::Copper, Good::Iron], needs_fuel: true },
     Recipe { out: Good::Weapons, tech_any: &[TechId::Steel], min_pop: 2500, ore_any: &[Good::Iron], needs_fuel: true },
-    Recipe { out: Good::Jewelry, tech_any: &[TechId::Coin], min_pop: 2000, ore_any: &[Good::Gold, Good::Silver], needs_fuel: false },
+    // M14.5 — gems join gold and silver at the jeweler's bench
+    Recipe { out: Good::Jewelry, tech_any: &[TechId::Coin], min_pop: 2000, ore_any: &[Good::Gold, Good::Silver, Good::Gems], needs_fuel: false },
+    // M14.5 — the earth crafts: riverbank clay through the kilns
+    Recipe { out: Good::Pottery, tech_any: &[TechId::Pottery], min_pop: 800, ore_any: &[Good::Clay], needs_fuel: true },
+    Recipe { out: Good::Brick, tech_any: &[TechId::Masonry], min_pop: 1500, ore_any: &[Good::Clay], needs_fuel: true },
+    // M14.6 — the soft trades: fleece to the loom, hides to the tan-pits
+    // (bark lore, not fire), grapes to the press and into amphorae.
+    Recipe { out: Good::Cloth, tech_any: &[TechId::Loom], min_pop: 1000, ore_any: &[Good::Wool], needs_fuel: false },
+    Recipe { out: Good::Leather, tech_any: &[TechId::HerbLore], min_pop: 1000, ore_any: &[Good::Hides], needs_fuel: false },
+    Recipe { out: Good::Wine, tech_any: &[TechId::Pottery], min_pop: 1200, ore_any: &[Good::Grapes], needs_fuel: false },
 ];
 
 const FORGE_LIT: [&str; 3] = [
@@ -543,6 +675,32 @@ const FORGE_LIT: [&str; 3] = [
     "{S} raises a guildhall of hammers: its {G} carry the town's mark now.",
     "Ore goes into {S} and {G} come out; the caravans pay in silver.",
 ];
+
+/// M14.5 — the clay crafts speak of kilns, not anvils.
+const KILN_LIT: [&str; 3] = [
+    "The kilns of {S} glow through the night — {G} of {S} make travel the river roads.",
+    "{S} digs the riverbank and fires it true: its {G} carry the town's stamp now.",
+    "Clay goes into {S} and {G} come out; every market stall stacks them high.",
+];
+
+/// M14.6 — and the soft trades speak of looms, tan-pits and presses.
+const WORKS_LIT: [&str; 3] = [
+    "The workshops of {S} hum from bell to bell — {G} of {S} make are asked for by name.",
+    "{S} turns the country's harvest into {G}: the raw carts come in, the finished carts go out.",
+    "What the hinterland grows, {S} refines — its {G} fetch twice the raw at any fair.",
+];
+
+/// The voice and the vocabulary of each craft: (works, feedstock, lines).
+/// One place to look up how a workshop speaks when it lights or goes cold.
+fn craft_voice(out: Good) -> (&'static str, &'static str, &'static [&'static str]) {
+    match out {
+        Good::Pottery | Good::Brick => ("kilns", "clay", &KILN_LIT),
+        Good::Cloth => ("looms", "wool", &WORKS_LIT),
+        Good::Leather => ("tan-pits", "hides", &WORKS_LIT),
+        Good::Wine => ("presses", "grapes", &WORKS_LIT),
+        _ => ("forges", "ore", &FORGE_LIT),
+    }
+}
 
 /// Towns with ore, fuel, hands and the art work it into finished goods.
 /// Returns chronicle lines for forges newly lit or newly gone cold.
@@ -575,7 +733,7 @@ pub fn craft_pass(
         }
     }
     for (si, s) in settlements.iter_mut().enumerate() {
-        let Some(soc) = socs.get(s.culture.idx()) else { continue };
+        let Some(soc) = socs.get(s.people.idx()) else { continue };
         let k_area = areas.area.get(si).copied();
         let nearby: GoodSet = k_area
             .and_then(|k| area_goods.get(k))
@@ -612,12 +770,16 @@ pub fn craft_pass(
                 if p_out > p_cur {
                     s.exports = Some(rc.out);
                 }
-                let t = FORGE_LIT[rng.gen_range(0..FORGE_LIT.len())];
+                let (_, _, lines) = craft_voice(rc.out);
+                let t = lines[rng.gen_range(0..lines.len())];
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
                     k: EventKind::Trade,
                     text: t.replace("{S}", &s.name).replace("{G}", rc.out.name()),
+                    // anchor the ground (M9.2)
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             } else if !eligible && has {
@@ -625,14 +787,18 @@ pub fn craft_pass(
                 if s.exports == Some(rc.out) {
                     s.exports = s.goods.first().copied();
                 }
+                let (works, feed, _) = craft_voice(rc.out);
                 events.push(Event {
                     m: month_abs,
                     s: s.name.clone(),
                     k: EventKind::Trade,
                     text: format!(
-                        "The forges of {} go cold — no ore comes, and the {} trade dies with them.",
-                        s.name, rc.out
+                        "The {} of {} go cold — no {} comes, and the {} trade dies with them.",
+                        works, s.name, feed, rc.out
                     ),
+                    // anchor the ground (M9.2)
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
@@ -678,30 +844,35 @@ pub fn merchant_pass(
     by_id: &HashMap<SettlementId, usize>,
 ) -> Vec<Event> {
     let Economy { merchants, areas, .. } = eco;
-    let Peoples { settlements, cultures, societies: socs } = peoples;
+    let Peoples { settlements, peoples: cultures, societies: socs, .. } = peoples;
     let mut events = Vec::new();
     if areas.markets.len() < 2 {
         return events;
     }
+    let salted = areas_with_salt(areas, settlements);
 
-    // which areas the roads actually join (merchants follow routes)
-    let mut linked: BTreeSet<(usize, usize)> = BTreeSet::new();
+    // which areas the roads actually join (merchants follow routes) —
+    // M14.7: remember the CHEAPEST leg joining each pair, because that is
+    // the leg a merchant would take and the freight their cargo pays
+    let mut linked: BTreeMap<(usize, usize), f64> = BTreeMap::new();
     for r in routes {
         let (Some(&ia), Some(&ib)) = (by_id.get(&r.a), by_id.get(&r.b)) else {
             continue;
         };
         let (ka, kb) = (areas.area_of(ia), areas.area_of(ib));
         if ka != kb {
-            linked.insert((ka.min(kb), ka.max(kb)));
+            let e = linked.entry((ka.min(kb), ka.max(kb))).or_insert(f64::MAX);
+            *e = e.min(r.cost.max(1.0));
         }
     }
+    let c0 = median_cost(routes);
 
     // --- new blood: once a year, coin-wise cultures send out a trader
     if month_abs.rem_euclid(12) == 5 {
         let alive = merchants.iter().filter(|m| m.alive).count();
         if alive < MERCHANT_CAP {
             for (ci, cu) in cultures.iter().enumerate() {
-            let cid = CultureId(ci);
+            let cid = PeopleId(ci);
                 if !socs.get(ci).map_or(false, |so| so.knows(TechId::Coin)) {
                     continue;
                 }
@@ -711,7 +882,7 @@ pub fn merchant_pass(
                         m.alive
                             && by_id
                                 .get(&m.home)
-                                .map_or(false, |&i| settlements[i].culture == cid)
+                                .map_or(false, |&i| settlements[i].people == cid)
                     })
                     .count();
                 if of_culture >= 2 || rng.gen::<f64>() > 0.30 {
@@ -720,7 +891,7 @@ pub fn merchant_pass(
                 // the richest sizeable town of the people sends its trader
                 let Some(home) = settlements
                     .iter()
-                    .filter(|s| s.culture == cid && s.pop >= 2500)
+                    .filter(|s| s.people == cid && s.pop >= 2500)
                     .max_by(|a, b| a.wealth.partial_cmp(&b.wealth).unwrap())
                 else {
                     continue;
@@ -778,7 +949,7 @@ pub fn merchant_pass(
         // widest gap from home market to any route-linked area
         let mut best: Option<(f64, Good, usize)> = None; // (gap, good, other)
         let goods: Vec<Good> = areas.markets[ka].keys().collect();
-        for &(x, y) in &linked {
+        for (&(x, y), &leg) in &linked {
             let kb = if x == ka {
                 y
             } else if y == ka {
@@ -787,7 +958,18 @@ pub fn merchant_pass(
                 continue;
             };
             for &g in &goods {
-                let gap = (areas.markets[kb].price(g) - areas.markets[ka].price(g)).abs();
+                // M14.2 — merchants carry salt-fish, never fresh: no yard
+                // in either market, no perishable run
+                if crate::resources::salt_cured(g)
+                    && !(salted.get(ka).copied().unwrap_or(false)
+                        || salted.get(kb).copied().unwrap_or(false))
+                {
+                    continue;
+                }
+                // M14.7 — the margin is what survives the freight: a
+                // grain gap across the world loses to a gem gap next door
+                let gap = (areas.markets[kb].price(g) - areas.markets[ka].price(g)).abs()
+                    * carriage(g, leg, c0);
                 if best.as_ref().map_or(true, |(bg, _, _)| gap > *bg) {
                     best = Some((gap, g, kb));
                 }
@@ -897,12 +1079,19 @@ pub fn monthly(
     rng: &mut Pcg64Mcg,
     by_id: &HashMap<SettlementId, usize>,
 ) -> Vec<Event> {
+    // M14.9 — the tastes of the peoples enter the books
+    let people_style: Vec<usize> = peoples
+        .peoples
+        .iter()
+        .map(|p| crate::culture::style_index(&p.style))
+        .collect();
     let Economy { market, areas, route_flow, .. } = eco;
-    let Peoples { settlements, societies: socs, .. } = peoples;
+    let Peoples { settlements, realms, societies: socs, .. } = peoples;
     let mut events = Vec::new();
-    update_prices(market, settlements);
-    update_area_prices(areas, settlements, market);
-    equalize_along_routes(areas, settlements, routes, by_id);
+    update_prices(market, settlements, &people_style);
+    update_area_prices(areas, settlements, market, &people_style);
+    let salted = areas_with_salt(areas, settlements);
+    equalize_along_routes(areas, settlements, routes, by_id, &salted);
 
     let mods: Vec<society::Mods> = socs.iter().map(society::mods_for).collect();
 
@@ -915,15 +1104,7 @@ pub fn monthly(
     route_flow.resize(routes.len(), 0.0);
     // the median leg cost sets the distance scale for attenuation (M5.4):
     // scale-free, so re-tuning route costing never re-tunes the economy
-    let c0 = {
-        let mut cs: Vec<f64> = routes.iter().map(|r| r.cost.max(1.0)).collect();
-        if cs.is_empty() {
-            50.0
-        } else {
-            cs.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            cs[cs.len() / 2]
-        }
-    };
+    let c0 = median_cost(routes);
     for (ri, r) in routes.iter().enumerate() {
         let (Some(&ia), Some(&ib)) = (by_id.get(&r.a), by_id.get(&r.b)) else {
             continue;
@@ -947,7 +1128,19 @@ pub fn monthly(
                 .collect();
             let mut gaps: Vec<f64> = goods
                 .iter()
-                .map(|g| (areas.markets[ka].price(g) - areas.markets[kb].price(g)).abs())
+                // M14.2 — un-salted perishables earn nothing across the
+                // border: no yard, no salt-fish trade
+                .filter(|&g| {
+                    !crate::resources::salt_cured(g)
+                        || salted.get(ka).copied().unwrap_or(false)
+                        || salted.get(kb).copied().unwrap_or(false)
+                })
+                // M14.7 — a gap only earns what the cargo class can haul:
+                // bulk gaps die on long overland legs, precious gaps pay
+                .map(|g| {
+                    (areas.markets[ka].price(g) - areas.markets[kb].price(g)).abs()
+                        * carriage(g, r.cost, c0)
+                })
                 .collect();
             gaps.sort_by(|a, b| b.partial_cmp(a).unwrap());
             gap = gaps.into_iter().take(4).sum();
@@ -960,8 +1153,8 @@ pub fn monthly(
                 .cos();
             flow *= (1.0 + 0.5 * r.ramp * phase).max(0.4);
         }
-        let ta = mods.get(sa.culture.idx()).map(|m| m.trade).unwrap_or(1.0);
-        let tb = mods.get(sb.culture.idx()).map(|m| m.trade).unwrap_or(1.0);
+        let ta = mods.get(sa.people.idx()).map(|m| m.trade).unwrap_or(1.0);
+        let tb = mods.get(sb.people.idx()).map(|m| m.trade).unwrap_or(1.0);
         // a harbour works the cranes: more cargo through, more dues taken
         let ha = if sa.port { 1.25 } else { 1.0 };
         let hb = if sb.port { 1.25 } else { 1.0 };
@@ -976,7 +1169,7 @@ pub fn monthly(
     // same luxury formula as update_prices — one taste, two ledgers
     let luxury = (total_wealth / (total_pop.max(1) as f64) / 4.0).min(0.5);
     for (i, s) in settlements.iter_mut().enumerate() {
-        let m = mods.get(s.culture.idx()).cloned().unwrap_or_default();
+        let m = mods.get(s.people.idx()).cloned().unwrap_or_default();
         // M2.4 Bettencourt: socio-economic output scales superlinearly with
         // town size (∝ pop^1.15) — denser streets, faster deals — while
         // infrastructure upkeep scales sublinearly (∝ pop^0.85): shared
@@ -1004,8 +1197,10 @@ pub fn monthly(
         let income = production + trade_income[i] - upkeep;
         s.wealth = round2((s.wealth + income).max(0.0));
         if income > 0.0 {
-            if let Some(soc) = socs.get_mut(s.culture.idx()) {
-                soc.treasury = round2(soc.treasury + 0.08 * income);
+            // ADR-0018 — the tithe follows the banner: coin flows to the
+            // crown that rules the town, not to the tongue spoken in it.
+            if let Some(realm) = realms.get_mut(s.realm.0) {
+                realm.treasury = round2(realm.treasury + 0.08 * income);
             }
         }
 
@@ -1029,6 +1224,9 @@ pub fn monthly(
                 s: s.name.clone(),
                 k: EventKind::Wonder,
                 text: which.replace("{S}", &s.name),
+                // anchor the ground (M9.2)
+                x: s.x,
+                y: s.y,
                 ..Default::default()
             });
         }
@@ -1047,14 +1245,20 @@ pub fn monthly(
                 cheapest = Some((g, ratio));
             }
         }
+        // anchor market events to the loudest producer's ground so the
+        // second reading (resolve_events) can always find them a subject —
+        // a good's name is vocabulary, not an entity, and resolves to nothing.
+        let producer_of = |g: crate::resources::Good| {
+            settlements
+                .iter()
+                .filter(|s| s.goods.contains(&g))
+                .max_by_key(|s| s.pop)
+                .map(|s| (s.name.clone(), s.x, s.y))
+        };
         if let Some((g, r)) = dearest {
             if r > 2.2 {
-                let producer = settlements
-                    .iter()
-                    .filter(|s| s.goods.contains(&g))
-                    .max_by_key(|s| s.pop)
-                    .map(|s| s.name.clone())
-                    .unwrap_or_else(|| "distant ports".to_string());
+                let (producer, px, py) = producer_of(g)
+                    .unwrap_or_else(|| ("distant ports".to_string(), -1, -1));
                 events.push(Event {
                     m: month_abs,
                     s: g.to_string(),
@@ -1063,6 +1267,8 @@ pub fn monthly(
                         "{} fetches many times its old price; caravans race for {}.",
                         capitalize(g.name()), producer
                     ),
+                    x: px,
+                    y: py,
                     ..Default::default()
                 });
             }
@@ -1070,6 +1276,7 @@ pub fn monthly(
         if events.is_empty() {
             if let Some((g, r)) = cheapest {
                 if r < 0.5 {
+                    let (px, py) = producer_of(g).map(|(_, x, y)| (x, y)).unwrap_or((-1, -1));
                     events.push(Event {
                         m: month_abs,
                         s: g.to_string(),
@@ -1078,6 +1285,8 @@ pub fn monthly(
                             "The bottom falls out of the {} trade; warehouses overflow and merchants weep.",
                             g
                         ),
+                        x: px,
+                        y: py,
                         ..Default::default()
                     });
                 }
@@ -1105,8 +1314,14 @@ use crate::state::{Economy, Peoples};
 pub const BANDS: &[Band] = &[
     Band { name: "max pinned price share", sweet: (0.0, 0.25), hard: (0.0, 0.55), target: "sweet ≤25% · hard ≤55%" },
     Band { name: "wealth gini", sweet: (0.20, 0.80), hard: (0.05, 0.95), target: "sweet 0.20–0.80 — some inequality, no monopoly" },
-    Band { name: "inter-area price divergence", sweet: (1.03, 3.0), hard: (1.0, 6.0), target: "M5.2 gate: local markets disagree, but not madly" },
+    // M14.7 re-based: with class-split openness the mean rides on bulk's
+    // deliberate dispersion (grain is priced by the valley that grew it),
+    // so the sweet ceiling moves 3.0→4.5; the hard wall stays a wall.
+    Band { name: "wild collapse share", sweet: (0.0, 0.25), hard: (0.0, 0.5), target: "M14.8: overharvest bites somewhere, never everywhere" },
+    Band { name: "inter-area price divergence", sweet: (1.03, 4.5), hard: (1.0, 6.0), target: "M5.2 gate: local markets disagree, but not madly" },
     Band { name: "wealth~pop scaling β", sweet: (0.90, 1.60), hard: (0.50, 2.10), target: "M2.4: superlinear output, target ≈1.15" },
     Band { name: "iron/grain price ratio", sweet: (1.5, 14.0), hard: (0.8, 40.0), target: "M2.7: metal dear, bread cheap" },
     Band { name: "gold/grain price ratio", sweet: (2.5, 80.0), hard: (1.2, 300.0), target: "M2.7: the precious envelope" },
+    Band { name: "salt/grain price ratio", sweet: (0.8, 10.0), hard: (0.4, 40.0), target: "M14.2: dear inland, never gold — the Hodges envelope" },
+    Band { name: "wool/grain price ratio", sweet: (1.0, 12.0), hard: (0.5, 40.0), target: "M14.3: the staple export — dearer than bread, cheaper than iron" },
 ];

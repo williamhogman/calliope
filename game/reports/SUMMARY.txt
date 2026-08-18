@@ -1,22 +1,28 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-17 01:38 UTC
+mode: full · size: 512 · generated: 2026-08-18 01:01 UTC
 
-totals: 309 pass · 2 warn · 0 fail
+totals: 368 pass · 12 warn · 0 fail
+
+-- assay.txt
+   all checks pass
 
 -- bench.txt
-   all checks pass
+[WARN] median tick payload                          6645 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
    all checks pass
 
 -- build.txt
-   all checks pass
+[WARN] wasm binary size                              3162446 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
 
 -- civ-12345.txt
-[WARN] median town spacing                           48 km   (M2.5: market-town band ~15–30 km in settled cores)
+[WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
+[WARN] events per year                                74.3   (sweet 2–48 · hard 0.5–100)
+[WARN] median town spacing                           51 km   (M2.5: market-town band ~15–30 km in settled cores)
 
 -- civ-777.txt
-   all checks pass
+[WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
+[WARN] events per year                                60.9   (sweet 2–48 · hard 0.5–100)
 
 -- climate-12345.txt
    all checks pass
@@ -49,10 +55,10 @@ totals: 309 pass · 2 warn · 0 fail
    all checks pass
 
 -- patina.txt
-   all checks pass
+[WARN] ruins per century (after y100)                14.33   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-   all checks pass
+[WARN] tick rate year 100                   353 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
    all checks pass
@@ -67,10 +73,10 @@ totals: 309 pass · 2 warn · 0 fail
    all checks pass
 
 -- sweep.txt
-   all checks pass
+[WARN] mean events/year                               48.3   (sweet 2–48 · hard 0.5–100)
 
 -- systems.txt
-   all checks pass
+[WARN] ECS parallel ceiling stays low               1.650×   (ADR-0022: re-open the bevy_ecs question if this rises)
 
 -- telling-12345.txt
    all checks pass

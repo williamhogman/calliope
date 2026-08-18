@@ -7,7 +7,7 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
-use crate::ids::{CultureId, SettlementId};
+use crate::ids::{PeopleId, RealmId, SettlementId};
 use crate::constants as gc;
 use crate::naming;
 use crate::ndimage;
@@ -48,11 +48,16 @@ pub struct Settlement {
     pub k: f64,
     pub coastal: bool,
     pub river: bool,
-    pub culture: CultureId,
-    /// Culture whose tongue coined the name — stable through conquest
+    /// The people who live here (ADR-0018) — moves only by assimilation
+    /// or merging (M12), never by conquest.
+    pub people: PeopleId,
+    /// The crown that rules here (ADR-0018) — moves by conquest,
+    /// secession, union and collapse.
+    pub realm: RealmId,
+    /// People whose tongue coined the name — stable through conquest
     /// (names carry time, M9.2); the M3 label audit classifies against
     /// this, not the current owner.
-    pub namer: CultureId,
+    pub namer: PeopleId,
     pub connections: i64,
     pub goods: Goods,
     pub exports: Option<Good>,
@@ -89,6 +94,17 @@ pub struct Settlement {
     /// Gibrat dip never kills a town that would have recovered.
     #[serde(skip)]
     pub ail: u16,
+    /// M12.2 — assimilation drift, 0..1: generations spent leaning toward
+    /// the crown people's tongue. Engine-internal; the flip is the event.
+    #[serde(skip)]
+    pub drift: f64,
+    /// The people the drift leans toward — a change of crown resets it.
+    #[serde(skip)]
+    pub drift_to: Option<PeopleId>,
+    /// M12.5 — the crown's word for a minority town; its own folk keep
+    /// the map name. Shipped so the inspector can show the doubling.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub exonym: Option<String>,
 }
 
 /// Effective hinterland a town can actually farm, km² — a half-day's
@@ -322,8 +338,9 @@ pub fn found_settlements(
             k: 0.0, // set by World::generate once the crop grid exists
             coastal: coast[[by, bx]],
             river: near_fresh[[by, bx]],
-            culture: CultureId(0),
-            namer: CultureId(0),
+            people: PeopleId(0),
+            realm: RealmId(0),
+            namer: PeopleId(0),
             connections: 0,
             goods: Goods::new(),
             exports: None,
@@ -336,6 +353,9 @@ pub fn found_settlements(
             born: 0,
             failing: false,
             ail: 0,
+            drift: 0.0,
+            drift_to: None,
+            exonym: None,
         });
         for y in 0..size {
             for x in 0..size {

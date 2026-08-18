@@ -24,7 +24,7 @@ export const FIELDS = [
   { name: "crops", dtype: "uint8", units: "crop package id", gpu: false },
   { name: "strahler", dtype: "uint8", units: "stream order, 0 off-river", gpu: true },
   { name: "flags", dtype: "uint8", units: "CellFlags bits", gpu: true },
-  { name: "territory", dtype: "int16", units: "owner culture, −1 wild", gpu: false },
+  { name: "territory", dtype: "int16", units: "owner realm, −1 wild", gpu: false },
 ];
 
 export const EVENT_KINDS = [
@@ -46,9 +46,11 @@ export const EVENT_KINDS = [
   { name: "trade", family: "economy", weight: 1 },
   { name: "war", family: "war", weight: 3 },
   { name: "wonder", family: "realm", weight: 2 },
+  { name: "kindred", family: "realm", weight: 3 },
+  { name: "era", family: "realm", weight: 4 },
 ];
 
-export const ENTITY_KINDS = ["artifact", "culture", "feature", "good", "person", "ruin", "settlement", "war", "world"];
+export const ENTITY_KINDS = ["artifact", "culture", "feature", "good", "person", "ruin", "settlement", "war", "world", "realm", "civilization"];
 
 export const BIOMES = [
   { id: 0, name: "Water" },
@@ -64,4 +66,4 @@ export const BIOMES = [
   { id: 10, name: "Ice" },
 ];
 
-export const GOODS = ["bananas", "blackberries", "blueberries", "cattle", "coal", "copper", "deer", "elk", "fish", "gold", "grain", "horse", "iron", "jewelry", "mithril", "pig", "sheep", "silver", "stone", "strawberries", "timber", "tools", "weapons"];
+export const GOODS = ["bananas", "blackberries", "blueberries", "brick", "cattle", "clay", "cloth", "coal", "copper", "deer", "dyes", "elk", "fish", "furs", "gems", "gold", "grain", "grapes", "hides", "horse", "iron", "jewelry", "leather", "marble", "mithril", "pig", "pottery", "salt", "sheep", "silver", "spices", "stone", "strawberries", "timber", "tools", "weapons", "wine", "wool"];

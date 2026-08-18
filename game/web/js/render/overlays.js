@@ -231,7 +231,7 @@ export function drawSettlements(R, ctx, view, state) {
     const sy = view.ty + (st.y + 0.5) * s;
     if (sx < -60 || sy < -30 || sx > R.canvas.clientWidth + 60 || sy > R.canvas.clientHeight + 30) continue;
     const r = TIER_RADIUS[st.tier] || 3;
-    const [cr, cg, cb] = R.cultureColor(st);
+    const [cr, cg, cb] = R.realmColor(st);
     const selected = state.selectedId === st.id;
     if (selected) {
       ctx.beginPath();

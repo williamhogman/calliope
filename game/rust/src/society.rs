@@ -9,8 +9,8 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
-use crate::ids::CultureId;
-use crate::culture::Culture;
+use crate::ids::PeopleId;
+use crate::culture::People;
 use crate::resources::{Deposit, Good, GoodSet};
 use crate::settlements::{territory_radius, Settlement};
 use crate::event::EventKind;
@@ -159,6 +159,26 @@ pub const TECHS: [Tech; 21] = [
         flavor: "Deep miners of the {P} bring up mithril, and their smiths work wonders whiter than moonlight." },
 ];
 
+/// M15.2 — the REQUIRES vocabulary bridge. `Good::requires()` labels are
+/// client-facing gate names; every one must resolve here, and the assay
+/// proves it. Three kinds: a tech's own name in `TECHS`, a family label
+/// covering several arts, or a folkway — a pre-tech art every people
+/// knows from the founding, which gates nothing.
+pub const FOLKWAYS: [&str; 3] = ["farming", "fishing", "gathering"];
+
+/// Family labels: one gate name, several qualifying arts.
+pub const TECH_FAMILIES: [(&str, &[TechId]); 2] = [
+    ("metal-working", &[TechId::Bronze, TechId::Iron]),
+    ("mithril-smithing", &[TechId::MithrilCraft]),
+];
+
+/// Does a `Good::requires()` label name something real?
+pub fn requires_resolves(label: &str) -> bool {
+    TECHS.iter().any(|t| t.name == label)
+        || FOLKWAYS.contains(&label)
+        || TECH_FAMILIES.iter().any(|(f, ids)| *f == label && !ids.is_empty())
+}
+
 /// The id's row in `TECHS` — variant order and table order are one.
 pub fn tech(id: TechId) -> &'static Tech {
     &TECHS[id as usize]
@@ -182,7 +202,7 @@ const ASCENSIONS: [&str; 4] = [
 
 #[derive(Serialize, Clone)]
 pub struct Society {
-    pub culture: usize,
+    pub people: usize,
     pub era: usize,
     pub polity: usize,
     pub techs: Vec<TechId>,
@@ -191,20 +211,24 @@ pub struct Society {
     #[serde(skip)]
     pub known: TechSet,
     pub knowledge: f64,
-    pub treasury: f64,
+    /// M13.2 — golden-age research pace, owned by the civ pass: reset to
+    /// 1.0 every civ year, raised for members of golden civilizations.
+    /// Off the wire; the arts it buys are what the client sees.
+    #[serde(skip)]
+    pub boon: f64,
 }
 
-pub fn init(cultures: &[Culture]) -> Vec<Society> {
-    cultures
+pub fn init(peoples: &[People]) -> Vec<Society> {
+    peoples
         .iter()
         .map(|c| Society {
-            culture: c.id.0,
+            people: c.id.0,
             era: 0,
             polity: 0,
             techs: Vec::new(),
             known: TechSet::EMPTY,
             knowledge: 0.0,
-            treasury: 25.0,
+            boon: 1.0,
         })
         .collect()
 }
@@ -288,13 +312,13 @@ pub fn mods_for(soc: &Society) -> Mods {
 // ---------------------------------------------------------------- monthly
 
 /// Resource kinds within reach of a people's settlements.
-fn reachable_kinds(cid: CultureId, settlements: &[Settlement], deposits: &[Deposit]) -> GoodSet {
+fn reachable_kinds(cid: PeopleId, settlements: &[Settlement], deposits: &[Deposit]) -> GoodSet {
     let mut kinds = GoodSet::EMPTY;
-    for s in settlements.iter().filter(|s| s.culture == cid) {
+    for s in settlements.iter().filter(|s| s.people == cid) {
         let r = territory_radius(s.pop) * 2.2;
         let r2 = r * r;
         for d in deposits {
-            if !d.known || d.left == 0.0 {
+            if !d.live() {
                 continue; // no bronze from a seam nobody has found
             }
             let dx = (d.x - s.x) as f64;
@@ -314,12 +338,12 @@ pub fn monthly(
     month_abs: i64,
     rng: &mut Pcg64Mcg,
 ) -> Vec<Event> {
-    let Peoples { settlements, cultures, societies: socs } = peoples;
+    let Peoples { settlements, peoples: cultures, societies: socs, .. } = peoples;
     let mut events = Vec::new();
     for si in 0..socs.len() {
-        let cid = CultureId(socs[si].culture);
+        let cid = PeopleId(socs[si].people);
         let mine: Vec<&Settlement> =
-            settlements.iter().filter(|s| s.culture == cid).collect();
+            settlements.iter().filter(|s| s.people == cid).collect();
         if mine.is_empty() {
             continue;
         }
@@ -339,7 +363,7 @@ pub fn monthly(
                 kp += 1.0;
             }
         }
-        kp = (kp * m.research).max(0.2);
+        kp = (kp * m.research * socs[si].boon).max(0.2);
         socs[si].knowledge += kp;
 
         // --- discovery: one art at most per month per people. Every art

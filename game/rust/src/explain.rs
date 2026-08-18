@@ -42,7 +42,7 @@ fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
     let s = world.peoples.settlements.iter().find(|s| s.id == id)?;
     let md = world
         .peoples.societies
-        .get(s.culture.idx())
+        .get(s.people.idx())
         .map(society::mods_for)
         .unwrap_or_default();
     let (y, x) = (s.y as usize, s.x as usize);
@@ -137,6 +137,30 @@ fn explain_good(world: &World, key: &str) -> Option<Value> {
     }
     let luxury = (total_wealth / (total_pop.max(1) as f64) / 4.0).min(0.5);
 
+    // M14.9 — the taste mix, exactly as compute_prices folds it in
+    let mut pop_by_style = [0.0f64; crate::culture::N_STYLES];
+    for s in &world.peoples.settlements {
+        let sty = world
+            .peoples
+            .peoples
+            .get(s.people.0)
+            .map(|p| crate::culture::style_index(&p.style))
+            .unwrap_or(0);
+        pop_by_style[sty] += s.pop as f64;
+    }
+    let style_pop: f64 = pop_by_style.iter().sum();
+    let mix = |g: Good| -> f64 {
+        if style_pop <= 0.0 {
+            return 1.0;
+        }
+        pop_by_style
+            .iter()
+            .enumerate()
+            .map(|(k, p)| p * crate::culture::taste(k, g))
+            .sum::<f64>()
+            / style_pop
+    };
+
     // relative scarcity: pressure measured against the market's geometric
     // mean, exactly as `economy::update_prices` does it.
     let mut supplies: enum_map::EnumMap<Good, Option<f64>> = enum_map::EnumMap::default();
@@ -150,7 +174,7 @@ fn explain_good(world: &World, key: &str) -> Option<Value> {
     let mut own_pressure = None;
     for (g, sup) in &supplies {
         if let Some(sup) = sup {
-            let p = (demand_weight(g, luxury) + 0.02) / (sup + 0.02);
+            let p = (demand_weight(g, luxury) * mix(g) + 0.02) / (sup + 0.02);
             if g == good {
                 own_pressure = Some(p);
             }
@@ -162,7 +186,7 @@ fn explain_good(world: &World, key: &str) -> Option<Value> {
     }
     let gm = (pressures.iter().map(|p| p.ln()).sum::<f64>() / pressures.len() as f64).exp();
     let pressure = own_pressure
-        .unwrap_or_else(|| (demand_weight(good, luxury) + 0.02) / (supply + 0.02));
+        .unwrap_or_else(|| (demand_weight(good, luxury) * mix(good) + 0.02) / (supply + 0.02));
 
     let base = base_value(good);
     let target = (base * (pressure / gm).powf(0.55)).clamp(0.3 * base, 5.0 * base);

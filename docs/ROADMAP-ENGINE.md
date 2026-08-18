@@ -182,8 +182,8 @@ boundary stops being the naive part of the system.
 - [x] E7.5 Stage progress events during generation drive the loading veil with real stage names — all nine observed live, RAISING THE LAND → WAKING THE FIRST PEOPLES (`GenBuilder` in `world.rs`, `WasmWorldBuilder` in `lib.rs`) (S-M)
 - [x] E7.6 Binary tick lane — **rejected with E4.6** (ADR-0017), see Rejected: the lane's savings are sub-millisecond per tick
 - [x] E7.7 Protocol op-codes gain their single source of truth in `proto.js` (OP + DEADLINE), imported by both endpoints. The Rust-enum half is rejected: the op strings are a JS↔JS contract between `net.js` and `worker.js` — the wasm boundary is method calls, so Rust never sees an op string and codegen would be a build stage for nothing (S)
-- [x] E7.8 COOP/COEP headers in `scripts/serve.py`; `crossOriginIsolated === true` verified live. The production-host half is moot by ADR-0015 — nothing depends on SAB, so prod needs no header change (S)
-- [x] E7.9 Research + ADR: shared-memory field mirror rejected with measurements — fields are immutable post-generation and already cross as one zero-copy transferable; SAB would fork dev/prod behavior (ADR-0015) (L)
+- [x] E7.8 COOP/COEP headers in `scripts/serve.py`; `crossOriginIsolated === true` verified live. The production-host half is moot by ADR-0023 — nothing depends on SAB, so prod needs no header change (S)
+- [x] E7.9 Research + ADR: shared-memory field mirror rejected with measurements — fields are immutable post-generation and already cross as one zero-copy transferable; SAB would fork dev/prod behavior (ADR-0023) (L)
 - [x] E7.10 Worker crash recovery: on worker death, respawn, regenerate the recorded seed, replay the months run — determinism (ADR-0003) makes reconstruction free. Verified live: worker killed at month 12, world restored to month 12, two one-line toasts, zero console errors (M)
 
 Gates: scripted Playwright probe — regenerate mid-generation, regenerate

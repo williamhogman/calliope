@@ -378,6 +378,95 @@ pub fn sift(events: &[Event], reg: &Registry) -> Vec<Story> {
                     );
                 }
             }
+            // --- palace blood (M11.6): thrones taken by coup or won in
+            // wars of the circlet; the old blood returning writes the
+            // restoration arc
+            EntityKind::Realm => {
+                let palace: Vec<usize> = beats
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, b)| {
+                        b.k == EventKind::Ruler
+                            && (b.text.contains("seizes the circlet")
+                                || b.text.contains("war of the circlet of"))
+                    })
+                    .map(|(i, _)| i)
+                    .collect();
+                let arc: Vec<&Event> = beats
+                    .iter()
+                    .filter(|b| matches!(b.k, EventKind::Ruler | EventKind::Realm | EventKind::War))
+                    .copied()
+                    .collect();
+                if palace
+                    .windows(2)
+                    .any(|w| beats[w[1]].m - beats[w[0]].m <= 100 * 12)
+                {
+                    push(
+                        "bloody-circlet",
+                        ent.id,
+                        format!("The Bloody Circlet of {}", ent.name),
+                        vec![ent.id],
+                        arc.clone(),
+                    );
+                } else if beats.iter().any(|b| b.text.contains("seizes the circlet")) {
+                    push(
+                        "usurpation",
+                        ent.id,
+                        format!("The Usurpation of {}", ent.name),
+                        vec![ent.id],
+                        arc.clone(),
+                    );
+                }
+                if beats.iter().any(|b| b.text.contains("is restored to the throne")) {
+                    push(
+                        "restoration",
+                        ent.id,
+                        format!("The Old Blood of {}", ent.name),
+                        vec![ent.id],
+                        arc,
+                    );
+                }
+            }
+            // --- the arc of empires (M13.6): rise, golden noon, rot,
+            // interregnum, succession — one multi-century story keyed on
+            // the civilization entity the civ pass registers.
+            EntityKind::Civilization => {
+                let arc: Vec<&Event> = beats
+                    .iter()
+                    .filter(|b| {
+                        matches!(
+                            b.k,
+                            EventKind::Era
+                                | EventKind::Realm
+                                | EventKind::Kindred
+                                | EventKind::Wonder
+                                | EventKind::War
+                        )
+                    })
+                    .copied()
+                    .collect();
+                if ent.until.is_some() && arc.len() >= 3 {
+                    // the whole shape exists: dawn to interregnum's end
+                    push(
+                        "empire-arc",
+                        ent.id,
+                        format!("The Arc of {}", ent.name),
+                        vec![ent.id],
+                        arc,
+                    );
+                } else if arc.iter().any(|b| b.text.contains("golden age dawns"))
+                    && arc.len() >= 3
+                {
+                    // still standing, but the noon is on record
+                    push(
+                        "high-noon",
+                        ent.id,
+                        format!("The High Noon of {}", ent.name),
+                        vec![ent.id],
+                        arc,
+                    );
+                }
+            }
             _ => {}
         }
     }

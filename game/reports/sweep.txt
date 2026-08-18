@@ -2,12 +2,12 @@
  CALLIOPE DIAGNOSTIC · SWEEP                        size 512 · 100y · 5 seeds
 ========================================================================
    seed  land%   des%   for%  mtn%   isl  dep towns       pop   grw×   era arts strk camp  war   rt  ev/y  genms  flags
-  12345   34.2   20.1   25.4  13.9    15  126 16→101    819612 610.28     3   60   35    4   64  169  29.4   1142  ·
-    777   31.8   20.9   22.6   7.9    23  113 16→100    877923 681.62     3  126   25    3  182  178  29.5   1195  ·
-  31337   33.5   23.6   28.0  10.0    13  132 16→99    867316 619.51     3   96   31    1  162  172  26.9   1042  ·
-  90210   35.3   18.3   27.1  12.3    26  149 16→102   1114141 746.24     3  139   39    2  169  177  28.3   1075  ·
-    555   33.2   22.8   27.4   7.5    15  139 16→96    794057 480.08     3   87   24    2   56  172  24.3   1010  ·
----mean   33.6   21.1   26.1  10.3                                     627.55                        27.7
+  12345   34.2   20.1   25.4  13.9    15  154 16→106    836967 623.21     3   75   51    6  437  176  55.5    983  ·
+    777   31.8   20.9   22.6   7.9    23  141 16→99    733881 569.78     3  105   47    5  323  172  46.0    801  ·
+  31337   33.5   23.6   28.0  10.0    13  157 16→99    788012 562.87     3   63   53    5  390  169  49.4    775  ·
+  90210   35.3   18.3   27.1  12.3    26  175 16→104    692400 463.76     3   99   55    2  302  176  40.7    748  ·
+    555   33.2   22.8   27.4   7.5    15  170 16→102    810464 490.00     3   88   43    3  382  182  49.8    957  ·
+---mean   33.6   21.1   26.1  10.3                                     541.92                        48.3
 
 flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected
 
@@ -16,14 +16,15 @@ flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-
 [PASS] mean desert share                             21.1%   (sweet 12–28% · hard 6–38%)
 [PASS] mean forest share                             26.1%   (sweet 25–60% · hard 15–75%)
 [PASS] mean mountain share                           10.3%   (sweet 2–14% · hard 0.5–22%)
-[PASS] mean growth                                 627.55×   (M2 crop-package K: sweet 2–1200×)
-[PASS] mean events/year                               27.7   (sweet 2–40 · hard 0.5–100)
+[PASS] mean growth                                 541.92×   (M2 crop-package K: sweet 2–1200×)
+[WARN] mean events/year                               48.3   (sweet 2–48 · hard 0.5–100)
 [PASS] all seeds clean of hard flags             all clean   (no B/P/R/G/S/U flags on any seed)
 [PASS] strikes on every seed                           5/5   (prospecting fires everywhere)
 [PASS] mining camps emerge (≥60% of seeds)             5/5   (ore pull creates colonies)
 [PASS] Iron Age reached (≥50% of seeds)                5/5   (history should not stall in bronze)
 [PASS] worlds still growing at half-run (≥60%)            5/5   (no century-long plateaus)
+[PASS] daughter peoples sunder (≥60% of seeds)            3/5   (M12.1: far branches become peoples of their own)
 [PASS] famine strikes somewhere (≥60% of seeds)            5/5   (M2.6: failed rains have a price)
-[PASS] famine bounded (<150/century worst seed)     18/century   (M2.6: hunger is a visitation, not the weather)
-[PASS] mean rank-size slope                 -0.98 over 5 seeds   (M2.3 gate: Zipf holds across the sweep)
-CHECKS: 14 pass · 0 warn · 0 fail
+[PASS] famine bounded (<150/century worst seed)     26/century   (M2.6: hunger is a visitation, not the weather)
+[PASS] mean rank-size slope                 -1.02 over 5 seeds   (M2.3 gate: Zipf holds across the sweep)
+CHECKS: 14 pass · 1 warn · 0 fail

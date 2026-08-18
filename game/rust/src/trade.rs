@@ -70,8 +70,8 @@ pub fn goods_for(s: &mut Settlement, deposits: &[Deposit], fertility: &Array2<f3
     let mut near: Vec<&Deposit> = deposits
         .iter()
         .filter(|d| {
-            if !d.known || d.left == 0.0 {
-                return false; // unfound seams and dead pits yield nothing
+            if !d.live() {
+                return false; // unfound seams, dead pits and stripped woods yield nothing
             }
             let dx = (d.x - s.x) as f64;
             let dy = (d.y - s.y) as f64;
@@ -88,6 +88,20 @@ pub fn goods_for(s: &mut Settlement, deposits: &[Deposit], fertility: &Array2<f3
         if !goods.contains(&d.r) {
             goods.push(d.r);
         }
+    }
+    // M14.3 — animal secondaries: the beasts on the hoof carry a second
+    // harvest. Sheep country shears wool; cattle and the hunted game
+    // yield hides. Derived, never placed — the flock is the deposit — so
+    // they ride behind their animals and drop first when the list fills.
+    if goods.contains(&Good::Sheep) && !goods.contains(&Good::Wool) {
+        goods.push(Good::Wool);
+    }
+    if (goods.contains(&Good::Cattle)
+        || goods.contains(&Good::Deer)
+        || goods.contains(&Good::Elk))
+        && !goods.contains(&Good::Hides)
+    {
+        goods.push(Good::Hides);
     }
     let fert = fertility[[s.y as usize, s.x as usize]];
     if fert > 0.45 && !goods.contains(&Good::Grain) {

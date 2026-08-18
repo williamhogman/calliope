@@ -5,6 +5,7 @@ import { EVENT_KINDS as ENGINE_EVENT_KINDS } from "../gen/constants.js";
 
 export const LAYERS = [
   ["political", "Political", "Realms and their reach"],
+  ["culture", "Peoples", "Tongues and the reach of their speech"],
   ["biomes", "Terrain", "The land as seen from orbit"],
   ["elevation", "Elevation", "Height above the sea"],
   ["temperature", "Temperature", "Warmth through the seasons"],
@@ -36,6 +37,7 @@ const KIND_COLOR = {
   ruler:     "#c9a0e8",
   realm:     "#e8c07a",
   society:   "#e0b0d0",
+  kindred:   "#d4a0b0",
   tech:      "#7fc4e8",
   wonder:    "#ffd766",
   war:       "#e05555",
@@ -82,23 +84,36 @@ export const PATTERN_META = {
   "roads-of":        { label: "Merchant's road", color: "#9fd0c8" },
   "restless-crowns": { label: "Restless crowns", color: "#e8c07a" },
   "relic-road":      { label: "Relic's road",    color: "#7fc4e8" },
+  "empire-arc":      { label: "Empire's arc",    color: "#e8b54a" },
+  "high-noon":       { label: "High noon",       color: "#f0d090" },
 };
 export const patternMeta = (p) => PATTERN_META[p] || { label: p, color: "#8a8fa0" };
 
 // M6.1 — how the cast reads in lists: a tint per entity kind.
 export const ENTITY_KINDS = {
-  person:     { label: "person",     color: "#c9a0e8" },
-  ruler:      { label: "ruler",      color: "#c9a0e8" },
-  artifact:   { label: "relic",      color: "#7fc4e8" },
-  war:        { label: "war",        color: "#e05555" },
-  settlement: { label: "settlement", color: "#d4a94a" },
-  culture:    { label: "people",     color: "#e8c07a" },
-  feature:    { label: "place",      color: "#8fb6dd" },
-  ruin:       { label: "ruin",       color: "#b09a86" },
-  world:      { label: "world",      color: "#a8d4b8" },
-  good:       { label: "good",       color: "#9fd0c8" },
+  person:       { label: "person",       color: "#c9a0e8" },
+  ruler:        { label: "ruler",        color: "#c9a0e8" },
+  artifact:     { label: "relic",        color: "#7fc4e8" },
+  war:          { label: "war",          color: "#e05555" },
+  settlement:   { label: "settlement",   color: "#d4a94a" },
+  culture:      { label: "people",       color: "#e8c07a" },
+  realm:        { label: "realm",        color: "#e8c07a" },
+  civilization: { label: "civilization", color: "#e8b54a" },
+  feature:      { label: "place",        color: "#8fb6dd" },
+  ruin:         { label: "ruin",         color: "#b09a86" },
+  world:        { label: "world",        color: "#a8d4b8" },
+  good:         { label: "good",         color: "#9fd0c8" },
 };
 export const entityKind = (k) => ENTITY_KINDS[k] || { label: k, color: "#8a8fa0" };
+
+// M13 — where a civilization stands on its arc: chip tint per stage.
+export const CIV_STAGES = {
+  rising:      { label: "Rising",      color: "#a8d4b8" },
+  golden:      { label: "Golden Age",  color: "#f0d090" },
+  waning:      { label: "Waning",      color: "#e8a06a" },
+  interregnum: { label: "Interregnum", color: "#e05555" },
+};
+export const civStage = (s) => CIV_STAGES[s] || { label: s, color: "#8a8fa0" };
 
 export const FALLBACK_MONTHS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 

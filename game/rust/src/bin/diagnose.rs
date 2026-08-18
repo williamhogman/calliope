@@ -210,7 +210,8 @@ fn hash_state(w: &World) -> u64 {
         s.push_str(&format!("d{}|{}|{}|{:.2}|{}|{:.0}\n", d.r, d.x, d.y, d.rich, d.known, d.left));
     }
     for t in &w.peoples.settlements {
-        s.push_str(&format!("s{}|{}|{}|{}|{:.2}|{:?}\n", t.id, t.name, t.pop, t.culture, t.wealth, t.goods.iter().map(|g| g.name()).collect::<Vec<_>>()));
+        // both axes ride the hash (ADR-0018): tongue and banner
+        s.push_str(&format!("s{}|{}|{}|{}|{}|{:.2}|{:?}\n", t.id, t.name, t.pop, t.people.0, t.realm.0, t.wealth, t.goods.iter().map(|g| g.name()).collect::<Vec<_>>()));
     }
     for f in &w.features {
         s.push_str(&format!("f{}|{}|{}|{}\n", f.t, f.name, f.x, f.y));
@@ -273,6 +274,10 @@ struct RunLog {
     coalition_seen: bool,
     /// Most vassal realms seen at once.
     vassals_max: usize,
+    // ---- M12 kindred telemetry ----
+    /// Did the living-people count ever rise year-on-year? (Fusion — the
+    /// falling half — is judged on the 300y patina clock, not here.)
+    peoples_rose: bool,
 }
 
 /// Advance `years` in 12-month ticks, logging everything worth judging.
@@ -280,17 +285,19 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
     let mut log = RunLog::default();
     let mut last_m = w.month;
     let god_names: Vec<String> = w
-        .peoples.cultures
+        .peoples.peoples
         .iter()
         .flat_map(|c| c.pantheon.iter().map(|g| g.name.clone()))
         .collect();
+    // ADR-0018 — "polities" are realms: a crown lives while a town flies it
     let alive_count = |w: &World| -> usize {
-        (0..w.peoples.cultures.len())
-            .filter(|&c| w.peoples.settlements.iter().any(|s| s.culture.0 == c))
+        (0..w.peoples.realms.len())
+            .filter(|&c| w.peoples.settlements.iter().any(|s| s.realm.0 == c))
             .count()
     };
-    let mut owners: Vec<usize> = w.peoples.settlements.iter().map(|s| s.culture.0).collect();
-    let mut n_cultures = w.peoples.cultures.len();
+    let mut owners: Vec<usize> = w.peoples.settlements.iter().map(|s| s.realm.0).collect();
+    let mut n_realms = w.peoples.realms.len();
+    let mut prev_peoples = w.peoples.peoples.iter().filter(|p| p.alive).count();
     for yr in 1..=years {
         let (evs, _founded, _dep) = w.tick(12);
         for e in &evs {
@@ -321,14 +328,14 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
         log.total_events += evs.len();
         // ---- M4: who holds what, and did any of it move this year ----
         for (i, s) in w.peoples.settlements.iter().enumerate() {
-            if i < owners.len() && owners[i] != s.culture.0 {
+            if i < owners.len() && owners[i] != s.realm.0 {
                 log.transfers += 1;
             }
         }
-        owners = w.peoples.settlements.iter().map(|s| s.culture.0).collect();
-        if w.peoples.cultures.len() > n_cultures {
-            log.rebellions += w.peoples.cultures.len() - n_cultures;
-            n_cultures = w.peoples.cultures.len();
+        owners = w.peoples.settlements.iter().map(|s| s.realm.0).collect();
+        if w.peoples.realms.len() > n_realms {
+            log.rebellions += w.peoples.realms.len() - n_realms;
+            n_realms = w.peoples.realms.len();
         }
         if w.politics.wars.iter().any(|war| !war.allies_a.is_empty() || !war.allies_b.is_empty()) {
             log.coalition_seen = true;
@@ -336,9 +343,16 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
         let vassals = w.politics.vassal_of.iter().filter(|v| v.is_some()).count();
         log.vassals_max = log.vassals_max.max(vassals);
         log.polities.push(alive_count(w));
+        // M12.1 — divergence should mint daughter peoples on this clock;
+        // fusion (the falling half) is a patina-scale check (300y).
+        let living_peoples = w.peoples.peoples.iter().filter(|p| p.alive).count();
+        if living_peoples > prev_peoples {
+            log.peoples_rose = true;
+        }
+        prev_peoples = living_peoples;
         let pop: i64 = w.peoples.settlements.iter().map(|s| s.pop).sum();
         let wealth: f64 = w.peoples.settlements.iter().map(|s| s.wealth).sum();
-        let treasury: f64 = w.peoples.societies.iter().map(|s| s.treasury).sum();
+        let treasury: f64 = w.peoples.realms.iter().map(|r| r.treasury).sum();
         let techs: usize = w.peoples.societies.iter().map(|s| s.techs.len()).sum();
         let known = w.deposits.iter().filter(|d| d.known).count();
         log.rows.push((yr, pop, w.peoples.settlements.len(), w.routes.len(), wealth, treasury, techs, known, evs.len()));
@@ -713,6 +727,43 @@ fn cmd_resources(seed: i64, size: usize) {
     c.want("essential kinds all present", essential_missing == 0, format!("{} missing", essential_missing), "everything except mithril/bananas should place");
     c.want("gold placed", gold, if gold { "yes".into() } else { "no".into() }, "a world without gold has a dull late game");
     c.want("mithril placed", mithril, if mithril { "yes".into() } else { "no".into() }, "the legendary seam should exist somewhere");
+
+    // ---- M14.2 salt: pans on the shore, seams in the rock ----
+    let salt_all: Vec<_> = w.deposits.iter().filter(|d| d.r == resources::Good::Salt).collect();
+    let pans = salt_all.iter().filter(|d| d.left < 0.0).count();
+    let seams = salt_all.len() - pans;
+    let pans_known = salt_all.iter().filter(|d| d.left < 0.0 && d.known).count();
+    c.must(
+        "coastal salt pan exists",
+        pans >= 1,
+        format!("{} pans · {} rock seams", pans, seams),
+        "M14.2: every world gets at least one renewing pan on an arid shore",
+    );
+    c.must(
+        "salt sources ≥2",
+        salt_all.len() >= 2,
+        format!("{}", salt_all.len()),
+        "M14.2 floor: one source is a monopoly, not an economy",
+    );
+    c.want(
+        "pans known at dawn",
+        pans_known == pans,
+        format!("{} of {}", pans_known, pans),
+        "a salt pan is plain to see — never hidden, never exhausted",
+    );
+
+    // ---- M14.1 ontology lint: the GOODS table is the single truth ----
+    let lint = calliope::resources::ontology_lint();
+    c.want(
+        "goods table agrees with closure flags",
+        lint.is_empty(),
+        if lint.is_empty() {
+            format!("{} rows consistent", calliope::resources::Good::COUNT)
+        } else {
+            lint.join(" · ")
+        },
+        "M14.1: one declaration point — flags derive-checked against GOODS",
+    );
     c.print();
 }
 
@@ -721,7 +772,7 @@ fn cmd_resources(seed: i64, size: usize) {
 fn cmd_civ(seed: i64, size: usize, years: usize) {
     let mut w = World::generate(seed, size);
     header("CIVILIZATION", &format!("seed {} · {}x{} · {}y", seed, w.width, size, years));
-    println!("world \"{}\" · {} cultures · {} settlements at dawn", w.world_name, w.peoples.cultures.len(), w.peoples.settlements.len());
+    println!("world \"{}\" · {} peoples · {} realms · {} settlements at dawn", w.world_name, w.peoples.peoples.len(), w.peoples.realms.len(), w.peoples.settlements.len());
 
     let pop0: i64 = w.peoples.settlements.iter().map(|s| s.pop).sum();
     let setts0 = w.peoples.settlements.len();
@@ -758,8 +809,12 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
 
     println!();
     println!("societies at year {}:", years);
-    for (soc, cu) in w.peoples.societies.iter().zip(w.peoples.cultures.iter()) {
-        println!("  {:<22} {:<10} {:<14} {:>2} arts · treasury {:>8.0} · lore {:>6.0}", cu.people, society::POLITIES[soc.polity], society::ERAS[soc.era], soc.techs.len(), soc.treasury, soc.knowledge);
+    for (soc, cu) in w.peoples.societies.iter().zip(w.peoples.peoples.iter()) {
+        println!("  {:<22} {:<10} {:<14} {:>2} arts · lore {:>6.0}", cu.people, society::POLITIES[soc.polity], society::ERAS[soc.era], soc.techs.len(), soc.knowledge);
+    }
+    println!("crowns at year {}:", years);
+    for r in w.peoples.realms.iter().filter(|r| r.alive) {
+        println!("  {:<22} treasury {:>8.0}", r.name, r.treasury);
     }
 
     let pop1: i64 = w.peoples.settlements.iter().map(|s| s.pop).sum();
@@ -792,6 +847,298 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     c.must("no template placeholders", log.placeholders == 0, format!("{}", log.placeholders), "no {P}/{S} may leak into chronicle text");
     c.must("no empty event texts", log.empties == 0, format!("{}", log.empties), "every event tells its story");
     c.must("settlement names unique", names.len() == w.peoples.settlements.len(), format!("{} names / {} towns", names.len(), w.peoples.settlements.len()), "the taken-set must hold");
+    // M10.4 — the seat is mechanically real: every living crown's seat
+    // must resolve to a town under its own banner, every month.
+    let seat_bad = w
+        .peoples
+        .realms
+        .iter()
+        .filter(|r| r.alive)
+        .filter(|r| !w.peoples.settlements.iter().any(|s| s.id == r.seat && s.realm == r.id))
+        .count();
+    let seat_moves = w
+        .chronicle
+        .events
+        .iter()
+        .filter(|e| e.text.contains(" removes to ") || e.text.contains(" removes from "))
+        .count();
+    c.must("realm seats under their own banner", seat_bad == 0, format!("{} dangling · {} seat moves", seat_bad, seat_moves), "M10.4: a lost seat re-homes the same month");
+    // ---- M11 — the unrest ladder --------------------------------------
+    let count = |pat: &str| w.chronicle.events.iter().filter(|e| e.text.contains(pat)).count();
+    println!();
+    println!("---- unrest ladder (M11) ----------------------------------------------");
+    println!(
+        " riots {:>3} · charters {:>3} · coups {:>3} · crises {:>3} (resolved {:>3}) · secessions {:>3}",
+        count("Bread riots"),
+        count("charter of liberties"),
+        count("seizes the circlet"),
+        count("claim the circlet"),
+        count("war of the circlet of"),
+        count("rise against"),
+    );
+    let u_max = w.politics.unrest.iter().cloned().fold(0.0f64, f64::max);
+    let u_mean = if w.politics.unrest.is_empty() { 0.0 } else { w.politics.unrest.iter().sum::<f64>() / w.politics.unrest.len() as f64 };
+    println!(" unrest now: mean {:.2} · max {:.2} over {} realms", u_mean, u_max, w.politics.unrest.len());
+    let unrest_ok = w.politics.unrest.iter().all(|u| u.is_finite() && (0.0..=1.0).contains(u));
+    c.must("unrest stays a 0..1 gauge", unrest_ok, format!("{} realms", w.politics.unrest.len()), "M11.1: finite, clamped");
+    // ladder rungs only (crisis openings ride ruler deaths, checked below)
+    let rung_anchor = |t: &str| {
+        t.contains("seizes the circlet")
+            || t.contains("charter of liberties")
+            || t.contains("Bread riots")
+            || t.contains("rise against")
+    };
+    let mut rungs_by_realm: std::collections::BTreeMap<&str, Vec<i64>> = Default::default();
+    for e in w.chronicle.events.iter().filter(|e| rung_anchor(&e.text)) {
+        rungs_by_realm.entry(e.s.as_str()).or_default().push(e.m);
+    }
+    let rung_total: usize = rungs_by_realm.values().map(|v| v.len()).sum();
+    let min_gap = rungs_by_realm
+        .values()
+        .flat_map(|v| v.windows(2).map(|w| w[1] - w[0]))
+        .min()
+        .unwrap_or(i64::MAX);
+    // name the offender: which realm, which months, which rungs
+    if min_gap < 12 {
+        for (name, months) in &rungs_by_realm {
+            for w2 in months.windows(2) {
+                if w2[1] - w2[0] < 12 {
+                    println!(" CONVULSION: {} at m{} then m{} (gap {} mo)", name, w2[0], w2[1], w2[1] - w2[0]);
+                    for e in w.chronicle.events.iter().filter(|e| e.s.as_str() == *name && rung_anchor(&e.text) && (e.m == w2[0] || e.m == w2[1])) {
+                        println!("   m{} [{}] {}", e.m, e.k, &e.text.chars().take(110).collect::<String>());
+                    }
+                }
+            }
+        }
+    }
+    if years >= 100 {
+        c.want("the unrest ladder speaks", rung_total >= 1, format!("{} rungs fired", rung_total), "M11: riots/charters/coups/secessions on the century scale");
+    }
+    c.must(
+        "no realm convulses monthly",
+        min_gap >= 12 || rung_total < 2,
+        if min_gap == i64::MAX { "no repeats".into() } else { format!("min gap {} mo", min_gap) },
+        "M11.6: cooldowns keep risings years apart",
+    );
+    let crisis_stuck = w
+        .politics
+        .crisis
+        .iter()
+        .flatten()
+        .filter(|cw| cw.ends < w.month)
+        .count();
+    c.must("no war of the circlet outlives its term", crisis_stuck == 0, format!("{} stuck", crisis_stuck), "M11.3: crises resolve the month they come due");
+    // ---- M12 — kindred and crown ---------------------------------------
+    println!();
+    println!("---- kindred and crown (M12) ------------------------------------------");
+    let foreign: Vec<&calliope::settlements::Settlement> = w
+        .peoples
+        .settlements
+        .iter()
+        .filter(|s| {
+            w.peoples
+                .realms
+                .get(s.realm.0)
+                .map_or(false, |r| r.alive && r.people != s.people)
+        })
+        .collect();
+    let drifting = foreign.iter().filter(|s| s.drift > 0.0).count();
+    let d_max = foreign.iter().map(|s| s.drift).fold(0.0f64, f64::max);
+    println!(
+        " foreign-crowned towns {:>3} of {:>3} · drifting {:>3} · max drift {:.2}",
+        foreign.len(),
+        w.peoples.settlements.len(),
+        drifting,
+        d_max
+    );
+    let (kindred_foreign, kindred_drifting, gate_breaches) = {
+        let mut pairs: BTreeMap<(usize, usize), usize> = BTreeMap::new();
+        let (mut kf, mut kd, mut br) = (0usize, 0usize, 0usize);
+        for s in &foreign {
+            let r = &w.peoples.realms[s.realm.0];
+            *pairs.entry((s.people.idx(), r.people.idx())).or_default() += 1;
+            let k = calliope::culture::kinship(s.people, r.people, &w.peoples.peoples, &w.peoples.coresidence);
+            if k >= 0.20 {
+                kf += 1;
+                if s.drift > 0.0 {
+                    kd += 1;
+                }
+            } else if s.drift > 0.0 {
+                br += 1; // drift across a non-kindred pair — forbidden (M12 gate)
+            }
+        }
+        for ((a, b), n) in &pairs {
+            let k = calliope::culture::kinship(
+                calliope::ids::PeopleId(*a),
+                calliope::ids::PeopleId(*b),
+                &w.peoples.peoples,
+                &w.peoples.coresidence,
+            );
+            println!(
+                "   {:<16} under {:<16} {:>3} towns · kinship {:.2}",
+                w.peoples.peoples[*a].people, w.peoples.peoples[*b].people, n, k
+            );
+        }
+        (kf, kd, br)
+    };
+    let flips = count("count themselves");
+    let sunders = count("a people of their own");
+    let fusions = count("one people now");
+    let unions = count("are joined");
+    let crown_exonyms = count("On the crown's rolls");
+    println!(
+        " moves: {} flips · {} sunderings · {} fusions · {} unions · {} crown exonyms",
+        flips, sunders, fusions, unions, crown_exonyms
+    );
+    // union-gate census: every kindred pair of living crowns and which
+    // gate stops them — the tuner reads this table, not tea leaves.
+    {
+        let nr = w.peoples.realms.len();
+        // a final-month secession can leave the matrix one row short
+        w.politics.grow(nr);
+        for a in 0..nr {
+            for b in (a + 1)..nr {
+                let (ra, rb) = (&w.peoples.realms[a], &w.peoples.realms[b]);
+                if !ra.alive || !rb.alive {
+                    continue;
+                }
+                let k = calliope::culture::kinship(ra.people, rb.people, &w.peoples.peoples, &w.peoples.coresidence);
+                if k < 0.55 {
+                    continue;
+                }
+                let (oab, oba) = (w.politics.opinion[a * nr + b], w.politics.opinion[b * nr + a]);
+                let vassal = w.politics.vassal_of[a].is_some() || w.politics.vassal_of[b].is_some();
+                println!(
+                    "   union gate: {:<18} + {:<18} kin {:.2} · opinion {:>4.0}/{:>4.0} · vassal {}",
+                    ra.name, rb.name, k, oab, oba, vassal
+                );
+            }
+        }
+    }
+    let co_ok = w.peoples.coresidence.len() == w.peoples.peoples.len()
+        && w
+            .peoples
+            .coresidence
+            .iter()
+            .all(|row| row.iter().all(|v| v.is_finite() && *v >= 0.0));
+    c.must(
+        "co-residence ledger squares with the roster",
+        co_ok,
+        format!("{}×{} for {} peoples", w.peoples.coresidence.len(),
+            w.peoples.coresidence.first().map_or(0, |r| r.len()), w.peoples.peoples.len()),
+        "M12.1: the ledger grows with divergence, stays finite",
+    );
+    c.must(
+        "no drift across non-kindred pairs",
+        gate_breaches == 0,
+        format!("{} breaches", gate_breaches),
+        "M12 gate: below kinship 0.20 the minority stands and remembers",
+    );
+    if years >= 100 {
+        let moves_cy = (flips + sunders + fusions + unions) as f64 * 100.0 / years as f64;
+        c.band("kindred moves per century", moves_cy, format!("{:.1}", moves_cy));
+        let flips_cy = flips as f64 * 100.0 / years as f64;
+        c.band("assimilation cadence", flips_cy, format!("{:.1} flips/century", flips_cy));
+        // the drift machinery must at least be turning wherever kindred
+        // crowns rule kindred strangers — zero motion means a dead clock.
+        if kindred_foreign >= 5 {
+            c.want(
+                "assimilation drift is turning",
+                kindred_drifting >= 1 || flips >= 1,
+                format!("{} of {} kindred foreign-crowned towns drift", kindred_drifting, kindred_foreign),
+                "M12.2: towns under kindred crowns lean, however slowly",
+            );
+        }
+    }
+    // ---- M13 — the arc of empires ---------------------------------------
+    println!();
+    println!("---- the arc of empires (M13) -----------------------------------------");
+    let civs_alive = w.peoples.civs.iter().filter(|cv| cv.alive).count();
+    for cv in &w.peoples.civs {
+        let members = cv
+            .peoples
+            .iter()
+            .map(|p| w.peoples.peoples[p.idx()].people.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!(
+            "   {:<26} {:<12} {} tongues [{}] · golden ages {} · monuments {}{}{}",
+            cv.name,
+            format!("{:?}", cv.stage).to_lowercase(),
+            cv.peoples.len(),
+            members,
+            cv.golden_ages,
+            cv.monuments,
+            cv.hegemony.as_deref().map(|h| format!(" · {}", h)).unwrap_or_default(),
+            if cv.alive { "" } else { " · ENDED" },
+        );
+        // the drivers the stage machine read on its last pass (M13.3)
+        println!(
+            "     drivers: legit {:.2} · asab {:.2} · wealth {:.0} · stretch {:.2}   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)",
+            cv.legit, cv.asab, cv.wealth, cv.stretch
+        );
+        println!(
+            "     span: {} crowns · {} towns · admin {:.1} vs capacity {:.1}   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)",
+            cv.crowns, cv.towns, cv.admin, cv.capacity
+        );
+    }
+    let civ_minted = count("first write of");
+    let civ_golden = count("golden age dawns");
+    let civ_falls = count("breaks. The crowns");
+    let civ_closed = count("The interregnum ends");
+    println!(
+        " arc events: {} minted · {} golden dawns · {} falls · {} interregna closed",
+        civ_minted, civ_golden, civ_falls, civ_closed
+    );
+    if years >= 100 {
+        c.band("living civilizations", civs_alive as f64, format!("{} of {} ever", civs_alive, w.peoples.civs.len()));
+    }
+    // the closure is a partition: no tongue may answer two civilizations
+    {
+        let mut seen: BTreeSet<usize> = BTreeSet::new();
+        let mut shared = 0usize;
+        for cv in w.peoples.civs.iter().filter(|cv| cv.alive) {
+            for p in &cv.peoples {
+                if !seen.insert(p.idx()) {
+                    shared += 1;
+                }
+            }
+        }
+        c.must("civ membership is a partition", shared == 0, format!("{} shared tongues", shared), "M13.1: kinship-closure — one tongue, one civilization");
+    }
+    // a standing civilization must still hold crowns; a crownless one
+    // belongs in its interregnum, not on the map
+    let hollow = w
+        .peoples
+        .civs
+        .iter()
+        .filter(|cv| cv.alive && cv.stage != calliope::civ::Stage::Interregnum)
+        .filter(|cv| {
+            !w.peoples
+                .realms
+                .iter()
+                .any(|r| r.alive && cv.peoples.contains(&r.people))
+        })
+        .count();
+    c.must("no crownless civilization stands", hollow == 0, format!("{} hollow", hollow), "M13.4: losing every crown opens the interregnum");
+    // successor realms per collapse — fragmentation, not deletion (M13.4)
+    if civ_falls >= 1 {
+        let ended: Vec<&calliope::civ::Civ> = w.peoples.civs.iter().filter(|cv| !cv.alive).collect();
+        if !ended.is_empty() {
+            let succ_total: usize = ended
+                .iter()
+                .map(|cv| {
+                    w.peoples
+                        .realms
+                        .iter()
+                        .filter(|r| r.alive && cv.peoples.contains(&r.people))
+                        .count()
+                })
+                .sum();
+            let per = succ_total as f64 / ended.len() as f64;
+            c.band("successor realms per collapse", per, format!("{:.1} over {} falls", per, ended.len()));
+        }
+    }
     c.band("events per year", ev_per_year, format!("{:.1}", ev_per_year));
     c.want("no long silences", log.max_gap <= 36, format!("{} mo", log.max_gap), "≤36 months between chronicle entries");
     if years >= 80 {
@@ -854,7 +1201,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let mut audited = 0usize;
         let mut hits = 0usize;
         for s in &w.peoples.settlements {
-            let Some(cu) = w.peoples.cultures.get(s.namer.idx()) else { continue };
+            let Some(cu) = w.peoples.peoples.get(s.namer.idx()) else { continue };
             let b = naming::bank(&cu.style);
             audited += 1;
             let pre_ok = b.pre.iter().any(|(p, _)| s.name.starts_with(p));
@@ -894,7 +1241,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             .iter()
             .map(|s| s.name.as_str())
             .chain(w.features.iter().map(|f| f.name.as_str()))
-            .chain(w.peoples.cultures.iter().map(|cu| cu.people.as_str()))
+            .chain(w.peoples.peoples.iter().map(|cu| cu.people.as_str()))
         {
             if !seen.insert(n) {
                 dups += 1;
@@ -907,19 +1254,19 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // on far-apart continents legitimately double nothing — count the
         // candidate features first (same geometry as culture_toponyms) and
         // only demand exonyms when candidates exist.
-        if w.peoples.cultures.len() >= 2 {
+        if w.peoples.peoples.len() >= 2 {
             let mut candidates = 0usize;
             for f in &w.features {
                 if matches!(f.t.as_str(), "ocean" | "sea" | "continent" | "river" | "delta") {
                     continue;
                 }
-                let mut best = vec![f64::INFINITY; w.peoples.cultures.len()];
+                let mut best = vec![f64::INFINITY; w.peoples.peoples.len()];
                 for s in &w.peoples.settlements {
                     let dx = (s.x - f.x) as f64;
                     let dy = (s.y - f.y) as f64;
                     let d2 = dx * dx + dy * dy;
-                    if d2 < best[s.culture.idx()] {
-                        best[s.culture.idx()] = d2;
+                    if d2 < best[s.people.idx()] {
+                        best[s.people.idx()] = d2;
                     }
                 }
                 let mut v: Vec<f64> = best.into_iter().filter(|d| d.is_finite()).collect();
@@ -941,8 +1288,8 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
 
         // M3.5 pantheon: four named gods per people, and the chronicle
         // must actually speak of them (festivals, omens, war names).
-        let full = w.peoples.cultures.iter().filter(|cu| cu.pantheon.len() >= 3).count();
-        c.must("pantheons complete", full == w.peoples.cultures.len(), format!("{}/{}", full, w.peoples.cultures.len()), "M3.5: ≥ 3 named gods per people");
+        let full = w.peoples.peoples.iter().filter(|cu| cu.pantheon.len() >= 3).count();
+        c.must("pantheons complete", full == w.peoples.peoples.len(), format!("{}/{}", full, w.peoples.peoples.len()), "M3.5: ≥ 3 named gods per people");
         if years >= 100 {
             let cited = log.god_citations;
             c.must("gods cited in the chronicle", cited >= 1, format!("{}", cited), "M3.5: omens/festivals/wars name the gods");
@@ -955,9 +1302,9 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let pol_max = log.polities.iter().max().copied().unwrap_or(0);
         let pol_last = log.polities.last().copied().unwrap_or(0);
 
-        // Territory sanity: every owned cell names a real culture, and the
-        // political map covers a sane share of the land.
-        let n_cult = w.peoples.cultures.len() as i16;
+        // Territory sanity: every owned cell names a real realm (ADR-0018 —
+        // borders are political), and the map covers a sane share of land.
+        let n_cult = w.peoples.realms.len() as i16;
         let terr = w.fields.territory.as_slice().unwrap_or(&[]);
         let mut owned = 0usize;
         let mut bad = 0usize;
@@ -975,7 +1322,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             }
         }
         let owned_share = owned as f64 / land_cells.max(1) as f64;
-        c.must("territory owners valid", bad == 0, format!("{} bad cells", bad), "M4.1: every owned cell names a live culture");
+        c.must("territory owners valid", bad == 0, format!("{} bad cells", bad), "M4.1: every owned cell names a live realm");
         c.band("land under banners", owned_share, pct(owned_share));
 
         if years >= 100 {
@@ -988,7 +1335,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 let total: i64 = w.peoples.settlements.iter().map(|s| s.pop).sum();
                 let mut by_c: BTreeMap<usize, i64> = BTreeMap::new();
                 for s in &w.peoples.settlements {
-                    *by_c.entry(s.culture.0).or_default() += s.pop;
+                    *by_c.entry(s.realm.0).or_default() += s.pop;
                 }
                 by_c.values().max().copied().unwrap_or(0) as f64 / total.max(1) as f64
             };
@@ -1015,17 +1362,39 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 }
             }
             let mut ratios = Vec::new();
+            // M14.7 — the same spreads bucketed by value density: bulk
+            // should stay dispersed (freight walls the markets apart),
+            // precious should flatten (it crosses the map for its weight)
+            let mut by_class: [Vec<f64>; 3] = [Vec::new(), Vec::new(), Vec::new()];
             for g in goods.iter() {
                 let ps: Vec<f64> = w.economy.areas.markets.iter().map(|m| m.price(g)).collect();
                 let lo = ps.iter().cloned().fold(f64::INFINITY, f64::min);
                 let hi = ps.iter().cloned().fold(0.0f64, f64::max);
                 if lo > 0.0 {
                     ratios.push(hi / lo);
+                    let ci = match g.transport() {
+                        resources::Transport::Bulk => 0,
+                        resources::Transport::Ordinary => 1,
+                        resources::Transport::Precious => 2,
+                    };
+                    by_class[ci].push(hi / lo);
                 }
             }
             if !ratios.is_empty() {
                 let mean = ratios.iter().sum::<f64>() / ratios.len() as f64;
                 c.band("inter-area price divergence", mean, format!("×{:.2} mean spread", mean));
+            }
+            let cm = |v: &Vec<f64>| -> f64 {
+                if v.is_empty() { 0.0 } else { v.iter().sum::<f64>() / v.len() as f64 }
+            };
+            let (mb, mo, mp) = (cm(&by_class[0]), cm(&by_class[1]), cm(&by_class[2]));
+            if mb > 0.0 && mp > 0.0 {
+                c.want(
+                    "von Thünen ordering",
+                    mb >= mp,
+                    format!("bulk ×{:.2} · ordinary ×{:.2} · precious ×{:.2}", mb, mo, mp),
+                    "M14.7: bulk stays local and dispersed, precious arbitrages flat — rings emerge, not painted",
+                );
             }
         }
         if years >= 100 {
@@ -1091,16 +1460,27 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     let mut w = World::generate(seed, size);
     header("ECONOMY", &format!("seed {} · {}x{} · {}y", seed, w.width, size, years));
 
-    const TRACKED: [resources::Good; 10] = [
+    // M15.6 — conservation ledger baselines: what every seam and ground
+    // held at the founding, so the books can be balanced at the end.
+    let left0: Vec<f64> = w.deposits.iter().map(|d| d.left).collect();
+    let stock0: Vec<f64> = w.deposits.iter().map(|d| d.stock).collect();
+
+    const TRACKED: [resources::Good; 20] = [
         resources::Good::Grain, resources::Good::Fish, resources::Good::Timber,
         resources::Good::Stone, resources::Good::Coal, resources::Good::Copper,
         resources::Good::Iron, resources::Good::Silver, resources::Good::Gold,
-        resources::Good::Mithril,
+        resources::Good::Mithril, resources::Good::Salt, resources::Good::Wool,
+        resources::Good::Hides, resources::Good::Furs, resources::Good::Grapes,
+        resources::Good::Spices, resources::Good::Dyes, resources::Good::Clay,
+        resources::Good::Marble, resources::Good::Gems,
     ];
     let mut series: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
     let mut strikes = 0usize;
     let mut depletions = 0usize;
     let mut trade_events = 0usize;
+    // M14.8 — count wild-stock phase transitions across the run
+    let (mut wild_thin, mut wild_collapse, mut wild_recover) = (0usize, 0usize, 0usize);
+    let mut prev_phase: Vec<u8> = w.deposits.iter().map(|d| d.phase).collect();
     let months = years * 12;
     for _ in 0..months {
         let (evs, _f, _d) = w.tick(1);
@@ -1112,6 +1492,17 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
                 _ => {}
             }
         }
+        for (i, d) in w.deposits.iter().enumerate() {
+            let p0 = prev_phase.get(i).copied().unwrap_or(0);
+            if d.phase != p0 {
+                match d.phase {
+                    1 => wild_thin += 1,
+                    2 => wild_collapse += 1,
+                    _ => wild_recover += 1,
+                }
+            }
+        }
+        prev_phase = w.deposits.iter().map(|d| d.phase).collect();
         for g in TRACKED {
             if w.economy.market.contains(g) {
                 series.entry(g.name()).or_default().push(w.economy.market.price(g));
@@ -1163,13 +1554,13 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     println!();
     println!("routes: {} ({} sea / {} mixed / {} land) · mean cost {:.1} · mean length {:.0} km", w.routes.len(), sea_r, mixed_r, land_r, mean_cost, mean_len * gc::KM_PER_CELL);
     println!("harbours: {} · unconnected towns: {}", ports, unconnected);
-    println!("treasuries:");
-    for (soc, cu) in w.peoples.societies.iter().zip(w.peoples.cultures.iter()) {
-        println!("  {:<22} {:>9.0}", cu.people, soc.treasury);
+    println!("treasuries (crowns — ADR-0018):");
+    for r in w.peoples.realms.iter().filter(|r| r.alive) {
+        println!("  {:<22} {:>9.0}", r.name, r.treasury);
     }
 
     let finite_ok = w.economy.market.iter_some().all(|(_, p)| p.is_finite()) && wealth.iter().all(|v| v.is_finite());
-    let treasuries_ok = w.peoples.societies.iter().all(|s| s.treasury >= 0.0 && s.treasury.is_finite());
+    let treasuries_ok = w.peoples.realms.iter().all(|r| r.treasury >= 0.0 && r.treasury.is_finite());
 
     let mut c = Checks::default();
     c.band("max pinned price share", max_pinned, pct(max_pinned));
@@ -1207,6 +1598,220 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         c.band("known seams worked", share, pct(share));
     }
 
+    // ---- M14.8 the wild stocks breathe: timber, fish and game carry memory ----
+    println!();
+    println!("wild stocks (M14.8): transitions thin {} · collapse {} · recover {} · timber scar cells {}",
+        wild_thin, wild_collapse, wild_recover, w.scars.len());
+    println!("{:<9} {:>7} {:>9} {:>9} {:>8} {:>10}", "good", "grounds", "min stock", "mean", "thinned", "collapsed");
+    let mut wild_known = 0usize;
+    let mut wild_collapsed_now = 0usize;
+    let mut wild_min_stock = f64::INFINITY;
+    for g in [resources::Good::Timber, resources::Good::Fish, resources::Good::Furs,
+              resources::Good::Deer, resources::Good::Elk] {
+        let ds: Vec<_> = w.deposits.iter().filter(|d| d.r == g && d.known).collect();
+        if ds.is_empty() { continue; }
+        let min = ds.iter().map(|d| d.stock).fold(f64::INFINITY, f64::min);
+        let mean = ds.iter().map(|d| d.stock).sum::<f64>() / ds.len() as f64;
+        let th = ds.iter().filter(|d| d.phase == 1).count();
+        let co = ds.iter().filter(|d| d.phase == 2).count();
+        wild_known += ds.len();
+        wild_collapsed_now += co;
+        wild_min_stock = wild_min_stock.min(min);
+        println!("{:<9} {:>7} {:>9.2} {:>9.2} {:>8} {:>10}", g.name(), ds.len(), min, mean, th, co);
+    }
+    c.want(
+        "wild stocks breathe",
+        wild_min_stock < 0.98,
+        format!("min stock {:.2}", wild_min_stock),
+        "M14.8: harvest pressure actually moves a stock",
+    );
+    if years >= 60 {
+        c.want(
+            "the axe bites somewhere",
+            wild_thin + wild_collapse >= 1,
+            format!("thin {} · collapse {}", wild_thin, wild_collapse),
+            "M14.8: some crowded ground thins under the axe or the net",
+        );
+    }
+    if wild_known > 0 {
+        let share = wild_collapsed_now as f64 / wild_known as f64;
+        c.band("wild collapse share", share, pct(share));
+    }
+    // withdrawal invariant: every wild good a town lists traces to a living
+    // ground inside its work radius — a collapsed ground feeds nobody.
+    let mut untraced = 0usize;
+    for s in &w.peoples.settlements {
+        let r = calliope::settlements::work_radius(s.pop);
+        for g in &s.goods {
+            if resources::regrow_rate(*g).is_none() { continue; }
+            // the subsistence fallback: a coastal town with no natural
+            // grounds at all nets minnows (trade::goods_for) — listed,
+            // never traced. Workshops may sit on top of the fallback, so
+            // "no other natural good" is the test, not "no other good".
+            if *g == resources::Good::Fish
+                && s.coastal
+                && s.goods.iter().all(|o| *o == resources::Good::Fish || o.is_craft())
+            { continue; }
+            let ok = w.deposits.iter().any(|d| {
+                d.r == *g && d.live() && {
+                    let dx = (d.x - s.x) as f64;
+                    let dy = (d.y - s.y) as f64;
+                    dx * dx + dy * dy <= r * r
+                }
+            });
+            if !ok { untraced += 1; }
+        }
+    }
+    c.must(
+        "wild goods trace to living grounds",
+        untraced == 0,
+        format!("{} untraced listings", untraced),
+        "M14.8: collapse withdraws the good (subsistence nets exempt)",
+    );
+
+    // ---- M15.6 the conservation ledger: double-entry stock and flow ----
+    // Every unit drawn from a reserve and every breath of a wild stock
+    // was metered at the site of the change (world.flows); here the books
+    // are balanced against the state ledger. Nothing consumed that was
+    // not produced: residual = (state delta) − (meter), zero to rounding.
+    let mut by_good: BTreeMap<&str, (usize, f64, f64, f64)> = BTreeMap::new();
+    let mut ledger_worst = 0.0f64;
+    let n_meters = w.flows.extracted.len().min(w.deposits.len());
+    for di in 0..n_meters {
+        let d = &w.deposits[di];
+        let mineral = d.r.spec().reserve.is_some() && left0[di] >= 0.0;
+        let (delta, meter) = if mineral {
+            (left0[di] - d.left, w.flows.extracted[di])
+        } else {
+            (d.stock - stock0[di], w.flows.dstock[di])
+        };
+        let resid = (delta - meter).abs();
+        ledger_worst = ledger_worst.max(resid);
+        let e = by_good.entry(d.r.name()).or_insert((0, 0.0, 0.0, 0.0));
+        e.0 += 1;
+        e.1 += delta;
+        e.2 += meter;
+        e.3 = e.3.max(resid);
+    }
+    println!();
+    println!("conservation ledger (M15.6): state delta vs site meter, {} deposits", n_meters);
+    println!("{:<9} {:>6} {:>12} {:>12} {:>12}", "good", "n", "state Δ", "metered", "worst resid");
+    for (g, (n, delta, meter, resid)) in by_good.iter().filter(|(_, v)| v.1 != 0.0 || v.2 != 0.0) {
+        println!("{:<9} {:>6} {:>12.2} {:>12.2} {:>12.2e}", g, n, delta, meter, resid);
+    }
+    c.must(
+        "ledger balances to rounding",
+        w.flows.extracted.len() == w.deposits.len() && ledger_worst < 1e-6,
+        format!("worst residual {:.2e}", ledger_worst),
+        "M15.6: every draw and every breath was metered where it happened",
+    );
+
+    // ---- M14.9 per-culture tastes: the demand side leans toward the buyer --
+    use calliope::culture;
+    // table sanity: bounded multipliers, and the directional facts the
+    // roadmap names (steppe prizes horses, the coasts prize wine, the
+    // north prizes furs, the desert shuns them).
+    let markers = [
+        resources::Good::Horse, resources::Good::Wine, resources::Good::Furs,
+        resources::Good::Timber, resources::Good::Spices, resources::Good::Marble,
+    ];
+    let mut bounded = true;
+    for k in 0..culture::N_STYLES {
+        for g in markers {
+            let t = culture::taste(k, g);
+            if !(0.5..=1.7).contains(&t) { bounded = false; }
+        }
+    }
+    let steppe = culture::style_index("steppe");
+    let hellenic = culture::style_index("hellenic");
+    let nordic = culture::style_index("nordic");
+    let arid = culture::style_index("arid");
+    let facts = culture::taste(steppe, resources::Good::Horse) > 1.0
+        && culture::taste(hellenic, resources::Good::Wine) > 1.0
+        && culture::taste(nordic, resources::Good::Furs) > 1.0
+        && culture::taste(arid, resources::Good::Furs) < 1.0;
+    c.must(
+        "taste table sane",
+        bounded && facts,
+        format!("steppe·horse {:.2} · hellenic·wine {:.2} · nordic·furs {:.2} · arid·furs {:.2}",
+            culture::taste(steppe, resources::Good::Horse),
+            culture::taste(hellenic, resources::Good::Wine),
+            culture::taste(nordic, resources::Good::Furs),
+            culture::taste(arid, resources::Good::Furs)),
+        "M14.9: multipliers in [0.5,1.7] and lean the way the cultures do",
+    );
+    // wiring A/B through the public API: same towns, two imagined
+    // citizenries — the book under the culture that prizes a worked good
+    // must price it above the book under the culture that shuns it.
+    let n_peoples = w.peoples.peoples.len();
+    let mut ab: Option<(resources::Good, usize, usize, f64)> = None; // good, hi, lo, diff
+    for g in markers {
+        if !w.peoples.settlements.iter().any(|s| s.goods.contains(&g)) { continue; }
+        for hi in 0..culture::N_STYLES {
+            for lo in 0..culture::N_STYLES {
+                let diff = culture::taste(hi, g) - culture::taste(lo, g);
+                if diff > ab.map_or(0.05, |(_, _, _, d)| d) {
+                    ab = Some((g, hi, lo, diff));
+                }
+            }
+        }
+    }
+    if let Some((g, hi, lo, _)) = ab {
+        let mut m_hi = calliope::economy::Market::default();
+        let mut m_lo = calliope::economy::Market::default();
+        calliope::economy::update_prices(&mut m_hi, &w.peoples.settlements, &vec![hi; n_peoples]);
+        calliope::economy::update_prices(&mut m_lo, &w.peoples.settlements, &vec![lo; n_peoples]);
+        let (ph, pl) = (m_hi.price(g), m_lo.price(g));
+        c.must(
+            "taste moves the book (A/B)",
+            ph > pl,
+            format!("{:?}: {} {:.3} vs {} {:.3}", g, culture::ALL_STYLES[hi], ph, culture::ALL_STYLES[lo], pl),
+            "M14.9: same supply, the prizing culture's book prices it higher",
+        );
+    } else {
+        c.want(
+            "taste moves the book (A/B)",
+            false,
+            "no worked marker good with a taste split".into(),
+            "M14.9: expected at least one of horse/wine/furs/timber/spices/marble worked",
+        );
+    }
+    // and in the real world: the taste mix actually varies across market
+    // areas — cultural geography reaches the books.
+    let n_areas = w.economy.areas.markets.len();
+    println!(" taste geography: {} market areas · {} peoples", n_areas, n_peoples);
+    let mut spread_max = 0.0f64;
+    if n_areas >= 2 {
+        let style_of: Vec<usize> = w.peoples.peoples.iter()
+            .map(|p| culture::style_index(&p.style)).collect();
+        for g in markers {
+            let mut mixes: Vec<f64> = Vec::new();
+            for k in 0..n_areas {
+                let mut pops = [0.0f64; culture::N_STYLES];
+                for (si, s) in w.peoples.settlements.iter().enumerate() {
+                    if w.economy.areas.area_of(si) == k {
+                        pops[style_of.get(s.people.0).copied().unwrap_or(0)] += s.pop as f64;
+                    }
+                }
+                let tot: f64 = pops.iter().sum();
+                if tot > 0.0 {
+                    mixes.push(pops.iter().enumerate()
+                        .map(|(kk, p)| p * culture::taste(kk, g)).sum::<f64>() / tot);
+                }
+            }
+            if mixes.len() >= 2 {
+                let (lo, hi) = mixes.iter().fold((f64::MAX, f64::MIN), |(a, b), &m| (a.min(m), b.max(m)));
+                spread_max = spread_max.max(hi - lo);
+            }
+        }
+        c.want(
+            "tastes vary across areas",
+            spread_max >= 0.03,
+            format!("max mix spread {:.3}", spread_max),
+            "M14.9: different peoples, different books — the mix is not flat",
+        );
+    }
+
     // ---- M2.4 Bettencourt: β from ln(wealth) ~ β·ln(pop) across towns ----
     let pts: Vec<(f64, f64)> = w.peoples.settlements.iter()
         .filter(|s| s.pop > 80 && s.wealth > 1.0)
@@ -1233,6 +1838,119 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         let r = pau / pg.max(1e-9);
         c.band("gold/grain price ratio", r, format!("{:.1}×", r));
     }
+
+    // ---- M14.2 salt: worked, priced in the envelope, curing the catch ----
+    let salt_towns = w.peoples.settlements.iter()
+        .filter(|s| s.goods.contains(&resources::Good::Salt))
+        .count();
+    c.want(
+        "salt towns exist",
+        salt_towns >= 1,
+        format!("{}", salt_towns),
+        "M14.2 gate: pans on arid shores get worked",
+    );
+    if let (Some(&pg), Some(&ps)) = (means.get("grain"), means.get("salt")) {
+        let r = ps / pg.max(1e-9);
+        c.band("salt/grain price ratio", r, format!("{:.1}×", r));
+    }
+
+    // ---- M14.3 animal secondaries: the second harvest reaches market ----
+    let towns_with = |g: resources::Good| {
+        w.peoples.settlements.iter().filter(|s| s.goods.contains(&g)).count()
+    };
+    let wool_towns = towns_with(resources::Good::Wool);
+    let hide_towns = towns_with(resources::Good::Hides);
+    let fur_towns = towns_with(resources::Good::Furs);
+    let fur_ground = w.deposits.iter().any(|d| d.r == resources::Good::Furs);
+    c.want(
+        "wool towns exist",
+        wool_towns >= 1,
+        format!("{}", wool_towns),
+        "M14.3: sheep country shears — the fiber rides behind the flock",
+    );
+    c.want(
+        "hide towns exist",
+        hide_towns >= 1,
+        format!("{}", hide_towns),
+        "M14.3: cattle and game yield hides wherever they are worked",
+    );
+    c.want(
+        "the cold calls",
+        fur_towns >= 1 || fur_ground,
+        format!("{} fur towns · ground placed {}", fur_towns, fur_ground),
+        "M14.3: fur country placed or worked — the luxury pull on the waste",
+    );
+    if let (Some(&pg), Some(&pw)) = (means.get("grain"), means.get("wool")) {
+        let r = pw / pg.max(1e-9);
+        c.band("wool/grain price ratio", r, format!("{:.1}×", r));
+    }
+
+    // ---- M14.4 cultivated luxuries: tight belts, worked or waiting ----
+    let placed = |g: resources::Good| w.deposits.iter().filter(|d| d.r == g).count();
+    for (g, name, why) in [
+        (resources::Good::Grapes, "vineyard hills", "M14.4: the warm-hill belt places and gets worked"),
+        (resources::Good::Spices, "spice coast", "M14.4: tropical shores place — the long-route luxury"),
+        (resources::Good::Dyes, "murex shore", "M14.4: temperate dye shores place — concentrated, not everywhere"),
+        (resources::Good::Clay, "clay pits", "M14.5: the alluvial margins place — the kiln's feedstock"),
+        (resources::Good::Marble, "marble quarries", "M14.5: the luxury stone places — Bulk, so it moves by water or not at all"),
+        (resources::Good::Gems, "gem seams", "M14.5: the jeweler's third ore places beside gold and silver"),
+    ] {
+        let ground = placed(g);
+        let worked = towns_with(g);
+        c.want(
+            &format!("{name} placed"),
+            ground >= 1,
+            format!("{} grounds · {} towns", ground, worked),
+            why,
+        );
+    }
+
+    // ---- M14.5 earth crafts: the kilns actually light ----
+    let pot_towns = towns_with(resources::Good::Pottery);
+    let brick_towns = towns_with(resources::Good::Brick);
+    let clay_worked = towns_with(resources::Good::Clay);
+    c.want(
+        "kilns lit",
+        pot_towns + brick_towns >= 1 || clay_worked == 0,
+        format!("{} pottery · {} brick towns · {} clay towns", pot_towns, brick_towns, clay_worked),
+        "M14.5: worked clay must reach a kiln — pottery or brick towns exist",
+    );
+
+    // ---- M14.6 secondary recipes: the soft trades light, and the town
+    // that refines need not be the camp that extracts ----
+    let soft = [
+        (resources::Good::Cloth, resources::Good::Wool),
+        (resources::Good::Leather, resources::Good::Hides),
+        (resources::Good::Wine, resources::Good::Grapes),
+    ];
+    let mut lit_kinds = 0usize;
+    let mut split_shops = 0usize; // workshop towns that buy their feedstock off the carts
+    let mut detail = String::new();
+    for (out, raw) in soft {
+        let shops: Vec<_> = w
+            .peoples
+            .settlements
+            .iter()
+            .filter(|s| s.goods.contains(&out))
+            .collect();
+        if !shops.is_empty() {
+            lit_kinds += 1;
+        }
+        split_shops += shops.iter().filter(|s| !s.goods.contains(&raw)).count();
+        detail.push_str(&format!("{} {} · ", shops.len(), out.name()));
+    }
+    c.want(
+        "soft trades lit",
+        lit_kinds >= 1,
+        format!("{}{} kinds", detail, lit_kinds),
+        "M14.6: wool/hides/grapes reach a workshop — cloth, leather or wine towns exist",
+    );
+    c.want(
+        "processing splits from extraction",
+        lit_kinds == 0 || split_shops >= 1,
+        format!("{} workshop towns without their own feedstock ground", split_shops),
+        "M14.6: at least one workshop buys its raw off the area market — towns divide by role",
+    );
     c.print();
 }
 
@@ -1380,6 +2098,10 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
         rivers_intact: bool,
         strata_over: usize,   // any formerly-stack deeper than 2
         ungloseed: usize,     // renamed things with no etymology
+        sundered: usize,      // M12.1 divergences (roster rose)
+        fused: usize,         // M12.4 fusions (roster fell)
+        golden: usize,        // M13.2 golden dawns
+        arcs: usize,          // M13.4 full arcs closed (interregnum ended)
     }
 
     let mut rows: Vec<Row> = Vec::new();
@@ -1393,7 +2115,8 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
         }
         let evs = &w.chronicle.events;
         let veiled = evs.iter().filter(|e| e.veiled).count();
-        let transfers = evs.iter().filter(|e| e.text.contains("passes from the")).count();
+        // ADR-0018: transfer prose names realms — anchor on the banner phrase
+        let transfers = evs.iter().filter(|e| e.text.contains("to the banners of")).count();
         let renames = evs.iter().filter(|e| e.text.contains("lay their own name over")).count();
         let worn = evs.iter().filter(|e| e.text.contains("wears") && e.text.contains("smooth")).count()
             + evs.iter().filter(|e| e.text.contains("appears on the new charts as")).count();
@@ -1414,6 +2137,13 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
                 .iter()
                 .filter(|f| (!f.formerly.is_empty() || f.t == "battlefield") && f.ety.is_empty())
                 .count();
+        // M12.6 — count the roster's two movements straight off the prose
+        // anchors (exact regardless of tick step size)
+        let sundered = evs.iter().filter(|e| e.text.contains("a people of their own")).count();
+        let fused = evs.iter().filter(|e| e.text.contains("are one people now")).count();
+        // M13 — the empire arc off its prose anchors
+        let golden = evs.iter().filter(|e| e.text.contains("golden age dawns")).count();
+        let arcs = evs.iter().filter(|e| e.text.contains("The interregnum ends")).count();
         rows.push(Row {
             seed,
             ruins: w.ruins.len(),
@@ -1429,16 +2159,20 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
             rivers_intact,
             strata_over,
             ungloseed,
+            sundered,
+            fused,
+            golden,
+            arcs,
         });
     }
 
     println!(
-        "{:>7} {:>6} {:>7} {:>8} {:>7} {:>7} {:>6} {:>6} {:>6} {:>6} {:>7}",
-        "seed", "ruins", "late", "veiled%", "rename", "worn", "field", "faded", "wars", "xfers", "rivers"
+        "{:>7} {:>6} {:>7} {:>8} {:>7} {:>7} {:>6} {:>6} {:>6} {:>6} {:>7} {:>6} {:>6} {:>5} {:>5}",
+        "seed", "ruins", "late", "veiled%", "rename", "worn", "field", "faded", "wars", "xfers", "rivers", "sundr", "fused", "gold", "arcs"
     );
     for r in &rows {
         println!(
-            "{:>7} {:>6} {:>7} {:>8} {:>7} {:>7} {:>6} {:>6} {:>6} {:>6} {:>7}",
+            "{:>7} {:>6} {:>7} {:>8} {:>7} {:>7} {:>6} {:>6} {:>6} {:>6} {:>7} {:>6} {:>6} {:>5} {:>5}",
             r.seed,
             r.ruins,
             r.ruins_late,
@@ -1450,6 +2184,10 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
             r.wars,
             r.transfers,
             if r.rivers_intact { "held" } else { "BROKEN" },
+            r.sundered,
+            r.fused,
+            r.golden,
+            r.arcs,
         );
     }
 
@@ -1502,6 +2240,20 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
         format!("{} fields / {} wars", total_fields, total_wars),
         "M9.4: decisive fields earn names",
     );
+    // M12.6 — over three centuries the people roster must move both ways:
+    // divergence mints daughters, fusion folds minorities back in.
+    let breathing = rows.iter().filter(|r| r.sundered > 0 && r.fused > 0).count();
+    c.want(
+        "people count moves both ways (≥60% of seeds)",
+        breathing * 10 >= rows.len() * 6,
+        format!("{}/{}", breathing, rows.len()),
+        "M12.6: sunderings and fusions both fire on the patina clock",
+    );
+    // M13.4 — on the multi-century clock whole civilizations must close
+    // their arcs: golden noon, fall, interregnum, succession.
+    let arc_rate = rows.iter().map(|r| r.arcs as f64).sum::<f64>() / n / (years as f64 / 300.0);
+    let total_golden: usize = rows.iter().map(|r| r.golden).sum();
+    c.band("civ arcs completed per 300 y", arc_rate, format!("{:.1} (gold {} · arcs {})", arc_rate, total_golden, rows.iter().map(|r| r.arcs).sum::<usize>()));
     c.print();
 }
 
@@ -1828,6 +2580,8 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         era: usize,
         evyr: f64,
         flags: String,
+        /// M12.1 — a daughter people sundered off during the run
+        sundered: bool,
     }
     let mut rows: Vec<Row> = Vec::new();
 
@@ -1903,7 +2657,7 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
 
         println!("{:>7} {:>6.1} {:>6.1} {:>6.1} {:>5.1} {:>5} {:>4} {:>2}→{:<2} {:>9} {:>6.2} {:>5} {:>4} {:>4} {:>4} {:>4} {:>4} {:>5.1} {:>6}  {}", seed, 100.0 * land_frac, 100.0 * desert, 100.0 * forest, 100.0 * mtn, li.n, w.deposits.len(), setts0, w.peoples.settlements.len(), pop1, growth, era, arts, log.strikes, log.camps, log.wars, w.routes.len(), evyr, gen_ms, flags);
 
-        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags });
+        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags, sundered: log.peoples_rose });
     }
 
     let n = rows.len() as f64;
@@ -1940,6 +2694,10 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
     if years >= 100 {
         let pacing = rows.iter().filter(|r| r.pace <= 0.92).count();
         c.want("worlds still growing at half-run (≥60%)", pacing * 10 >= rows.len() * 6, format!("{}/{}", pacing, rows.len()), "no century-long plateaus");
+        // M12.1 — divergence must fire on the century clock; fusion (the
+        // falling half of M12.6) is judged in patina where 300y give it room.
+        let sunderers = rows.iter().filter(|r| r.sundered).count();
+        c.want("daughter peoples sunder (≥60% of seeds)", sunderers * 10 >= rows.len() * 6, format!("{}/{}", sunderers, rows.len()), "M12.1: far branches become peoples of their own");
         // M2.6: dry-shock years must starve somewhere across the sweep,
         // but famine must stay an event, not a climate.
         let famine_seeds = rows.iter().filter(|r| r.famines > 0).count();
@@ -2471,6 +3229,22 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
             format!("{} towns", truth.len()), "E4.2: merge(bootstrap, deltas) = engine state");
         c.must(&format!("market replays to truth ({})", seed), market_shadow == market_truth,
             format!("{} goods", market_truth.len()), "E4.3: merge(bootstrap, m_hot) = engine ledger");
+        if areas_shadow != areas_truth {
+            // name the first divergent hub — a bare FAIL hides the shape
+            for (id, t) in &areas_truth {
+                if areas_shadow.get(id) != Some(t) {
+                    println!("  area diverges at hub {}: shadow={} truth={}", id,
+                        areas_shadow.get(id).map(|v| v.to_string()).unwrap_or("∅".into()), t);
+                    break;
+                }
+            }
+            for id in areas_shadow.keys() {
+                if !areas_truth.contains_key(id) {
+                    println!("  area shadow holds unknown hub {}", id);
+                    break;
+                }
+            }
+        }
         c.must(&format!("area prices replay to truth ({})", seed), areas_shadow == areas_truth,
             format!("{} hubs", areas_truth.len()), "E4.3: per-good hub patches rebuild the areas");
         println!(
@@ -2781,6 +3555,9 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
         ("economy", "E·P·R", true),
         ("merchants", "E·P·C·R", true),
         ("statecraft", "P·C·G·R", true),
+        ("kindred", "P·N·R", true),
+        ("union", "P·R", true),
+        ("civ", "P·C·R", true),
         ("patina", "P·C·N·R", true),
         ("territory", "G", false),
         ("chronicle", "C·P·R", true),
@@ -2843,7 +3620,7 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
     c.must("driver overhead is noise", overhead / wall.max(1e-9) < 0.05,
         format!("{:.2}%", 100.0 * overhead / wall.max(1e-9)), "the hand-rolled lattice costs <5% dispatch");
     c.want("ECS parallel ceiling stays low", ceiling <= 1.5,
-        format!("{:.3}×", ceiling), "ADR-0015: re-open the bevy_ecs question if this rises");
+        format!("{:.3}×", ceiling), "ADR-0022: re-open the bevy_ecs question if this rises");
     c.print();
 }
 

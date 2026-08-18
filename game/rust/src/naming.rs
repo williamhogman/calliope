@@ -894,7 +894,7 @@ pub const TONGUE_REACH: f64 = 30.0;
 pub fn culture_toponyms(
     features: &mut [Feature],
     settlements: &[crate::settlements::Settlement],
-    cultures: &[crate::culture::Culture],
+    cultures: &[crate::culture::People],
     taken: &mut HashSet<String>,
     seed: i64,
 ) {
@@ -913,8 +913,8 @@ pub fn culture_toponyms(
             let d = (s.x - f.x) as f64;
             let e = (s.y - f.y) as f64;
             let d2 = d * d + e * e;
-            if d2 < best[s.culture.idx()].0 {
-                best[s.culture.idx()] = (d2, s.culture.idx());
+            if d2 < best[s.people.idx()].0 {
+                best[s.people.idx()] = (d2, s.people.idx());
             }
         }
         let mut near: Vec<(f64, usize)> = best
@@ -955,7 +955,7 @@ pub fn culture_toponyms(
 pub fn exonym_pass(
     features: &mut [Feature],
     settlements: &[crate::settlements::Settlement],
-    cultures: &[crate::culture::Culture],
+    cultures: &[crate::culture::People],
     taken: &mut HashSet<String>,
     rng: &mut Pcg64Mcg,
 ) -> Vec<(String, String, String)> {
@@ -976,8 +976,8 @@ pub fn exonym_pass(
             let dx = (s.x - f.x) as f64;
             let dy = (s.y - f.y) as f64;
             let d2 = dx * dx + dy * dy;
-            if d2 < best[s.culture.idx()] {
-                best[s.culture.idx()] = d2;
+            if d2 < best[s.people.idx()] {
+                best[s.people.idx()] = d2;
             }
         }
         let mut near: Vec<(f64, usize)> = best

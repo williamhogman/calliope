@@ -20,7 +20,7 @@ use crate::entity::Registry;
 use crate::erosion;
 use crate::geo;
 use crate::hydrology;
-use crate::ids::{CultureId, EntityId, SettlementId};
+use crate::ids::{EntityId, PeopleId, RealmId, SettlementId};
 use crate::naming::{self, Feature};
 use crate::noisegen::Perlin3;
 use crate::patina::{self, Ruin};
@@ -88,6 +88,11 @@ pub struct World {
     pub world_name: String,
     /// M9.1 — where towns died: named remains on the map.
     pub ruins: Vec<Ruin>,
+    /// M14.8 — timber scars on the biome map: (deposit, y, x, original
+    /// biome code), remembered so recovery can restore the forest.
+    pub scars: Vec<(usize, i64, i64, u8)>,
+    /// M15.6 — cumulative flow meters per deposit; see `resources::Flows`.
+    pub flows: resources::Flows,
     /// Years each route has gone without realized flow (M9.4).
     route_idle: Vec<u16>,
     /// M6.4 — narrative heat: decaying sum of the month's weighted events;
@@ -491,11 +496,13 @@ impl GenBuilder {
         naming::culture_toponyms(&mut features, &setts, &cultures, &mut taken, seed);
         let societies = society::init(&cultures);
         let mut market = Market::default();
-        economy::update_prices(&mut market, &setts);
+        let people_style: Vec<usize> =
+            cultures.iter().map(|p| culture::style_index(&p.style)).collect();
+        economy::update_prices(&mut market, &setts, &people_style);
         // the first carve of the market areas (M5.2)
         let sidx0 = economy::sidx(&setts);
         let mut areas = economy::build_areas(&setts, &routes, None, &sidx0);
-        economy::update_area_prices(&mut areas, &setts, &market);
+        economy::update_area_prices(&mut areas, &setts, &market, &people_style);
         timings.push(("settlements", now_ms() - t7));
 
         let mut rng = crate::util::rng(seed + 777);
@@ -510,7 +517,7 @@ impl GenBuilder {
         }
         let sett_ents: Vec<EntityId> = setts
             .iter()
-            .map(|s| registry.add(EntityKind::Settlement, &s.name, 0, Some(s.culture), s.x, s.y))
+            .map(|s| registry.add(EntityKind::Settlement, &s.name, 0, Some(s.people), s.x, s.y))
             .collect();
         for f in &features {
             registry.add(EntityKind::Feature, &f.name, 0, None, f.x, f.y);
@@ -523,18 +530,28 @@ impl GenBuilder {
             resources::Good::Tools,
             resources::Good::Weapons,
             resources::Good::Jewelry,
+            resources::Good::Pottery,
+            resources::Good::Brick,
+            resources::Good::Cloth,
+            resources::Good::Leather,
+            resources::Good::Wine,
         ]) {
             registry.add(EntityKind::Good, g.name(), 0, None, -1, -1);
         }
 
+        // ADR-0018 — the dawn crowns: one realm per people, seated in its
+        // largest town; every dawn town then flies its own people's banner.
+        let realms = politics::init_realms(&cultures, &mut setts, &mut taken, &mut registry, seed);
+
         let mut chron = ChronicleState::default();
-        chron.rulers = chronicle::init_rulers(&mut rng, &cultures, &mut taken, &mut registry);
+        chron.rulers =
+            chronicle::init_rulers(&mut rng, &realms, &cultures, &mut taken, &mut registry);
 
         let mut events: Vec<Event> =
             chronicle::founding_myths(&mut rng, &cultures, &features, &world_name);
         for (si, s) in setts.iter().enumerate() {
             let people = if !cultures.is_empty() {
-                cultures[s.culture.idx()].people.clone()
+                cultures[s.people.idx()].people.clone()
             } else {
                 "first peoples".to_string()
             };
@@ -578,11 +595,15 @@ impl GenBuilder {
                 flow_amp,
                 strahler: hydro.strahler,
                 territory: Array2::from_elem((1, 1), -1),
+                peoples_map: Array2::from_elem((1, 1), -1),
             },
             peoples: Peoples {
+                coresidence: vec![vec![0.0; cultures.len()]; cultures.len()],
                 settlements: setts,
-                cultures,
+                peoples: cultures,
+                realms,
                 societies,
+                civs: Vec::new(),
             },
             economy: Economy {
                 market,
@@ -596,11 +617,13 @@ impl GenBuilder {
                 artifacts: Vec::new(),
                 state: chron,
             },
+            flows: resources::Flows::for_deposits(deposits.len()),
             deposits,
             features,
             routes,
             world_name,
             ruins: Vec::new(),
+            scars: Vec::new(),
             route_idle: Vec::new(),
             heat: 0.0,
             rng,
@@ -653,14 +676,22 @@ impl World {
         b.finish()
     }
 
-    /// M4.1 — redraw the influence map after borders move or towns grow.
+    /// M4.1 — redraw both influence maps after borders move or towns grow:
+    /// the realm map (political territory) and the people map (whose
+    /// hearths lie where — ADR-0018's slow axis).
     pub fn recompute_territory(&mut self) {
         self.fields.territory = politics::influence_map(
             &self.fields.height,
             &self.peoples.settlements,
+            &self.peoples.realms,
             &self.peoples.societies,
             &self.politics.asab,
-            self.peoples.cultures.len(),
+            self.peoples.realms.len(),
+        );
+        self.fields.peoples_map = politics::peoples_influence_map(
+            &self.fields.height,
+            &self.peoples.settlements,
+            self.peoples.peoples.len(),
         );
         self.dirty.mark(Dirty::TERRITORY);
     }
@@ -826,22 +857,25 @@ impl World {
         let month = month_abs.rem_euclid(12);
         let mods: Vec<society::Mods> =
             self.peoples.societies.iter().map(society::mods_for).collect();
-        // M2.3: the seat of kings — each culture's greatest town keeps a
-        // court, and courts import: grain barges, tribute, hungry retinues.
-        // The head of the rank-size curve is political as much as economic.
-        let mut seat: Vec<usize> = Vec::new();
+        // M2.3/M10.4: the seat of kings — the realm's *named seat* keeps
+        // a court, and courts import: grain barges, tribute, hungry
+        // retinues. The head of the rank-size curve is political as much
+        // as economic (ADR-0018: courts follow crowns, not tongues). The
+        // seat is the one politics maintains — a fallen seat re-homes in
+        // the statecraft pass, not here.
+        let mut seat: Vec<usize> = vec![usize::MAX; self.peoples.realms.len()];
         for (i, s) in self.peoples.settlements.iter().enumerate() {
-            while seat.len() <= s.culture.0 {
-                seat.push(usize::MAX);
-            }
-            if seat[s.culture.idx()] == usize::MAX
-                || s.pop > self.peoples.settlements[seat[s.culture.idx()]].pop
+            if self
+                .peoples
+                .realms
+                .get(s.realm.0)
+                .is_some_and(|r| r.seat == s.id)
             {
-                seat[s.culture.idx()] = i;
+                seat[s.realm.0] = i;
             }
         }
         for (si, s) in self.peoples.settlements.iter_mut().enumerate() {
-            let md = mods.get(s.culture.idx()).cloned().unwrap_or_default();
+            let md = mods.get(s.people.idx()).cloned().unwrap_or_default();
             let (y, x) = (s.y as usize, s.x as usize);
             let t_now =
                 climate::month_temperature(self.fields.tmean[[y, x]] as f64, self.fields.tamp[[y, x]] as f64, month);
@@ -873,7 +907,7 @@ impl World {
             // and the fat head of the rank-size curve lives in the hubs.
             k *= 1.0 + 0.26 * (s.connections.min(8) as f64);
             // NOTE: mirrored by explain.rs — the court term rides on s.k.
-            if seat.get(s.culture.idx()) == Some(&si) {
+            if seat.get(s.realm.0) == Some(&si) {
                 k *= 1.6; // the court eats what the realm sends
             }
             s.k = round2(k);
@@ -1043,6 +1077,11 @@ impl World {
                         s: s.name.clone(),
                         k: EventKind::Growth,
                         text: format!("{} has grown into a {}.", s.name, s.tier.to_lowercase()),
+                        // anchor the ground: the town may be renamed this
+                        // very tick (M9.2) and the resolver must still
+                        // find it by its one immovable property
+                        x: s.x,
+                        y: s.y,
                         ..Default::default()
                     });
                     // rising tier: something worth singing about may be raised
@@ -1050,7 +1089,7 @@ impl World {
                         &mut self.chronicle.state,
                         &mut self.rng,
                         s,
-                        &self.peoples.cultures,
+                        &self.peoples.peoples,
                         month_abs,
                     );
                     events.extend(wonders);
@@ -1060,6 +1099,9 @@ impl World {
                         s: s.name.clone(),
                         k: EventKind::Disaster,
                         text: format!("{} dwindles to a {}.", s.name, s.tier.to_lowercase()),
+                        // anchor the ground (see the promotion twin above)
+                        x: s.x,
+                        y: s.y,
                         ..Default::default()
                     });
                 }
@@ -1077,12 +1119,19 @@ impl World {
         let mut pull = Array2::<f64>::zeros((h, w));
         const R: i64 = 5;
         for d in &self.deposits {
-            if !d.known || d.left == 0.0 {
+            if !d.live() {
                 continue;
             }
-            // renewables draw no rush; it is metal, coal and stone that call
-            if !d.r.is_mineral() {
-                continue;
+            // renewables draw no rush; it is metal, coal and stone that
+            // call — and two luxuries (M14.3/4): furs colonize the cold,
+            // spices the fever coast, the way ore colonizes the dry.
+            // Grapes and dyes lie in comfortable country and wait for
+            // ordinary settlement to reach them.
+            {
+                use crate::resources::Good;
+                if !(d.r.is_mineral() || d.r == Good::Furs || d.r == Good::Spices) {
+                    continue;
+                }
             }
             let claimed = self.peoples.settlements.iter().any(|s| {
                 let r = settlements::work_radius(s.pop);
@@ -1133,7 +1182,7 @@ impl World {
                 // carries — not the import-lifted ceiling stored in s.k
                 // (hub and court terms), which would gate colonists on
                 // grain barges that feed the city just fine.
-                let md = mods_v.get(p.culture.idx()).cloned().unwrap_or_default();
+                let md = mods_v.get(p.people.idx()).cloned().unwrap_or_default();
                 let kland = settlements::capacity_at(
                     &self.fields.crops,
                     &self.fields.fertility,
@@ -1159,7 +1208,7 @@ impl World {
                 let parent = self.peoples.settlements[pi].clone();
                 let range = self
                     .peoples.societies
-                    .get(parent.culture.idx())
+                    .get(parent.people.idx())
                     .map(|so| society::mods_for(so).colony_range)
                     .unwrap_or(1.0);
                 settlements::colony_site(
@@ -1179,8 +1228,10 @@ impl World {
             }
             let migrants = ((ppop as f64 * self.rng.gen_range(0.08..0.14)) as i64).max(40);
             self.peoples.settlements[pi].pop = (ppop - migrants).max(60);
-            let cid = self.peoples.settlements[pi].culture;
-            let idx = self.found_settlement(y, x, migrants, cid);
+            // colonists carry both their tongue and their banner (ADR-0018)
+            let pid = self.peoples.settlements[pi].people;
+            let rid = self.peoples.settlements[pi].realm;
+            let idx = self.found_settlement(y, x, migrants, pid, rid);
             founded = true;
             let name = self.peoples.settlements[idx].name.clone();
             let coastal = self.peoples.settlements[idx].coastal;
@@ -1212,11 +1263,19 @@ impl World {
     }
 
     /// Raise a new settlement at (y, x): coin a name in the founding
-    /// culture's style, list its goods, size its land, and wire it into
-    /// the trade web. Shared by colonists and rush camps alike.
-    fn found_settlement(&mut self, y: usize, x: usize, migrants: i64, cid: CultureId) -> usize {
-        let style = if !self.peoples.cultures.is_empty() {
-            self.peoples.cultures[cid.0].style.clone()
+    /// people's style, list its goods, size its land, and wire it into
+    /// the trade web. Shared by colonists and rush camps alike. The new
+    /// town speaks `pid`'s tongue and flies `rid`'s banner (ADR-0018).
+    fn found_settlement(
+        &mut self,
+        y: usize,
+        x: usize,
+        migrants: i64,
+        pid: PeopleId,
+        rid: RealmId,
+    ) -> usize {
+        let style = if !self.peoples.peoples.is_empty() {
+            self.peoples.peoples[pid.0].style.clone()
         } else {
             "hellenic".to_string()
         };
@@ -1240,8 +1299,9 @@ impl World {
             k: 0.0,
             coastal: self.coast[[y, x]],
             river: self.near_fresh[[y, x]],
-            culture: cid,
-            namer: cid,
+            people: pid,
+            realm: rid,
+            namer: pid,
             connections: 0,
             goods: resources::Goods::new(),
             exports: None,
@@ -1254,11 +1314,14 @@ impl World {
             born: self.month,
             failing: false,
             ail: 0,
+            drift: 0.0,
+            drift_to: None,
+            exonym: None,
         };
         trade::goods_for(&mut s, &self.deposits, &self.fields.fertility);
         let mdc = self
             .peoples.societies
-            .get(cid.0)
+            .get(pid.0)
             .map(society::mods_for)
             .unwrap_or_default();
         s.k = round2(settlements::capacity_at(
@@ -1277,7 +1340,7 @@ impl World {
         {
             let t = &self.peoples.settlements[idx];
             self.chronicle.registry
-                .add(EntityKind::Settlement, &t.name, self.month, Some(t.culture), t.x, t.y);
+                .add(EntityKind::Settlement, &t.name, self.month, Some(t.people), t.x, t.y);
         }
         trade::connect_settlement(
             idx,
@@ -1309,7 +1372,7 @@ impl World {
                 break;
             }
             let d = &self.deposits[di];
-            if !d.known || d.left == 0.0 {
+            if !d.live() {
                 continue;
             }
             if !d.r.is_mineral() {
@@ -1372,9 +1435,10 @@ impl World {
             }
             let migrants = ((spop as f64 * 0.08) as i64).clamp(60, 240);
             self.peoples.settlements[src].pop = spop - migrants;
-            let cid = self.peoples.settlements[src].culture;
+            let pid = self.peoples.settlements[src].people;
+            let rid = self.peoples.settlements[src].realm;
             let sname = self.peoples.settlements[src].name.clone();
-            let idx = self.found_settlement(y, x, migrants, cid);
+            let idx = self.found_settlement(y, x, migrants, pid, rid);
             founded = true;
             let name = self.peoples.settlements[idx].name.clone();
             events.push(Event {
@@ -1419,7 +1483,7 @@ impl World {
                 let s = &self.peoples.settlements[i];
                 (
                     s.name.clone(),
-                    self.peoples.cultures[s.culture.idx()].people.clone(),
+                    self.peoples.peoples[s.people.idx()].people.clone(),
                     s.x,
                     s.y,
                 )
@@ -1455,8 +1519,11 @@ impl World {
                 continue;
             }
             self.taken.insert(name.clone());
-            let people = self.peoples.cultures[winner.0].people.clone();
-            let eid = self.chronicle.registry.add(EntityKind::Feature, &name, m, Some(winner), x, y);
+            // the winning crown's own folk carry the tale (ADR-0018)
+            let win_people = self.peoples.realms[winner.0].people;
+            let people = self.peoples.peoples[win_people.idx()].people.clone();
+            let eid =
+                self.chronicle.registry.add(EntityKind::Feature, &name, m, Some(win_people), x, y);
             self.features.push(Feature {
                 t: "battlefield".to_string(),
                 name: name.clone(),
@@ -1497,7 +1564,9 @@ impl World {
             let Some(i) = self.peoples.settlements.iter().position(|s| s.id == sid) else {
                 continue;
             };
-            let to = self.peoples.settlements[i].culture;
+            // the conquering crown renames in ITS people's tongue — the
+            // town's own folk keep speaking theirs (ADR-0018)
+            let to = self.peoples.realms[self.peoples.settlements[i].realm.0].people;
             // a people does not rename what already speaks its tongue,
             // and a place carries at most two former names (bounded strata)
             if self.peoples.settlements[i].namer == to || self.peoples.settlements[i].formerly.len() >= 2 {
@@ -1506,10 +1575,10 @@ impl World {
             if self.rng.gen::<f64>() >= 0.35 {
                 continue;
             }
-            let style = self.peoples.cultures[to.0].style.clone();
+            let style = self.peoples.peoples[to.0].style.clone();
             let coined = naming::coin(&mut self.rng, &style, &mut self.taken);
             let old = self.peoples.settlements[i].name.clone();
-            let people = self.peoples.cultures[to.0].people.clone();
+            let people = self.peoples.peoples[to.0].people.clone();
             let (x, y) = (self.peoples.settlements[i].x, self.peoples.settlements[i].y);
             {
                 let s = &mut self.peoples.settlements[i];
@@ -1552,9 +1621,9 @@ impl World {
         if self.peoples.settlements.len() <= 6 {
             return;
         }
-        let mut counts = vec![0usize; self.peoples.cultures.len()];
+        let mut counts = vec![0usize; self.peoples.peoples.len()];
         for s in &self.peoples.settlements {
-            counts[s.culture.idx()] += 1;
+            counts[s.people.idx()] += 1;
         }
         let besieged: HashSet<SettlementId> = self
             .politics
@@ -1567,7 +1636,7 @@ impl World {
             if month_abs - s.born < 240 {
                 continue; // twenty years' grace: young colonies struggle honestly
             }
-            if counts[s.culture.idx()] <= 1 {
+            if counts[s.people.idx()] <= 1 {
                 continue; // never a people's last hearth
             }
             if besieged.contains(&s.id) {
@@ -1607,7 +1676,7 @@ impl World {
         let ruin_name = format!("Ruins of {}", dead.name);
         let rid = self
             .chronicle.registry
-            .add(EntityKind::Ruin, &ruin_name, month_abs, Some(dead.culture), dead.x, dead.y);
+            .add(EntityKind::Ruin, &ruin_name, month_abs, Some(dead.people), dead.x, dead.y);
         self.ruins.push(Ruin {
             name: ruin_name.clone(),
             of: dead.name.clone(),
@@ -1615,7 +1684,7 @@ impl World {
             y: dead.y,
             since: month_abs,
             why: why.to_string(),
-            people: self.peoples.cultures[dead.culture.idx()].people.clone(),
+            people: self.peoples.peoples[dead.people.idx()].people.clone(),
             ety: dead.ety.clone(),
             eid: rid,
         });

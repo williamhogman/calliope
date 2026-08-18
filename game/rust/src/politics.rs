@@ -4,6 +4,11 @@
 //! legitimacy that raise realms at the frontiers and break them in the
 //! soft centuries after.
 //!
+//! ADR-0018: this module owns the **realm axis** — crowns, treasuries,
+//! wars, borders. The people axis (tongue, gods, arts) lives in
+//! `culture.rs`; a settlement carries one id of each, and conquest moves
+//! only the realm.
+//!
 //! Everything here is a pure function of the seed: one shared rng stream,
 //! fixed iteration order, no wall-clock. The chronicle narrates; this
 //! module decides.
@@ -16,9 +21,9 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
-use crate::ids::{CultureId, EntityId, SettlementId};
-use crate::chronicle::{self, ChronicleState};
-use crate::culture::{self, Culture};
+use crate::ids::{EntityId, PeopleId, RealmId, SettlementId};
+use crate::chronicle::{self, ChronicleState, Ruler};
+use crate::culture::People;
 use crate::entity::EntityKind;
 use crate::entity::Registry;
 use crate::naming;
@@ -49,19 +54,117 @@ const SCORE_VASSAL: f64 = 26.0;
 const SCORE_DECISIVE: f64 = 34.0;
 /// Settlements within this range (cells) make two realms neighbours.
 const NEIGHBOUR_RANGE: f64 = 90.0;
+/// M11.1 — unrest: the monthly calm bleed on the 0..1 gauge. The feeds
+/// (weak crown, guttered asabiyyah, hunger, war weariness, holdings
+/// beyond reach) are inline in `monthly`; each ladder rung vents a slice
+/// and arms a cooldown (M11.6) so realms convulse on the scale of years.
+const UNREST_CALM: f64 = 0.010;
+/// The ladder's rungs, lowest to highest (M11.2/4/5).
+const LADDER_RIOT: f64 = 0.55;
+const LADDER_CHARTER: f64 = 0.60;
+const LADDER_COUP: f64 = 0.72;
+const LADDER_SECEDE: f64 = 0.85;
+/// M11.4 — administrative reach (cells from the seat) by polity tier:
+/// bands, chiefdoms, kingdoms, empires. Towns beyond it feed unrest and
+/// open the secession gate for a detached shore. Public: the kindred
+/// pass (M12.2) reads the same reach to slow drift past the frontier.
+pub const ADMIN_REACH: [f64; 4] = [14.0, 22.0, 32.0, 46.0];
+
+// ---------------------------------------------------------------- realms
+
+/// A realm (ADR-0018): the political clock. Name, ruling house, seat,
+/// treasury — everything that changes by coup, conquest and coin rather
+/// than by generations.
+#[derive(Serialize, Clone)]
+pub struct Realm {
+    pub id: RealmId,
+    /// The realm's name in its crown people's tongue ("Vessmark").
+    pub name: String,
+    /// The ruling line ("House Kaldra") — succession stays inside it
+    /// until a crisis replaces it.
+    pub house: String,
+    /// The crown people — whose tongue names the court, whose gods bless
+    /// the wars. Towns of other peoples may still fly this banner.
+    pub people: PeopleId,
+    /// Seat of the crown; re-seated if the seat falls.
+    pub seat: SettlementId,
+    pub color: String,
+    /// Month of founding (0 = the dawn).
+    pub founded: i64,
+    /// False once struck from the rolls; the row stays so ids never shift.
+    pub alive: bool,
+    /// The crown's coin (moved off `Society` — ADR-0018): war chests,
+    /// walls, tribute all draw on this.
+    pub treasury: f64,
+}
+
+/// The crown people of a realm.
+pub fn crown<'a>(peoples_v: &'a [People], realms: &[Realm], r: RealmId) -> &'a People {
+    &peoples_v[realms[r.0].people.idx()]
+}
+
+/// Coin a realm name and house in a people's tongue.
+fn coin_realm_name(
+    rng: &mut Pcg64Mcg,
+    style: &str,
+    taken: &mut HashSet<String>,
+) -> (String, String) {
+    let name = naming::make_word(rng, style, taken);
+    let house = format!("House {}", naming::make_word(rng, style, taken));
+    (name, house)
+}
+
+/// The dawn realms: one crown per people, seated in its largest town
+/// (ADR-0018 — the axes start aligned and drift apart from here).
+pub fn init_realms(
+    peoples_v: &[People],
+    settlements: &mut [Settlement],
+    taken: &mut HashSet<String>,
+    reg: &mut Registry,
+    seed: i64,
+) -> Vec<Realm> {
+    let mut rng = crate::util::rng(seed + 7171);
+    let mut realms: Vec<Realm> = Vec::new();
+    for (pi, p) in peoples_v.iter().enumerate() {
+        let (name, house) = coin_realm_name(&mut rng, &p.style, taken);
+        let seat = settlements
+            .iter()
+            .filter(|s| s.people == p.id)
+            .max_by_key(|s| s.pop)
+            .map(|s| (s.id, s.x, s.y))
+            .unwrap_or((SettlementId(-1), -1, -1));
+        reg.add(EntityKind::Realm, &name, 0, Some(p.id), seat.1, seat.2);
+        realms.push(Realm {
+            id: RealmId(pi),
+            name,
+            house,
+            people: p.id,
+            seat: seat.0,
+            color: p.color.clone(),
+            founded: 0,
+            alive: true,
+            treasury: 25.0,
+        });
+    }
+    // the dawn towns fly the banner of their own people's crown
+    for s in settlements.iter_mut() {
+        s.realm = RealmId(s.people.idx().min(realms.len().saturating_sub(1)));
+    }
+    realms
+}
 
 // ---------------------------------------------------------------- state
 
 #[derive(Serialize, Clone)]
 pub struct War {
     /// Leading belligerents: `a` declared on `b`.
-    pub a: CultureId,
-    pub b: CultureId,
+    pub a: RealmId,
+    pub b: RealmId,
     /// Realms that joined each banner after the kindling.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub allies_a: Vec<CultureId>,
+    pub allies_a: Vec<RealmId>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub allies_b: Vec<CultureId>,
+    pub allies_b: Vec<RealmId>,
     pub name: String,
     pub start: i64,
     /// Weariness cap: peace comes by this month at the latest.
@@ -93,18 +196,18 @@ pub struct War {
 }
 
 impl War {
-    pub fn involves(&self, c: CultureId) -> bool {
+    pub fn involves(&self, c: RealmId) -> bool {
         self.a == c
             || self.b == c
             || self.allies_a.contains(&c)
             || self.allies_b.contains(&c)
     }
-    fn side_a(&self) -> Vec<CultureId> {
+    fn side_a(&self) -> Vec<RealmId> {
         let mut v = vec![self.a];
         v.extend(&self.allies_a);
         v
     }
-    fn side_b(&self) -> Vec<CultureId> {
+    fn side_b(&self) -> Vec<RealmId> {
         let mut v = vec![self.b];
         v.extend(&self.allies_b);
         v
@@ -115,21 +218,38 @@ impl War {
 pub struct Siege {
     /// Settlement id under siege (ids are stable for a settlement's life).
     pub target: SettlementId,
-    /// Culture doing the besieging.
-    pub attacker: CultureId,
+    /// Realm doing the besieging.
+    pub attacker: RealmId,
     /// 0..100; the wall falls at 100.
     pub progress: f64,
 }
 
 #[derive(Clone)]
 pub struct Tribute {
-    pub from: CultureId,
-    pub to: CultureId,
+    pub from: RealmId,
+    pub to: RealmId,
     pub per_month: f64,
     pub months_left: i64,
 }
 
-#[derive(Default)]
+/// One pretender in a war of the circlet (M11.3).
+#[derive(Clone)]
+pub struct Claimant {
+    pub name: String,
+    pub house: String,
+    pub ent: EntityId,
+}
+
+/// A war of the circlet (M11.3): the throne contested from inside the
+/// hall. No borders move; when the term runs out the winner's house
+/// rules. `seated` names the claimant holding the throne meanwhile.
+#[derive(Clone)]
+pub struct CircletWar {
+    pub claimants: Vec<Claimant>,
+    pub seated: usize,
+    pub ends: i64,
+}
+
 pub struct Politics {
     pub wars: Vec<War>,
     /// Flat n×n: opinion[a*n+b] = how a's court regards b, −100..100.
@@ -140,11 +260,20 @@ pub struct Politics {
     pub asab: Vec<f64>,
     /// The ruling line's legitimacy, 0..1.
     pub legit: Vec<f64>,
-    pub vassal_of: Vec<Option<CultureId>>,
+    /// M11.1 — unrest, 0..1: the pressure gauge the ladder reads.
+    pub unrest: Vec<f64>,
+    /// M11.6 — no ladder rung may fire for a realm before this month.
+    pub calm_until: Vec<i64>,
+    /// M11.3 — active wars of the circlet, at most one per throne.
+    pub crisis: Vec<Option<CircletWar>>,
+    /// M11.6 — the house last cast down by a coup, per realm: a crisis
+    /// pretender may carry it back (the restoration arc).
+    pub deposed: Vec<Option<String>>,
+    pub vassal_of: Vec<Option<RealmId>>,
     pub tributes: Vec<Tribute>,
     /// Battle marks awaiting the map (M9.4): (x, y, month, loser town,
-    /// winner culture). The world drains these into named battlefields.
-    pub marks: Vec<(i64, i64, i64, String, CultureId)>,
+    /// winner realm). The world drains these into named battlefields.
+    pub marks: Vec<(i64, i64, i64, String, RealmId)>,
     /// Settlements handed over this month (M9.2): the world lets the
     /// conqueror lay a name-layer over some of them.
     pub transfers: Vec<SettlementId>,
@@ -159,6 +288,10 @@ impl Politics {
             ae: vec![0.0; n],
             asab: vec![0.55; n],
             legit: vec![0.7; n],
+            unrest: vec![0.15; n],
+            calm_until: vec![0; n],
+            crisis: vec![None; n],
+            deposed: vec![None; n],
             vassal_of: vec![None; n],
             tributes: Vec::new(),
             marks: Vec::new(),
@@ -167,10 +300,10 @@ impl Politics {
         }
     }
 
-    pub fn op(&self, a: CultureId, b: CultureId) -> f64 {
+    pub fn op(&self, a: RealmId, b: RealmId) -> f64 {
         self.opinion[a.0 * self.n + b.0]
     }
-    pub fn op_add(&mut self, a: CultureId, b: CultureId, d: f64) {
+    pub fn op_add(&mut self, a: RealmId, b: RealmId, d: f64) {
         let v = &mut self.opinion[a.0 * self.n + b.0];
         *v = (*v + d).clamp(-100.0, 100.0);
     }
@@ -191,6 +324,10 @@ impl Politics {
         self.ae.resize(n_new, 0.0);
         self.asab.resize(n_new, 0.55);
         self.legit.resize(n_new, 0.7);
+        self.unrest.resize(n_new, 0.25);
+        self.calm_until.resize(n_new, 0);
+        self.crisis.resize_with(n_new, || None);
+        self.deposed.resize_with(n_new, || None);
         self.vassal_of.resize(n_new, None);
         self.n = n_new;
     }
@@ -207,28 +344,28 @@ const WAR_NAMES: [&str; 12] = [
 
 // ---------------------------------------------------------------- helpers
 
-fn towns_of<'a>(setts: &'a [Settlement], c: CultureId) -> Vec<usize> {
+fn towns_of(setts: &[Settlement], c: RealmId) -> Vec<usize> {
     setts
         .iter()
         .enumerate()
-        .filter(|(_, s)| s.culture == c)
+        .filter(|(_, s)| s.realm == c)
         .map(|(i, _)| i)
         .collect()
 }
 
-pub fn alive(setts: &[Settlement], c: CultureId) -> bool {
-    setts.iter().any(|s| s.culture == c)
+pub fn alive(setts: &[Settlement], c: RealmId) -> bool {
+    setts.iter().any(|s| s.realm == c)
 }
 
-fn pop_of(setts: &[Settlement], c: CultureId) -> i64 {
-    setts.iter().filter(|s| s.culture == c).map(|s| s.pop).sum()
+fn pop_of(setts: &[Settlement], c: RealmId) -> i64 {
+    setts.iter().filter(|s| s.realm == c).map(|s| s.pop).sum()
 }
 
 /// Squared distance between the closest settlements of two realms.
-fn closest2(setts: &[Settlement], a: CultureId, b: CultureId) -> f64 {
+fn closest2(setts: &[Settlement], a: RealmId, b: RealmId) -> f64 {
     let mut best = f64::INFINITY;
-    for sa in setts.iter().filter(|s| s.culture == a) {
-        for sb in setts.iter().filter(|s| s.culture == b) {
+    for sa in setts.iter().filter(|s| s.realm == a) {
+        for sb in setts.iter().filter(|s| s.realm == b) {
             let dy = (sa.y - sb.y) as f64;
             let dx = (sa.x - sb.x) as f64;
             best = best.min(dy * dy + dx * dx);
@@ -237,18 +374,29 @@ fn closest2(setts: &[Settlement], a: CultureId, b: CultureId) -> f64 {
     best
 }
 
-fn neighbours(setts: &[Settlement], a: CultureId, b: CultureId) -> bool {
+fn neighbours(setts: &[Settlement], a: RealmId, b: RealmId) -> bool {
     closest2(setts, a, b) <= NEIGHBOUR_RANGE * NEIGHBOUR_RANGE
+}
+
+/// Arts of one realm — read through its crown people (ADR-0018:
+/// knowledge travels with the tongue, war chests with the crown).
+fn realm_mods(realms: &[Realm], socs: &[Society], c: RealmId) -> society::Mods {
+    realms
+        .get(c.0)
+        .and_then(|r| socs.get(r.people.idx()))
+        .map(society::mods_for)
+        .unwrap_or_default()
 }
 
 /// Fielded strength of one banner: pooled souls with diminishing returns,
 /// sharpened by the arts of war, solidarity and a believed-in crown.
 fn strength(
     setts: &[Settlement],
+    realms: &[Realm],
     socs: &[Society],
     pol: &Politics,
-    leader: CultureId,
-    allies: &[CultureId],
+    leader: RealmId,
+    allies: &[RealmId],
 ) -> f64 {
     let mut total = 0.0;
     for (ci, share) in std::iter::once((leader, 1.0))
@@ -258,10 +406,7 @@ fn strength(
         if p <= 0.0 {
             continue;
         }
-        let war = socs
-            .get(ci.0)
-            .map(|s| society::mods_for(s).war)
-            .unwrap_or(1.0);
+        let war = realm_mods(realms, socs, ci).war;
         let asab = pol.asab.get(ci.0).copied().unwrap_or(0.5);
         let legit = pol.legit.get(ci.0).copied().unwrap_or(0.7);
         total += p.powf(0.6) * war * (0.55 + 0.9 * asab) * (0.8 + 0.4 * legit) * share;
@@ -269,19 +414,20 @@ fn strength(
     total
 }
 
-/// Hand a settlement to a new banner and say so.
+/// Hand a settlement to a new banner and say so. The realm moves; the
+/// people stay (ADR-0018) — conquest plants a minority, not a migration.
 fn transfer(
     setts: &mut [Settlement],
     idx: usize,
-    to: CultureId,
-    cultures: &[Culture],
+    to: RealmId,
+    realms: &[Realm],
     month: i64,
     why: &str,
     events: &mut Vec<Event>,
     transfers: &mut Vec<SettlementId>,
 ) {
-    let from = setts[idx].culture;
-    setts[idx].culture = to;
+    let from = setts[idx].realm;
+    setts[idx].realm = to;
     // the world may let the conqueror lay a new name over the old (M9.2)
     transfers.push(setts[idx].id);
     events.push(Event {
@@ -289,8 +435,8 @@ fn transfer(
         s: setts[idx].name.clone(),
         k: EventKind::War,
         text: format!(
-            "{} passes from the {} to the banners of the {} — {}.",
-            setts[idx].name, cultures[from.0].people, cultures[to.0].people, why
+            "{} passes from {} to the banners of {} — {}.",
+            setts[idx].name, realms[from.0].name, realms[to.0].name, why
         ),
         // anchor the ground, not the name: conquest may rename the town
         // this very tick (M9.2) and the resolver must still find it
@@ -302,17 +448,16 @@ fn transfer(
 
 // ---------------------------------------------------------------- territory
 
-/// M4.1 — influence-map territory. Every settlement projects weight
-/// pop^0.85, raised by its realm's era and solidarity, out to a radius
-/// that grows with that weight; each land cell belongs to the realm with
-/// the strongest summed pull. Wilderness stays unowned. Owner = culture
-/// id, −1 = none.
-pub fn influence_map(
+/// The shared influence kernel: every settlement projects `weight(s)`
+/// out to a radius that grows with that weight; each land cell belongs
+/// to the group with the strongest summed pull. Wilderness stays
+/// unowned. Owner = group index, −1 = none.
+fn influence_core(
     height: &Array2<f32>,
     settlements: &[Settlement],
-    socs: &[Society],
-    asab: &[f64],
-    n_cultures: usize,
+    n_groups: usize,
+    group: impl Fn(&Settlement) -> usize,
+    weight: impl Fn(usize, &Settlement) -> f64,
 ) -> Array2<i16> {
     let (h, w) = height.dim();
     let hw = h * w;
@@ -321,25 +466,23 @@ pub fn influence_map(
     let mut bestv = vec![0f32; hw];
     let mut owner = vec![-1i16; hw];
 
-    // group settlement indices by culture, in culture order (deterministic)
-    for c in 0..n_cultures {
+    // group settlement indices in group order (deterministic)
+    for c in 0..n_groups {
         let towns: Vec<&Settlement> =
-            settlements.iter().filter(|s| s.culture.0 == c).collect();
+            settlements.iter().filter(|s| group(s) == c).collect();
         if towns.is_empty() {
             continue;
         }
-        let era = socs.get(c).map(|s| s.era as f64).unwrap_or(0.0);
-        let coh = asab.get(c).copied().unwrap_or(0.5);
-        let mut boxes: Vec<(usize, usize, usize, usize, f64, f64, f64)> = Vec::new();
+        let mut boxes: Vec<(usize, usize, usize, usize)> = Vec::new();
         for s in &towns {
-            let weight = (s.pop as f64).powf(0.85) * (1.0 + 0.20 * era) * (0.75 + 0.5 * coh);
+            let weight = weight(c, s);
             let r = (2.2 * weight.powf(0.30)).clamp(5.0, 42.0);
             let reach = (1.45 * r).ceil() as i64;
             let y0 = (s.y - reach).max(0) as usize;
             let y1 = ((s.y + reach) as usize).min(h - 1);
             let x0 = (s.x - reach).max(0) as usize;
             let x1 = ((s.x + reach) as usize).min(w - 1);
-            boxes.push((y0, y1, x0, x1, s.y as f64, s.x as f64, r));
+            boxes.push((y0, y1, x0, x1));
             for y in y0..=y1 {
                 for x in x0..=x1 {
                     let dy = y as f64 - s.y as f64;
@@ -358,8 +501,8 @@ pub fn influence_map(
                 }
             }
         }
-        // claim: compare this realm's summed pull against the best so far
-        for (y0, y1, x0, x1, _, _, _) in &boxes {
+        // claim: compare this group's summed pull against the best so far
+        for (y0, y1, x0, x1) in &boxes {
             for y in *y0..=*y1 {
                 for x in *x0..=*x1 {
                     let i = y * w + x;
@@ -375,6 +518,49 @@ pub fn influence_map(
         }
     }
     Array2::from_shape_vec((h, w), owner).unwrap()
+}
+
+/// M4.1 — realm territory. Weight pop^0.85, raised by the crown's era
+/// and solidarity. Owner = realm id, −1 = wilderness (ADR-0018).
+pub fn influence_map(
+    height: &Array2<f32>,
+    settlements: &[Settlement],
+    realms: &[Realm],
+    socs: &[Society],
+    asab: &[f64],
+    n_realms: usize,
+) -> Array2<i16> {
+    influence_core(
+        height,
+        settlements,
+        n_realms,
+        |s| s.realm.0,
+        |c, s| {
+            let era = realms
+                .get(c)
+                .and_then(|r| socs.get(r.people.idx()))
+                .map(|s| s.era as f64)
+                .unwrap_or(0.0);
+            let coh = asab.get(c).copied().unwrap_or(0.5);
+            (s.pop as f64).powf(0.85) * (1.0 + 0.20 * era) * (0.75 + 0.5 * coh)
+        },
+    )
+}
+
+/// M10.6 — the people-axis influence map for the culture layer: where
+/// each people's weight of settlement actually lies, crowns ignored.
+pub fn peoples_influence_map(
+    height: &Array2<f32>,
+    settlements: &[Settlement],
+    n_peoples: usize,
+) -> Array2<i16> {
+    influence_core(
+        height,
+        settlements,
+        n_peoples,
+        |s| s.people.0,
+        |_, s| (s.pop as f64).powf(0.85),
+    )
 }
 
 /// Run-length encode the owner grid as [run, value, run, value, …] —
@@ -484,10 +670,10 @@ pub fn monthly(
     rng: &mut Pcg64Mcg,
 ) -> (Vec<Event>, bool) {
     let Chronicle { state: chron, registry: reg, .. } = record;
-    let Peoples { settlements, cultures, societies: socs } = peoples;
+    let Peoples { settlements, peoples: peoples_v, realms, societies: socs, coresidence, .. } = peoples;
     let mut events = Vec::new();
     let mut borders_changed = false;
-    let n = cultures.len();
+    let n = realms.len();
     if n == 0 {
         return (events, false);
     }
@@ -500,8 +686,8 @@ pub fn monthly(
     for v in pol.ae.iter_mut() {
         *v *= AE_DECAY;
     }
-    for a in (0..n).map(CultureId) {
-        for b in (0..n).map(CultureId) {
+    for a in (0..n).map(RealmId) {
+        for b in (0..n).map(RealmId) {
             if a != b && alive(settlements, a) && alive(settlements, b)
                 && neighbours(settlements, a, b)
             {
@@ -509,40 +695,106 @@ pub fn monthly(
             }
         }
     }
+    // M12.3 — the kinship pull: shared tongue and gods draw courts
+    // together, gently, toward a modest warmth — never past a grudge
+    // that a war is actively feeding. This is what makes the union of
+    // crowns reachable at all: without it opinion only decays and
+    // grinds, and no two courts ever stand warm enough to join.
+    for a in 0..n {
+        for b in 0..n {
+            let (ra, rb) = (RealmId(a), RealmId(b));
+            if a == b || !alive(settlements, ra) || !alive(settlements, rb) {
+                continue;
+            }
+            if pol.wars.iter().any(|w| w.involves(ra) && w.involves(rb)) {
+                continue;
+            }
+            let kin = culture::kinship(realms[a].people, realms[b].people, peoples_v, coresidence);
+            if kin >= 0.55 && pol.op(ra, rb) < 30.0 {
+                pol.op_add(ra, rb, 0.10 + 0.25 * kin);
+            }
+        }
+    }
 
     // --- asabiyyah: solidarity surges at hard frontiers, gutters in
     // safe hearts; legitimacy drifts home to a workable middle
-    for c in (0..n).map(CultureId) {
+    for c in (0..n).map(RealmId) {
         if !alive(settlements, c) {
             continue;
         }
         let at_war = pol.wars.iter().any(|w| w.involves(c));
-        let frontier = frontier_exposure(settlements, territory, cultures, c);
+        let frontier = frontier_exposure(settlements, territory, peoples_v, realms, c);
         let up = ASAB_SURGE * (frontier + if at_war { 0.6 } else { 0.0 });
         pol.asab[c.0] = (pol.asab[c.0] + up - ASAB_DECAY).clamp(0.05, 1.0);
         let target = 0.72;
         pol.legit[c.0] += (target - pol.legit[c.0]) * 0.0025;
     }
 
+    // --- unrest (M11.1): the gauge the ladder reads. A weak crown,
+    // guttered solidarity, hunger in the towns, long wars, and holdings
+    // beyond the seat's administrative reach all feed it; quiet months
+    // bleed it off. A throne in dispute burns solidarity instead.
+    for c in (0..n).map(RealmId) {
+        if !alive(settlements, c) {
+            continue;
+        }
+        if pol.crisis[c.0].is_some() {
+            pol.asab[c.0] = (pol.asab[c.0] - 0.003).max(0.05);
+            continue;
+        }
+        let towns = towns_of(settlements, c);
+        if towns.is_empty() {
+            continue;
+        }
+        let hungry = towns.iter().filter(|&&i| settlements[i].failing).count() as f64
+            / towns.len() as f64;
+        let weary = pol
+            .wars
+            .iter()
+            .filter(|w| w.involves(c))
+            .map(|w| (((month - w.start) as f64) / 120.0).min(1.0))
+            .sum::<f64>()
+            .min(1.0);
+        let polity = socs.get(realms[c.0].people.idx()).map_or(0, |so| so.polity.min(3));
+        let far = seat_of(settlements, realms, c).map_or(0.0, |(_, _, sx, sy)| {
+            let out = towns
+                .iter()
+                .filter(|&&i| {
+                    let dy = (settlements[i].y - sy) as f64;
+                    let dx = (settlements[i].x - sx) as f64;
+                    (dy * dy + dx * dx).sqrt() > ADMIN_REACH[polity]
+                })
+                .count();
+            out as f64 / towns.len() as f64
+        });
+        let du = 0.024 * ((0.62 - pol.legit[c.0]).max(0.0) / 0.62)
+            + 0.014 * ((0.30 - pol.asab[c.0]).max(0.0) / 0.30)
+            + 0.020 * hungry
+            + 0.012 * weary
+            + 0.022 * far
+            - UNREST_CALM;
+        pol.unrest[c.0] = (pol.unrest[c.0] + du).clamp(0.0, 1.0);
+    }
+
     // --- tribute caravans set out
     let mut spent: Vec<Event> = Vec::new();
     pol.tributes.retain_mut(|t| {
         t.months_left -= 1;
-        if let Some(s) = socs.get_mut(t.from.0) {
+        if let Some(s) = realms.get_mut(t.from.0) {
             let pay = t.per_month.min(s.treasury);
             s.treasury = round2(s.treasury - pay);
-            if let Some(r) = socs.get_mut(t.to.0) {
+            if let Some(r) = realms.get_mut(t.to.0) {
                 r.treasury = round2(r.treasury + pay);
             }
         }
         if t.months_left <= 0 {
             spent.push(Event {
                 m: month,
-                s: cultures[t.from.0].people.clone(),
+                s: realms[t.from.0].name.clone(),
                 k: EventKind::Realm,
                 text: format!(
-                    "The last tribute caravan of the {} reaches the {}; the debt of the old war is paid.",
-                    cultures[t.from.0].people, cultures[t.to.0].people
+                    "The last tribute caravan of {} reaches {}; the debt of the old war is paid.",
+                    realms[t.from.0].name, realms[t.to.0].name
                 ),
                 ..Default::default()
             });
@@ -554,7 +806,7 @@ pub fn monthly(
     events.extend(spent);
 
     // --- vassals pay their dues, and sometimes slip the leash
-    for v in (0..n).map(CultureId) {
+    for v in (0..n).map(RealmId) {
         let Some(suz) = pol.vassal_of[v.0] else { continue };
         if !alive(settlements, v) {
             pol.vassal_of[v.0] = None;
@@ -564,27 +816,27 @@ pub fn monthly(
             pol.vassal_of[v.0] = None;
             events.push(Event {
                 m: month,
-                s: cultures[v.0].people.clone(),
+                s: realms[v.0].name.clone(),
                 k: EventKind::Realm,
                 text: format!(
-                    "With the fall of their masters, the {} are answerable to no one again.",
-                    cultures[v.0].people
+                    "With the fall of their masters, {} answers to no one again.",
+                    realms[v.0].name
                 ),
                 ..Default::default()
             });
             continue;
         }
-        if let Some(s) = socs.get_mut(v.0) {
+        if let Some(s) = realms.get_mut(v.0) {
             let due = round2((s.treasury * 0.006).max(0.3).min(s.treasury));
             s.treasury = round2(s.treasury - due);
-            if let Some(r) = socs.get_mut(suz.0) {
+            if let Some(r) = realms.get_mut(suz.0) {
                 r.treasury = round2(r.treasury + due);
             }
         }
         // independence: high solidarity, a distracted or weakened master
         let suz_at_war = pol.wars.iter().any(|w| w.involves(suz));
-        let sv = strength(settlements, socs, pol, v, &[]);
-        let ss = strength(settlements, socs, pol, suz, &[]);
+        let sv = strength(settlements, realms, socs, pol, v, &[]);
+        let ss = strength(settlements, realms, socs, pol, suz, &[]);
         let opening = if suz_at_war || sv > ss { 1.0 } else { 0.2 };
         if rng.gen::<f64>() < 0.0022 * pol.asab[v.0] * opening {
             pol.vassal_of[v.0] = None;
@@ -592,27 +844,27 @@ pub fn monthly(
             pol.op_add(suz, v, -50.0);
             events.push(Event {
                 m: month,
-                s: cultures[v.0].people.clone(),
+                s: realms[v.0].name.clone(),
                 k: EventKind::Realm,
                 text: format!(
-                    "The {} cast off the yoke of the {} and stand as their own realm once more.",
-                    cultures[v.0].people, cultures[suz.0].people
+                    "{} casts off the yoke of {} and stands as its own realm once more.",
+                    realms[v.0].name, realms[suz.0].name
                 ),
                 ..Default::default()
             });
             if pol.wars.len() < 3 && rng.gen::<f64>() < 0.5 {
-                kindle_war(pol, rng, month, suz, v, cultures, "the War of the Broken Leash", &mut events, taken, reg);
+                kindle_war(pol, rng, month, suz, v, peoples_v, realms, "the War of the Broken Leash", &mut events, taken, reg);
             }
         }
     }
 
     // --- fortification: exposed border towns raise walls (treasury sink)
     if month.rem_euclid(12) == 3 {
-        for c in (0..n).map(CultureId) {
+        for c in (0..n).map(RealmId) {
             if !alive(settlements, c) {
                 continue;
             }
-            let treasury = socs.get(c.0).map(|s| s.treasury).unwrap_or(0.0);
+            let treasury = realms.get(c.0).map(|s| s.treasury).unwrap_or(0.0);
             let cost_next = |f: u8| 30.0 + 25.0 * f as f64;
             if treasury < cost_next(0) + 30.0 {
                 continue;
@@ -624,7 +876,7 @@ pub fn monthly(
                     continue;
                 }
                 let mut d2 = f64::INFINITY;
-                for o in settlements.iter().filter(|o| o.culture != c) {
+                for o in settlements.iter().filter(|o| o.realm != c) {
                     let dy = (o.y - settlements[i].y) as f64;
                     let dx = (o.x - settlements[i].x) as f64;
                     d2 = d2.min(dy * dy + dx * dx);
@@ -635,7 +887,7 @@ pub fn monthly(
             }
             if let Some((i, _)) = best {
                 let cost = cost_next(settlements[i].fort);
-                if let Some(s) = socs.get_mut(c.0) {
+                if let Some(s) = realms.get_mut(c.0) {
                     if s.treasury >= cost + 30.0 {
                         s.treasury = round2(s.treasury - cost);
                         settlements[i].fort += 1;
@@ -644,11 +896,20 @@ pub fn monthly(
                             2 => "rings itself in stone walls",
                             _ => "crowns its walls with towers and an iron gate",
                         };
+                        let mut ids: crate::event::EventIds = Default::default();
+                        if let Some(e) =
+                            reg.find_kind(EntityKind::Settlement, &settlements[i].name)
+                        {
+                            ids.push(e);
+                        }
                         events.push(Event {
                             m: month,
                             s: settlements[i].name.clone(),
                             k: EventKind::Society,
                             text: format!("{} {} — the border is watched.", settlements[i].name, what),
+                            ids,
+                            x: settlements[i].x,
+                            y: settlements[i].y,
                             ..Default::default()
                         });
                     }
@@ -658,19 +919,22 @@ pub fn monthly(
     }
 
     // --- wars: battles, raids, sieges, and peace
-    let (war_events, changed) = conduct_wars(pol, rng, month, settlements, cultures, socs, reg);
+    let (war_events, changed) = conduct_wars(pol, rng, month, settlements, peoples_v, realms, socs, reg);
     events.extend(war_events);
     borders_changed |= changed;
 
     // --- new wars kindle out of grievance and dread
     if pol.wars.len() < 3 {
-        'outer: for a in (0..n).map(CultureId) {
-            for b in (0..n).map(CultureId) {
+        'outer: for a in (0..n).map(RealmId) {
+            for b in (0..n).map(RealmId) {
                 if a == b {
                     continue;
                 }
                 if !alive(settlements, a) || !alive(settlements, b) {
                     continue;
+                }
+                if pol.crisis[a.0].is_some() || pol.crisis[b.0].is_some() {
+                    continue; // a throne in dispute wages no outward war (M11.3)
                 }
                 if pol.vassal_of[a.0].is_some() || pol.vassal_of[b.0] == Some(a) {
                     continue;
@@ -684,23 +948,25 @@ pub fn monthly(
                 let appetite = 0.5 + pol.asab[a.0];
                 let haz = 0.0010 * (1.0 + 2.2 * grudge + 1.4 * dread) * appetite;
                 if rng.gen::<f64>() < haz {
-                    // one war in three is sworn before a god (M3.5)
-                    let war_god = cultures[a.0]
+                    // one war in three is sworn before a god (M3.5) — the
+                    // crown people's war god carries the banner
+                    let crown_a = crown(peoples_v, realms, a);
+                    let war_god = crown_a
                         .pantheon
                         .iter()
                         .find(|g| g.domain == "war")
-                        .or_else(|| cultures[a.0].pantheon.first());
+                        .or_else(|| crown_a.pantheon.first());
                     let name = if rng.gen::<f64>() < 0.33 && war_god.is_some() {
                         format!("the War of {}'s Altar", war_god.unwrap().name)
                     } else {
                         WAR_NAMES[rng.gen_range(0..WAR_NAMES.len())].to_string()
                     };
-                    kindle_war(pol, rng, month, a, b, cultures, &name, &mut events, taken, reg);
+                    kindle_war(pol, rng, month, a, b, peoples_v, realms, &name, &mut events, taken, reg);
                     // coalitions: realms that dread the aggressor rally to
                     // the defender's banner (M4.3)
                     let wi = pol.wars.len() - 1;
                     let mut joined = Vec::new();
-                    for j in (0..n).map(CultureId) {
+                    for j in (0..n).map(RealmId) {
                         if j == a || j == b || !alive(settlements, j) {
                             continue;
                         }
@@ -722,17 +988,17 @@ pub fn monthly(
                         pol.op_add(b, j, 15.0);
                         events.push(Event {
                             m: month,
-                            s: cultures[j.0].people.clone(),
+                            s: realms[j.0].name.clone(),
                             k: EventKind::War,
                             text: format!(
-                                "Dreading the appetite of the {}, the {} swear common cause with the {}.",
-                                cultures[a.0].people, cultures[j.0].people, cultures[b.0].people
+                                "Dreading the appetite of {}, {} swears common cause with {}.",
+                                realms[a.0].name, realms[j.0].name, realms[b.0].name
                             ),
                             ..Default::default()
                         });
                     }
                     // loyal vassals march with their suzerain
-                    for j in (0..n).map(CultureId) {
+                    for j in (0..n).map(RealmId) {
                         if pol.vassal_of[j.0] == Some(b) && alive(settlements, j) {
                             pol.wars[wi].allies_b.push(j);
                         } else if pol.vassal_of[j.0] == Some(a) && alive(settlements, j) {
@@ -745,30 +1011,125 @@ pub fn monthly(
         }
     }
 
-    // --- rebellion: big, hollow realms shed their edges (M4.5)
-    let reb = rebellion_pass(pol, chron, rng, taken, month, settlements, cultures, socs, reg);
-    if !reb.is_empty() {
-        borders_changed = true;
-        events.extend(reb);
+    // --- wars of the circlet resolve (M11.3): the throne settled by
+    // blood inside the hall — the winner's house rules, no border moves
+    events.extend(resolve_circlet_wars(pol, chron, rng, month, settlements, realms, reg));
+
+    // --- the unrest ladder (M11): pressure vents on the lowest rung
+    // that fits — riots, a charter, a palace coup — and only tears the
+    // map when the secession gate opens (M11.4, formerly the M4.5 roll)
+    let (lad, lad_borders) = unrest_ladder(
+        pol, chron, rng, taken, month, settlements, peoples_v, realms, socs, reg,
+    );
+    borders_changed |= lad_borders;
+    events.extend(lad);
+
+    // --- the ledger of the living: a realm's alive flag follows its towns
+    for r in realms.iter_mut() {
+        let holds = settlements.iter().any(|s| s.realm == r.id);
+        if r.alive && !holds {
+            r.alive = false;
+        }
+    }
+
+    // --- the seat endures, or it does not (M10.4): a crown whose seat
+    // is lost — taken in war, ceded at the peace table, or fallen silent —
+    // removes to its greatest remaining town and pays for the shame in
+    // legitimacy. A seat merely outgrown translates the court quietly:
+    // an event, no shock.
+    for c in (0..n).map(RealmId) {
+        if !realms[c.0].alive || !alive(settlements, c) {
+            continue;
+        }
+        let seat_id = realms[c.0].seat;
+        let held = settlements.iter().find(|s| s.id == seat_id);
+        let ours = held.is_some_and(|s| s.realm == c);
+        let Some(best) = towns_of(settlements, c)
+            .into_iter()
+            .max_by_key(|&i| settlements[i].pop)
+        else {
+            continue;
+        };
+        if !ours {
+            // the seat has fallen — re-home the crown, and let it smart
+            let shock = if held.is_some() { 0.16 } else { 0.08 };
+            pol.legit[c.0] = (pol.legit[c.0] - shock).max(0.05);
+            let text = match held {
+                Some(fallen) => format!(
+                    "The seat of {} is lost: {} flies the banners of {}, and the crown of {} removes to {} under a shadow.",
+                    realms[c.0].name,
+                    fallen.name,
+                    realms[fallen.realm.0].name,
+                    realms[c.0].house,
+                    settlements[best].name
+                ),
+                None => format!(
+                    "The old seat of {} lies silent; the crown of {} removes to {} under a shadow.",
+                    realms[c.0].name, realms[c.0].house, settlements[best].name
+                ),
+            };
+            realms[c.0].seat = settlements[best].id;
+            let mut ids: crate::event::EventIds = Default::default();
+            if let Some(e) = reg.find_kind(EntityKind::Realm, &realms[c.0].name) {
+                ids.push(e);
+            }
+            events.push(Event {
+                m: month,
+                s: realms[c.0].name.clone(),
+                k: EventKind::Realm,
+                text,
+                ids,
+                x: settlements[best].x,
+                y: settlements[best].y,
+                ..Default::default()
+            });
+        } else if settlements[best].id != seat_id
+            && settlements[best].pop as f64
+                > 1.6 * held.map_or(1.0, |s| s.pop.max(1) as f64)
+        {
+            // quiet translation: the halls of another town now outshine
+            // the old seat, and the court follows the splendour
+            let old_name = held.map(|s| s.name.clone()).unwrap_or_default();
+            realms[c.0].seat = settlements[best].id;
+            let mut ids: crate::event::EventIds = Default::default();
+            if let Some(e) = reg.find_kind(EntityKind::Realm, &realms[c.0].name) {
+                ids.push(e);
+            }
+            events.push(Event {
+                m: month,
+                s: realms[c.0].name.clone(),
+                k: EventKind::Realm,
+                text: format!(
+                    "The court of {} removes from {} to {}, whose halls now outshine the old seat.",
+                    realms[c.0].name, old_name, settlements[best].name
+                ),
+                ids,
+                x: settlements[best].x,
+                y: settlements[best].y,
+                ..Default::default()
+            });
+        }
     }
 
     (events, borders_changed)
 }
 
 /// Share of a realm's towns that sit on a hard frontier: foreign-owned
-/// territory (of a different *style*, the meta-ethnic edge) within reach.
+/// territory whose crown people is of a different *style* (the
+/// meta-ethnic edge) within reach.
 fn frontier_exposure(
     setts: &[Settlement],
     territory: &Array2<i16>,
-    cultures: &[Culture],
-    c: CultureId,
+    peoples_v: &[People],
+    realms: &[Realm],
+    c: RealmId,
 ) -> f64 {
     let (h, w) = territory.dim();
     let towns = towns_of(setts, c);
     if towns.is_empty() {
         return 0.0;
     }
-    let my_style = &cultures[c.0].style;
+    let my_style = &crown(peoples_v, realms, c).style;
     let mut exposed = 0usize;
     for &i in &towns {
         let (sy, sx) = (setts[i].y as isize, setts[i].x as isize);
@@ -781,8 +1142,8 @@ fn frontier_exposure(
                     continue;
                 }
                 let o = territory[[y as usize, x as usize]];
-                if o >= 0 && o as usize != c.0 {
-                    let os = &cultures[o as usize].style;
+                if o >= 0 && o as usize != c.0 && (o as usize) < realms.len() {
+                    let os = &crown(peoples_v, realms, RealmId(o as usize)).style;
                     if os != my_style {
                         hit = true;
                         break 'scan;
@@ -802,9 +1163,10 @@ fn kindle_war(
     pol: &mut Politics,
     rng: &mut Pcg64Mcg,
     month: i64,
-    a: CultureId,
-    b: CultureId,
-    cultures: &[Culture],
+    a: RealmId,
+    b: RealmId,
+    peoples_v: &[People],
+    realms: &[Realm],
     name: &str,
     events: &mut Vec<Event>,
     taken: &mut HashSet<String>,
@@ -813,20 +1175,20 @@ fn kindle_war(
     let until = month + rng.gen_range(24..72);
     // the war and the generals who will carry it enter the telling (M6.2)
     let war_ent = reg.add(EntityKind::War, name, month, None, -1, -1);
-    let gen_a_name = naming::make_word(rng, &cultures[a.0].style, taken);
-    let gen_b_name = naming::make_word(rng, &cultures[b.0].style, taken);
-    let gen_a = reg.add_person(&gen_a_name, "general", month, Some(a));
-    let gen_b = reg.add_person(&gen_b_name, "general", month, Some(b));
-    let ca_ent = reg.find_kind(EntityKind::Culture, &cultures[a.0].people).unwrap_or(EntityId(-1));
-    let cb_ent = reg.find_kind(EntityKind::Culture, &cultures[b.0].people).unwrap_or(EntityId(-1));
+    let gen_a_name = naming::make_word(rng, &crown(peoples_v, realms, a).style, taken);
+    let gen_b_name = naming::make_word(rng, &crown(peoples_v, realms, b).style, taken);
+    let gen_a = reg.add_person(&gen_a_name, "general", month, Some(realms[a.0].people));
+    let gen_b = reg.add_person(&gen_b_name, "general", month, Some(realms[b.0].people));
+    let ca_ent = reg.find_kind(EntityKind::Realm, &realms[a.0].name).unwrap_or(EntityId(-1));
+    let cb_ent = reg.find_kind(EntityKind::Realm, &realms[b.0].name).unwrap_or(EntityId(-1));
     events.push(Event {
         m: month,
         s: name.to_string(),
         k: EventKind::War,
         text: format!(
-            "War kindles between the {} and the {} — men will call it {}. The banners of the {} follow {}; the {} look to {}.",
-            cultures[a.0].people, cultures[b.0].people, name,
-            cultures[a.0].people, gen_a_name, cultures[b.0].people, gen_b_name
+            "War kindles between {} and {} — men will call it {}. The banners of {} follow {}; {} looks to {}.",
+            realms[a.0].name, realms[b.0].name, name,
+            realms[a.0].name, gen_a_name, realms[b.0].name, gen_b_name
         ),
         ids: smallvec![war_ent, ca_ent, cb_ent, gen_a, gen_b],
         ..Default::default()
@@ -872,7 +1234,8 @@ fn conduct_wars(
     rng: &mut Pcg64Mcg,
     month: i64,
     settlements: &mut Vec<Settlement>,
-    cultures: &[Culture],
+    _peoples_v: &[People],
+    realms: &mut Vec<Realm>,
     socs: &mut [Society],
     reg: &mut Registry,
 ) -> (Vec<Event>, bool) {
@@ -884,13 +1247,13 @@ fn conduct_wars(
         let (a, b) = (pol.wars[wi].a, pol.wars[wi].b);
         let side_a = pol.wars[wi].side_a();
         let side_b = pol.wars[wi].side_b();
-        let sa = strength(settlements, socs, pol, a, &pol.wars[wi].allies_a);
-        let sb = strength(settlements, socs, pol, b, &pol.wars[wi].allies_b);
+        let sa = strength(settlements, realms, socs, pol, a, &pol.wars[wi].allies_a);
+        let sb = strength(settlements, realms, socs, pol, b, &pol.wars[wi].allies_b);
         let total = (sa + sb).max(1e-9);
 
         // war chests drain while the banners fly
         for &side in side_a.iter().chain(side_b.iter()) {
-            if let Some(s) = socs.get_mut(side.0) {
+            if let Some(s) = realms.get_mut(side.0) {
                 s.treasury = round2((s.treasury - 3.0).max(0.0));
             }
         }
@@ -924,7 +1287,7 @@ fn conduct_wars(
                 .min_by_key(|&i| {
                     settlements
                         .iter()
-                        .filter(|o| o.culture == winner)
+                        .filter(|o| o.realm == winner)
                         .map(|o| {
                             let dy = o.y - settlements[i].y;
                             let dx = o.x - settlements[i].x;
@@ -968,8 +1331,8 @@ fn conduct_wars(
                         );
                     } else {
                         coda = format!(
-                            " {} of the {} held the day.",
-                            gen_name, cultures[winner.0].people
+                            " {} of {} held the day.",
+                            gen_name, realms[winner.0].name
                         );
                     }
                 }
@@ -978,8 +1341,8 @@ fn conduct_wars(
                     s: pol.wars[wi].name.clone(),
                     k: EventKind::War,
                     text: format!(
-                        "The hosts meet under the walls of {} — the {} carry the day, and the {} leave their dead on the field.{}",
-                        settlements[fi].name, cultures[winner.0].people, cultures[loser.0].people, coda
+                        "The hosts meet under the walls of {} — {} carries the day, and {} leaves its dead on the field.{}",
+                        settlements[fi].name, realms[winner.0].name, realms[loser.0].name, coda
                     ),
                     ids: smallvec![pol.wars[wi].ent, gen],
                     x: settlements[fi].x,
@@ -1004,18 +1367,12 @@ fn conduct_wars(
         if rng.gen::<f64>() < 0.18 {
             let a_raids = rng.gen::<f64>() < sa / total;
             let (attacker, victim_c) = if a_raids { (a, b) } else { (b, a) };
-            let att_war = socs
-                .get(attacker.0)
-                .map(|s| society::mods_for(s).war)
-                .unwrap_or(1.0);
-            let walls = socs
-                .get(victim_c.0)
-                .map(|s| society::mods_for(s).defense)
-                .unwrap_or(1.0);
+            let att_war = realm_mods(realms, socs, attacker).war;
+            let walls = realm_mods(realms, socs, victim_c).defense;
             let victims: Vec<usize> = settlements
                 .iter()
                 .enumerate()
-                .filter(|(_, s)| s.culture == victim_c && s.pop > 90)
+                .filter(|(_, s)| s.realm == victim_c && s.pop > 90)
                 .map(|(i, _)| i)
                 .collect();
             if !victims.is_empty() {
@@ -1028,22 +1385,22 @@ fn conduct_wars(
                     settlements[vi].wealth * 0.25 * att_war.min(1.6) * walls * fortwall,
                 );
                 settlements[vi].wealth = round2((settlements[vi].wealth - plunder).max(0.0));
-                if let Some(sa_) = socs.get_mut(attacker.0) {
+                if let Some(sa_) = realms.get_mut(attacker.0) {
                     sa_.treasury = round2(sa_.treasury + 0.6 * plunder);
                 }
                 pol.wars[wi].score += if a_raids { 1.0 } else { -1.0 } * (0.6 + plunder / 60.0).min(2.0);
                 let text = if plunder > 25.0 {
                     format!(
-                        "Raiders of the {} burn the fields of {} — {} souls lost, {} in coin carried off.",
-                        cultures[attacker.0].people,
+                        "Raiders of {} burn the fields of {} — {} souls lost, {} in coin carried off.",
+                        realms[attacker.0].name,
                         settlements[vi].name,
                         loss,
                         plunder.round() as i64
                     )
                 } else {
                     format!(
-                        "Raiders of the {} burn the fields of {} — {} souls lost.",
-                        cultures[attacker.0].people, settlements[vi].name, loss
+                        "Raiders of {} burn the fields of {} — {} souls lost.",
+                        realms[attacker.0].name, settlements[vi].name, loss
                     )
                 };
                 events.push(Event {
@@ -1071,7 +1428,7 @@ fn conduct_wars(
                 .min_by_key(|&i| {
                     settlements
                         .iter()
-                        .filter(|o| o.culture == att)
+                        .filter(|o| o.realm == att)
                         .map(|o| {
                             let dy = o.y - settlements[i].y;
                             let dx = o.x - settlements[i].x;
@@ -1091,8 +1448,8 @@ fn conduct_wars(
                     s: settlements[ti].name.clone(),
                     k: EventKind::War,
                     text: format!(
-                        "The host of the {} sits down before {} — the siege begins.",
-                        cultures[att.0].people, settlements[ti].name
+                        "The host of {} sits down before {} — the siege begins.",
+                        realms[att.0].name, settlements[ti].name
                     ),
                     ids: smallvec![pol.wars[wi].ent],
                     x: settlements[ti].x,
@@ -1104,12 +1461,12 @@ fn conduct_wars(
         if let Some(siege) = pol.wars[wi].siege.clone() {
             let ti = settlements.iter().position(|s| s.id == siege.target);
             match ti {
-                Some(ti) if settlements[ti].culture != siege.attacker => {
+                Some(ti) if settlements[ti].realm != siege.attacker => {
                     let att = siege.attacker;
-                    let def = settlements[ti].culture;
+                    let def = settlements[ti].realm;
                     let (satt, sdef) = if att == a { (sa, sb) } else { (sb, sa) };
                     // besiegers eat coin
-                    if let Some(s) = socs.get_mut(att.0) {
+                    if let Some(s) = realms.get_mut(att.0) {
                         s.treasury = round2((s.treasury - 2.0).max(0.0));
                     }
                     // relief: the defenders may break the siege
@@ -1121,8 +1478,8 @@ fn conduct_wars(
                             s: settlements[ti].name.clone(),
                             k: EventKind::War,
                             text: format!(
-                                "A relief host of the {} scatters the besiegers — {} breathes again.",
-                                cultures[def.0].people, settlements[ti].name
+                                "A relief host of {} scatters the besiegers — {} breathes again.",
+                                realms[def.0].name, settlements[ti].name
                             ),
                             ids: smallvec![pol.wars[wi].ent],
                             x: settlements[ti].x,
@@ -1142,12 +1499,12 @@ fn conduct_wars(
                             settlements[ti].pop = (settlements[ti].pop - sack).max(60);
                             let plunder = round2(settlements[ti].wealth * 0.4);
                             settlements[ti].wealth = round2(settlements[ti].wealth - plunder);
-                            if let Some(s) = socs.get_mut(att.0) {
+                            if let Some(s) = realms.get_mut(att.0) {
                                 s.treasury = round2(s.treasury + 0.7 * plunder);
                             }
                             settlements[ti].fort = settlements[ti].fort.saturating_sub(1);
                             transfer(
-                                settlements, ti, att, cultures, month,
+                                settlements, ti, att, realms, month,
                                 "taken by storm after the long siege", &mut events,
                                 &mut pol.transfers,
                             );
@@ -1175,7 +1532,7 @@ fn conduct_wars(
     // --- peace terms, in the order the wars ended (M4.2)
     for &wi in ended.iter().rev() {
         let war = pol.wars.remove(wi);
-        let (evs, changed) = make_peace(pol, rng, month, &war, settlements, cultures, socs, reg);
+        let (evs, changed) = make_peace(pol, rng, month, &war, settlements, realms, reg);
         events.extend(evs);
         borders_changed |= changed;
     }
@@ -1191,8 +1548,7 @@ fn make_peace(
     month: i64,
     war: &War,
     settlements: &mut [Settlement],
-    cultures: &[Culture],
-    socs: &mut [Society],
+    realms: &mut [Realm],
     reg: &mut Registry,
 ) -> (Vec<Event>, bool) {
     let mut events = Vec::new();
@@ -1206,19 +1562,19 @@ fn make_peace(
         reg.earn_epithet(war.ent, "the Tide-Turned");
     }
     for (gen, side) in [(war.gen_a, war.a), (war.gen_b, war.b)] {
-        let people = cultures.get(side.0).map(|c| c.people.clone()).unwrap_or_default();
+        let banner = realms.get(side.0).map(|r| r.name.clone()).unwrap_or_default();
         reg.close(
             gen,
             month,
-            &format!("led the hosts of the {} in {}", people, war.name),
+            &format!("led the hosts of {} in {}", banner, war.name),
         );
     }
     let verdict = if margin < SCORE_TRIBUTE {
         "ended with neither side the better for it".to_string()
     } else {
         format!(
-            "ended in victory for the {}",
-            cultures.get(winner.0).map(|c| c.people.as_str()).unwrap_or("victors")
+            "ended in victory for {}",
+            realms.get(winner.0).map(|r| r.name.as_str()).unwrap_or("the victors")
         )
     };
     reg.close(war.ent, month, &verdict);
@@ -1239,8 +1595,8 @@ fn make_peace(
             s: war.name.clone(),
             k: EventKind::War,
             text: format!(
-                "{} gutters out — of the {} nothing remains to make peace with.",
-                war.name, cultures[loser.0].people
+                "{} gutters out — of {} nothing remains to make peace with.",
+                war.name, realms[loser.0].name
             ),
             ids: smallvec![war.ent],
             ..Default::default()
@@ -1254,8 +1610,8 @@ fn make_peace(
             s: war.name.clone(),
             k: EventKind::War,
             text: format!(
-                "Peace is sworn between the {} and the {}; {} is over, and neither side gained more than graves.",
-                cultures[war.a.0].people, cultures[war.b.0].people, war.name
+                "Peace is sworn between {} and {}; {} is over, and neither side gained more than graves.",
+                realms[war.a.0].name, realms[war.b.0].name, war.name
             ),
             ids: smallvec![war.ent],
             ..Default::default()
@@ -1272,11 +1628,11 @@ fn make_peace(
 
     if margin < SCORE_CEDE {
         // tribute: a lump of the loser's treasury and ten years of caravans
-        let lump = round2(socs.get(loser.0).map(|s| s.treasury * 0.35).unwrap_or(0.0));
-        if let Some(s) = socs.get_mut(loser.0) {
+        let lump = round2(realms.get(loser.0).map(|s| s.treasury * 0.35).unwrap_or(0.0));
+        if let Some(s) = realms.get_mut(loser.0) {
             s.treasury = round2(s.treasury - lump);
         }
-        if let Some(s) = socs.get_mut(winner.0) {
+        if let Some(s) = realms.get_mut(winner.0) {
             s.treasury = round2(s.treasury + lump);
         }
         let per_month = round2((0.6 + lump * 0.01).min(4.0));
@@ -1291,8 +1647,8 @@ fn make_peace(
             s: war.name.clone(),
             k: EventKind::War,
             text: format!(
-                "{} ends: the {} buy their peace — {} in coin, and tribute caravans to the {} for ten years.",
-                war.name, cultures[loser.0].people, lump.round() as i64, cultures[winner.0].people
+                "{} ends: {} buys its peace — {} in coin, and tribute caravans to {} for ten years.",
+                war.name, realms[loser.0].name, lump.round() as i64, realms[winner.0].name
             ),
             ..Default::default()
         });
@@ -1305,7 +1661,7 @@ fn make_peace(
     loser_towns.sort_by_key(|&i| {
         settlements
             .iter()
-            .filter(|o| o.culture == winner)
+            .filter(|o| o.realm == winner)
             .map(|o| {
                 let dy = o.y - settlements[i].y;
                 let dx = o.x - settlements[i].x;
@@ -1323,7 +1679,7 @@ fn make_peace(
         ceded.min(n_towns.saturating_sub(1)).max(1)
     };
     for &i in loser_towns.iter().take(take) {
-        transfer(settlements, i, winner, cultures, month, "ceded at the peace table", &mut events, &mut pol.transfers);
+        transfer(settlements, i, winner, realms, month, "ceded at the peace table", &mut events, &mut pol.transfers);
         borders_changed = true;
     }
     pol.ae[winner.0] = (pol.ae[winner.0] + 8.0 * take as f64).min(100.0);
@@ -1331,21 +1687,23 @@ fn make_peace(
     if annex {
         events.push(Event {
             m: month,
-            s: cultures[loser.0].people.clone(),
+            s: realms[loser.0].name.clone(),
             k: EventKind::Realm,
             text: format!(
-                "{} ends in ruin for the {}: their last towns pass to the {}, and their realm is struck from the rolls.",
-                war.name, cultures[loser.0].people, cultures[winner.0].people
+                "{} ends in ruin for {}: its last towns pass to {}, and the realm is struck from the rolls.",
+                war.name, realms[loser.0].name, realms[winner.0].name
             ),
             ids: smallvec![war.ent],
             ..Default::default()
         });
-        // the people leave the rolls of the living realms (M6.1)
-        if let Some(ce) = reg.find_kind(EntityKind::Culture, &cultures[loser.0].people) {
+        // the realm leaves the rolls of the living (M6.1); its people
+        // live on under a foreign crown (ADR-0018)
+        realms[loser.0].alive = false;
+        if let Some(ce) = reg.find_kind(EntityKind::Realm, &realms[loser.0].name) {
             reg.close(
                 ce,
                 month,
-                &format!("their realm struck from the rolls at the end of {}", war.name),
+                &format!("struck from the rolls at the end of {}", war.name),
             );
         }
         pol.vassal_of[loser.0] = None;
@@ -1357,8 +1715,8 @@ fn make_peace(
             s: war.name.clone(),
             k: EventKind::Realm,
             text: format!(
-                "{} ends with the {} on their knees: they kneel as vassals of the {}, their tribute set, their wars no longer their own.",
-                war.name, cultures[loser.0].people, cultures[winner.0].people
+                "{} ends with {} on its knees: it kneels as vassal of {}, its tribute set, its wars no longer its own.",
+                war.name, realms[loser.0].name, realms[winner.0].name
             ),
             ..Default::default()
         });
@@ -1368,8 +1726,8 @@ fn make_peace(
             s: war.name.clone(),
             k: EventKind::War,
             text: format!(
-                "{} is over. The {} dictate the peace, and the border stones are moved.",
-                war.name, cultures[winner.0].people
+                "{} is over. {} dictates the peace, and the border stones are moved.",
+                war.name, realms[winner.0].name
             ),
             ..Default::default()
         });
@@ -1377,118 +1735,705 @@ fn make_peace(
     (events, borders_changed)
 }
 
-/// M4.5 — hollow realms crack. A big polity with guttering asabiyyah and
-/// a doubted crown sheds its farthest towns as a new realm of the same
-/// tongue, young and burning.
+/// The seat's index, name and position — falling back to the greatest
+/// town under the banner when the named seat dangles mid-month (the
+/// M10.4 fallback rule).
+fn seat_of(
+    settlements: &[Settlement],
+    realms: &[Realm],
+    c: RealmId,
+) -> Option<(usize, String, i64, i64)> {
+    let r = &realms[c.0];
+    settlements
+        .iter()
+        .position(|s| s.id == r.seat && s.realm == c)
+        .or_else(|| {
+            let mut best: Option<usize> = None;
+            for (i, s) in settlements.iter().enumerate() {
+                if s.realm == c && best.map_or(true, |b| s.pop > settlements[b].pop) {
+                    best = Some(i);
+                }
+            }
+            best
+        })
+        .map(|i| (i, settlements[i].name.clone(), settlements[i].x, settlements[i].y))
+}
+
+/// M11 — the unrest ladder. Each realm's gauge is read once a month; the
+/// highest rung whose threshold and conditions hold fires, vents part of
+/// the pressure and arms a cooldown (M11.6). Secession sits at the top
+/// and is the only rung that moves borders — and it is gated (M11.4):
+/// only another people, or a shore beyond the crown's reach, may leave,
+/// and only from a hollow realm. A rising that fails the gate falls
+/// through to the coup rung instead of tearing the map.
 #[allow(clippy::too_many_arguments)]
-fn rebellion_pass(
+fn unrest_ladder(
     pol: &mut Politics,
     chron: &mut ChronicleState,
     rng: &mut Pcg64Mcg,
     taken: &mut HashSet<String>,
     month: i64,
     settlements: &mut [Settlement],
-    cultures: &mut Vec<Culture>,
-    socs: &mut Vec<Society>,
+    peoples_v: &[People],
+    realms: &mut Vec<Realm>,
+    socs: &[Society],
+    reg: &mut Registry,
+) -> (Vec<Event>, bool) {
+    let mut events = Vec::new();
+    let mut borders = false;
+    let mut seceded = false;
+    let n0 = realms.len();
+    for c in (0..n0).map(RealmId) {
+        if !realms[c.0].alive || !alive(settlements, c) || pol.crisis[c.0].is_some() {
+            continue;
+        }
+        if month < pol.calm_until[c.0] {
+            continue;
+        }
+        let u = pol.unrest[c.0];
+        if u < LADDER_RIOT {
+            continue;
+        }
+        // --- top rung: secession (M11.4) — at most one a month, world-wide
+        if u >= LADDER_SECEDE && !seceded && pol.asab[c.0] < 0.50 {
+            if let Some(evs) = try_secession(
+                pol, chron, rng, taken, month, settlements, peoples_v, realms, socs, reg, c,
+            ) {
+                events.extend(evs);
+                borders = true;
+                seceded = true;
+                pol.unrest[c.0] = (pol.unrest[c.0] - 0.45).max(0.0);
+                pol.calm_until[c.0] = month + 48;
+                continue;
+            }
+        }
+        // --- coup rung (M11.2): the palace settles what the street began
+        if u >= LADDER_COUP && pol.legit[c.0] < 0.58 {
+            events.extend(palace_coup(
+                pol, chron, rng, taken, month, settlements, peoples_v, realms, reg, c,
+            ));
+            pol.unrest[c.0] = (pol.unrest[c.0] - 0.35).max(0.0);
+            pol.calm_until[c.0] = month + 60;
+            continue;
+        }
+        // --- charter rung (M11.5): a lettered crown buys the peace
+        let towns = towns_of(settlements, c);
+        let cost = 160.0 + 6.0 * towns.len() as f64;
+        let lettered = socs
+            .get(realms[c.0].people.idx())
+            .map_or(false, |so| so.knows(society::TechId::Law));
+        if u >= LADDER_CHARTER && lettered && realms[c.0].treasury >= cost {
+            realms[c.0].treasury = round2(realms[c.0].treasury - cost);
+            pol.legit[c.0] = (pol.legit[c.0] + 0.12).min(1.0);
+            pol.unrest[c.0] = (pol.unrest[c.0] - 0.25).max(0.0);
+            pol.calm_until[c.0] = month + 30;
+            let seat = seat_of(settlements, realms, c);
+            let ruler = chron.rulers.iter().find(|r| r.realm == c);
+            let who = ruler
+                .map(|r| r.title())
+                .unwrap_or_else(|| realms[c.0].house.clone());
+            let mut ids: crate::event::EventIds = smallvec![];
+            if let Some(e) = reg.find_kind(EntityKind::Realm, &realms[c.0].name) {
+                ids.push(e);
+            }
+            if let Some(r) = ruler {
+                ids.push(r.ent);
+            }
+            events.push(Event {
+                m: month,
+                s: realms[c.0].name.clone(),
+                k: EventKind::Realm,
+                text: format!(
+                    "{} grants a charter of liberties{}: the crown's word set down in ink, and coin spent for quiet streets.",
+                    who,
+                    seat.as_ref()
+                        .map(|(_, nm, _, _)| format!(" at {}", nm))
+                        .unwrap_or_default()
+                ),
+                ids,
+                x: seat.as_ref().map(|&(_, _, x, _)| x).unwrap_or(-1),
+                y: seat.as_ref().map(|&(_, _, _, y)| y).unwrap_or(-1),
+                ..Default::default()
+            });
+            continue;
+        }
+        // --- bottom rung: the street speaks and a little pressure vents
+        if rng.gen::<f64>() < 0.35 {
+            pol.unrest[c.0] = (pol.unrest[c.0] - 0.08).max(0.0);
+            pol.calm_until[c.0] = month + 24;
+            let seat = seat_of(settlements, realms, c);
+            let mut ids: crate::event::EventIds = smallvec![];
+            if let Some(e) = reg.find_kind(EntityKind::Realm, &realms[c.0].name) {
+                ids.push(e);
+            }
+            events.push(Event {
+                m: month,
+                s: realms[c.0].name.clone(),
+                k: EventKind::Realm,
+                text: format!(
+                    "Bread riots shake {} — the peace of {} holds, but by a thread.",
+                    seat.as_ref()
+                        .map(|(_, nm, _, _)| nm.clone())
+                        .unwrap_or_else(|| "the streets".into()),
+                    realms[c.0].name
+                ),
+                ids,
+                x: seat.as_ref().map(|&(_, _, x, _)| x).unwrap_or(-1),
+                y: seat.as_ref().map(|&(_, _, _, y)| y).unwrap_or(-1),
+                ..Default::default()
+            });
+        }
+    }
+    (events, borders)
+}
+
+/// M11.4 — the gated secession, formerly the M4.5 rebellion roll. Shape
+/// first (enough towns on both sides of the split), then the gate: the
+/// rebel bloc follows another people than the crown, or its seed town
+/// lies beyond the crown's administrative reach. Risings mint realms,
+/// never peoples (ADR-0018).
+#[allow(clippy::too_many_arguments)]
+fn try_secession(
+    pol: &mut Politics,
+    chron: &mut ChronicleState,
+    rng: &mut Pcg64Mcg,
+    taken: &mut HashSet<String>,
+    month: i64,
+    settlements: &mut [Settlement],
+    peoples_v: &[People],
+    realms: &mut Vec<Realm>,
+    socs: &[Society],
+    reg: &mut Registry,
+    c: RealmId,
+) -> Option<Vec<Event>> {
+    let towns = towns_of(settlements, c);
+    if towns.len() < 4 {
+        return None;
+    }
+    // the capital is the largest town; the rising starts farthest away
+    let capital = *towns.iter().max_by_key(|&&i| settlements[i].pop).unwrap();
+    let seed_town = *towns
+        .iter()
+        .max_by_key(|&&i| {
+            let dy = settlements[i].y - settlements[capital].y;
+            let dx = settlements[i].x - settlements[capital].x;
+            dy * dy + dx * dx
+        })
+        .unwrap();
+    if seed_town == capital {
+        return None;
+    }
+    let rebels: Vec<usize> = towns
+        .iter()
+        .copied()
+        .filter(|&i| {
+            let dys = settlements[i].y - settlements[seed_town].y;
+            let dxs = settlements[i].x - settlements[seed_town].x;
+            let dyc = settlements[i].y - settlements[capital].y;
+            let dxc = settlements[i].x - settlements[capital].x;
+            dys * dys + dxs * dxs < dyc * dyc + dxc * dxc
+        })
+        .collect();
+    if rebels.len() < 2 || towns.len() - rebels.len() < 2 {
+        return None;
+    }
+    // the would-be crown: the people most numerous among the rebel towns
+    let crown_people = {
+        let mut counts: Vec<(PeopleId, i64)> = Vec::new();
+        for &i in &rebels {
+            let p = settlements[i].people;
+            if let Some(e) = counts.iter_mut().find(|e| e.0 == p) {
+                e.1 += settlements[i].pop;
+            } else {
+                counts.push((p, settlements[i].pop));
+            }
+        }
+        let mut best = counts[0];
+        for e in &counts {
+            if e.1 > best.1 {
+                best = *e;
+            }
+        }
+        best.0
+    };
+    // the gate (M11.4): another tongue under the banner, or a seed town
+    // beyond the crown's administrative reach — otherwise no secession
+    let old_crown = realms[c.0].people;
+    let reach = ADMIN_REACH[socs.get(old_crown.idx()).map_or(0, |so| so.polity.min(3))];
+    let far = seat_of(settlements, realms, c).map_or(false, |(_, _, sx, sy)| {
+        let dy = (settlements[seed_town].y - sy) as f64;
+        let dx = (settlements[seed_town].x - sx) as f64;
+        (dy * dy + dx * dx).sqrt() > reach
+    });
+    if crown_people == old_crown && !far {
+        return None;
+    }
+    let mut events = Vec::new();
+    let style = peoples_v[crown_people.idx()].style.clone();
+    let (name, house) = coin_realm_name(rng, &style, taken);
+    let parent_name = realms[c.0].name.clone();
+    let new_id = RealmId(realms.len());
+    // coin is divided by heads; the arts stay with the people
+    let share = rebels.len() as f64 / towns.len() as f64;
+    let seed_pos = (settlements[seed_town].x, settlements[seed_town].y);
+    let new_treasury = round2(realms[c.0].treasury * share);
+    realms[c.0].treasury = round2(realms[c.0].treasury * (1.0 - share));
+    realms.push(Realm {
+        id: new_id,
+        name: name.clone(),
+        house,
+        people: crown_people,
+        seat: settlements[seed_town].id,
+        color: culture::next_realm_color(new_id.idx()),
+        founded: month,
+        alive: true,
+        treasury: new_treasury,
+    });
+    for &i in &rebels {
+        settlements[i].realm = new_id;
+    }
+    // a young crown, and a court that remembers why it left
+    pol.grow(realms.len());
+    pol.asab[new_id.0] = 0.85;
+    pol.legit[new_id.0] = 0.55;
+    pol.unrest[new_id.0] = 0.30;
+    pol.calm_until[new_id.0] = month + 36;
+    pol.op_add(new_id, c, -65.0);
+    pol.op_add(c, new_id, -65.0);
+    pol.legit[c.0] = (pol.legit[c.0] - 0.10).max(0.0);
+    // the new realm and its first crown enter the telling (M6.1)
+    let realm_ent = reg.add(
+        EntityKind::Realm, &name, month, Some(crown_people), seed_pos.0, seed_pos.1,
+    );
+    let ruler = chronicle::new_ruler(
+        rng, &realms[new_id.0], &peoples_v[crown_people.idx()], taken, month, reg,
+    );
+    let ruler_name = ruler.title();
+    let ruler_ent = ruler.ent;
+    chron.rulers.push(ruler);
+    events.push(Event {
+        m: month,
+        s: name.clone(),
+        k: EventKind::Realm,
+        text: format!(
+            "The far towns rise against {}: {} settlements follow {} out of the old realm, and men begin to speak of {}.",
+            parent_name, rebels.len(), ruler_name, name
+        ),
+        ids: smallvec![realm_ent, ruler_ent],
+        x: seed_pos.0,
+        y: seed_pos.1,
+        ..Default::default()
+    });
+    // half the time the old realm marches to take back its own
+    if pol.wars.len() < 3 && rng.gen::<f64>() < 0.5 {
+        let war_name = format!("the {} Rising", name);
+        kindle_war(pol, rng, month, c, new_id, peoples_v, realms, &war_name, &mut events, taken, reg);
+    }
+    Some(events)
+}
+
+/// M11.2 — a palace coup. The usurper is a living general from the
+/// realm's wars when one stands, else a lord of the court; the old house
+/// falls and a new one rules. Epithets are earned in the act: "the
+/// Kingslayer" when the old ruler is slain, "the Usurper" otherwise.
+#[allow(clippy::too_many_arguments)]
+fn palace_coup(
+    pol: &mut Politics,
+    chron: &mut ChronicleState,
+    rng: &mut Pcg64Mcg,
+    taken: &mut HashSet<String>,
+    month: i64,
+    settlements: &[Settlement],
+    peoples_v: &[People],
+    realms: &mut [Realm],
+    reg: &mut Registry,
+    c: RealmId,
+) -> Vec<Event> {
+    let mut events = Vec::new();
+    let Some(ri) = chron.rulers.iter().position(|r| r.realm == c) else {
+        return events;
+    };
+    let people = &peoples_v[realms[c.0].people.idx()];
+    // a marshal with an army at his back, when the realm has one afield
+    let general = pol
+        .wars
+        .iter()
+        .find_map(|w| {
+            if w.a == c {
+                Some(w.gen_a)
+            } else if w.b == c {
+                Some(w.gen_b)
+            } else {
+                None
+            }
+        })
+        .and_then(|e| reg.get(e).map(|p| (p.name.clone(), e)));
+    let was_marshal = general.is_some();
+    let (name, ent) = general.unwrap_or_else(|| {
+        let nm = naming::make_word(rng, &people.style, taken);
+        let e = reg.add_person(&nm, "courtier", month, Some(realms[c.0].people));
+        (nm, e)
+    });
+    let slain = rng.gen::<f64>() < 0.5;
+    let epithet = if slain { "the Kingslayer" } else { "the Usurper" };
+    reg.earn_epithet(ent, epithet);
+    let old = chron.rulers[ri].clone();
+    reg.close(
+        old.ent,
+        month,
+        &if slain {
+            format!("slain at his own table — the circlet of {} seized by {}", realms[c.0].name, name)
+        } else {
+            format!("cast down and driven into exile; {} took the circlet of {}", name, realms[c.0].name)
+        },
+    );
+    let old_house = realms[c.0].house.clone();
+    let new_house = format!("House {}", naming::make_word(rng, &people.style, taken));
+    realms[c.0].house = new_house.clone();
+    // the fallen house is remembered — a later crisis pretender may
+    // carry it back (the restoration arc, M11.6)
+    pol.deposed[c.0] = Some(old_house.clone());
+    chron.rulers[ri] = Ruler {
+        realm: c,
+        name: name.clone(),
+        epithet: epithet.to_string(),
+        since: month,
+        age_months: rng.gen_range(300..520),
+        ent,
+    };
+    // a short honeymoon: doubted, but not so damned that the next coup
+    // is already armed — chain-coups should be an arc, not the default
+    pol.legit[c.0] = 0.50;
+    let seat = seat_of(settlements, realms, c);
+    let hand = if was_marshal { "the marshal of its armies" } else { "a lord of the court" };
+    let deed = if slain {
+        format!("{} of {} is slain at his own table", old.title(), realms[c.0].name)
+    } else {
+        format!("{} of {} is cast down and driven into exile", old.title(), realms[c.0].name)
+    };
+    let mut ids: crate::event::EventIds = smallvec![old.ent, ent];
+    if let Some(e) = reg.find_kind(EntityKind::Realm, &realms[c.0].name) {
+        ids.insert(0, e);
+    }
+    events.push(Event {
+        m: month,
+        s: realms[c.0].name.clone(),
+        k: EventKind::Ruler,
+        text: format!(
+            "{}. {}, {}, seizes the circlet — {} falls, and {} rules in its place.",
+            deed, name, hand, old_house, new_house
+        ),
+        ids,
+        x: seat.as_ref().map(|&(_, _, x, _)| x).unwrap_or(-1),
+        y: seat.as_ref().map(|&(_, _, _, y)| y).unwrap_or(-1),
+        ..Default::default()
+    });
+    events
+}
+
+/// M11.3 — wars of the circlet run their course. When the term is up a
+/// claimant takes the throne, every rival claim closes, and the realm
+/// keeps its borders — this was a war inside the hall. A claimant who
+/// carries the deposed house home writes the restoration arc (M11.6).
+fn resolve_circlet_wars(
+    pol: &mut Politics,
+    chron: &mut ChronicleState,
+    rng: &mut Pcg64Mcg,
+    month: i64,
+    settlements: &[Settlement],
+    realms: &mut [Realm],
     reg: &mut Registry,
 ) -> Vec<Event> {
     let mut events = Vec::new();
-    let n = cultures.len();
-    for c in (0..n).map(CultureId) {
-        let towns = towns_of(settlements, c);
-        if towns.len() < 4 {
+    for c in (0..realms.len()).map(RealmId) {
+        let due = matches!(
+            pol.crisis.get(c.0),
+            Some(Some(cw)) if month >= cw.ends || !realms[c.0].alive
+        );
+        if !due {
             continue;
         }
-        let size_factor = ((towns.len() as f64 - 3.0) / 6.0).min(1.0);
-        let p = 0.0030 * (1.0 - pol.asab[c.0]) * (1.1 - pol.legit[c.0]).max(0.0) * size_factor;
-        if rng.gen::<f64>() >= p {
+        let cw = pol.crisis[c.0].take().unwrap();
+        if !realms[c.0].alive || !alive(settlements, c) {
+            // the realm died mid-crisis: the seated claimant falls with
+            // it (the fallen-crowns pass), the rivals' claims just end
+            for (j, cl) in cw.claimants.iter().enumerate() {
+                if j != cw.seated {
+                    reg.close(cl.ent, month, "the claim died with the realm");
+                }
+            }
             continue;
         }
-        // the capital is the largest town; the rising starts farthest away
-        let capital = *towns.iter().max_by_key(|&&i| settlements[i].pop).unwrap();
-        let seed_town = *towns
-            .iter()
-            .max_by_key(|&&i| {
-                let dy = settlements[i].y - settlements[capital].y;
-                let dx = settlements[i].x - settlements[capital].x;
-                dy * dy + dx * dx
-            })
-            .unwrap();
-        if seed_town == capital {
-            continue;
+        let w = rng.gen_range(0..cw.claimants.len());
+        for (j, cl) in cw.claimants.iter().enumerate() {
+            if j == w {
+                continue;
+            }
+            let fate = if rng.gen::<f64>() < 0.5 {
+                "fell in the war of the circlet"
+            } else {
+                "yielded the claim and took the road into exile"
+            };
+            reg.close(cl.ent, month, &format!("{} of {}", fate, realms[c.0].name));
         }
-        let rebels: Vec<usize> = towns
-            .iter()
-            .copied()
-            .filter(|&i| {
-                let dys = settlements[i].y - settlements[seed_town].y;
-                let dxs = settlements[i].x - settlements[seed_town].x;
-                let dyc = settlements[i].y - settlements[capital].y;
-                let dxc = settlements[i].x - settlements[capital].x;
-                dys * dys + dxs * dxs < dyc * dyc + dxc * dxc
-            })
-            .collect();
-        if rebels.len() < 2 || towns.len() - rebels.len() < 2 {
-            continue;
+        let winner = cw.claimants[w].clone();
+        let restored = pol.deposed[c.0].as_deref() == Some(winner.house.as_str());
+        let ri = chron.rulers.iter().position(|r| r.realm == c);
+        if w != cw.seated {
+            if let Some(ri) = ri {
+                let epithet = if restored { "the Returned" } else { "the Hard-won" };
+                reg.earn_epithet(winner.ent, epithet);
+                chron.rulers[ri] = Ruler {
+                    realm: c,
+                    name: winner.name.clone(),
+                    epithet: epithet.to_string(),
+                    since: month,
+                    age_months: rng.gen_range(280..520),
+                    ent: winner.ent,
+                };
+            }
+        } else if let Some(ri) = ri {
+            chron.rulers[ri].epithet = "the Unbowed".to_string();
+            reg.earn_epithet(winner.ent, "the Unbowed");
         }
-        // a new realm of the old tongue
-        let new_id = CultureId(cultures.len());
-        let nc = culture::secede(&cultures[c.0], new_id, rng, taken);
-        let people = nc.people.clone();
-        let parent_people = cultures[c.0].people.clone();
-        cultures.push(nc);
-        // the society splits: arts travel, coin is divided by heads
-        let share = rebels.len() as f64 / towns.len() as f64;
-        let parent_soc = socs[c.0].clone();
-        let mut new_soc = Society {
-            culture: new_id.0,
-            era: parent_soc.era,
-            polity: parent_soc.polity.saturating_sub(1).max(1),
-            techs: parent_soc.techs.clone(),
-            known: parent_soc.known,
-            knowledge: round2(parent_soc.knowledge * 0.7),
-            treasury: round2(parent_soc.treasury * share),
+        let old_house = realms[c.0].house.clone();
+        realms[c.0].house = winner.house.clone();
+        if restored {
+            pol.deposed[c.0] = None;
+        } else if old_house != winner.house {
+            pol.deposed[c.0] = Some(old_house);
+        }
+        pol.legit[c.0] = 0.55;
+        pol.unrest[c.0] = (pol.unrest[c.0] - 0.25).max(0.0);
+        pol.calm_until[c.0] = month + 24;
+        let seat = seat_of(settlements, realms, c);
+        let text = if restored {
+            format!(
+                "The war of the circlet of {} is done: the old blood returns, and {} of {} is restored to the throne.",
+                realms[c.0].name, winner.name, winner.house
+            )
+        } else {
+            format!(
+                "The war of the circlet of {} is done: {} of {} holds the throne, and the rival claims are ash.",
+                realms[c.0].name, winner.name, winner.house
+            )
         };
-        if let Some(ps) = socs.get_mut(c.0) {
-            ps.treasury = round2(ps.treasury * (1.0 - share));
+        let mut ids: crate::event::EventIds = smallvec![winner.ent];
+        if let Some(e) = reg.find_kind(EntityKind::Realm, &realms[c.0].name) {
+            ids.insert(0, e);
         }
-        new_soc.polity = new_soc.polity.min(society::POLITIES.len() - 1);
-        socs.push(new_soc);
-        for &i in &rebels {
-            settlements[i].culture = new_id;
-        }
-        // a young crown, and a court that remembers why it left
-        pol.grow(cultures.len());
-        pol.asab[new_id.0] = 0.85;
-        pol.legit[new_id.0] = 0.55;
-        pol.op_add(new_id, c, -65.0);
-        pol.op_add(c, new_id, -65.0);
-        pol.legit[c.0] = (pol.legit[c.0] - 0.10).max(0.0);
-        // the new people and their first crown enter the telling (M6.1)
-        let culture_ent = reg.add(EntityKind::Culture, &people, month, Some(new_id), -1, -1);
-        let ruler = chronicle::new_ruler(rng, &cultures[new_id.0], taken, month, reg);
-        let ruler_name = ruler.title();
-        let ruler_ent = ruler.ent;
-        chron.rulers.push(ruler);
         events.push(Event {
             m: month,
-            s: people.clone(),
-            k: EventKind::Realm,
-            text: format!(
-                "The far towns rise against the {}: {} settlements follow {} out of the old realm, and men begin to speak of the {}.",
-                parent_people, rebels.len(), ruler_name, people
-            ),
-            ids: smallvec![culture_ent, ruler_ent],
-            x: settlements[seed_town].x,
-            y: settlements[seed_town].y,
+            s: realms[c.0].name.clone(),
+            k: EventKind::Ruler,
+            text,
+            ids,
+            x: seat.as_ref().map(|&(_, _, x, _)| x).unwrap_or(-1),
+            y: seat.as_ref().map(|&(_, _, _, y)| y).unwrap_or(-1),
             ..Default::default()
         });
-        // half the time the old realm marches to take back its own
-        if pol.wars.len() < 3 && rng.gen::<f64>() < 0.5 {
-            let name = format!("the {} Rising", cultures[new_id.0].name);
-            kindle_war(pol, rng, month, c, new_id, cultures, &name, &mut events, taken, reg);
+    }
+    events
+}
+
+use crate::culture;
+
+// ---------------------------------------------------------------- union
+
+/// M12.3 — peaceful union: two realms of kindred peoples, warm courts
+/// both ways and a shared threat at the door join under one crown, by
+/// compact or by marriage. The greater crown rules everything; the
+/// lesser house persists as a named sworn line at the united court. At
+/// most one union a year, worldwide — crowns do not pool like raindrops.
+pub fn union_pass(
+    peoples: &mut Peoples,
+    pol: &mut Politics,
+    month: i64,
+    rng: &mut Pcg64Mcg,
+    reg: &mut Registry,
+) -> Vec<Event> {
+    let mut events = Vec::new();
+    let Peoples { settlements, peoples: peoples_v, realms, coresidence, .. } = peoples;
+    let n = realms.len();
+    if n < 2 {
+        return events;
+    }
+    // A secession earlier this same month may have outgrown the opinion
+    // matrix — widen before indexing with today's roster (idempotent).
+    pol.grow(n);
+    let towns_of = |rid: usize| settlements.iter().filter(|s| s.realm.0 == rid).count();
+    let pop_of = |rid: usize| -> i64 {
+        settlements.iter().filter(|s| s.realm.0 == rid).map(|s| s.pop).sum()
+    };
+    /// Which door the union came through — the prose differs.
+    enum Via {
+        Compact,
+        Oath,
+    }
+    for a in 0..n {
+        for b in (a + 1)..n {
+            if !realms[a].alive || !realms[b].alive {
+                continue;
+            }
+            if pol.crisis[a].is_some() || pol.crisis[b].is_some() {
+                continue;
+            }
+            let (ra, rb) = (RealmId(a), RealmId(b));
+            if pol.wars.iter().any(|w| w.involves(ra) && w.involves(rb)) {
+                continue;
+            }
+            let kin = culture::kinship(realms[a].people, realms[b].people, peoples_v, coresidence);
+            if kin < 0.55 {
+                continue;
+            }
+            // Two doors into one crown:
+            //  - the compact of equals: two free kindred crowns, warm
+            //    courts both ways, a shared threat at the door;
+            //  - the oath fulfilled: a kindred sworn line folds into its
+            //    suzerain after long warmth — no threat needed, the
+            //    swearing was the threat.
+            let sworn_to_a = pol.vassal_of[b] == Some(ra);
+            let sworn_to_b = pol.vassal_of[a] == Some(rb);
+            let via = if sworn_to_a || sworn_to_b {
+                let (suz, vas) = if sworn_to_a { (a, b) } else { (b, a) };
+                if pol.opinion[vas * n + suz] < 10.0 || towns_of(vas) < 1 {
+                    continue;
+                }
+                if rng.gen::<f64>() > 0.15 {
+                    continue;
+                }
+                Via::Oath
+            } else {
+                if pol.vassal_of[a].is_some() || pol.vassal_of[b].is_some() {
+                    continue;
+                }
+                if towns_of(a) < 2 || towns_of(b) < 2 {
+                    continue;
+                }
+                if pol.opinion[a * n + b] < 25.0 || pol.opinion[b * n + a] < 25.0 {
+                    continue;
+                }
+                let threatened = pol
+                    .wars
+                    .iter()
+                    .any(|w| w.involves(ra) != w.involves(rb) && (w.involves(ra) || w.involves(rb)))
+                    || (0..n).any(|c| {
+                        c != a
+                            && c != b
+                            && realms[c].alive
+                            && pol.opinion[c * n + a] <= -25.0
+                            && pol.opinion[c * n + b] <= -25.0
+                    });
+                if !threatened || rng.gen::<f64>() > 0.25 {
+                    continue;
+                }
+                Via::Compact
+            };
+
+            // --- the joining: the suzerain keeps the crown by oath; by
+            // compact, the greater. Either way one circlet remains.
+            let (big, small) = match via {
+                Via::Oath => {
+                    if sworn_to_a {
+                        (a, b)
+                    } else {
+                        (b, a)
+                    }
+                }
+                Via::Compact => {
+                    if pop_of(a) >= pop_of(b) {
+                        (a, b)
+                    } else {
+                        (b, a)
+                    }
+                }
+            };
+            let (big_id, small_id) = (RealmId(big), RealmId(small));
+            let small_name = realms[small].name.clone();
+            let small_house = realms[small].house.clone();
+            let small_seat_name = settlements
+                .iter()
+                .find(|s| s.id == realms[small].seat)
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| small_name.clone());
+            for s in settlements.iter_mut() {
+                if s.realm == small_id {
+                    s.realm = big_id;
+                }
+            }
+            let dowry = realms[small].treasury;
+            realms[big].treasury += dowry;
+            realms[small].treasury = 0.0;
+            realms[small].alive = false;
+            // the folded crown leaves the rolls of the living (M6.1) —
+            // same bookkeeping as a conquest death, gentler fate
+            if let Some(ce) = reg.find_kind(EntityKind::Realm, &small_name) {
+                reg.close(
+                    ce,
+                    month,
+                    &format!("its crown joined with {} in union", realms[big].name),
+                );
+            }
+            // sworn lines re-swear to the united crown; the folded
+            // line's own oath is spent
+            pol.vassal_of[small] = None;
+            for v in pol.vassal_of.iter_mut() {
+                if *v == Some(small_id) {
+                    *v = Some(big_id);
+                }
+            }
+            // the lesser crown's wars ride along under the united banner
+            for w in pol.wars.iter_mut() {
+                if w.a == small_id {
+                    w.a = big_id;
+                }
+                if w.b == small_id {
+                    w.b = big_id;
+                }
+                for v in w.allies_a.iter_mut().chain(w.allies_b.iter_mut()) {
+                    if *v == small_id {
+                        *v = big_id;
+                    }
+                }
+            }
+            pol.wars.retain(|w| w.a != w.b);
+            // a union settles both courts for a season
+            pol.legit[big] = (pol.legit[big] + 0.05).min(1.0);
+            pol.unrest[big] = (pol.unrest[big] - 0.10).max(0.0);
+            pol.unrest[small] = 0.0;
+            pol.calm_until[big] = pol.calm_until[big].max(month + 36);
+            let by_marriage = rng.gen::<f64>() < 0.5;
+            let big_name = realms[big].name.clone();
+            let (sx, sy) = settlements
+                .iter()
+                .find(|s| s.id == realms[big].seat)
+                .map(|s| (s.x, s.y))
+                .unwrap_or((-1, -1));
+            let text = match via {
+                Via::Oath => format!(
+                    "The oath is fulfilled: long sworn to that crown, {} is a country of {} outright now, and the crowns of both are joined; House {} keeps its seat at {} as a sworn line.",
+                    small_name, big_name, small_house, small_seat_name
+                ),
+                Via::Compact if by_marriage => format!(
+                    "By a marriage long in the making, the crowns of {} and {} are joined; one circlet rules both countries now, and House {} keeps its honored seat at {} as a sworn line.",
+                    big_name, small_name, small_house, small_seat_name
+                ),
+                Via::Compact => format!(
+                    "With enemies at both doors, the crowns of {} and {} are joined by compact under one circlet; House {} keeps its seat at {} as a sworn line of the united realm.",
+                    big_name, small_name, small_house, small_seat_name
+                ),
+            };
+            events.push(Event {
+                m: month,
+                s: big_name,
+                k: EventKind::Realm,
+                text,
+                x: sx,
+                y: sy,
+                ..Default::default()
+            });
+            return events; // at most one union a year
         }
-        break; // at most one rising a month, world-wide
     }
     events
 }
@@ -1499,10 +2444,6 @@ fn rebellion_pass(
 pub fn war_name_bank() -> &'static [&'static str] {
     &WAR_NAMES
 }
-
-// naming is pulled in transitively via culture::secede
-#[allow(unused_imports)]
-use naming as _naming;
 
 // ---------------------------------------------------------------- bands
 

@@ -44,6 +44,13 @@ pub enum EventKind {
     Trade,
     War,
     Wonder,
+    /// M12 — the kindred clock: assimilation, divergence, fusion. Appended
+    /// last so existing kinds keep their wire discriminants.
+    Kindred,
+    /// M13 — the arc of empires: civilization set-pieces (a golden age
+    /// dawns, the court rots, the empire breaks, successors are named).
+    /// Appended last; wire discriminants hold.
+    Era,
 }
 
 impl EventKind {
@@ -97,6 +104,8 @@ event_table! {
     Trade     => family economy, weight 1, fortune 0;
     War       => family war,     weight 3, fortune -1;
     Wonder    => family realm,   weight 2, fortune 1;
+    Kindred   => family realm,   weight 3, fortune 0;
+    Era       => family realm,   weight 4, fortune 0;
 }
 
 /// E5.5 — inline storage for the common 0–2 entity ids per event.
@@ -145,6 +154,8 @@ pub fn headline_worthy(k: EventKind) -> bool {
             | EventKind::Society
             | EventKind::Tech
             | EventKind::Myth
+            | EventKind::Kindred
+            | EventKind::Era
     )
 }
 

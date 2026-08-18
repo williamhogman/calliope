@@ -9,10 +9,11 @@
  * @property {{hubs: Array<{id: number, n: number, name: string, p: Object<string, number>}>, of: Array<number>, spread: Array<unknown>}} areas
  * @property {Array<{dtype: string, name: string, nbytes: number, offset: number, q?: {offset: number, scale: number, xform: string}, shape: Array<number>}>} arrays
  * @property {Array<{color: Array<number>, id: number, name: string}>} biomes
+ * @property {Array<unknown>} civs
  * @property {number} crc32
  * @property {Array<{density: number, id: number, name: string}>} crop_packages
- * @property {Array<{alive: boolean, asab: number, color: string, era: string, id: number, legit: number, name: string, pantheon: Array<{domain: string, name: string}>, people: string, polity: string, ruler: string, style: string, techs: Array<unknown>, treasury: number}>} cultures
- * @property {Array<{known: boolean, left: number, r: string, rich: number, x: number, y: number}>} deposits
+ * @property {Array<{alive: boolean, color: string, era: string, id: number, name: string, pantheon: Array<{domain: string, name: string}>, people: string, polity: string, style: string, techs: Array<unknown>, towns: number}>} cultures
+ * @property {Array<{known: boolean, left: number, phase: number, r: string, rich: number, stock: number, x: number, y: number}>} deposits
  * @property {number} deposits_hidden
  * @property {Array<string>} entity_kinds
  * @property {Array<string>} event_kinds
@@ -27,12 +28,14 @@
  * @property {number} month
  * @property {Array<string>} months
  * @property {number} pack
- * @property {Object<string, {abundance: string, category: string, color: string, isa: Array<string>, requires: null | string, virtual?: boolean}>} resources
+ * @property {Array<number>} peoples
+ * @property {Array<{alive: boolean, asab: number, color: string, founded: number, house: string, id: number, legit: number, name: string, people: number, ruler: string, seat: number, treasury: number, unrest: number}>} realms
+ * @property {Object<string, {abundance: string, category: string, color: string, isa: Array<string>, perishable: boolean, requires: null | string, transport: string, virtual?: boolean}>} resources
  * @property {Array<{a: number, b: number, cost: number, goods: Array<string>, m: Array<number>, path: Array<Array<number>>, ramp: number, sea: number, w: number}>} routes
  * @property {Array<unknown>} ruins
  * @property {number} sea_level
  * @property {number} seed
- * @property {Array<{coastal: boolean, connections: number, culture: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, pop: number, port: boolean, river: boolean, tier: string, wealth: number, x: number, y: number}>} settlements
+ * @property {Array<{coastal: boolean, connections: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} settlements
  * @property {number} size
  * @property {Array<number>} territory
  * @property {Array<unknown>} wars
@@ -44,9 +47,8 @@
  * Result of advancing the simulation; `routes` only when a colony was founded.
  * @typedef {Object} Tick
  * @property {{hubs: Array<{id: number, n?: number, name?: string, p: Object<string, number>}>, of?: Array<number>, spread?: Array<unknown>}} areas
- * @property {Array<{asab: number, i: number, legit: number, treasury: number}>} [c_hot]
- * @property {Array<{alive: boolean, asab: number, color: string, era: string, id: number, legit: number, name: string, pantheon: Array<{domain: string, name: string}>, people: string, polity: string, ruler: string, style: string, techs: Array<string>, treasury: number}>} [cultures]
- * @property {Array<{known: boolean, left: number, r: string, rich: number, x: number, y: number}>} [deposits]
+ * @property {Array<{alive: boolean, color: string, era: string, id: number, name: string, pantheon: Array<{domain: string, name: string}>, people: string, polity: string, style: string, techs: Array<string>, towns: number}>} [cultures]
+ * @property {Array<{known: boolean, left: number, phase: number, r: string, rich: number, stock: number, x: number, y: number}>} [deposits]
  * @property {number} [deposits_hidden]
  * @property {Array<number>} ev
  * @property {Array<{alt?: string, alt_people?: string, ety: string, name: string, people?: string, size: number, t: string, x: number, y: number}>} [features]
@@ -54,9 +56,12 @@
  * @property {Array<{b: number, g: string, p: number, t: number}>} [m_hot]
  * @property {Array<{b: number, g: string, p: number, t: number}>} [market]
  * @property {number} month
+ * @property {Array<number>} [peoples]
+ * @property {Array<{asab: number, i: number, legit: number, treasury: number, unrest: number}>} [r_hot]
+ * @property {Array<{alive: boolean, asab: number, color: string, founded: number, house: string, id: number, legit: number, name: string, people: number, ruler?: string, seat: number, treasury: number, unrest: number}>} [realms]
  * @property {Array<{a: number, b: number, cost: number, goods: Array<string>, m: Array<number>, path: Array<Array<number>>, ramp: number, sea: number, w: number}>} [routes]
  * @property {Array<Array<number | null>>} [s_hot]
- * @property {Array<{coastal: boolean, connections: number, culture: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, pop: number, port: boolean, river: boolean, tier: string, wealth: number, x: number, y: number}>} [settlements]
+ * @property {Array<{coastal: boolean, connections: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} [settlements]
  * @property {Array<number>} [territory]
  */
 
@@ -79,11 +84,13 @@
  * @typedef {Object} Entity
  * @property {number} [culture]
  * @property {Array<string>} [epithets]
+ * @property {string} [fate]
  * @property {number} id
  * @property {number} kind
  * @property {string} name
  * @property {string} [role]
  * @property {number} since
+ * @property {number} [until]
  * @property {number} x
  * @property {number} y
  */
@@ -91,7 +98,7 @@
 /**
  * One sifted microstory.
  * @typedef {Object} Story
- * @property {Array<{ids: Array<number>, k: number, legend?: string, m: number, s: string, text: string, veiled?: boolean, x: number, y: number}>} beats
+ * @property {Array<{ids: Array<number>, k: number, legend?: string, m: number, s: string, text: string, x: number, y: number}>} beats
  * @property {Array<number>} ids
  * @property {string} pattern
  * @property {number} score

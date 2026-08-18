@@ -9,6 +9,7 @@ pub mod agriculture;
 pub mod artifact;
 pub mod biomes;
 pub mod chronicle;
+pub mod civ;
 pub mod climate;
 pub mod constants;
 pub mod culture;

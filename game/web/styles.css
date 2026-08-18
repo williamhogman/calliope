@@ -840,6 +840,27 @@ input { font: inherit; color: inherit; }
 }
 .war-banner:hover { background: rgba(224, 85, 85, 0.16); }
 
+/* ADR-0018 — the Powers tab's two rosters: Crowns above, Tongues below */
+.ol-section {
+  padding: 9px 12px 3px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* a war note that is also a door into the war view */
+.insp-note.link-note {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+}
+.insp-note.link-note:hover { text-decoration: underline; }
+
 .m-trend { width: 14px; text-align: center; font-size: 10px; color: var(--dim); flex: 0 0 auto; }
 .m-trend.up { color: var(--neg); }
 .m-trend.down { color: var(--pos); }
@@ -1331,3 +1352,15 @@ input { font: inherit; color: inherit; }
 
 /* E8.12 — overlay/alert options are real buttons now; keep the row shape. */
 button.option { width: 100%; text-align: left; }
+
+/* M13 — the civilization tier in rosters and cards */
+.stage-chip {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-left: 7px;
+  opacity: 0.92;
+  vertical-align: 1px;
+}
+.insp-note.warn { color: #e0b06a; }

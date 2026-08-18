@@ -11,7 +11,8 @@ import {
   abortGenerate, onWorkerLost, onWorkerRestored,
 } from "./net.js";
 import {
-  world, setWorld, setSettlements, setCultures, setWars, setEvents, events,
+  world, setWorld, setSettlements, setCultures, setRealms, setCivs, setWars,
+  setEvents, events,
   setRuins, month, setMonth, playing, setPlaying, speed, worldSize,
   setBusy, setSelection, market, setMarket, setAreas, setMerchants,
   setDepositsTick, setMarketTick, pushToast, setSeenEvents,
@@ -107,6 +108,8 @@ function applyWorld(w, { fit = true } = {}) {
     setSeenEvents((w.header.events || []).length);
     setSettlements(w.header.settlements);
     setCultures(w.header.cultures || []);
+    setRealms(w.header.realms || []);
+    setCivs(w.header.civs || []);
     setWars(w.header.wars || []);
     setRuins(w.header.ruins || []);
     setMarket(w.header.market || []);
@@ -209,14 +212,32 @@ export async function advance(months) {
         ctx.renderer.setRoutes(res.routes); // colonies joined the network
       }
       if (res.cultures) {
+        // peoples block (ADR-0018 slow axis): era, tech, divergence, death
         w.header.cultures = res.cultures;
         setCultures(res.cultures);
-      } else if (res.c_hot) {
-        // heartbeat patch (E4.2): treasury/asab/legit over the held cultures
-        const culs = w.header.cultures.slice();
-        for (const { i, ...p } of res.c_hot) culs[i] = { ...culs[i], ...p };
-        w.header.cultures = culs;
-        setCultures(culs);
+        ctx.renderer.setPeopleRoster(res.cultures);
+      }
+      if (res.realms) {
+        // full realm block: cold half moved — succession, conquest, union
+        w.header.realms = res.realms;
+        setRealms(res.realms);
+        ctx.renderer.setRealmRoster(res.realms);
+      } else if (res.r_hot) {
+        // heartbeat patch (E4.2): treasury/asab/legit over the held realms
+        const rlms = (w.header.realms || []).slice();
+        for (const { i, ...p } of res.r_hot) rlms[i] = { ...rlms[i], ...p };
+        w.header.realms = rlms;
+        setRealms(rlms);
+      }
+      if (res.civs) {
+        // civilization tier moved (M13): stage turns, golden ages, falls
+        w.header.civs = res.civs;
+        setCivs(res.civs);
+      }
+      if (res.peoples) {
+        // the tongue map moved (M10.6): assimilation, divergence, merging
+        w.header.peoples = res.peoples;
+        ctx.renderer.setPeoples(res.peoples);
       }
       if (res.wars) setWars(res.wars);
       if (res.market) {

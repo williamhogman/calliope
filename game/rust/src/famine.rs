@@ -35,7 +35,7 @@ impl World {
         for i in 0..self.peoples.settlements.len() {
             let (y, x, pop, culture, river, name) = {
                 let s = &self.peoples.settlements[i];
-                (s.y, s.x, s.pop, s.culture, s.river, s.name.clone())
+                (s.y, s.x, s.pop, s.people, s.river, s.name.clone())
             };
             let pack = self.fields.crops[[y as usize, x as usize]];
             let rainfed = (pack == agriculture::CropPackage::Wheat.code()
@@ -72,7 +72,7 @@ impl World {
             // old full scan: nearest by (distance², index)
             let target = town_buckets.nearest(x as f64, y as f64, |j| {
                 let o = &self.peoples.settlements[j];
-                j != i && o.culture == culture && !(dry(o.x, o.y) < -0.30)
+                j != i && o.people == culture && !(dry(o.x, o.y) < -0.30)
             });
             let text = if let Some((j, _)) = target {
                 migrations.push((j, walked));
@@ -92,6 +92,8 @@ impl World {
                 s: name,
                 k: EventKind::Famine,
                 text,
+                x,
+                y,
                 ..Default::default()
             });
         }

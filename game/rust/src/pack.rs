@@ -121,6 +121,91 @@ impl World {
 /// Pack protocol version — the client refuses any other (E3.6).
 pub const PACK_VERSION: u32 = 2;
 
+/// M15.7 — hostile-proof pack reader: everything the client's unpacker
+/// trusts, re-checked here with bounds instead of faith. Returns
+/// `(array count, blob bytes)` for a well-formed buffer; any truncation,
+/// corruption, lying header or overflowing size is an `Err`, never a
+/// panic. The assay's fuzz lane hammers this with mutated real packs.
+pub fn validate_pack(bytes: &[u8]) -> Result<(usize, usize), String> {
+    if bytes.len() < 4 {
+        return Err("short buffer: no header length".into());
+    }
+    let hlen = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) as usize;
+    let base = 4usize
+        .checked_add(hlen)
+        .ok_or_else(|| "header length overflows".to_string())?;
+    if base > bytes.len() {
+        return Err(format!("header runs past buffer: {} > {}", base, bytes.len()));
+    }
+    let header: Value = serde_json::from_slice(&bytes[4..base])
+        .map_err(|e| format!("header is not JSON: {e}"))?;
+    if header.get("pack").and_then(Value::as_u64) != Some(PACK_VERSION as u64) {
+        return Err("wrong or missing pack version".into());
+    }
+    let blob = &bytes[base..];
+    let crc = header
+        .get("crc32")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "missing crc32".to_string())?;
+    if crate::util::crc32(blob) as u64 != crc {
+        return Err("crc32 mismatch: blob corrupt or truncated".into());
+    }
+    let arrays = header
+        .get("arrays")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "missing arrays table".to_string())?;
+    let mut expected_off = 0usize;
+    for e in arrays {
+        let off = e
+            .get("offset")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| "array entry missing offset".to_string())? as usize;
+        let nb = e
+            .get("nbytes")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| "array entry missing nbytes".to_string())? as usize;
+        let shape = e
+            .get("shape")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "array entry missing shape".to_string())?;
+        if shape.len() != 2 {
+            return Err("shape is not 2-D".into());
+        }
+        let mut cells = 1usize;
+        for d in shape {
+            let d = d
+                .as_u64()
+                .ok_or_else(|| "shape dim is not an integer".to_string())?
+                as usize;
+            cells = cells
+                .checked_mul(d)
+                .ok_or_else(|| "shape overflows".to_string())?;
+        }
+        let cell = match e.get("dtype").and_then(Value::as_str) {
+            Some("float32") => 4,
+            Some("uint16") | Some("int16") => 2,
+            Some("uint8") => 1,
+            other => return Err(format!("unknown dtype {other:?}")),
+        };
+        let want = cells
+            .checked_mul(cell)
+            .ok_or_else(|| "nbytes overflows".to_string())?;
+        if nb != want {
+            return Err(format!("nbytes {} disagrees with shape ({} expected)", nb, want));
+        }
+        if off != expected_off {
+            return Err(format!("offset {} breaks contiguity (expected {})", off, expected_off));
+        }
+        expected_off = off
+            .checked_add(nb)
+            .ok_or_else(|| "offsets overflow".to_string())?;
+    }
+    if expected_off != blob.len() {
+        return Err(format!("blob is {} B but arrays claim {}", blob.len(), expected_off));
+    }
+    Ok((arrays.len(), blob.len()))
+}
+
 fn min_max(s: &[f32]) -> (f64, f64) {
     let mut lo = f64::INFINITY;
     let mut hi = f64::NEG_INFINITY;
@@ -238,7 +323,7 @@ field_registry! {
     crops:     U8,  units "crop package id",                 hash true,  gpu false, wire raw;
     strahler:  U8,  units "stream order, 0 off-river",       hash true,  gpu true,  wire raw;
     flags:     U8,  units "CellFlags bits",                  hash true,  gpu true,  wire raw;
-    territory: I16, units "owner culture, −1 wild",          hash false, gpu false, wire raw;
+    territory: I16, units "owner realm, −1 wild",            hash false, gpu false, wire raw;
 }
 
 /// Wire quantization mode for a registry field (E3.4).

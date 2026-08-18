@@ -6,8 +6,8 @@ import { createEffect, createMemo, onCleanup } from "solid-js";
 import html from "solid-js/html";
 
 import {
-  world, settlements, cultures, wars, month, playing, speed, worldSize,
-  setWorldSize, busy, layer, overlays, toasts, dismissToast,
+  world, settlements, cultures, realms, wars, month, playing, speed,
+  worldSize, setWorldSize, busy, layer, overlays, toasts, dismissToast,
   worldMenuOpen, setWorldMenuOpen, overlaysOpen, setOverlaysOpen,
   legendOpen, setLegendOpen, setSearchOpen, notifOpen, setNotifOpen,
   notif, setNotif, persistUi, closePopovers, isMobile, sheet, setSheet,
@@ -113,7 +113,26 @@ function LegendPop() {
     const w = world();
     if (!w) return "";
     const l = layer();
-    if (l === "biomes" || l === "political") {
+    if (l === "political") {
+      // ADR-0018 — the political map colours by banner, not tongue
+      const rows = (realms() || []).filter((r) => r.alive);
+      return html`<div class="legend">
+        ${rows.map((r) => html`<div class="legend-item">
+          <span class="swatch" style=${`background:${r.color}`}></span>
+          <span>${r.name}</span>
+        </div>`)}
+      </div><div class="pop-note">Realms tinted by their banners over satellite terrain.</div>`;
+    }
+    if (l === "culture") {
+      const rows = (cultures() || []).filter((c) => c.alive !== false);
+      return html`<div class="legend">
+        ${rows.map((c) => html`<div class="legend-item">
+          <span class="swatch" style=${`background:${c.color}`}></span>
+          <span>${c.people}</span>
+        </div>`)}
+      </div><div class="pop-note">Peoples tinted by their tongue \u2014 borders of speech, not of crowns.</div>`;
+    }
+    if (l === "biomes") {
       return html`<div class="legend">
         ${w.header.biomes
           .filter((b) => b.id !== 0)
@@ -121,9 +140,7 @@ function LegendPop() {
             <span class="swatch" style=${`background:rgb(${b.color.join(",")})`}></span>
             <span>${b.name}</span>
           </div>`)}
-      </div>${l === "political"
-        ? html`<div class="pop-note">Realms tinted by their people over satellite terrain.</div>`
-        : html`<div class="pop-note">True-colour composite \u2014 canopy, soil, rock and snow.</div>`}`;
+      </div><div class="pop-note">True-colour composite \u2014 canopy, soil, rock and snow.</div>`;
     }
     if (l === "elevation") return gradLegend(ELEV_LAND_GRAD, 0, 1, "sea level", "high peaks");
     if (l === "temperature") return gradLegend(TEMP_GRAD, -35, 35, "\u221235\u00b0C", "35\u00b0C");
@@ -216,7 +233,7 @@ function NotifPop() {
 function TopRight(a) {
   return html`<div class="topright pop-anchor">
     ${each(() => wars() || [], (w) => {
-      const side = (id) => (cultures() || [])[id]?.people || "?";
+      const side = (id) => (realms() || [])[id]?.name || "?";
       return html`<button class="sit-chip"
         title=${() => `${w.name} \u2014 ${side(w.a)} against ${side(w.b)}`}
         onClick=${() => a.select({ kind: "war", id: w.name })}>

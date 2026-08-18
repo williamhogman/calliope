@@ -209,6 +209,11 @@ export function initGpu(ctx) {
         // an unchanged month costs neither a rebuild nor an upload
         const tint = renderer.tintRgba(ctx.version.n);
         gpu.setTint(tint, renderer.tintEpoch, renderer.lastTintRows);
+      } else if (layer() === "culture") {
+        // people-axis tint (M10.6): same texture lane, generational epoch.
+        // The "p" prefix keys it apart from political epochs so switching
+        // lenses always re-uploads the right texture.
+        gpu.setTint(renderer.peopleTint(), "p" + renderer.peoplesEpoch, null);
       }
       try {
         gpu.render(

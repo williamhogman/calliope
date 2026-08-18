@@ -11,6 +11,8 @@
 
 use std::collections::HashMap;
 
+use crate::civ;
+use crate::culture;
 use crate::economy;
 use crate::naming;
 use crate::ids::SettlementId;
@@ -129,6 +131,9 @@ pub static SYSTEMS: &[&dyn System] = &[
     &EconomyPulse,
     &Merchants,
     &Statecraft,
+    &Kindred,
+    &Union,
+    &CivPulse,
     &Patina,
     &Territory,
     &ChroniclePulse,
@@ -246,7 +251,7 @@ impl System for Exonyms {
         let doubled = naming::exonym_pass(
             &mut w.features,
             &w.peoples.settlements,
-            &w.peoples.cultures,
+            &w.peoples.peoples,
             &mut w.taken,
             &mut w.rng,
         );
@@ -393,6 +398,94 @@ impl System for Statecraft {
     }
 }
 
+/// M12 — the kindred year: co-residence bookkeeping, assimilation drift
+/// and flips, divergence of far branches, fusion of long-married
+/// minorities, minority exonyms. Generational clock: once a year, off
+/// the other yearly phases.
+struct Kindred;
+impl System for Kindred {
+    fn name(&self) -> &'static str {
+        "kindred"
+    }
+    fn cadence(&self) -> Cadence {
+        Cadence::EveryN { n: 12, phase: 7 }
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        let evs = culture::kindred_pass(
+            &mut w.peoples,
+            &w.economy.areas,
+            w.month,
+            &mut w.rng,
+            &mut w.taken,
+            &mut w.chronicle.registry,
+        );
+        if !evs.is_empty() {
+            // identity moved on the map: the culture territory redraws
+            sink.borders_changed = true;
+        }
+        sink.emit(evs);
+    }
+}
+
+/// M12.3 — union of crowns: kindred realms, warm courts, a shared
+/// threat — one circlet by compact or marriage. Political clock, but
+/// yearly: crowns do not pool like raindrops.
+struct Union;
+impl System for Union {
+    fn name(&self) -> &'static str {
+        "union"
+    }
+    fn cadence(&self) -> Cadence {
+        Cadence::EveryN { n: 12, phase: 9 }
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        let evs = politics::union_pass(
+            &mut w.peoples,
+            &mut w.politics,
+            w.month,
+            &mut w.rng,
+            &mut w.chronicle.registry,
+        );
+        if !evs.is_empty() {
+            sink.borders_changed = true;
+        }
+        sink.emit(evs);
+    }
+}
+
+/// M13/ADR-0019 — the civilization year: kinship-closure over the living
+/// peoples, roster matching, minting, the arc (rising → golden → waning →
+/// interregnum), hegemony, and the golden research boon. Runs after the
+/// kindred and union passes so it reads this year's kinship truth, and
+/// before the patina so falls weather in the same month they happen.
+struct CivPulse;
+impl System for CivPulse {
+    fn name(&self) -> &'static str {
+        "civ"
+    }
+    fn cadence(&self) -> Cadence {
+        Cadence::EveryN { n: 12, phase: 11 }
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        let evs = civ::civ_pass(
+            &mut w.peoples,
+            &mut w.politics,
+            &mut w.chronicle,
+            w.month,
+            &mut w.rng,
+            &mut w.taken,
+        );
+        sink.emit(evs);
+    }
+}
+
+
+
+
+
 /// The patina settles behind the drums: battlefields earn names,
 /// conquerors rename, towns die to ruin, roads fade, names wear (M9).
 struct Patina;
@@ -434,6 +527,7 @@ impl System for ChroniclePulse {
         let evs = chronicle::monthly(
             &mut w.chronicle,
             &mut w.peoples,
+            &mut w.politics,
             &w.features,
             &w.world_name,
             &mut w.taken,

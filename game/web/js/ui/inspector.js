@@ -7,12 +7,13 @@ import { createEffect, createMemo, createResource, on } from "solid-js";
 import html from "solid-js/html";
 
 import {
-  world, settlements, cultures, wars, market, areas, month, selection,
+  world, settlements, cultures, realms, civs, wars, market, areas, month, selection,
   selectedSettlement, settlementsById, hoverTip, isMobile, sheet, setSheet,
   marketTick, stories, entities, legendMode, setLegendMode, persistUi, ruins,
 } from "./state.js";
 import {
   STYLE_LABEL, fmt, FALLBACK_MONTHS, patternMeta, entityKind, eventColor,
+  civStage,
 } from "./config.js";
 import { I } from "./icons.js";
 import { each, eachIdx } from "./list.js";
@@ -127,6 +128,7 @@ function CellView(a, sel) {
       </div>
       ${i.frozen ? html`<div class="insp-tagrow"><span class="d-tag">${i.frozen}</span></div>` : ""}
       ${i.territory ? html`<div class="insp-line">${i.territory}</div>` : ""}
+      ${i.folk ? html`<div class="insp-line dim">${i.folk}</div>` : ""}
       ${(i.notes || []).map((n) => html`<div class="insp-note">\u263c ${n}</div>`)}
       ${i.resources.map((r) => html`<div class="insp-note res">\u25c6 ${r.name}
         <span class="dim">(${r.abundance}${r.requires ? `, requires ${r.requires}` : ""})</span></div>`)}
@@ -137,7 +139,11 @@ function CellView(a, sel) {
 
 function SettlementView(a) {
   const s = selectedSettlement;
-  const culture = () => (cultures() || [])[s()?.culture];
+  // ADR-0018 — the two axes: whose tongue (people) and whose crown (realm),
+  // plus the people who coined the name (namer, stable through conquest).
+  const people = () => (cultures() || [])[s()?.people];
+  const realm = () => (realms() || [])[s()?.realm];
+  const namer = () => (cultures() || [])[s()?.namer];
   const explain = useExplain(a, () => (s() ? { kind: "settlement", id: s().id } : null));
   // M5.2 — which market area this town trades in
   const marketArea = () => {
@@ -155,13 +161,16 @@ function SettlementView(a) {
     const resources = w?.header.resources || {};
     const tags = [st.port ? "harbour" : null, st.coastal ? "coastal" : null, st.river ? "fresh water" : null]
       .filter(Boolean);
+    const foreignCrown = realm() && people() && realm().people !== st.people;
     return html`<div class="insp-body">
       <div class="insp-head">
-        <span class="insp-kicker" style=${`color:${culture()?.color || "#999"}`}>
-          ${st.tier}${culture() ? ` of the ${culture().people}` : ""}</span>
+        <span class="insp-kicker" style=${`color:${realm()?.color || people()?.color || "#999"}`}>
+          ${st.tier}${people() ? ` of the ${people().people}` : ""}${realm() ? ` \u00b7 ${realm().name}` : ""}</span>
         <span class="insp-name">${st.name}</span>
-        ${st.ety ? html`<span class="insp-sub ety">\u201c${st.ety}\u201d in the tongue of the ${culture()?.people || "first peoples"}</span>` : ""}
+        ${st.ety ? html`<span class="insp-sub ety">\u201c${st.ety}\u201d in the tongue of the ${namer()?.people || people()?.people || "first peoples"}</span>` : ""}
       </div>
+      ${foreignCrown ? html`<div class="insp-line dim">A ${people().people} town under the banners of ${realm().name}.</div>` : ""}
+      ${st.exonym ? html`<div class="insp-line dim">On the crown's rolls it is written <i>${st.exonym}</i>; its own folk keep the old name.</div>` : ""}
       ${(st.formerly || []).length ? html`<div class="insp-strata">
         Once ${st.formerly.join(", then ")} \u2014 the old name${st.formerly.length > 1 ? "s" : ""} linger${st.formerly.length > 1 ? "" : "s"} on shepherds' tongues.</div>` : ""}
       ${st.failing ? html`<div class="insp-note fail">\u26e9 The young take the roads out; houses stand empty by the gate.</div>` : ""}
@@ -190,35 +199,49 @@ function SettlementView(a) {
       ${() => (explain() ? Ledger({ data: explain }) : "")}
       <div class="insp-actions">
         <button class="ghost-btn" onClick=${() => a.flyTo(st.x + 0.5, st.y + 0.5, 8)}>${I.fly()} Fly to</button>
-        ${culture() ? html`<button class="ghost-btn" onClick=${() => a.select({ kind: "culture", id: st.culture })}>${I.people()} People</button>` : ""}
+        ${people() ? html`<button class="ghost-btn" onClick=${() => a.select({ kind: "culture", id: st.people })}>${I.people()} Folk</button>` : ""}
+        ${realm() ? html`<button class="ghost-btn" onClick=${() => a.select({ kind: "realm", id: st.realm })}>${I.crown()} Crown</button>` : ""}
       </div>
     </div>`;
   };
 }
 
+// ADR-0018 — the slow axis: tongue, gods, arts. No coin, no crown; those
+// live on RealmView. Wars are realm business and do not appear here.
 function CultureView(a, sel) {
   const c = () => (cultures() || [])[sel.id];
-  const mine = createMemo(() => settlements().filter((s) => s.culture === sel.id));
-  const atWar = () => (wars() || []).filter((w) => w.a === sel.id || w.b === sel.id);
+  const mine = createMemo(() => settlements().filter((s) => s.people === sel.id));
+  const crowns = createMemo(() =>
+    (realms() || []).filter((r) => r.alive && r.people === sel.id));
   const top = createMemo(() =>
     mine().slice().sort((x, y) => y.pop - x.pop).slice(0, 6));
   return () => {
     const cu = c();
     if (!cu) return "";
     const pop = mine().reduce((acc, s) => acc + s.pop, 0);
+    const parent = cu.parent != null ? (cultures() || [])[cu.parent] : null;
     return html`<div class="insp-body">
       <div class="insp-head">
         <span class="insp-kicker" style=${`color:${cu.color}`}>${cu.polity || "people"}${cu.era ? ` \u00b7 ${cu.era}` : ""}</span>
         <span class="insp-name">${cu.people}</span>
-        <span class="insp-sub">${STYLE_LABEL[cu.style] || cu.style}${cu.ruler ? ` \u00b7 led by ${cu.ruler}` : ""}</span>
+        <span class="insp-sub">${STYLE_LABEL[cu.style] || cu.style}</span>
       </div>
+      ${cu.alive === false ? html`<div class="insp-note fail">This tongue has fallen silent \u2014 its folk speak other words now; its names remain in the strata.</div>` : ""}
+      ${parent ? html`<div class="insp-line dim">Diverged from the
+        <button class="link-btn" onClick=${() => a.select({ kind: "culture", id: cu.parent })}>${parent.people}</button>
+        \u2014 the old kinship is still heard in the names.</div>` : ""}
       <div class="kv">
         <div><span class="dim">Souls</span><b>${fmt(pop)}</b></div>
-        <div><span class="dim">Holdings</span><b>${mine().length}</b></div>
-        <div><span class="dim">Treasury</span><b>${fmt(cu.treasury || 0)}</b></div>
+        <div><span class="dim">Hearths</span><b>${mine().length}</b></div>
+        <div><span class="dim">Crowns</span><b>${crowns().length}</b></div>
         <div><span class="dim">Arts</span><b>${(cu.techs || []).length}</b></div>
       </div>
-      ${() => atWar().map((w) => html`<div class="insp-note war">\u2694 ${w.name}</div>`)}
+      ${() => (crowns().length ? html`<div class="ent-chips">
+        ${crowns().map((r) => html`<button class="ent-chip" style=${`--ec:${r.color}`}
+          onClick=${() => a.select({ kind: "realm", id: r.id })}>
+          <span class="s-dot" style=${`background:${r.color}`}></span>${r.name}
+        </button>`)}
+      </div>` : "")}
       ${(cu.pantheon || []).length ? html`<div class="pantheon">
         <div class="insp-goods-title dim">Pantheon</div>
         ${(cu.pantheon || []).map((g, i) => html`<div class="god-row">
@@ -238,6 +261,114 @@ function CultureView(a, sel) {
     </div>`;
   };
 }
+
+// ADR-0018 — the fast axis: crown, coin, banners, wars. The realm holds
+// towns of many tongues; its crown people only lends it a court style.
+function RealmView(a, sel) {
+  const r = () => (realms() || [])[sel.id];
+  const mine = createMemo(() => settlements().filter((s) => s.realm === sel.id));
+  const atWar = () => (wars() || []).filter((w) => w.a === sel.id || w.b === sel.id);
+  const top = createMemo(() =>
+    mine().slice().sort((x, y) => y.pop - x.pop).slice(0, 6));
+  // the tongues under this banner, most hearths first — polyglot realms
+  // are the conquest story made visible
+  const tongues = createMemo(() => {
+    const n = new Map();
+    for (const s of mine()) n.set(s.people, (n.get(s.people) || 0) + 1);
+    return [...n.entries()]
+      .sort((x, y) => y[1] - x[1])
+      .map(([id, towns]) => ({ p: (cultures() || [])[id], towns }))
+      .filter((t) => t.p);
+  });
+  return () => {
+    const rm = r();
+    if (!rm) return "";
+    const pop = mine().reduce((acc, s) => acc + s.pop, 0);
+    const crownPeople = (cultures() || [])[rm.people];
+    const seat = mine().find((s) => s.id === rm.seat)
+      || settlements().find((s) => s.id === rm.seat);
+    return html`<div class="insp-body">
+      <div class="insp-head">
+        <span class="insp-kicker" style=${`color:${rm.color}`}>realm${crownPeople ? ` \u00b7 a ${crownPeople.people} crown` : ""}</span>
+        <span class="insp-name">${rm.name}</span>
+        <span class="insp-sub">${rm.house}${rm.ruler ? ` \u00b7 ${rm.ruler}` : ""}</span>
+      </div>
+      ${rm.alive === false ? html`<div class="insp-note fail">Struck from the rolls \u2014 its banners are furled and its lands divided.</div>` : ""}
+      ${rm.vassal_of ? html`<div class="insp-line dim">Sworn to ${rm.vassal_of} \u2014 tribute flows upward.</div>` : ""}
+      <div class="kv">
+        <div><span class="dim">Souls</span><b>${fmt(pop)}</b></div>
+        <div><span class="dim">Holdings</span><b>${mine().length}</b></div>
+        <div><span class="dim">Treasury</span><b>${fmt(rm.treasury || 0)}</b></div>
+        <div><span class="dim">Unity</span><b>${rm.asab != null ? rm.asab.toFixed(2) : "\u2014"}</b></div>
+        <div><span class="dim">Unrest</span><b>${rm.unrest != null ? rm.unrest.toFixed(2) : "\u2014"}</b></div>
+      </div>
+      ${() => atWar().map((w) => html`<button class="insp-note war link-note"
+        onClick=${() => a.select({ kind: "war", id: w.name })}>\u2694 ${w.name}</button>`)}
+      ${() => (tongues().length > 1 ? html`<div class="insp-line dim">
+        Tongues under the banner: ${tongues().map((t) => `${t.p.people} (${t.towns})`).join(" \u00b7 ")}</div>` : "")}
+      ${seat ? html`<div class="insp-line dim">Seat of the crown:
+        <button class="link-btn" onClick=${() => a.select({ kind: "settlement", id: seat.id, fly: true })}>${seat.name}</button></div>` : ""}
+      <div class="insp-list">
+        ${each(top, (s) => html`<button class="insp-list-row" onClick=${() => a.select({ kind: "settlement", id: s.id, fly: true })}>
+          <span class="s-name">${s.name}</span><span class="s-tier">${s.tier}</span>
+          <span class="s-pop">${fmt(s.pop)}</span>
+        </button>`)}
+      </div>
+      <div class="insp-actions">
+        ${crownPeople ? html`<button class="ghost-btn" onClick=${() => a.select({ kind: "culture", id: rm.people })}>${I.people()} Crown people</button>` : ""}
+      </div>
+    </div>`;
+  };
+}
+
+// M13.1/M13.3 — the civilization card: the arc made explainable. The kv
+// grid shows the very drivers the stage machine read last pass (legit,
+// asab, wealth, stretch), so "why is this so?" has a literal answer.
+function CivView(a, sel) {
+  const c = () => (civs() || []).find((x) => x.id === sel.id);
+  return () => {
+    const cv = c();
+    if (!cv) return "";
+    const st = civStage(cv.stage);
+    const folk = (cv.peoples || [])
+      .map((pid) => (cultures() || [])[pid])
+      .filter(Boolean);
+    const members = (realms() || [])
+      .filter((r) => r.alive && (cv.members || []).includes(r.name));
+    const year = Math.floor((cv.founded || 0) / 12) + 1;
+    return html`<div class="insp-body">
+      <div class="insp-head">
+        <span class="insp-kicker" style=${`color:${st.color}`}>civilization \u00b7 ${st.label}</span>
+        <span class="insp-name">${cv.name}</span>
+        <span class="insp-sub">${cv.hegemony ? cv.hegemony : `named in year ${year}`}</span>
+      </div>
+      ${cv.stage === "golden" ? html`<div class="insp-note">A golden age \u2014 the hymns are loud, the granaries full, the writs obeyed.</div>` : ""}
+      ${cv.stage === "interregnum" ? html`<div class="insp-note fail">Interregnum \u2014 the paramount seat stands empty and the crowns contend.</div>` : ""}
+      ${cv.stretch > 1 && cv.stage !== "interregnum" ? html`<div class="insp-note warn">The writ outruns the riders \u2014 more courts than the seat can staff.</div>` : ""}
+      <div class="kv">
+        <div><span class="dim">Crowns</span><b>${cv.crowns}</b></div>
+        <div><span class="dim">Towns</span><b>${cv.towns}</b></div>
+        <div><span class="dim">Legitimacy</span><b>${cv.legit != null ? cv.legit.toFixed(2) : "\u2014"}</b></div>
+        <div><span class="dim">Solidarity</span><b>${cv.asab != null ? cv.asab.toFixed(2) : "\u2014"}</b></div>
+        <div><span class="dim">Wealth</span><b>${fmt(cv.wealth || 0)}</b></div>
+        <div><span class="dim">Stretch</span><b>${cv.stretch != null ? cv.stretch.toFixed(2) : "\u2014"}</b></div>
+        ${cv.golden_ages ? html`<div><span class="dim">Golden ages</span><b>${cv.golden_ages}</b></div>` : ""}
+        ${cv.monuments ? html`<div><span class="dim">Monuments</span><b>${cv.monuments}</b></div>` : ""}
+      </div>
+      ${folk.length ? html`<div class="insp-line dim">Kindred tongues:${" "}
+        ${folk.map((p, i) => html`${i ? " \u00b7 " : ""}<button class="link-btn"
+          onClick=${() => a.select({ kind: "culture", id: p.id })}>${p.people}</button>`)}</div>` : ""}
+      ${members.length ? html`<div class="insp-line dim">Crowns of the family:${" "}
+        ${members.map((r, i) => html`${i ? " \u00b7 " : ""}<button class="link-btn"
+          onClick=${() => a.select({ kind: "realm", id: r.id })}>${r.name}</button>`)}</div>` : ""}
+      ${cv.ent != null ? html`<div class="insp-actions">
+        <button class="ghost-btn" onClick=${() => a.select({ kind: "entity", id: cv.ent })}>${I.book ? I.book() : ""} Chronicle</button>
+      </div>` : ""}
+    </div>`;
+  };
+}
+
+
 
 function DepositView(a, sel) {
   const d = () => {
@@ -321,12 +452,13 @@ function WarView(a, sel) {
   const w = () => (wars() || []).find((x) => x.name === sel.id) || null;
   return () => {
     const war = w();
-    const cs = cultures() || [];
+    const rs = realms() || [];
     if (!war) return html`<div class="insp-body">
       <div class="insp-head"><span class="insp-kicker">war</span><span class="insp-name">${sel.id}</span></div>
       <div class="insp-note">The banners are furled \u2014 this war has ended.</div>
     </div>`;
-    const a1 = cs[war.a], b1 = cs[war.b];
+    // ADR-0018 — wars are fought between realms (banners), not peoples
+    const a1 = rs[war.a], b1 = rs[war.b];
     const monthsLeft = Math.max(0, war.until - month());
     return html`<div class="insp-body">
       <div class="insp-head">
@@ -334,12 +466,12 @@ function WarView(a, sel) {
         <span class="insp-name">${war.name}</span>
       </div>
       <div class="war-sides">
-        <button class="war-side" onClick=${() => a.select({ kind: "culture", id: war.a })}>
-          <span class="s-dot" style=${`background:${a1?.color || "#999"}`}></span>${a1?.people || "?"}
+        <button class="war-side" onClick=${() => a.select({ kind: "realm", id: war.a })}>
+          <span class="s-dot" style=${`background:${a1?.color || "#999"}`}></span>${a1?.name || "?"}
         </button>
         <span class="war-vs">against</span>
-        <button class="war-side" onClick=${() => a.select({ kind: "culture", id: war.b })}>
-          <span class="s-dot" style=${`background:${b1?.color || "#999"}`}></span>${b1?.people || "?"}
+        <button class="war-side" onClick=${() => a.select({ kind: "realm", id: war.b })}>
+          <span class="s-dot" style=${`background:${b1?.color || "#999"}`}></span>${b1?.name || "?"}
         </button>
       </div>
       <div class="insp-line dim">Perhaps ${Math.max(1, Math.round(monthsLeft / 12))} more year${monthsLeft > 18 ? "s" : ""} of bloodshed, unless peace comes early.</div>
@@ -550,6 +682,8 @@ export function InspectorDock(a) {
       case "cell": return CellView(a, sel);
       case "settlement": return SettlementView(a);
       case "culture": return CultureView(a, sel);
+      case "realm": return RealmView(a, sel);
+      case "civ": return CivView(a, sel);
       case "deposit": return DepositView(a, sel);
       case "feature": return FeatureView(a, sel);
       case "ruin": return RuinView(a, sel);

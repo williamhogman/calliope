@@ -26,6 +26,7 @@ export const I = {
   war: svg(`<path d="M4 20l6.5-6.5M20 4l-8 8M14.5 4H20v5.5M6 15l3 3-2.5 2.5L4 18z"/>`),
   book: svg(`<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21z"/><path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/>`),
   people: svg(`<circle cx="9" cy="8" r="3.4"/><path d="M2.8 19.4a6.2 6.2 0 0 1 12.4 0"/><path d="M16 5.4a3.4 3.4 0 0 1 0 5.9M17.8 13.6a6.2 6.2 0 0 1 3.4 5.8"/>`),
+  crown: svg(`<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-1.5 10h-15L3 8z"/><path d="M6 21h12"/>`, { sw: 1.5 }),
   market: svg(`<path d="M4 20V10m16 10V10M2.5 10L5 4h14l2.5 6M2.5 10h19M8 20v-6h8v6"/>`),
   place: svg(`<path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.6"/>`),
   why: svg(`<circle cx="12" cy="12" r="9"/><path d="M9.4 9.2a2.7 2.7 0 0 1 5.3.8c0 1.8-2.7 2.2-2.7 4"/><circle cx="12" cy="17.3" r="0.6" fill="currentColor" stroke="none"/>`),

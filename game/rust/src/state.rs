@@ -23,11 +23,13 @@ bitflags::bitflags! {
 
 use crate::artifact::Artifact;
 use crate::chronicle::ChronicleState;
-use crate::culture::Culture;
+use crate::culture::People;
 use crate::economy::{Market, MarketAreas, Merchant};
 use crate::entity::Registry;
+use crate::politics::Realm;
 use crate::settlements::Settlement;
 use crate::society::Society;
+use crate::civ::Civ;
 use crate::event::Event;
 
 /// The land itself — every per-cell grid (E3.2: f32 at rest).
@@ -49,15 +51,32 @@ pub struct Fields {
     pub flow_amp: Array2<f32>,
     /// Strahler stream order, 0 off-river.
     pub strahler: Array2<u8>,
-    /// Influence-map territory: owner culture per cell, −1 wilderness (M4.1).
+    /// Influence-map territory: owner REALM per cell, −1 wilderness
+    /// (M4.1, realm axis per ADR-0018).
     pub territory: Array2<i16>,
+    /// The people-axis influence map for the culture layer (M10.6):
+    /// dominant people per cell, −1 wilderness.
+    pub peoples_map: Array2<i16>,
 }
 
-/// The peoples — settlements, cultures and their arts.
+/// The peoples and their crowns — settlements, peoples, realms, arts.
 pub struct Peoples {
     pub settlements: Vec<Settlement>,
-    pub cultures: Vec<Culture>,
+    /// The generational axis (ADR-0018): tongue, gods, name bank.
+    pub peoples: Vec<People>,
+    /// The political axis (ADR-0018): crown, house, seat, treasury.
+    pub realms: Vec<Realm>,
+    /// Arts and lore, keyed by people — knowledge travels with the tongue.
     pub societies: Vec<Society>,
+    /// M13/ADR-0019 — the derived tier: civilizations named over the
+    /// kinship-closure of peoples. Recomputed yearly by the civ pass;
+    /// rows are never deleted (`alive` flips on collapse).
+    pub civs: Vec<Civ>,
+    /// M12.1 — months people A's towns have spent under crowns of people
+    /// B, exposure-weighted (a year under one crown with every town adds
+    /// 12). Directional; the kinship metric reads both ways. Grows a row
+    /// and column when a people diverges.
+    pub coresidence: Vec<Vec<f64>>,
 }
 
 /// The coin — market, areas, merchants, realized flow.

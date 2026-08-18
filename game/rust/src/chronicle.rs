@@ -9,11 +9,12 @@ use rand::Rng;
 use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 
-use crate::ids::{CultureId, EntityId};
-use crate::culture::Culture;
+use crate::ids::{EntityId, RealmId};
+use crate::culture::People;
 use crate::entity::EntityKind;
 use crate::entity::Registry;
 use crate::naming::{self, Feature};
+use crate::politics::{Claimant, CircletWar, Politics, Realm};
 use crate::settlements::Settlement;
 use crate::event::EventKind;
 use crate::event::Event;
@@ -22,7 +23,8 @@ use crate::event::Event;
 
 #[derive(Serialize, Clone)]
 pub struct Ruler {
-    pub culture: CultureId,
+    /// The crown worn (ADR-0018): rulers sit on realms, not peoples.
+    pub realm: RealmId,
     pub name: String,
     pub epithet: String,
     pub since: i64,
@@ -83,19 +85,22 @@ const OMENS_GOD: [&str; 5] = [
 
 // ---------------------------------------------------------------- rulers
 
+/// Crown a new ruler for a realm; the name comes in the crown people's
+/// tongue (ADR-0018).
 pub fn new_ruler(
     rng: &mut Pcg64Mcg,
-    culture: &Culture,
+    realm: &Realm,
+    people: &People,
     taken: &mut HashSet<String>,
     since: i64,
     reg: &mut Registry,
 ) -> Ruler {
-    let name = naming::make_word(rng, &culture.style, taken);
+    let name = naming::make_word(rng, &people.style, taken);
     let epithet = EPITHETS[rng.gen_range(0..EPITHETS.len())].to_string();
-    let ent = reg.add_person(&name, "ruler", since, Some(culture.id));
+    let ent = reg.add_person(&name, "ruler", since, Some(realm.people));
     reg.earn_epithet(ent, &epithet);
     Ruler {
-        culture: culture.id,
+        realm: realm.id,
         name,
         epithet,
         since,
@@ -107,13 +112,14 @@ pub fn new_ruler(
 
 pub fn init_rulers(
     rng: &mut Pcg64Mcg,
-    cultures: &[Culture],
+    realms: &[Realm],
+    peoples_v: &[People],
     taken: &mut HashSet<String>,
     reg: &mut Registry,
 ) -> Vec<Ruler> {
-    cultures
+    realms
         .iter()
-        .map(|c| new_ruler(rng, c, taken, 0, reg))
+        .map(|r| new_ruler(rng, r, &peoples_v[r.people.idx()], taken, 0, reg))
         .collect()
 }
 
@@ -122,7 +128,7 @@ pub fn init_rulers(
 /// Creation myth + one origin line per people. Written once, at the dawn.
 pub fn founding_myths(
     rng: &mut Pcg64Mcg,
-    cultures: &[Culture],
+    cultures: &[People],
     features: &[Feature],
     world_name: &str,
 ) -> Vec<Event> {
@@ -213,6 +219,7 @@ pub fn founding_myths(
 pub fn monthly(
     record: &mut Chronicle,
     peoples: &mut Peoples,
+    pol: &mut Politics,
     features: &[Feature],
     world_name: &str,
     taken: &mut HashSet<String>,
@@ -221,52 +228,150 @@ pub fn monthly(
     pace: f64,
 ) -> Vec<Event> {
     let Chronicle { state, registry: reg, .. } = record;
-    let Peoples { settlements, cultures, .. } = peoples;
+    let Peoples { settlements, peoples: cultures, realms, .. } = peoples;
     let mut events = Vec::new();
     if cultures.is_empty() {
         return events;
     }
 
-    // --- rulers age; the old ones die and heirs take up the circlet
+    // --- crowns struck from the rolls lose their rulers first
+    let fallen: Vec<Ruler> = {
+        let (dead, live): (Vec<Ruler>, Vec<Ruler>) = state
+            .rulers
+            .drain(..)
+            .partition(|r| !realms[r.realm.idx()].alive);
+        state.rulers = live;
+        dead
+    };
+    for r in fallen {
+        reg.close(
+            r.ent,
+            month_abs,
+            &format!("outlived {} — the crown was struck from the rolls", realms[r.realm.idx()].name),
+        );
+    }
+
+    // --- rulers age; the old ones die and heirs take up the circlet —
+    // unless the crown is doubted, in which case the succession opens a
+    // war of the circlet (M11.3) and no heir stands unquestioned
     for ri in 0..state.rulers.len() {
         state.rulers[ri].age_months += 1;
         let age = state.rulers[ri].age_months;
+        let rid = state.rulers[ri].realm;
+        // a throne already in dispute settles by arms, not by age
+        if pol.crisis.get(rid.idx()).map_or(false, |x| x.is_some()) {
+            continue;
+        }
         let p = 0.0006 + ((age - 480).max(0) as f64) * 0.000045;
         if rng.gen::<f64>() < p {
-            let cid = state.rulers[ri].culture;
-            let culture = &cultures[cid.idx()];
+            let realm = &realms[rid.idx()];
+            let people = &cultures[realm.people.idx()];
             let old_title = state.rulers[ri].title();
             let old_ent = state.rulers[ri].ent;
             let years = ((month_abs - state.rulers[ri].since) / 12).max(0);
-            let mut heir = new_ruler(rng, culture, taken, month_abs, reg);
+            // the named seat of the realm anchors the succession on the
+            // map (M10.4); a mid-month dangling seat falls back to the
+            // greatest town under the banner
+            let seat = settlements
+                .iter()
+                .find(|s| s.id == realm.seat && s.realm == rid)
+                .or_else(|| {
+                    settlements
+                        .iter()
+                        .filter(|s| s.realm == rid)
+                        .max_by_key(|s| s.pop)
+                });
+            let realm_ent = reg.find_kind(EntityKind::Realm, &realm.name);
+            let weak = pol.legit.get(rid.idx()).copied().unwrap_or(1.0) < 0.55;
+            let holdings = settlements.iter().filter(|s| s.realm == rid).count();
+            if weak && holdings >= 3 && rid.idx() < pol.crisis.len() {
+                // M11.3 — the war of the circlet opens: two or three
+                // claimants, the first of the old house seated meanwhile.
+                // Borders hold; the winner's house rules at the term.
+                let k = rng.gen_range(2..=3usize);
+                let mut claimants: Vec<Claimant> = Vec::new();
+                for j in 0..k {
+                    let cname = naming::make_word(rng, &people.style, taken);
+                    let house = if j == 0 {
+                        realm.house.clone()
+                    } else if j == 1 && pol.deposed[rid.idx()].is_some() {
+                        pol.deposed[rid.idx()].clone().unwrap()
+                    } else {
+                        format!("House {}", naming::make_word(rng, &people.style, taken))
+                    };
+                    let ent = reg.add_person(&cname, "claimant", month_abs, Some(realm.people));
+                    claimants.push(Claimant { name: cname, house, ent });
+                }
+                reg.close(
+                    old_ent,
+                    month_abs,
+                    &format!(
+                        "laid to rest after {} years — and the circlet of {} fell into dispute",
+                        years, realm.name
+                    ),
+                );
+                reg.earn_epithet(claimants[0].ent, "the Contested");
+                let seated = Ruler {
+                    realm: rid,
+                    name: claimants[0].name.clone(),
+                    epithet: "the Contested".to_string(),
+                    since: month_abs,
+                    age_months: rng.gen_range(240..480),
+                    ent: claimants[0].ent,
+                };
+                let mut ids: crate::event::EventIds = smallvec![old_ent];
+                for cl in &claimants {
+                    ids.push(cl.ent);
+                }
+                if let Some(ce) = realm_ent {
+                    ids.insert(0, ce);
+                }
+                events.push(Event {
+                    m: month_abs,
+                    s: realm.name.clone(),
+                    k: EventKind::Ruler,
+                    text: format!(
+                        "{} of {} is laid to rest, and no heir stands unquestioned: {} lords claim the circlet, and the realm holds its breath.",
+                        old_title, realm.name, k
+                    ),
+                    ids,
+                    x: seat.map(|s| s.x).unwrap_or(-1),
+                    y: seat.map(|s| s.y).unwrap_or(-1),
+                    ..Default::default()
+                });
+                pol.crisis[rid.idx()] = Some(CircletWar {
+                    claimants,
+                    seated: 0,
+                    ends: month_abs + rng.gen_range(8..30),
+                });
+                pol.unrest[rid.idx()] = (pol.unrest[rid.idx()] + 0.15).min(1.0);
+                state.rulers[ri] = seated;
+                continue;
+            }
+            let mut heir = new_ruler(rng, realm, people, taken, month_abs, reg);
             heir.age_months = rng.gen_range(200..420);
             reg.close(
                 old_ent,
                 month_abs,
                 &format!(
-                    "laid to rest after {} years under the circlet of the {}",
-                    years, culture.people
+                    "laid to rest after {} years under the circlet of {}",
+                    years, realm.name
                 ),
             );
             let text = format!(
-                "{} of the {} is laid to rest. {} takes up the circlet.",
+                "{} of {} is laid to rest. {} of {} takes up the circlet.",
                 old_title,
-                culture.people,
-                heir.title()
+                realm.name,
+                heir.title(),
+                realm.house
             );
-            // the seat of the realm anchors the succession on the map
-            let seat = settlements
-                .iter()
-                .filter(|s| s.culture == cid)
-                .max_by_key(|s| s.pop);
-            let culture_ent = reg.find_kind(EntityKind::Culture, &culture.people);
             let mut ids: crate::event::EventIds = smallvec![old_ent, heir.ent];
-            if let Some(ce) = culture_ent {
+            if let Some(ce) = realm_ent {
                 ids.insert(0, ce);
             }
             events.push(Event {
                 m: month_abs,
-                s: culture.people.clone(),
+                s: realm.name.clone(),
                 k: EventKind::Ruler,
                 text,
                 ids,
@@ -300,7 +405,7 @@ pub fn monthly(
     // --- and sometimes the gods themselves are read in the signs (M3.5)
     if rng.gen::<f64>() < 0.0022 * pace {
         let c = &cultures[rng.gen_range(0..cultures.len())];
-        if !c.pantheon.is_empty() {
+        if c.alive && !c.pantheon.is_empty() {
             let g = &c.pantheon[rng.gen_range(0..c.pantheon.len())];
             let raw = OMENS_GOD[rng.gen_range(0..OMENS_GOD.len())];
             let text = raw
@@ -321,13 +426,16 @@ pub fn monthly(
     // thin out (the telling has no room), in quiet ones they carry it
     let month = month_abs.rem_euclid(12);
     if month == 5 || month == 11 {
-        for c in cultures {
+        for c in cultures.iter() {
             if rng.gen::<f64>() > 0.10 * pace {
+                continue;
+            }
+            if !c.alive {
                 continue;
             }
             let host = settlements
                 .iter_mut()
-                .filter(|s| s.culture == c.id)
+                .filter(|s| s.people == c.id)
                 .max_by_key(|s| s.pop);
             let Some(host) = host else { continue };
             let what = match (c.style.as_str(), month) {
@@ -374,12 +482,12 @@ pub fn wonder_for(
     state: &mut ChronicleState,
     rng: &mut Pcg64Mcg,
     s: &Settlement,
-    cultures: &[Culture],
+    cultures: &[People],
     month_abs: i64,
 ) -> Vec<Event> {
     let mut events = Vec::new();
     let style = cultures
-        .get(s.culture.idx())
+        .get(s.people.idx())
         .map(|c| c.style.as_str())
         .unwrap_or("hellenic");
     if s.tier == "Town" {
@@ -434,6 +542,8 @@ use crate::state::{Chronicle, Peoples};
 
 /// Diagnostics bands (E2.7): the pace of the telling.
 pub const BANDS: &[Band] = &[
-    Band { name: "events per year", sweet: (2.0, 40.0), hard: (0.5, 100.0), target: "sweet 2–40 · hard 0.5–100" },
+    // sweet ceiling raised 40 → 48 with M11: the unrest ladder (riots,
+    // charters, coups, circlet wars) is a new legitimate event class.
+    Band { name: "events per year", sweet: (2.0, 48.0), hard: (0.5, 100.0), target: "sweet 2–48 · hard 0.5–100" },
     Band { name: "events mappable (coords)", sweet: (0.65, 1.0), hard: (0.45, 1.0), target: "most entries can fly the camera" },
 ];
