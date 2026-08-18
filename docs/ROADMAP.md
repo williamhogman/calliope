@@ -274,6 +274,22 @@ existing suite stays green throughout.
 
 ## Ready (calibration queue)
 
+Findings from the M15 assay landing (staged, not gate failures):
+
+- `validate_pack` guards the pack natively only: the worker's unpacker
+  still trusts the header at face value. Export the validator through
+  `WasmWorld` (or run it in `worker.js` before unpack) so a corrupted
+  cached pack fails loud in the client too — the proptest lane already
+  proves the checker itself never panics on hostile bytes.
+- `scripts/build.sh` decides wasm staleness by mtime, and checkout
+  normalization can stamp sources and binary within milliseconds of
+  each other — this run silently skipped a needed rebuild until forced.
+  Replace the `-newer` probe with a content hash of `src/ + Cargo.toml`
+  stored beside `version.js`.
+- The M15.5 route-spread law tests only the dearest route as bridge;
+  a sweep variant over every area-bridging route (and over the sweep
+  seeds) would turn one witness into a quantifier.
+
 Findings from the M14.2/M14.3 landings (staged, not gate failures):
 
 - Fur-country telling: fur camps founded by the pull emit the generic
