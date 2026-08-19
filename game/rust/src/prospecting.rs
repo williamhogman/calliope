@@ -346,6 +346,7 @@ impl World {
                             text: text.clone(),
                             x: dx0,
                             y: dy0,
+                            ids: near_ent,
                             ..Default::default()
                         });
                         self.refresh_goods_near(di);
