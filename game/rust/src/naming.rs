@@ -300,6 +300,7 @@ fn add_features(
 pub fn name_features(
     height: &Array2<f32>,
     sealevel: &crate::sealevel::SeaLevel,
+    ice: &crate::ice::Ice,
     biomes: &Array2<u8>,
     rivers: &Array2<bool>,
     lakes: &Array2<bool>,
@@ -685,7 +686,7 @@ pub fn name_features(
     // firths and strands read straight off the landform grid (the
     // sea-level history made visible). Minted last so every elder name
     // above keeps its draw from the stream.
-    let lf = crate::landform::classify(height, sealevel);
+    let lf = crate::landform::classify(height, sealevel, ice);
     let skerry = lf.mapv(|t| t == crate::landform::SKERRY);
     let lab = ndimage::label(&skerry, true);
     let comps = ndimage::top_components(&lab, 5.0 * sc, 5);

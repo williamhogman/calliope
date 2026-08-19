@@ -405,6 +405,7 @@ impl GenBuilder {
         let (features, world_name) = naming::name_features(
             self.height.as_ref().unwrap(),
             self.sealevel.as_ref().unwrap(),
+            self.ice.as_ref().unwrap(),
             self.biome_map.as_ref().unwrap(),
             &self.hydro.as_ref().unwrap().rivers,
             &self.hydro.as_ref().unwrap().lakes,
