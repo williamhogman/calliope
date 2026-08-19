@@ -61,6 +61,14 @@ pub struct Route {
     /// the road stays on the map, drawn faded, a mark history left.
     #[serde(skip_serializing_if = "std::ops::Not::not", default)]
     pub old: bool,
+    /// M37 — the icebound season: bit m set = sea ice shuts this lane
+    /// in calendar month m. 0 for routes whose water never freezes.
+    #[serde(skip_serializing_if = "u16_is_zero", default)]
+    pub closed: u16,
+}
+
+fn u16_is_zero(v: &u16) -> bool {
+    *v == 0
 }
 
 /// Work out what a settlement produces from its hinterland. Also stamps
@@ -143,10 +151,14 @@ fn smoothstep(x: f64, lo: f64, hi: f64) -> f64 {
 }
 
 /// The downsampled world the caravans plan over: what each step costs,
-/// and which cells are open water (so embarking can be charged).
+/// which cells are open water (so embarking can be charged), and the
+/// months that water is icebound (M37).
 pub struct TradeGrid {
     pub cost: Array2<f64>,
     pub sea: Array2<bool>,
+    /// M37 — full-resolution sea-ice month mask (`seaice::frozen_months`):
+    /// routes read their icebound season off the same grid A* priced.
+    pub frozen: Array2<u16>,
     pub f: usize,
 }
 
@@ -156,6 +168,8 @@ impl TradeGrid {
         flags: &Array2<u8>,
         biomes: &Array2<u8>,
         discharge: &Array2<f32>,
+        tmean: &Array2<f32>,
+        tamp: &Array2<f32>,
         f: usize,
     ) -> TradeGrid {
         let (rows, cols) = height.dim();
@@ -164,15 +178,26 @@ impl TradeGrid {
         let shore_d = ndimage::distance_transform_edt(&sea_mask);
         let hpos = height.mapv(|h| h.max(0.0) as f64);
         let (gy, gx) = ndimage::gradient(&hpos);
+        // M37 — where and when the sea freezes over
+        let frozen = crate::seaice::frozen_months(height, tmean, tamp);
 
         let full = Array2::from_shape_fn((rows, cols), |(y, x)| {
             let h = height[[y, x]] as f64;
             if h < 0.0 {
-                return if shore_d[[y, x]] <= 6.0 {
+                // M37 — perennial pack is no lane at all; a strait that
+                // freezes part of the year charges its closed season up
+                // front, pro rata — the annualized price of sometimes.
+                let iced = frozen[[y, x]].count_ones();
+                if iced >= 12 {
+                    return crate::seaice::PACK_SEA_COST;
+                }
+                let base = if shore_d[[y, x]] <= 6.0 {
                     COAST_SEA_COST
                 } else {
                     OPEN_SEA_COST
                 };
+                return base
+                    * (1.0 + crate::seaice::ICE_LANE_SURCHARGE * iced as f64 / 12.0);
             }
             if flags[[y, x]] & CellFlags::LAKE.bits() != 0 {
                 return LAKE_COST;
@@ -185,6 +210,8 @@ impl TradeGrid {
             cost += 3.0 * ((b == gc::DESERT) as u8 as f64)
                 + 9.0 * ((b == gc::ICE) as u8 as f64)
                 + 1.5 * ((b == gc::TUNDRA) as u8 as f64)
+                // M38 — summer mire: the wet tundra walks worse than dry heath
+                + 2.0 * ((b == gc::WET_TUNDRA) as u8 as f64)
                 + 2.5 * ((b == gc::TROPICAL_RAIN_FOREST) as u8 as f64)
                 + 0.8 * ((b == gc::WOODLAND
                     || b == gc::SEASONAL_RAIN_FOREST
@@ -215,7 +242,7 @@ impl TradeGrid {
             }
             2 * n > f * f
         });
-        TradeGrid { cost, sea, f }
+        TradeGrid { cost, sea, frozen, f }
     }
 }
 
@@ -423,6 +450,7 @@ pub fn route_entry(
     flags: &Array2<u8>,
     discharge: &Array2<f32>,
     flow_amp: &Array2<f32>,
+    frozen: &Array2<u16>,
 ) -> Route {
     let mut pts: Vec<[i64; 2]> = path
         .iter()
@@ -472,6 +500,21 @@ pub fn route_entry(
         0.0
     };
 
+    // M37 — the ice writes the schedule: any frozen water on the sailed
+    // leg closes the whole journey for those months.
+    let mut closed: u16 = 0;
+    for (p, &m) in pts.iter().zip(modes.iter()) {
+        if m == MODE_SEA
+            && p[0] >= 0
+            && p[1] >= 0
+            && (p[0] as usize) < ww
+            && (p[1] as usize) < hh
+        {
+            closed |= frozen[[p[1] as usize, p[0] as usize]];
+        }
+    }
+    closed &= crate::seaice::MONTHS_MASK;
+
     let base_w = (0.5 + (((sa.pop + sb.pop) as f64).log10() - 2.0) * 0.6).clamp(0.5, 2.0);
     // the sea multiplies what a route can carry
     let w = crate::util::round2((base_w * (0.8 + 0.55 * sea_frac)).clamp(0.4, 2.4));
@@ -486,6 +529,7 @@ pub fn route_entry(
         ramp,
         goods: vec![sa.exports.clone(), sb.exports.clone()],
         old: false,
+        closed,
     }
 }
 
@@ -583,7 +627,7 @@ pub fn build_routes(
         let goal = (sb.y as usize / f, sb.x as usize / f);
         if let Some((path, cost)) = astar(grid, start, goal) {
             if viable(cost, start, goal) {
-                routes.push(route_entry(sa, sb, &path, f, cost, height, flags, discharge, flow_amp));
+                routes.push(route_entry(sa, sb, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen));
             }
         }
     }
@@ -631,7 +675,7 @@ pub fn rescue_unconnected(
             if let Some((path, cost)) = astar(grid, start, goal) {
                 if best.as_ref().map_or(true, |(_, c)| cost < *c) {
                     best = Some((
-                        route_entry(&s, o, &path, f, cost, height, flags, discharge, flow_amp),
+                        route_entry(&s, o, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen),
                         cost,
                     ));
                 }
@@ -670,7 +714,7 @@ pub fn connect_settlement(
         let goal = (o.y as usize / f, o.x as usize / f);
         if let Some((path, cost)) = astar(grid, start, goal) {
             if viable(cost, start, goal) {
-                new_routes.push(route_entry(&s, o, &path, f, cost, height, flags, discharge, flow_amp));
+                new_routes.push(route_entry(&s, o, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen));
             }
         }
     }
@@ -781,7 +825,7 @@ pub fn bridge_components(
             if let Some((path, cost)) = astar(grid, start, goal) {
                 if best.as_ref().map_or(true, |(_, c)| cost < *c) {
                     best = Some((
-                        route_entry(s, o, &path, f, cost, height, flags, discharge, flow_amp),
+                        route_entry(s, o, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen),
                         cost,
                     ));
                 }

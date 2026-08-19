@@ -617,3 +617,23 @@ proptest! {
         prop_assert!(validate_pack(&bytes).is_err());
     }
 }
+
+// ======================================================================
+// M37 — sea ice: every freeze mask is a lawful winter
+// ======================================================================
+
+proptest! {
+    /// The SST proxy can only say three things about a cell: open all
+    /// year, frozen all year, or shut for one contiguous hemisphere-true
+    /// winter arc. No flicker, no summer ice, no two winters.
+    #[test]
+    fn sea_ice_masks_are_winter_arcs(tmean in -40.0f64..30.0, tamp in -25.0f64..25.0) {
+        let m = calliope::seaice::cell_mask(tmean, tamp);
+        if m != 0 && m != calliope::seaice::MONTHS_MASK {
+            prop_assert!(
+                calliope::seaice::is_winter_arc(m, tamp > 0.0),
+                "mask {:012b} from tmean {} tamp {} is not a winter arc", m, tmean, tamp
+            );
+        }
+    }
+}

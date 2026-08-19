@@ -7,10 +7,77 @@ the era files are binding; this ledger only records completion.
 | Phase | Title | Landed | Gate evidence |
 |---|---|---|---|
 | M16 | Plates Remembered | 2026-08-18 | terrain lane: plate count/mean drift-age banded, sketch+heightmap regen byte-identical ×3 seeds; full suite 381 pass · 14 warn · 0 fail (new warns = host ~1.8× slower across untouched stages — perf.txt vs c4c51c0; assay law fixed: phantom baseline on unlisted goods) |
+| M17 | Orogeny Ages | 2026-08-18 | terrain lane: young/old belt sharpness split banded per seed; rock ledger in `hash_state` |
+| M18 | Rock Provinces | 2026-08-18 | terrain+resources lanes: province shares banded, ore placement biased by province (χ² check green) |
+| M19 | Ore Follows Rock | 2026-08-18 | resources lane: per-kind province affinity holds ×3 seeds; floor guarantees intact (ADR-0013) |
+| M20 | Karst and Caves | 2026-08-18 | terrain lane: karst share of carbonate belt banded; spring-fed streams counted in hydro lane |
+| M21 | Soil Provinces | 2026-08-18 | terrain lane: soil-class shares banded; fertility correlation with class sign-correct ×3 seeds |
+| M22 | Fault Seams and Earthquakes | 2026-08-18 | seismic ledger byte-identical native↔wasm (ADR-0025); quake magnitude–frequency slope banded |
+| M23 | Live Volcanism | 2026-08-18 | civ lane: eruption cadence + VEI distribution banded; ash fertility bonus measured on flanks |
+| M24 | Disaster Wiring | 2026-08-18 | civ lane: fell/rebuild arcs close inside forty years (recovery warn is pre-staged calibration); ruins persist in chronicle |
+| M25 | Sea-Level History | 2026-08-19 | earth lane: eustatic curve + isostatic response IEEE-exact, in `earth_hash` replay identity |
+| M26 | Drowned and Raised Coasts | 2026-08-19 | terrain lane: ria/skerry/raised-beach counts banded; raised beaches thicken with the rise ×5 seeds |
+| M27 | Deep-Earth Determinism | 2026-08-19 | earth-wasm lane: plates·rock·seismic·volcanism·sealevel·landform one identity native↔wasm, seed 777 × 240 mo |
+| M28 | Ice-Sheet Extent | 2026-08-19 | earth lane: ELA mass-balance extent banded (ice 39–41% of land at LGM, margins ~60°); extent grid in `hash_state` |
+| M29 | Ice-Carved Relief | 2026-08-19 | terrain lane: U-valley/cirque/hang counts banded per glaciated belt; fjords classified + named; height NaN-free |
+| M30 | Depositional Legacy | 2026-08-19 | terrain lane: till/moraine/drumlin/esker + loess-mantle bands green ×6 seeds; counterfactual legacy uplift +0.039–0.054 on the farmable belt (≥ +0.005 gate); civ lane: footprint towns +0.039–0.051 vs zeroed deposits; full suite 483 pass · 13 warn · 0 fail, replay identity holds with loess in the ice ledger |
+| M31 | Proglacial Lakes and Spillways | 2026-08-19 | terrain lane: 5–16 moraine-dammed lakes ×3 seeds (≥64 km², shore-rim dam test), spillways drain downhill (0 ascending steps ×3 seeds), width bands scale with catchment (wide-class basins 46–210 cells vs 6–16); chains counted via union-find; lakes+spillways+meta in the ice ledger → replay identity native↔wasm; full suite 495 pass · 12 warn · 0 fail |
+| M32 | Outwash Plains and Braided Meltwater Rivers | 2026-08-19 | terrain lane: 853–1831 outwash cells ×4 seeds (meltwater routed off the sheets, corridors + planed aprons), braided share of below-margin rivers 3.1–5.5% (banded 2–35 sweet), counterfactual fertility uplift +0.027–0.033 on the farmable plain (banded); outwash grid in the ice ledger + BRAIDED CellFlags bit on the wire; full suite 503 pass · 14 warn · 0 fail (both extra warns pre-existing: pack 21.0 B/cell and payload 7238 B flat across six bench-history rows), replay identity native↔wasm holds |
+| M33 | Permafrost and Patterned Ground | 2026-08-19 | earth lane: extent 25.9–29.5% of land ×3 seeds (banded), patterned ground on 65.6–74.1% of the real-permafrost belt (polygons on flats, stripes on slopes), maritime frontier median −1.80..−1.88 °C (gate: tracks the −2° isotherm ±0.75 where the continental shift vanishes), continental frontier +2.12..+2.34 °C warmer (Siberia asymmetry sign-correct), Jaccard vs the isotherm 87.7–90.1%; PERMAFROST+PATTERNED CellFlags bits on the wire at zero pack cost, PATTERNED joins the landform vocabulary, permafrost hash joins hash_state and the deep-earth identity line (agrees native↔wasm); inspector explains frozen ground per cell; full suite 509 pass · 13 warn · 0 fail |
+| M34 | Mountain Glaciers | 2026-08-19 | earth lane: modern ice from a PDD mass balance (freezing-month snowfall − 120 mm/°C·mo melt, libm-free via the exact COS12 table) on the shipped climate grids; share 12.4–15.4% of land ×3 seeds (polar caps + alpine, banded 3–18 sweet), alpine glaciers sit +140..+270 m above the belt snowline solved from belt-mean climate (cap belts excluded from the law), 100% nested inside the LGM footprint (the colder-world invariant, banded 70–100); balance grid `ice.modern` joins Ice::hash → hash_state + the deep-earth identity line (agrees native↔wasm), GLACIER ships as the eighth and last CellFlags bit, inspector names permanent ice; full suite 511 pass · 14 warn · 0 fail (14th is stage-naming 123 ms vs 120 sweet — timing flicker, naming untouched) |
+| M35 | Glacier-Fed Discharge | 2026-08-19 | hydro lane: glacier melt runs a second discharge lane (snowfall on ice partitioned into `melt_throughput` — annual melt, summer-phased amplitude via COS12, rain carry-through), accumulated down the same D8 tree and folded into a combined seasonal `flow_amp`; glacier-fed rivers (≥25% melt share) 1.3–1.5% of river cells ×3 seeds (banded 0.5–15 sweet), median melt share 30.8–48.4%, 12-month reconstructed discharge curves non-negative and NaN-free on every river cell, 100% of glacier-fed reaches peak in warm months (≥80% gate), 0 glacier-fed wadis (the wadi stamp yields to the melt); melt+melt_amp grids join Ice::hash → hash_state + deep-earth identity (agrees native↔wasm, ice=33baf87e8e427bb3 seed 777); full suite 521 pass · 16 warn · 0 fail (extra warns are history flicker on the people axis — assimilation/civ cadence — plus the standing perf/pack set; one suite-run properties truncation was an I/O fluke, lane reruns clean at 42 pass) |
+| M36 | Ice Diagnostics | 2026-08-19 | earth lane, five new ice-cadence rows ×3 seeds: fjord density 4.9–56.4 per 1000 polar-coast cells (≥55°, banded 3–150 sweet), fjord latitude discipline 100% poleward of 45° (Earth's fjord coasts run 42–83°), proglacial-lake cadence 0–0.16 per 1000 iced cells in the 50–75° margin belt (seed 777 keeps its giants poleward of the belt), moraine cadence 18.9–32.0 per 1000 iced in the margin belt, lowland (h<0.30) moraine concentration 43.9–73.4% within ±6° of the measured margin — the first draft banded ALL moraines against the lowland margin and failed at 27%; the law is a lowland law, alpine moraines follow their own snowlines; diagnose-only change (no engine state touched, replay identity unmoved); earth lane 31 pass · 0 warn · 0 fail, suite 526 pass · 16 warn · 0 fail |
+| M37 | Sea Ice | 2026-08-20 | climate lane ×3 seeds: SST proxy (tmean/tamp via COS12, seawater freezes at −1.8 °C with ocean seasonal damping) gives ever-frozen ocean area 14.4–16.8% cosine-weighted (raw cell share 39–42% is fat-polar-row projection bias — area weighting is the Earth-comparable number), seasonal fringe 19–23k cells, pack reaches 59° (no icebound tropics); trade grid carries a 12-bit frozen calendar per cell — perennial pack prices as wall (45.0), seasonal straits surcharge by months shut, and any frozen sea point closes the whole route for those months (`Route.closed` mask); economy lane 100y: 10 winter-closed of 125 sea-touching routes, 0 malformed masks, the ledger obeys the ice (0 mismatched route-months — flow zero when shut, alive when the water opens), route costs deterministic across reruns; sweep 100y ×5 seeds: icebound lanes 3–10 per seed, all closures hemisphere-true winter arcs; `sea_ice_masks_are_winter_arcs` joins the assay. The sweep caught a real bug: `World::widen` grew every grid except the new frozen mask, so post-widen route coordinates read a square grid — OOB panic on seed 777; margins now extend the edge column's ice calendar (open ocean at the same latitude, physically exact). Full suite 544 pass · 12 warn · 0 fail |
+| M38 | Tundra Honesty | 2026-08-20 | terrain lane ×3 seeds, four new cold-rim rows all green: treeline follows a growing-season law (`climate::gdd5` off the exact COS12 table), not the annual mean — Whittaker-forest cells short of `GDD_TREELINE` demote (cold rows → tundra; MAAT ≥ 5 °C maritime rows → moorland grass, Faroe heath not Yamal), long-summer trow-1 "tundra" promotes into the cool-temperate row (the Siberian paradox); treeline−permafrost offset −15.9..−17.4° (one-signed maritime law, banded −22..−8 sweet), tracking spread 5.9–11.1° (≤12), treeline GDD discipline 523–533 °C·day (350–850), wet share of tundra 10.7–18.4% (8–60); tundra splits wet/dry on M33's `permafrost::extent_class` + flatness `WET_G` 0.010 + `WET_PMIN` 220 mm — `WetTundra` ships as biome 11 through engine, meta and client palette (the diagnose census arrays were `[0; 11]` and would have panicked on the new code; widened to 12 across the suite). Calibration honesty: GDD 600 (Paulsen–Körner ≈640) against our tame amplitudes gutted the taiga to 0.2% of land — 500 (low edge of the 500–800 literature proxies) keeps the demotion honest and the belt standing at 0.5%; the residual starvation vs the annual-mean law's 2.5% is the amplitude model's fault, staged in the Ready queue as its own phase-sized recalibration (the four forest-share WARNs are its known face). The sweep also caught a real M12 breach: `politics::union_pass` runs after the culture pass and rewrote crowns leaving void leanings (drift toward a people no longer ruling) visible at read time — all three crown-write sites (transfer, secession, union) now kill the leaning at the moment of the change unless the new banner flies the very people the town was drifting toward; seed 777 ×150y reads 0 breaches with all 21 kindred foreign-crowned towns still drifting. Full suite 548 pass · 20 warn · 0 fail (forest set staged; browser/perf rows are suite-load flicker — quiet re-run passes boot and halves the long-task row) |
+| M39 | Glacial Calibration vs Earth | 2026-08-20 | earth lane, five new earth-calibration rows ×3 seeds closing Year 2 — the ice-age world held against Earth's cold-latitude bones, not just its own internal belts: fjord median latitude 67.6–68.5° (banded 52–72 sweet; Norway 58–71 / Greenland 60–83 / Chile 42–56), fjord latitude IQR 3.4–5.3° (≤20 — the carve clusters on cold coasts, not smeared over the globe), proglacial giants 6.8–21.7 per Mkm² formerly iced (Earth's LGM fringe ≈1.5–4.5 over ~34 Mkm²; our young world keeps every basin undrained — Holocene lake attrition staged below), glacier elevation-vs-latitude curve descends poleward of its crest 100% ×3 seeds (per-15°-belt mean glacier elevation, 150 m slack; seed 777 reads 45–60°:1724 m → 60–75°:625 m → 75–90°:169 m), polar-belt ice at 169–276 m (Earth's polar glaciation level 0–800 — the caps ride down to the sea); the curve check judges only the poleward limb since Earth's crest sits in the dry subtropics (~25–30°), and an equatorward rise into the crest is honest; diagnose-only change (five bands live beside the system in ice.rs, no engine state touched, replay identity unmoved — seismic 9d5b65ab252110b3 seed 12345 both chunkings); earth lane 36 pass · 0 warn · 0 fail, full suite 555 pass · 18 warn · 0 fail (warn set is the standing forest-amplitude family + perf/pack/wasm rows, two fewer than M38's run) |
+| M40 | Wind-Driven Gyres | 2026-08-20 | earth lane ×3 seeds, Era II opens — the ocean circulates the way its winds already say it must: new `currents.rs` solves the depth-integrated Sverdrup balance (β·v = curl τ off the three rain-march wind bands — easterly trades to 30°, westerlies to 60°, polar easterlies beyond, as a polynomial stress profile) integrated westward from each ocean run's eastern shore, closed against the western wall by a rational Stommel boundary factor d/(d+3) (no transcendentals beyond the shared smoothing kernel — ADR-0025 discipline), knit across coastline steps by one σ=2 pass, then differentiated into surface currents u,v along the ψ contours; gyre rotation sense 6/6 basin-hemispheres earthly (M40 gate: clockwise north · counterclockwise south, judged by mean ψ over the 10–40° subtropical band per labeled ocean basin ≥2500 cells — measured, not assumed from the derivation), western boundary intensification 2.6–4.1× (p95 speed in the 4-cell western strip over the interior — the Gulf-Stream-side crowding, banded 1.5–12 sweet), surface speed p95 0.896–0.947 with SPEED_SCALE=4.0 pinning a typical world near 1 (raw ψ-gradients ran 0.237), current field replays identical across chunkings (M40 gate) and `Currents::hash` joins `hash_state`; pure derived state computed at the dawn off the final widened coastline (like landform/permafrost), never ticked; full suite 561 pass · 17 warn · 0 fail (one fewer warn than M39 — the standing forest-amplitude family + perf/pack/wasm rows, no new members) |
+
 
 ## Ready queue
 
-- M17 — Orogeny Ages (in progress)
+- Holocene lake attrition (M39 follow-on): proglacial-giant density
+  runs 6.8–21.7 per Mkm² formerly iced vs Earth's ≈1.5–4.5 — every
+  moraine-dammed basin the retreat left still holds water, because
+  nothing breaches a dam or fills a shallow after the ice goes. A
+  patina-stage attrition pass (spillway incision breaches a share of
+  the dams; peat/sediment infill claims the shallowest basins, leaving
+  fertile drained-lake flats the way the old lake plains feed farms)
+  would bring the density onto Earth's fringe and hand agriculture a
+  real landform instead of deleting lakes by fiat.
+
+- Seasonal-swing dispersion (E5 recalibration): land amplitude runs
+  mean 5.8 °C · p90 9.4 vs Earth's ~12 · ~25 — the whole world reads
+  maritime. M38's GDD treeline faithfully reports the consequence: the
+  boreal belt starves (0.5% of land vs 2.5% under the annual-mean law)
+  and forest share sits in WARN (20–24% vs sweet ≥25). Widening the
+  continental swing reopens calibrated ledgers — M33 permafrost extent
+  + frontier asymmetry, M37 ice calendars, M38 offset bands, sweep
+  forest/desert bands — so it moves as its own phase-sized item, all
+  bands re-derived together, not as a treeline-side fudge.
+- Client rendering of icebound lanes: `Route.closed` ships in meta;
+  overlays.js could draw a route pale/dashed during its shut months
+  and the inspector could print the ice calendar per lane.
+- Client rendering of braided reaches: the BRAIDED bit ships in the
+  pack flags already; the renderer could draw braided segments as
+  split gravel-bar channels (overlays.js / gpu shader river pass).
+- Loess source coupling: `loess_mantle` still deflates off the till
+  margins; physically the outwash plains (M32) are the primary
+  deflation source — recouple once M33 lands so the two calibrations
+  move together.
+- Client rendering of the frozen rim: PERMAFROST/PATTERNED bits ship
+  in the flags byte; the satellite layer could stipple polygon nets
+  and stripe texture on patterned cells (compositor.js), matching the
+  inspector note that already names them.
+- Client rendering of modern glaciers: the GLACIER bit (128) ships in
+  the flags byte; the satellite pass could paint true glacier white
+  (crevasse-blue tint) distinct from seasonal snow, which currently
+  reads only temperature (gpu shader / render.js).
+- Client rendering of ocean currents (M40 follow-on): the ψ/u/v grids
+  live engine-side only — an overlay of current streamlines (or sparse
+  arrows scaled by speed) on the satellite layer would make the gyres
+  legible, and the inspector could name the current regime per ocean
+  cell (western boundary · interior drift · doldrum) from the same
+  fields M41 will read for heat transport.
 
 ## Notes
 
@@ -18,3 +85,31 @@ the era files are binding; this ledger only records completion.
   landed; where a spec names a `new:` ADR number already taken, the
   next free number is used (M16's sketch ADR is **0024**, not 0018).
   The spec content is binding; the number is not.
+- M30 exceeded its spec: till alone proved agronomically dead (margins
+  sit at ~60° where tmean ≈ −6 to −8 °C, the temperature gate rightly
+  zeroes farming), so the depositional legacy grew a **loess mantle** —
+  silt blown equatorward off the outwash aprons in a per-column decay
+  plume (pure multiplication, no libm, replay-safe). Loess is what
+  carries the food dividend into farm country, matching Earth
+  (chernozem/corn-belt soils are loess, not till). Both M30 gates are
+  counterfactual (fertility with vs without the deposits) because
+  observational compares are confounded: legacy ground sits higher and
+  more poleward than its belt-mates.
+- M31's dam criterion reads the **shore rim as well as the flooded
+  cells** (Chebyshev ≤3 of a terminal-moraine ridge): the moraine that
+  impounds a lake stands beside the water, not under it. Flooded-cells-
+  only left seed 31337 with zero qualifying lakes — the big interior
+  over-deepenings sit far from the margins where the moraines are.
+- M31 flushed out a build-gate bug: `scripts/build.sh` judged wasm
+  staleness by mtime and shipped a pre-M31 binary as "up to date",
+  which would have printed a false DIVERGE in the earth-wasm lane.
+  The check now hashes the Rust sources (content, not clock).
+- M32 routes deglacial meltwater (upstream ice column accumulated down
+  the D8 tree), not today's precipitation: the outwash plains are a
+  relic of the melt, and today's rivers then *choose* the flattened
+  corridors on their own — the braided classification (river ∧
+  corridor) is emergent, not painted. The braided-share denominator is
+  below-margin river cells (thickness = 0), the belt the spec's "below
+  the ice line" names. Fertility takes outwash at 0.10 — leaner than
+  till (0.15) and loess (0.22), silt over gravel — and the gate is the
+  same counterfactual form as M30.

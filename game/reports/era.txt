@@ -4,55 +4,55 @@
 expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
 
       seed   land  river   mntn  entrp   coast  lmbig  towns  spacing
-     12345  0.348  0.031  0.138  2.146    8.61  0.515     12   127.8km
-     20264  0.337  0.028  0.114  2.120    8.95  0.989     10   187.4km
-     28183  0.350  0.032  0.097  2.106    8.45  0.500     12   109.4km
-     36102  0.355  0.031  0.110  2.134    9.08  0.491      9   168.8km
-     44021  0.353  0.028  0.136  2.099    9.39  0.497     11   149.1km
-     51940  0.362  0.034  0.098  2.096    8.59  0.494      9   182.1km
-     59859  0.363  0.033  0.176  2.163    9.18  0.504     12   134.7km
-     67778  0.355  0.029  0.195  2.181    8.29  0.520     14   108.5km
-     75697  0.324  0.030  0.098  2.056    9.09  0.514     10   144.6km
-     83616  0.334  0.031  0.062  2.103    9.60  0.498      8   149.6km
-     91535  0.345  0.029  0.143  2.145    8.78  0.510     10   153.0km
-     99454  0.364  0.032  0.136  2.157    8.76  0.507     12   149.9km
-    107373  0.342  0.030  0.085  2.137    8.61  0.516      9   166.2km
-    115292  0.325  0.028  0.095  2.128    8.49  0.519     14   123.3km
-    123211  0.363  0.031  0.154  2.151    9.18  0.501     13   109.8km
-    131130  0.346  0.030  0.064  2.148    7.89  0.506     10   139.2km
+     12345  0.348  0.031  0.138  2.110    8.61  0.515     10   125.1km
+     20264  0.337  0.027  0.115  2.059    8.95  0.989     11   181.4km
+     28183  0.350  0.032  0.097  2.075    8.45  0.500     13   121.6km
+     36102  0.355  0.029  0.110  2.076    9.08  0.491     10   112.7km
+     44021  0.353  0.028  0.136  2.073    9.39  0.497     10   190.7km
+     51940  0.362  0.034  0.098  2.079    8.59  0.494      8   208.8km
+     59859  0.363  0.032  0.176  2.120    9.18  0.504     11   147.6km
+     67778  0.355  0.028  0.195  2.121    8.29  0.520     12   127.4km
+     75697  0.324  0.029  0.099  2.018    9.09  0.514     11   123.3km
+     83616  0.334  0.031  0.063  2.061    9.60  0.498      9   110.4km
+     91535  0.345  0.027  0.144  2.093    8.78  0.510     11   139.1km
+     99454  0.364  0.032  0.136  2.105    8.76  0.507     11   165.3km
+    107373  0.342  0.029  0.086  2.075    8.61  0.516     13   131.8km
+    115292  0.325  0.028  0.095  2.069    8.49  0.519     14   126.9km
+    123211  0.363  0.031  0.154  2.092    9.18  0.501     10   115.9km
+    131130  0.346  0.030  0.065  2.085    7.89  0.506      9   137.5km
 
-  ERA 1 · water on the land — x: land share [0.324 … 0.364] · y: river share [0.028 … 0.034]
+  ERA 1 · water on the land — x: land share [0.324 … 0.364] · y: river share [0.027 … 0.034]
     |                      · |
     |                       ·|
     |               ·       ·|
-    |                        |
-    |      ·      ··   ·   · |
-    |·         ·             |
-    |            ·     ·     |
-    |·      ·         ·      |
+    |      ·      ··       · |
+    |·                 ·     |
+    |          ·             |
+    |·           ·    ··     |
+    |       ·                |
     occupied cells: 16
 
-  ERA 2 · relief vs variety — x: mountain share [0.062 … 0.195] · y: biome entropy [2.056 … 2.181]
-    |                       ·|
-    |             ·      ·   |
-    |·   ·        ·· ·       |
-    |      · ··              |
-    |·     ·                 |
-    |      ·      ·          |
+  ERA 2 · relief vs variety — x: mountain share [0.063 … 0.195] · y: biome entropy [2.018 … 2.121]
+    |                    ·  ·|
+    |             :          |
+    |·             · ·       |
+    |    · : ·    ·          |
+    |·     ·  ·              |
+    |                        |
     |                        |
     |      ·                 |
-    occupied cells: 16
+    occupied cells: 14
 
-  ERA 3 · the human layer — x: settlements [8.000 … 14.000] · y: NN spacing km [108.481 … 187.432]
-    |    ·   ·               |
-    |                        |
-    |    :                   |
-    |·       ·   ·  ·        |
-    |        :               |
-    |               :        |
-    |                       ·|
-    |               ·   ·   ·|
-    occupied cells: 13
+  ERA 3 · the human layer — x: settlements [8.000 … 14.000] · y: NN spacing km [110.397 … 208.803]
+    |·                       |
+    |        ·               |
+    |            ·           |
+    |            ·           |
+    |            ·           |
+    |    ·       ·      ·    |
+    |        ·   ·  ·   ·   ·|
+    |    ·   :               |
+    occupied cells: 15
 
   ERA 4 · the shape of coasts — x: coast complexity [7.891 … 9.601] · y: largest landmass [0.491 … 0.989]
     |              ·         |
@@ -65,7 +65,7 @@ expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
     |·    ·  :·: :   ::  ·  ·|
     occupied cells: 11
 
-  oatmeal: min 0.0063 (seeds 91535 vs 107373) · mean 0.0841 · max 0.3178 · min/mean 0.074
+  oatmeal: min 0.0093 (seeds 36102 vs 83616) · mean 0.0843 · max 0.2998 · min/mean 0.110
 
 
 ---- checks ----------------------------------------------------------
@@ -73,6 +73,6 @@ expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
 [PASS] relief varies                                Δ0.133   (M8.3: not one mountain recipe)
 [PASS] towns vary                                       Δ6   (M8.3: history diverges)
 [PASS] ERA occupancy / seed                           0.88   (M8.3: seeds spread across the plates)
-[PASS] oatmeal min/mean ratio                        0.074   (M8.4: no two worlds are the same bowl)
-[PASS] oatmeal mean distance                        0.0841   (M8.4: the family resembles, never repeats)
+[PASS] oatmeal min/mean ratio                        0.110   (M8.4: no two worlds are the same bowl)
+[PASS] oatmeal mean distance                        0.0843   (M8.4: the family resembles, never repeats)
 CHECKS: 6 pass · 0 warn · 0 fail

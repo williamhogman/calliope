@@ -428,6 +428,15 @@ fn transfer(
 ) {
     let from = setts[idx].realm;
     setts[idx].realm = to;
+    // the leaning dies at the crown change, not at the next culture
+    // pass: drift toward a people that no longer rules the town is
+    // void state, and the M12 gate reads plain drift and means it —
+    // it survives only when the new banner flies the very people the
+    // town was already leaning toward.
+    if setts[idx].drift_to != Some(realms[to.0].people) {
+        setts[idx].drift = 0.0;
+        setts[idx].drift_to = None;
+    }
     // the world may let the conqueror lay a new name over the old (M9.2)
     transfers.push(setts[idx].id);
     events.push(Event {
@@ -1991,6 +2000,12 @@ fn try_secession(
     });
     for &i in &rebels {
         settlements[i].realm = new_id;
+        // crown change kills the leaning at once (M12 gate) unless the
+        // new banner flies the very people the town was drifting toward
+        if settlements[i].drift_to != Some(crown_people) {
+            settlements[i].drift = 0.0;
+            settlements[i].drift_to = None;
+        }
     }
     // a young crown, and a court that remembers why it left
     pol.grow(realms.len());
@@ -2356,9 +2371,16 @@ pub fn union_pass(
                 .find(|s| s.id == realms[small].seat)
                 .map(|s| s.name.clone())
                 .unwrap_or_else(|| small_name.clone());
+            let big_people = realms[big].people;
             for s in settlements.iter_mut() {
                 if s.realm == small_id {
                     s.realm = big_id;
+                    // crown change kills the leaning at once (M12 gate)
+                    // unless the union's banner flies the drift target
+                    if s.drift_to != Some(big_people) {
+                        s.drift = 0.0;
+                        s.drift_to = None;
+                    }
                 }
             }
             let dowry = realms[small].treasury;

@@ -194,11 +194,25 @@ pub struct Hydrology {
     pub strahler: Array2<u8>,
     /// Signed seasonal discharge swing, -1..1 (positive peaks month 0).
     pub flow_amp: Array2<f64>,
+    /// M32 — braided reaches: river cells running over an outwash
+    /// corridor, wandering in gravel sheets instead of one channel.
+    pub braided: Array2<bool>,
+    /// M35 — accumulated glacial meltwater discharge per cell, same
+    /// units as `discharge` (of which it is a component).
+    pub melt: Array2<f64>,
+    /// M35 — signed month-0 harmonic of the melt lane, −1..1, same
+    /// convention as `flow_amp`; 0 wherever no melt flows.
+    pub melt_amp: Array2<f64>,
 }
 
 // 60.0 keeps the great rivers and their major tributaries (~4% of land)
 // and prunes the minor-stream fuzz the 4 km cells can't honestly carry.
 pub const RIVER_THRESHOLD: f64 = 60.0;
+
+/// M35 — a river cell is glacier-fed when at least this share of its
+/// discharge is accumulated melt. Glacier-fed rivers keep a reliable
+/// warm-season flow, so the wadi stamp yields to them.
+pub const GLACIAL_MIN: f64 = 0.25;
 
 pub fn hydrology(
     height: &Array2<f64>,
@@ -206,6 +220,9 @@ pub fn hydrology(
     precip: &Array2<f64>,
     pamp: &Array2<f64>,
     tmean: &Array2<f64>,
+    tamp: &Array2<f64>,
+    outwash: &Array2<f32>,
+    modern: &Array2<f32>,
 ) -> Hydrology {
     let size = height.dim().0;
     let filled = fill_depressions(height, water);
@@ -265,28 +282,59 @@ pub fn hydrology(
         }
     }
 
-    let w_precip = |y: usize, x: usize| {
-        if water[[y, x]] {
-            0.0
-        } else {
-            precip[[y, x]] / 1000.0
+    // --- M35: the glacier partition. On a glacier cell the year's
+    // snow is banked, not run off — `climate::melt_throughput` splits
+    // the cell into a melt lane (the bank, released by positive-degree
+    // months, summer-phased) and a rain lane (the warm months' rain,
+    // which runs off immediately with its true harmonic instead of
+    // pretending the banked snow fell as winter rain). Off-glacier
+    // cells keep the classic precip/pamp sources. Mass is conserved:
+    // melt + rain on a glacier cell sums to its runoff-eligible
+    // precipitation (a cap with no melt months banks its snow forever).
+    let mut melt_src = Array2::<f64>::zeros((size, size));
+    let mut melt_amp_src = Array2::<f64>::zeros((size, size));
+    let mut rain_src = Array2::<f64>::zeros((size, size));
+    let mut rain_harm_src = Array2::<f64>::zeros((size, size));
+    let glaciated = modern.dim() == (size, size);
+    for y in 0..size {
+        for x in 0..size {
+            if water[[y, x]] {
+                continue;
+            }
+            if glaciated && modern[[y, x]] > 0.0 {
+                let (melt, amp, rain, rharm) = crate::climate::melt_throughput(
+                    tmean[[y, x]],
+                    tamp[[y, x]],
+                    precip[[y, x]],
+                    pamp[[y, x]],
+                );
+                melt_src[[y, x]] = melt;
+                melt_amp_src[[y, x]] = melt * amp;
+                rain_src[[y, x]] = rain;
+                rain_harm_src[[y, x]] = rharm;
+            } else {
+                rain_src[[y, x]] = precip[[y, x]] / 1000.0;
+                rain_harm_src[[y, x]] = precip[[y, x]] * pamp[[y, x]] / 1000.0;
+            }
         }
-    };
-    let discharge = accumulate(&order, &dirs, w_precip, size);
+    }
+    let rain_acc = accumulate(&order, &dirs, |y, x| rain_src[[y, x]], size);
     // second accumulation, weighted by the signed seasonal share: the
     // ratio to total discharge says how hard each river breathes.
-    let acc_season = accumulate(
-        &order,
-        &dirs,
-        |y, x| {
-            if water[[y, x]] {
-                0.0
-            } else {
-                precip[[y, x]] * pamp[[y, x]] / 1000.0
+    let acc_season = accumulate(&order, &dirs, |y, x| rain_harm_src[[y, x]], size);
+    // M35 — the melt lane, flow-routed down the same tree, plus its
+    // signed harmonic mass for the combined seasonal swing.
+    let melt = accumulate(&order, &dirs, |y, x| melt_src[[y, x]], size);
+    let melt_harm = accumulate(&order, &dirs, |y, x| melt_amp_src[[y, x]], size);
+    let discharge = &rain_acc + &melt;
+    let mut melt_amp = Array2::<f64>::zeros((size, size));
+    for y in 0..size {
+        for x in 0..size {
+            if melt[[y, x]] > 1e-12 {
+                melt_amp[[y, x]] = (melt_harm[[y, x]] / melt[[y, x]]).clamp(-1.0, 1.0);
             }
-        },
-        size,
-    );
+        }
+    }
     let _ = any_terminal;
 
     let mut rivers = Array2::<bool>::from_elem((size, size), false);
@@ -353,14 +401,35 @@ pub fn hydrology(
     for y in 0..size {
         for x in 0..size {
             if discharge[[y, x]] > 1e-9 {
-                flow_amp[[y, x]] = (acc_season[[y, x]] / discharge[[y, x]]).clamp(-1.0, 1.0);
+                // M35 — both lanes breathe into one swing: the rain
+                // harmonic plus the summer-phased melt harmonic.
+                flow_amp[[y, x]] = ((acc_season[[y, x]] + melt_harm[[y, x]])
+                    / discharge[[y, x]])
+                    .clamp(-1.0, 1.0);
             }
             if rivers[[y, x]] {
                 // at low water the year's rain leans away: a channel that
                 // no longer clears the river bar is a wadi, full half the
-                // year and a ribbon of cracked mud the other half.
+                // year and a ribbon of cracked mud the other half. M35:
+                // glacier-fed rivers are exempt — the melt returns every
+                // summer, however hard the swing reads.
                 let dry = discharge[[y, x]] * (1.0 - flow_amp[[y, x]].abs());
-                seasonal[[y, x]] = dry < RIVER_THRESHOLD;
+                seasonal[[y, x]] = dry < RIVER_THRESHOLD
+                    && melt[[y, x]] / discharge[[y, x]] < GLACIAL_MIN;
+            }
+        }
+    }
+
+    // --- M32: braided reaches — a river crossing an outwash corridor
+    // wanders in gravel sheets instead of a single channel. Corridors
+    // are flat by construction (ice::OUT_SLOPE_MAX), so the low-slope
+    // test is already priced into the mask.
+    let mut braided = Array2::<bool>::from_elem((size, size), false);
+    if outwash.dim() == (size, size) {
+        for y in 0..size {
+            for x in 0..size {
+                braided[[y, x]] =
+                    rivers[[y, x]] && outwash[[y, x]] >= crate::ice::OUT_BRAID_MIN;
             }
         }
     }
@@ -375,6 +444,9 @@ pub fn hydrology(
         seasonal,
         strahler,
         flow_amp,
+        braided,
+        melt,
+        melt_amp,
     }
 }
 
@@ -389,4 +461,5 @@ pub const BANDS: &[Band] = &[
     Band { name: "river systems", sweet: (8.0, 400.0), hard: (3.0, 2000.0), target: "sweet 8–400 · hard 3–2000" },
     Band { name: "strahler top order", sweet: (4.0, 9.0), hard: (3.0, 12.0), target: "sweet 4–9 · hard 3–12" },
     Band { name: "river seasonal swing", sweet: (0.05, 0.50), hard: (0.01, 0.90), target: "mean |amp| · sweet .05–.50 · hard .01–.90" },
+    Band { name: "glacier-fed river share %", sweet: (0.5, 15.0), hard: (0.05, 40.0), target: "sweet 0.5–15 · hard 0.05–40 (M35: % of river cells carrying ≥25% accumulated melt — the ice keeps its rivers; measured 1.3–1.5 on three seeds)" },
 ];

@@ -29,7 +29,9 @@ pub fn next_realm_color(i: usize) -> String {
 
 fn style_by_biome(b: u8) -> &'static str {
     match b {
-        x if x == gc::TUNDRA || x == gc::BOREAL_FOREST || x == gc::ICE => "nordic",
+        x if x == gc::TUNDRA || x == gc::WET_TUNDRA || x == gc::BOREAL_FOREST || x == gc::ICE => {
+            "nordic"
+        }
         x if x == gc::DESERT || x == gc::SAVANNA => "arid",
         x if x == gc::TROPICAL_RAIN_FOREST
             || x == gc::TEMPERATE_RAIN_FOREST

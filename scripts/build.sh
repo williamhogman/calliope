@@ -16,10 +16,20 @@ REPORT=game/reports/build.txt
 now_ms() { date +%s%3N; }
 T_START=$(now_ms)
 
+# Staleness by content, not clock: hash every Rust source that feeds
+# the wasm and compare against the stamp of the last successful build.
+# The old `find -newer` mtime check shipped a stale binary as "up to
+# date" whenever anything else touched the wasm's timestamp — a false
+# DIVERGE waiting to happen in the earth-wasm replay lane.
+SRC_STAMP="$OUT/.src-hash"
+SRC_HASH=$(find "$RUST_DIR/src" -name '*.rs' -print0 2>/dev/null | sort -z \
+  | xargs -0 cat 2>/dev/null | cat - "$RUST_DIR/Cargo.toml" "$RUST_DIR/Cargo.lock" \
+  | sha1sum | cut -c1-40)
+
 needs_build=0
 if [ ! -f "$OUT/calliope_bg.wasm" ]; then
   needs_build=1
-elif [ -n "$(find "$RUST_DIR/src" "$RUST_DIR/Cargo.toml" -newer "$OUT/calliope_bg.wasm" -print -quit 2>/dev/null)" ]; then
+elif [ ! -f "$SRC_STAMP" ] || [ "$(cat "$SRC_STAMP")" != "$SRC_HASH" ]; then
   needs_build=1
 fi
 
@@ -46,6 +56,7 @@ if [ "$needs_build" = 1 ]; then
   fi
   mkdir -p "$OUT"
   cp "$RUST_DIR/pkg/calliope.js" "$RUST_DIR/pkg/calliope_bg.wasm" "$OUT/"
+  printf '%s' "$SRC_HASH" > "$SRC_STAMP"
 else
   echo "== WASM engine up to date =="
 fi

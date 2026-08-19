@@ -1109,6 +1109,11 @@ pub fn monthly(
         let (Some(&ia), Some(&ib)) = (by_id.get(&r.a), by_id.get(&r.b)) else {
             continue;
         };
+        // M37 — the ice shuts the lane: an icebound month moves no
+        // cargo and pays nobody; route_flow keeps the zero on record.
+        if r.closed & (1u16 << month_abs.rem_euclid(12)) != 0 {
+            continue;
+        }
         let (sa, sb) = (&settlements[ia], &settlements[ib]);
         let (ka, kb) = (areas.area_of(ia), areas.area_of(ib));
         let pa = market.price(sa.exports.unwrap_or(Good::Grain));

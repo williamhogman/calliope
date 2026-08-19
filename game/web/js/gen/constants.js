@@ -66,6 +66,7 @@ export const BIOMES = [
   { id: 7, name: "Temperate Rainforest" },
   { id: 8, name: "Boreal Forest" },
   { id: 9, name: "Tundra" },
+  { id: 11, name: "Wet Tundra" },
   { id: 10, name: "Ice" },
 ];
 

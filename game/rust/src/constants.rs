@@ -2,9 +2,9 @@
 
 use serde_json::{json, Value};
 
-/// The eleven biomes (E1.8) — one declaration: codes, display names and
-/// map colors live on the variants; `biome_meta()` is generated from it.
-/// Codes are stable — they ship in the pack.
+/// The twelve biomes (E1.8, M38) — one declaration: codes, display
+/// names and map colors live on the variants; `biome_meta()` is
+/// generated from it. Codes are stable — they ship in the pack.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, strum::Display, strum::EnumIter, strum::EnumCount, strum::IntoStaticStr)]
 #[repr(u8)]
 pub enum Biome {
@@ -22,6 +22,10 @@ pub enum Biome {
     #[strum(serialize = "Boreal Forest")]
     BorealForest = 8,
     Tundra = 9,
+    /// M38 — sedge-and-moss mire over a shallow permafrost table;
+    /// code 9 stays the dry fell-field default.
+    #[strum(serialize = "Wet Tundra")]
+    WetTundra = 11,
     Ice = 10,
 }
 
@@ -48,6 +52,7 @@ impl Biome {
             8 => Biome::BorealForest,
             9 => Biome::Tundra,
             10 => Biome::Ice,
+            11 => Biome::WetTundra,
             _ => Biome::Water,
         }
     }
@@ -64,6 +69,7 @@ impl Biome {
             Biome::TemperateRainForest => [32, 104, 84],
             Biome::BorealForest => [58, 92, 62],
             Biome::Tundra => [148, 145, 122],
+            Biome::WetTundra => [121, 139, 108],
             Biome::Ice => [235, 242, 246],
         }
     }
@@ -81,6 +87,7 @@ pub const SEASONAL_RAIN_FOREST: u8 = Biome::SeasonalRainForest.code();
 pub const TEMPERATE_RAIN_FOREST: u8 = Biome::TemperateRainForest.code();
 pub const BOREAL_FOREST: u8 = Biome::BorealForest.code();
 pub const TUNDRA: u8 = Biome::Tundra.code();
+pub const WET_TUNDRA: u8 = Biome::WetTundra.code();
 pub const ICE: u8 = Biome::Ice.code();
 
 /// Height unit: 1.0 == 4000 m (from geo.hy)

@@ -1,35 +1,33 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TELLING                      seed 12345 · size 512 · 150y
 ========================================================================
-chronicle: 9037 entries over 150y (60.2/y)
-  ids on 100.0% · coords on 97.9% · legend layer on 2101/2101 loud entries
-  ID-LESS: found ×1
-    m633 [found] Aelbrook — Settlers out of Ashenwood raise Aelbrook by the sea.
-cast: artifact 17+0† · civilization 3+2† · culture 12+0† · feature 97+0† · good 36+0† · person 17+184† · realm 13+17† · ruin 1+0† · settlement 100+1† · war 2+34† · world 1+0†
-epithets earned: 152  (Thalwydell "the Young", Orene "the Young", Khargol "the Unlucky", Skjalvik "the Old")
-artifacts: 17 wrought · 14 held · 3 lost
+chronicle: 8409 entries over 150y (56.1/y)
+  ids on 100.0% · coords on 97.8% · legend layer on 2143/2143 loud entries
+cast: artifact 8+0† · civilization 0+3† · culture 11+0† · feature 92+0† · good 36+0† · person 14+168† · realm 10+11† · ruin 1+0† · settlement 103+1† · war 0+34† · world 1+0†
+epithets earned: 152  (Thalwydell "the Young", Orene "the Young", Khargol "the Unlucky", Thoradal "the Wise")
+artifacts: 8 wrought · 7 held · 1 lost
 
-stories sifted: 48 (bloody-circlet ×9 · empire-arc ×2 · mine-curse ×10 · restoration ×1 · rivalry ×6 · roads-of ×10 · trials ×10)
-  389.9  The Trials of Sylenshade  (y55–149, 12 beats)
-  357.0  The Trials of Kalddal  (y0–148, 12 beats)
-  346.0  The Trials of Ordatagol  (y17–148, 12 beats)
-  323.0  The Trials of Glenwyleaf  (y45–146, 12 beats)
-  321.8  The Trials of Keshdag  (y55–146, 12 beats)
-  294.0  The Trials of Helraantheia  (y0–148, 12 beats)
-  291.6  The Trials of Idaantheia  (y68–149, 12 beats)
-  276.5  The Trials of Eirevik  (y21–144, 12 beats)
+stories sifted: 48 (bloody-circlet ×7 · empire-arc ×3 · mine-curse ×10 · restoration ×1 · rise-fall ×1 · rivalry ×2 · roads-of ×9 · tide-turned ×1 · trials ×10 · usurpation ×4)
+  399.5  The Trials of Kharasarai  (y9–141, 12 beats)
+  363.5  The Rise and Fall of Aelleaf  (y6–144, 12 beats)
+  347.5  The Trials of Briordel  (y0–150, 12 beats)
+  337.5  The Trials of Briadel  (y0–150, 12 beats)
+  313.3  The Trials of Ashwydell  (y60–149, 12 beats)
+  303.8  The Trials of Skjalberg  (y60–149, 12 beats)
+  293.5  The Trials of Ordadag  (y40–148, 12 beats)
+  283.0  The Trials of Olynion  (y0–148, 12 beats)
 
 ---- checks ----------------------------------------------------------
-[FAIL] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
+[PASS] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
 [PASS] every carried id is valid                     0 bad   (ids index the registry)
-[PASS] events mappable (coords)                      97.9%   (most entries can fly the camera)
-[PASS] loud events carry a legend                2101/2101   (M6.9: two-layer telling on weight ≥ 3)
+[PASS] events mappable (coords)                      97.8%   (most entries can fly the camera)
+[PASS] loud events carry a legend                2143/2143   (M6.9: two-layer telling on weight ≥ 3)
 [PASS] closed entities carry a fate              0 unfated   (every ending is written)
 [PASS] stories per century                            32.0   (M6.5 gate: the sifter yields)
 [PASS] sifter deterministic                      identical   (same log ⇒ same stories)
 [PASS] no duplicate stories                         0 dups   (dedup bounds hold)
 [PASS] a reversal story found                          yes   (M6.7: fortunes turn on the record)
-[PASS] relics wrought                                   17   (M6.3: artifacts enter the world)
+[PASS] relics wrought                                    8   (M6.3: artifacts enter the world)
 [PASS] epithets earned                                 152   (M6.8: names are coined in the field)
-[PASS] chronicle unbounded                            9037   (no truncation: the full log persists)
-CHECKS: 11 pass · 0 warn · 1 fail
+[PASS] chronicle unbounded                            8409   (no truncation: the full log persists)
+CHECKS: 12 pass · 0 warn · 0 fail

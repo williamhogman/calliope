@@ -79,6 +79,17 @@ function cellNotes(w, cx, cy, i, h, isWater) {
   if (!isWater && lat < 12 && precip[i] > 1300) {
     notes.push("Equatorial convergence \u2014 rising air brings near-daily rains");
   }
+  // M33 — the frozen-ground signature: permafrost (bit 32) and its
+  // patterned-ground micro-texture (bit 64) ride the flags byte.
+  if (!isWater && (flags[i] & 32)) {
+    notes.push((flags[i] & 64)
+      ? "Permafrost \u2014 frost sorts the ground into polygon nets and stripes"
+      : "Permafrost \u2014 the ground never thaws at depth");
+  }
+  // M34 — modern glacier (bit 128): snowfall outruns the melt year on year.
+  if (!isWater && (flags[i] & 128)) {
+    notes.push("Glacier \u2014 snowfall outruns the melt; permanent ice rides these heights");
+  }
   if (!isWater && fertility && fertility[i] > 0.55) {
     let nearRiver = false;
     for (let dy = -2; dy <= 2 && !nearRiver; dy++) {
@@ -189,6 +200,9 @@ export function inspectCell(cx, cy) {
     lake: (flags[i] & 2) !== 0,
     salt: (flags[i] & 4) !== 0,
     wadi: (flags[i] & 8) !== 0,
+    permafrost: (flags[i] & 32) !== 0,
+    patterned: (flags[i] & 64) !== 0,
+    glacier: (flags[i] & 128) !== 0,
     order: w.arrays.strahler ? w.arrays.strahler[i] : 0,
     flow: Math.round(discharge[i]),
     isWater,

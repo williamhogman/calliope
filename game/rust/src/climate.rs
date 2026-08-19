@@ -65,6 +65,127 @@ pub fn month_precip(p_annual: f64, pamp_signed: f64, month: i64) -> f64 {
     (p_annual / 12.0 * (1.0 + pamp_signed * phase)).max(0.0)
 }
 
+/// M34 — the twelve-month cosine cycle as exact literals: cos(2πm/12)
+/// takes only algebraic values (±1, ±√3/2, ±1/2, 0), so the glacier
+/// mass balance stays libm-free and replay-identical across runtimes
+/// (ADR-0025 discipline; the loess plume set the precedent).
+pub const COS12: [f64; 12] = [
+    1.0,
+    0.866_025_403_784_438_6,
+    0.5,
+    0.0,
+    -0.5,
+    -0.866_025_403_784_438_6,
+    -1.0,
+    -0.866_025_403_784_438_6,
+    -0.5,
+    0.0,
+    0.5,
+    0.866_025_403_784_438_6,
+];
+
+/// M38 — the treeline currency's floor: degree-days count above 5 °C.
+pub const GDD_BASE: f64 = 5.0;
+/// M38 — mean month length (365.25/12): degree-months → degree-days.
+pub const DAYS_PER_MONTH: f64 = 30.4375;
+
+/// M38 — growing-degree-days above 5 °C from the two-parameter
+/// seasonal climate, through the exact COS12 table (libm-free,
+/// replay-identical, ADR-0025 discipline). GDD5 is the ecologist's
+/// treeline currency: trees pay in summer warmth regardless of how
+/// brutal the winter gets, which is why larch taiga stands on Yakutian
+/// permafrost while maritime tundra at the same annual mean stays
+/// bare. Amplitude enters through |phase| symmetry, so the sign
+/// convention washes out and both hemispheres read the same law.
+#[inline]
+pub fn gdd5(tmean: f64, tamp_signed: f64) -> f64 {
+    let mut g = 0.0;
+    for phase in COS12 {
+        let t = tmean + tamp_signed * phase;
+        if t > GDD_BASE {
+            g += (t - GDD_BASE) * DAYS_PER_MONTH;
+        }
+    }
+    g
+}
+
+/// M34 — snow falls when the month sits at or below this air temperature (°C).
+pub const SNOW_T: f64 = 1.0;
+/// M34 — degree-month melt factor, mm w.e. per positive °C·month
+/// (≈4 mm/°C/day PDD for a snow–ice mix, ×30 days — Hock 2003 range).
+pub const DDF_MELT: f64 = 120.0;
+
+/// M34 — annual surface mass balance for permanent ice, in metres of
+/// water equivalent per year: snowfall accumulated over the freezing
+/// months minus positive-degree-month ablation, both read off the same
+/// seasonal cycle the rest of the engine ticks (`month_temperature` /
+/// `month_precip` semantics, but through the exact COS12 table so the
+/// result is a pure function of its four inputs on every runtime).
+/// Positive balance is glacier country.
+pub fn ice_balance(tmean: f64, tamp_signed: f64, p_annual: f64, pamp_signed: f64) -> f64 {
+    let mut acc = 0.0;
+    let mut pdd = 0.0;
+    for phase in COS12 {
+        let t = tmean + tamp_signed * phase;
+        let p = (p_annual / 12.0 * (1.0 + pamp_signed * phase)).max(0.0);
+        if t <= SNOW_T {
+            acc += p;
+        }
+        if t > 0.0 {
+            pdd += t;
+        }
+    }
+    (acc - DDF_MELT * pdd) / 1000.0
+}
+
+/// M35 — how a glacier cell hands its water to the rivers below.
+/// Splits the cell's year into the snow bank and the rain lane over
+/// the same COS12 cycle as `ice_balance`, and phases the bank's
+/// release by positive-degree months. Returns, all in metres/yr:
+///
+/// * `melt`      — annual meltwater throughput: the freezing-month
+///   accumulation given back in the warm season (steady state — what
+///   the ice takes it returns; a cap with no melt months returns 0
+///   and banks the snow forever).
+/// * `melt_amp`  — signed month-0 cosine projection of the melt-month
+///   weights, −1..1, same sign convention as `temperature_amplitude`:
+///   the melt lane's first harmonic for the seasonal-swing ledger.
+/// * `rain`      — the non-snow months' precipitation, which still
+///   runs off immediately like everywhere else.
+/// * `rain_amp_mass` — that rain's signed cosine mass (unnormalized
+///   harmonic), so the caller can keep the rain lane's true phase
+///   instead of pretending the banked snow ran off in winter.
+pub fn melt_throughput(
+    tmean: f64,
+    tamp_signed: f64,
+    p_annual: f64,
+    pamp_signed: f64,
+) -> (f64, f64, f64, f64) {
+    let mut acc = 0.0;
+    let mut rain = 0.0;
+    let mut rharm = 0.0;
+    let mut pdd = 0.0;
+    let mut proj = 0.0;
+    for phase in COS12 {
+        let t = tmean + tamp_signed * phase;
+        let p = (p_annual / 12.0 * (1.0 + pamp_signed * phase)).max(0.0);
+        if t <= SNOW_T {
+            acc += p;
+        } else {
+            rain += p;
+            rharm += p * phase;
+        }
+        if t > 0.0 {
+            pdd += t;
+            proj += t * phase;
+        }
+    }
+    let amp = if pdd > 0.0 { (proj / pdd).clamp(-1.0, 1.0) } else { 0.0 };
+    let melt = if pdd > 0.0 { acc / 1000.0 } else { 0.0 };
+    (melt, amp, rain / 1000.0, rharm / 1000.0)
+}
+
+
 /// Wind-advected moisture -> annual precipitation in mm/yr, plus the
 /// signed monsoon amplitude: how strongly the year's rain leans into
 /// the local summer as the ITCZ marches between the tropics.
