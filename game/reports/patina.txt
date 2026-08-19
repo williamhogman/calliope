@@ -2,19 +2,19 @@
  CALLIOPE DIAGNOSTIC · PATINA                       size 512 · 300y · 3 seeds
 ========================================================================
    seed  ruins    late  veiled%  rename    worn  field  faded   wars  xfers  rivers  sundr  fused  gold  arcs
-  12345     20      20      3.8      12       5     27      3      0     74    held     20      4     1     3
-    777     25      25      2.5      15       5     39      6      0    107    held     20      5     5     5
-  90210     20      20      3.3      11       2     38      0      1     95    held     20      6     1     2
+  12345     21      21      2.3      14       4     26      6      0     64    held     20      2     3     2
+    777     29      28      3.2      21       4     40      5      0     95    held     20      7     3     4
+  90210     26      26      3.6      16       2     48      3      2    121    held     18      6     0     3
 
 ---- checks ----------------------------------------------------------
-[PASS] ruins per century (after y100)                10.83   (M9.1 gate: mature worlds carry ruins)
-[PASS] withheld share of the chronicle                3.2%   (M9.5 gate: 2-8% of entries veiled)
+[WARN] ruins per century (after y100)                12.50   (M9.1 gate: mature worlds carry ruins)
+[PASS] withheld share of the chronicle                3.0%   (M9.5 gate: 2-8% of entries veiled)
 [PASS] hydronyms conserved                        all held   (M9.2 gate: river names survive every border change)
-[PASS] border changes occurred               276 transfers   (the conservation claim is tested, not vacuous)
+[PASS] border changes occurred               280 transfers   (the conservation claim is tested, not vacuous)
 [PASS] name strata bounded                          0 over   (M9.2: at most two former names per place)
 [PASS] every new name carries a gloss               0 bare   (M9.3 gate: renames and wearings are etymologized)
-[PASS] names worn or relaid somewhere                38+12   (M9.2/M9.3: the strata actually accrue)
-[PASS] battlefields mark the map            104 fields / 1 wars   (M9.4: decisive fields earn names)
+[PASS] names worn or relaid somewhere                51+10   (M9.2/M9.3: the strata actually accrue)
+[PASS] battlefields mark the map            114 fields / 2 wars   (M9.4: decisive fields earn names)
 [PASS] people count moves both ways (≥60% of seeds)            3/3   (M12.6: sunderings and fusions both fire on the patina clock)
-[PASS] civ arcs completed per 300 y         3.3 (gold 7 · arcs 10)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
-CHECKS: 10 pass · 0 warn · 0 fail
+[PASS] civ arcs completed per 300 y         3.0 (gold 6 · arcs 9)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
+CHECKS: 9 pass · 1 warn · 0 fail

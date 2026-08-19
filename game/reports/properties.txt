@@ -3,20 +3,20 @@
 ========================================================================
 seam-invariant properties (M8.1) and metamorphic checks (M8.2)
 
-seed  12345: 4746 river cells · 0 uphill · 0 cycles · 0 dry terminals
-seed  12345: 19 towns · 30 routes · 0 isolated · 1 components
-seed  12345: rain ×1.25 ⇒ river cells 4746 → 5605 · discharge 1938162 → 2573225
+seed  12345: 4742 river cells · 0 uphill · 0 cycles · 0 dry terminals
+seed  12345: 18 towns · 29 routes · 0 isolated · 1 components
+seed  12345: rain ×1.25 ⇒ river cells 4742 → 5604 · discharge 1937827 → 2573058
 
-seed    777: 4821 river cells · 0 uphill · 0 cycles · 0 dry terminals
+seed    777: 4820 river cells · 0 uphill · 0 cycles · 0 dry terminals
 seed    777: 17 towns · 21 routes · 0 isolated · 1 components
-seed    777: rain ×1.25 ⇒ river cells 4821 → 5902 · discharge 2016420 → 2600833
+seed    777: rain ×1.25 ⇒ river cells 4820 → 5913 · discharge 2018852 → 2604211
 
-seed  90210: 4893 river cells · 0 uphill · 0 cycles · 0 dry terminals
-seed  90210: 19 towns · 26 routes · 0 isolated · 1 components
-seed  90210: rain ×1.25 ⇒ river cells 4893 → 5800 · discharge 1945924 → 2473728
+seed  90210: 4891 river cells · 0 uphill · 0 cycles · 0 dry terminals
+seed  90210: 20 towns · 29 routes · 0 isolated · 1 components
+seed  90210: rain ×1.25 ⇒ river cells 4891 → 5803 · discharge 1946045 → 2473864
 
-seed  12345: 240 months of deltas · 19 towns replayed · 0 reships · 0 cursor breaks
-seed  12345: territory over 240 months · 18 full ships · 6 tile ships
+seed  12345: 240 months of deltas · 18 towns replayed · 0 reships · 0 cursor breaks
+seed  12345: territory over 240 months · 20 full ships · 4 tile ships
 
 
 ---- checks ----------------------------------------------------------
@@ -24,42 +24,42 @@ seed  12345: territory over 240 months · 18 full ships · 6 tile ships
 [PASS] rivers reach an outlet (12345)                0 dry   (M8.1: sea, lake or salt basin)
 [PASS] no isolated settlement (12345)            0 cut off   (M8.1: every town trades)
 [PASS] route graph connected (12345)               1 comps   (M8.1: one world, one web)
-[PASS] pack is stable (12345)                    6889468 B   (M8.1: same world ⇒ same bytes)
-[PASS] pack v2 + crc32 (12345)                crc 0d35708e   (E3.6: stamped and checksummed)
+[PASS] pack is stable (12345)                    6889244 B   (M8.1: same world ⇒ same bytes)
+[PASS] pack v2 + crc32 (12345)                crc c688a642   (E3.6: stamped and checksummed)
 [PASS] unpack layout sound (12345)               13 arrays   (M8.1: offsets contiguous, sizes exact)
 [PASS] raw sections bit-equal (12345)            bit-equal   (M8.1: arrays survive the wire)
 [PASS] quantization ≤ ε (12345)             worst 0.500·scale   (E3.4: u16 wire loses ≤ half a step)
-[PASS] territory RLE exact (12345)               1039 runs   (E3.5: borders compress, nothing drifts)
-[PASS] rain↑ ⇒ rivers not↓ (12345)             4746 → 5605   (M8.2: metamorphic monotonicity)
+[PASS] territory RLE exact (12345)                995 runs   (E3.5: borders compress, nothing drifts)
+[PASS] rain↑ ⇒ rivers not↓ (12345)             4742 → 5604   (M8.2: metamorphic monotonicity)
 [PASS] rain↑ ⇒ discharge↑ (12345)                    ×1.33   (M8.2: more water flows)
 [PASS] rivers descend filled (777)            0 up · 0 cyc   (M8.1: water only runs downhill)
 [PASS] rivers reach an outlet (777)                  0 dry   (M8.1: sea, lake or salt basin)
 [PASS] no isolated settlement (777)              0 cut off   (M8.1: every town trades)
 [PASS] route graph connected (777)                 1 comps   (M8.1: one world, one web)
-[PASS] pack is stable (777)                      6888876 B   (M8.1: same world ⇒ same bytes)
-[PASS] pack v2 + crc32 (777)                  crc 7449d2e8   (E3.6: stamped and checksummed)
+[PASS] pack is stable (777)                      6888844 B   (M8.1: same world ⇒ same bytes)
+[PASS] pack v2 + crc32 (777)                  crc e8209a6d   (E3.6: stamped and checksummed)
 [PASS] unpack layout sound (777)                 13 arrays   (M8.1: offsets contiguous, sizes exact)
 [PASS] raw sections bit-equal (777)              bit-equal   (M8.1: arrays survive the wire)
 [PASS] quantization ≤ ε (777)               worst 0.500·scale   (E3.4: u16 wire loses ≤ half a step)
-[PASS] territory RLE exact (777)                  937 runs   (E3.5: borders compress, nothing drifts)
-[PASS] rain↑ ⇒ rivers not↓ (777)               4821 → 5902   (M8.2: metamorphic monotonicity)
+[PASS] territory RLE exact (777)                  925 runs   (E3.5: borders compress, nothing drifts)
+[PASS] rain↑ ⇒ rivers not↓ (777)               4820 → 5913   (M8.2: metamorphic monotonicity)
 [PASS] rain↑ ⇒ discharge↑ (777)                      ×1.29   (M8.2: more water flows)
 [PASS] rivers descend filled (90210)          0 up · 0 cyc   (M8.1: water only runs downhill)
 [PASS] rivers reach an outlet (90210)                0 dry   (M8.1: sea, lake or salt basin)
 [PASS] no isolated settlement (90210)            0 cut off   (M8.1: every town trades)
 [PASS] route graph connected (90210)               1 comps   (M8.1: one world, one web)
-[PASS] pack is stable (90210)                    6890020 B   (M8.1: same world ⇒ same bytes)
-[PASS] pack v2 + crc32 (90210)                crc 9f3f9de2   (E3.6: stamped and checksummed)
+[PASS] pack is stable (90210)                    6890244 B   (M8.1: same world ⇒ same bytes)
+[PASS] pack v2 + crc32 (90210)                crc a9f235b4   (E3.6: stamped and checksummed)
 [PASS] unpack layout sound (90210)               13 arrays   (M8.1: offsets contiguous, sizes exact)
 [PASS] raw sections bit-equal (90210)            bit-equal   (M8.1: arrays survive the wire)
 [PASS] quantization ≤ ε (90210)             worst 0.500·scale   (E3.4: u16 wire loses ≤ half a step)
-[PASS] territory RLE exact (90210)               1139 runs   (E3.5: borders compress, nothing drifts)
-[PASS] rain↑ ⇒ rivers not↓ (90210)             4893 → 5800   (M8.2: metamorphic monotonicity)
+[PASS] territory RLE exact (90210)               1175 runs   (E3.5: borders compress, nothing drifts)
+[PASS] rain↑ ⇒ rivers not↓ (90210)             4891 → 5803   (M8.2: metamorphic monotonicity)
 [PASS] rain↑ ⇒ discharge↑ (90210)                    ×1.27   (M8.2: more water flows)
-[PASS] tick deltas replay to truth (12345)        19 towns   (E4.2: merge(bootstrap, deltas) = engine state)
-[PASS] market replays to truth (12345)            18 goods   (E4.3: merge(bootstrap, m_hot) = engine ledger)
+[PASS] tick deltas replay to truth (12345)        18 towns   (E4.2: merge(bootstrap, deltas) = engine state)
+[PASS] market replays to truth (12345)            13 goods   (E4.3: merge(bootstrap, m_hot) = engine ledger)
 [PASS] area prices replay to truth (12345)          1 hubs   (E4.3: per-good hub patches rebuild the areas)
-[PASS] territory replays to truth (12345)   18 full · 6 tiles   (E4.7: full RLE and tile patches must leave the client's grid exactly the engine's)
+[PASS] territory replays to truth (12345)   20 full · 4 tiles   (E4.7: full RLE and tile patches must leave the client's grid exactly the engine's)
 [PASS] no unchanged section reships (12345)      0 reships   (E4.2/E4.3: a section crosses only when it moved)
-[PASS] event cursor tiles the log (12345)            → 236   (E4.4: ranges concatenate without gap or overlap)
+[PASS] event cursor tiles the log (12345)            → 247   (E4.4: ranges concatenate without gap or overlap)
 CHECKS: 42 pass · 0 warn · 0 fail

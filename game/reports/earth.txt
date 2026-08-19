@@ -18,14 +18,14 @@
   90210    41.0        60.8        21     2263     100
 
    seed    pf %   cont %  pattern %    mar °C   off °C   agree %
-  12345    25.9     12.6       74.1     -1.80     2.12      87.7
-    777    27.1     13.5       65.6     -1.87     2.24      90.1
-  90210    29.5     14.3       66.3     -1.88     2.34      89.0
+  12345    26.0     12.6       74.1     -1.78     2.10      87.8
+    777    27.2     13.6       65.7     -1.86     2.24      90.1
+  90210    29.6     14.4       66.3     -1.87     2.32      89.0
 
    seed  gcells  share %   elev m   Δsnow m  in-LGM %
-  12345   14253    12.44      481       140     100.0
-    777   15830    13.51      611       270     100.0
-  90210   17924    15.39      569       267     100.0
+  12345   14248    12.44      480       135     100.0
+    777   15814    13.49      609       265     100.0
+  90210   17903    15.37      569       264     100.0
 
    seed  fj/1kco  fj>=45%  lk/1kice    mor/1k   mor±6°%
   12345      4.9    100.0      0.16      32.0      73.4
@@ -33,9 +33,9 @@
   90210     56.4    100.0      0.14      22.8      49.8
 
    seed  fj med°  fj IQR°    lk/Mkm²  curve%  polar m   glacier elev by belt (equator→pole)
-  12345     68.0      4.1      21.66     100      274   60-75°:518m · 75-90°:274m
-    777     67.6      3.4       6.81     100      169   45-60°:1724m · 60-75°:625m · 75-90°:169m
-  90210     68.5      5.3       9.16     100      276   45-60°:1052m · 60-75°:616m · 75-90°:276m
+  12345     68.0      4.1      21.66     100      274   60-75°:516m · 75-90°:274m
+    777     67.6      3.4       6.81     100      169   45-60°:1718m · 60-75°:623m · 75-90°:169m
+  90210     68.5      5.3       9.16     100      276   45-60°:1038m · 60-75°:615m · 75-90°:276m
 
    seed  basins   gyres earthly    sp p95   west ×
   12345       1       2       2     0.947      2.9
@@ -66,13 +66,13 @@
 [PASS] ELA poleward monotone                          99 %   (sweet 85–100 · hard 70–100 (% of 3° bins where the lowest glaciated cell drops))
 [PASS] peak ice thickness m                         2352 m   (sweet 1200–4000 · hard 600–4000 (dome height; parabolic profile, Antarctic cap))
 [PASS] ice ledger regen byte-identical           identical   (M28 gate: frozen prehistory replays; joins hash_state)
-[PASS] permafrost share of land                     27.5 %   (sweet 5–30% · hard 2–45% (M33: the cold rim, not the whole tundra; measured 25.9–29.5))
+[PASS] permafrost share of land                     27.6 %   (sweet 5–30% · hard 2–45% (M33: the cold rim, not the whole tundra; measured 25.9–29.5))
 [PASS] patterned share of permafrost                68.7 %   (sweet 10–80% · hard 3–95% (M33: polygons on flats + stripes on slopes; measured 65.6–74.1))
-[PASS] maritime frontier MAAT                     -1.85 °C   (sweet −2.75..−1.25 °C · hard −4..−0.5 (M33 gate: where the sea keeps the shift near zero the frontier tracks the −2° isotherm ±0.75))
-[PASS] continental frontier offset                +2.23 °C   (sweet +0.25..+3 °C · hard 0..+4 (M33: the interior frontier runs warmer than the maritime one by the continental reach))
+[PASS] maritime frontier MAAT                     -1.84 °C   (sweet −2.75..−1.25 °C · hard −4..−0.5 (M33 gate: where the sea keeps the shift near zero the frontier tracks the −2° isotherm ±0.75))
+[PASS] continental frontier offset                +2.22 °C   (sweet +0.25..+3 °C · hard 0..+4 (M33: the interior frontier runs warmer than the maritime one by the continental reach))
 [PASS] isotherm agreement                           88.9 %   (sweet 70–100% · hard 55–100 (M33 gate: Jaccard of extent vs tmean ≤ −2 °C on land; measured 87.7–90.1))
-[PASS] modern glacier share of land %              13.78 %   (sweet 3–18 · hard 0.5–30 (M34: cells with positive annual mass balance — polar caps plus alpine ice; Earth runs ~10 with its sheets; measured 12.4–15.4 on three seeds))
-[PASS] glacier elev above snowline m                +225 m   (sweet 0–900 · hard −200–1600 (M34 gate: mean alpine-glacier elevation minus the belt snowline solved from belt-mean climate, cap belts excluded; measured +140–270))
+[PASS] modern glacier share of land %              13.77 %   (sweet 3–18 · hard 0.5–30 (M34: cells with positive annual mass balance — polar caps plus alpine ice; Earth runs ~10 with its sheets; measured 12.4–15.4 on three seeds))
+[PASS] glacier elev above snowline m                +222 m   (sweet 0–900 · hard −200–1600 (M34 gate: mean alpine-glacier elevation minus the belt snowline solved from belt-mean climate, cap belts excluded; measured +140–270))
 [PASS] modern ice inside LGM footprint %           100.0 %   (sweet 70–100 · hard 50–100 (M34: the LGM was colder everywhere — today's ice lives inside yesterday's; measured 100))
 [PASS] fjord cells per 1000 polar coast               34.3   (sweet 3–150 · hard 1–400 (M36: fjord cells per 1000 coast cells ≥55°|lat| — the Norway/Greenland analog coasts are riddled, not saturated; measured 4.9–56.4 ×3 seeds, mean 34.3))
 [PASS] fjord cells poleward of 45° %               100.0 %   (sweet 90–100 · hard 70–100 (M36: Earth's fjord coasts run 42–83°; the drowned carve stays poleward; measured 100 ×3 seeds))
