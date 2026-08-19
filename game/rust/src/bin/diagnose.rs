@@ -1466,8 +1466,53 @@ fn cmd_terrain(seed: i64, size: usize) {
     );
     let legi_worst = legi.iter().cloned().fold(0.0f64, f64::max);
 
+    // ---- heat transport (M41) -------------------------------------------
+    // The law re-run on the post-widen ledger: the same `current_bias`
+    // the dawn folded into tmean, measured where it touches land. Warm
+    // rims and cold rims must both exist, sit a few °C off their zonal
+    // law, and the world-mean must stay near zero — advection moves
+    // heat, it does not mint it.
+    let water_g = w.fields.height.mapv(|h| h < 0.0);
+    let heat = calliope::climate::current_bias(&water_g, &w.currents.v);
+    let mut hw_n = 0usize;
+    let mut hw_sum = 0.0f64;
+    let mut hc_n = 0usize;
+    let mut hc_sum = 0.0f64;
+    let mut h_net = 0.0f64;
+    for y in 0..rows {
+        for x in 0..cols {
+            let b = heat[[y, x]];
+            h_net += b;
+            if land[[y, x]] {
+                if b >= 0.5 {
+                    hw_n += 1;
+                    hw_sum += b;
+                } else if b <= -0.5 {
+                    hc_n += 1;
+                    hc_sum += b;
+                }
+            }
+        }
+    }
+    let hw_mean = if hw_n > 0 { hw_sum / hw_n as f64 } else { 0.0 };
+    let hc_mean = if hc_n > 0 { hc_sum / hc_n as f64 } else { 0.0 };
+    let h_net_mean = h_net / (rows * cols) as f64;
+    println!(
+        "heat transport (M41): warm rim {} cells mean {:+.2} °C · cold rim {} cells mean {:+.2} °C · net {:+.3} °C",
+        hw_n, hw_mean, hc_n, hc_mean, h_net_mean
+    );
+
     let mut c = Checks::default();
     c.band("land fraction", land_frac, pct(land_frac));
+    c.must(
+        "warm and cold rims both exist (M41)",
+        hw_n > 0 && hc_n > 0,
+        format!("{} warm · {} cold cells", hw_n, hc_n),
+        "M41: the currents must touch coasts both ways — Gulf Stream and Humboldt analogs",
+    );
+    c.band("warm-coast heat delta", hw_mean, format!("{:+.2} °C ({} cells)", hw_mean, hw_n));
+    c.band("cold-coast heat delta", hc_mean, format!("{:+.2} °C ({} cells)", hc_mean, hc_n));
+    c.band("heat transport net bias", h_net_mean.abs(), format!("{:+.3} °C", h_net_mean));
     c.must("border land cells", bl == 0, format!("{}", bl), "must be 0 — no clipped landmasses");
     // M25 gate — the coastline holds the datum: land area stays within
     // ±5% (relative) of the pre-M25 baseline near mid-curve, widening
