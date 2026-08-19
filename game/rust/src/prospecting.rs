@@ -265,6 +265,10 @@ impl World {
             let near = near_i
                 .map(|i| self.peoples.settlements[i].name.clone())
                 .unwrap_or_else(|| "the wilds".to_string());
+            // M6.1 — deposit-anchored entries carry the town's id from the
+            // start; the ground fallback in resolve_events can't find a
+            // settlement standing on a stand of timber or a fishing shoal.
+            let near_ent = self.near_settlement_ent(near_i);
             use resources::Good;
             let text = {
                 match (kind, to) {
