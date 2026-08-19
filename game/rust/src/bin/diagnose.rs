@@ -287,6 +287,14 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
     let mut vt_cones = [0usize; 3]; // cone counts by tercile
     let mut ring_sum = [0.0f64; 3]; // ash at vent / mid ring / far ring
     let mut ring_n = [0usize; 3];
+    // M28 — ice lane aggregates (the footprint is gen-time state, so
+    // the tick length does not move these).
+    let mut i_rows: Vec<String> = Vec::new();
+    let mut i_share = 0.0f64;
+    let mut i_margin = 0.0f64;
+    let mut i_mono = 0.0f64;
+    let mut i_dome = 0.0f64;
+    let mut i_pure = true;
 
     println!();
     println!(
@@ -381,6 +389,65 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
             " {:>6} {:>6} {:>9} {:>12.2} {:>9.2}",
             seed, nc, v.log.len(), cad, vm
         ));
+
+        // M28 — the ice lane: footprint share, lowland margin latitude,
+        // the ELA's poleward march read back off the mask, dome height.
+        let ice = &w.ice;
+        let (ir, icw) = ice.thickness.dim();
+        let nf = ir as f64;
+        let mut land = 0usize;
+        let mut iced = 0usize;
+        let mut low_lats: Vec<f64> = Vec::new();
+        let mut bin_min: Vec<f64> = vec![f64::INFINITY; 30]; // 3° bins, 0..90
+        let mut dome = 0.0f64;
+        for y in 0..ir {
+            let lat = (-90.0 + (y as f64) * 180.0 / (nf - 1.0)).abs();
+            for x in 0..icw {
+                let h = w.fields.height[[y, x]] as f64;
+                if h < 0.0 {
+                    continue;
+                }
+                land += 1;
+                let t = ice.thickness[[y, x]] as f64;
+                if t > 0.0 {
+                    iced += 1;
+                    dome = dome.max(t);
+                    if h < 0.10 {
+                        low_lats.push(lat);
+                    }
+                    let b = ((lat / 3.0) as usize).min(29);
+                    bin_min[b] = bin_min[b].min(h);
+                }
+            }
+        }
+        let share = 100.0 * iced as f64 / land.max(1) as f64;
+        low_lats.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let margin = if low_lats.is_empty() {
+            90.0
+        } else {
+            low_lats[(low_lats.len() as f64 * 0.05) as usize]
+        };
+        // Equator→pole, does the lowest glaciated cell keep dropping?
+        let occ: Vec<f64> = bin_min.iter().copied().filter(|v| v.is_finite()).collect();
+        let mut steps = 0usize;
+        let mut drops = 0usize;
+        for pair in occ.windows(2) {
+            steps += 1;
+            if pair[1] <= pair[0] + 0.01 {
+                drops += 1;
+            }
+        }
+        let mono = if steps == 0 { 100.0 } else { 100.0 * drops as f64 / steps as f64 };
+        i_share += share / seeds.len() as f64;
+        i_margin += margin / seeds.len() as f64;
+        i_mono += mono / seeds.len() as f64;
+        i_dome = i_dome.max(dome);
+        // Purity: recompute off the same height field, same footprint.
+        i_pure &= calliope::ice::compute(w.seed, &w.fields.height).hash() == ice.hash();
+        i_rows.push(format!(
+            " {:>6} {:>7.1} {:>11.1} {:>9} {:>8.0} {:>7.0}",
+            seed, share, margin, occ.len(), dome, mono
+        ));
     }
 
     println!();
@@ -389,6 +456,15 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
         "seed", "cones", "eruptions", "erupt/cone-cy", "mean VEI"
     );
     for r in &v_rows {
+        println!("{r}");
+    }
+
+    println!();
+    println!(
+        " {:>6} {:>7} {:>11} {:>9} {:>8} {:>7}",
+        "seed", "ice %", "margin lat", "ela bins", "dome m", "mono %"
+    );
+    for r in &i_rows {
         println!("{r}");
     }
 
@@ -458,6 +534,18 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
         format!("vent {:.3} > r3 {:.3} > r6 {:.3}", ring[0], ring[1], ring[2]),
         "M23 gate: the fertile apron thins away from the vent",
     );
+    // M28 — the ice checks: footprint, margin law, ELA march, dome, purity.
+    c.band("ice share of land at LGM", i_share, format!("{:.1} %", i_share));
+    c.band("lowland ice margin lat", i_margin, format!("{:.1}°", i_margin));
+    c.band("ELA poleward monotone", i_mono, format!("{:.0} %", i_mono));
+    c.band("peak ice thickness m", i_dome, format!("{:.0} m", i_dome));
+    c.must(
+        "ice footprint regen byte-identical",
+        i_pure,
+        format!("{}", if i_pure { "identical" } else { "DIVERGE" }),
+        "M28 gate: pure function of seed + height; joins hash_state",
+    );
+
     c.print();
 }
 
