@@ -2314,6 +2314,59 @@ fn cmd_climate(seed: i64, size: usize) {
     );
     let arable = pshare(1) + pshare(2) + pshare(3);
 
+    // ---- current-aware rain (M42) ---------------------------------------
+    // The same anomaly the dawn folded into tmean, re-run post-widen and
+    // read against the rain it shaped: land the cold rims reach must run
+    // drier than its latitude's land mean (the Atacama law), land the
+    // warm rims reach wetter (the Gulf-Stream law). Ratios are aggregate
+    // rim rain over the zonal expectation for the same cells, so a lone
+    // wet outlier cannot buy the pass.
+    let water_g = w.fields.height.mapv(|h| h < 0.0);
+    let heat = calliope::climate::current_bias(&water_g, &w.currents.v);
+    let mut zonal_p = vec![0.0f64; rows];
+    let mut zonal_n = vec![0usize; rows];
+    for y in 0..rows {
+        for x in 0..cols {
+            if land[[y, x]] {
+                zonal_p[y] += w.fields.precip[[y, x]] as f64;
+                zonal_n[y] += 1;
+            }
+        }
+    }
+    let (mut cold_p, mut cold_e, mut cold_n) = (0.0f64, 0.0f64, 0usize);
+    let (mut warm_p, mut warm_e, mut warm_n) = (0.0f64, 0.0f64, 0usize);
+    for y in 0..rows {
+        if zonal_n[y] < 8 {
+            continue; // a lone island row proves nothing
+        }
+        let zm = zonal_p[y] / zonal_n[y] as f64;
+        if zm < 1.0 {
+            continue; // polar bone-dry rows divide to noise
+        }
+        for x in 0..cols {
+            if !land[[y, x]] {
+                continue;
+            }
+            let b = heat[[y, x]];
+            if b <= -0.5 {
+                cold_p += w.fields.precip[[y, x]] as f64;
+                cold_e += zm;
+                cold_n += 1;
+            } else if b >= 0.5 {
+                warm_p += w.fields.precip[[y, x]] as f64;
+                warm_e += zm;
+                warm_n += 1;
+            }
+        }
+    }
+    let cold_ratio = if cold_e > 0.0 { cold_p / cold_e } else { 1.0 };
+    let warm_ratio = if warm_e > 0.0 { warm_p / warm_e } else { 1.0 };
+    println!();
+    println!(
+        "current-aware rain (M42): cold-rim land {} cells at {:.2}× its zonal law · warm-rim {} cells at {:.2}×",
+        cold_n, cold_ratio, warm_n, warm_ratio
+    );
+
     let mut c = Checks::default();
     c.band("desert share of land", desert, pct(desert));
     c.band("tundra+ice share of land", frozen, pct(frozen));
