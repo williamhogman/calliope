@@ -962,6 +962,69 @@ fn cmd_terrain(seed: i64, size: usize) {
             if purity { "identical".into() } else { "DIVERGED".into() },
             "M26 gate: pure function of height + sea level; joins hash_state",
         );
+
+        // M29 — glacial relief: U-valleys, cirques and hangs by belt.
+        {
+            let ice = &w.ice;
+            let (ir, icw) = ice.thickness.dim();
+            let nf = ir as f64;
+            let mut iced = [0usize; 2]; // alpine 40–62° · sheet >62°
+            let mut ucel = [0usize; 2];
+            let mut fjords = 0usize;
+            for y in 0..ir {
+                let lat = (-90.0 + (y as f64) * 180.0 / (nf - 1.0)).abs();
+                let belt = if lat >= 62.0 {
+                    1
+                } else if lat >= 40.0 {
+                    0
+                } else {
+                    continue;
+                };
+                for x in 0..icw {
+                    if w.fields.height[[y, x]] < 0.0 {
+                        continue;
+                    }
+                    if ice.thickness[[y, x]] > 0.0 {
+                        iced[belt] += 1;
+                        if ice.carved[[y, x]] >= 0.01 {
+                            ucel[belt] += 1;
+                        }
+                    }
+                }
+            }
+            for v in lf.iter() {
+                if *v == calliope::landform::FJORD {
+                    fjords += 1;
+                }
+            }
+            let cir_alp = ice
+                .cirques
+                .iter()
+                .filter(|&&(y, _)| {
+                    let lat = (-90.0 + (y as f64) * 180.0 / (nf - 1.0)).abs();
+                    (40.0..62.0).contains(&lat)
+                })
+                .count();
+            let u_alp = 1000.0 * ucel[0] as f64 / iced[0].max(1) as f64;
+            let u_sht = 1000.0 * ucel[1] as f64 / iced[1].max(1) as f64;
+            let c_alp = 1000.0 * cir_alp as f64 / iced[0].max(1) as f64;
+            println!();
+            println!(
+                "glacial relief: u-cells alpine {} / sheet {} · cirques {} ({} alpine) · hangs {} · fjord cells {}",
+                ucel[0], ucel[1], ice.cirques.len(), cir_alp, ice.hangs.len(), fjords
+            );
+            c.band("u-valley cells per 1000 iced, alpine", u_alp, format!("{:.0}", u_alp));
+            c.band("u-valley cells per 1000 iced, sheet", u_sht, format!("{:.0}", u_sht));
+            c.band("cirques per 1000 iced, alpine", c_alp, format!("{:.1}", c_alp));
+            c.band("hanging valleys per world", ice.hangs.len() as f64, format!("{}", ice.hangs.len()));
+            let finite = w.fields.height.iter().all(|v| v.is_finite());
+            c.must(
+                "height field NaN-free after the carve",
+                finite,
+                if finite { "finite".into() } else { "NaN".into() },
+                "M29 gate: the carve is pure lowering arithmetic",
+            );
+        }
         if sl.eustatic < 0.0 && coast_up >= 150 && coast_dn >= 150 {
             let d_up = raised_up as f64 / coast_up as f64;
             let d_dn = raised_dn as f64 / coast_dn as f64;

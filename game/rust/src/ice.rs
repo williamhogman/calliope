@@ -384,8 +384,6 @@ pub fn carve(height: &mut Array2<f64>, ice: &mut Ice) {
 
     // Hanging valleys: a carved tributary whose receiving trunk was cut
     // deeper hangs above it at the junction.
-    const N8: [(isize, isize); 8] =
-        [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1)];
     for y in 0..rows {
         for x in 0..cols {
             let ca = cut[[y, x]];
@@ -396,7 +394,7 @@ pub fn carve(height: &mut Array2<f64>, ice: &mut Ice) {
             if d < 0 {
                 continue;
             }
-            let (dy, dx) = N8[d as usize];
+            let (dy, dx) = crate::hydrology::N8[d as usize];
             let ny = y as isize + dy;
             let nx = x as isize + dx;
             if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
