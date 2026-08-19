@@ -76,7 +76,19 @@ downstream layers (rock, volcanism, landform) were presumed hostage
 to transcendental drift, but three seeds × 240 months came back
 byte-identical native vs wasm, so the gate covers all six layers
 instead of the seismic ledger alone. Generation budget held green
-(512² median 1371 ms) with the suite at 440 pass · 0 fail.
+(512² median 1371 ms) with the suite at 440 pass · 0 fail. M28
+gives the world its ice age: `ice.rs` cuts the LGM footprint from an
+equilibrium-line-altitude law — a parabola from 0.62 height units at
+the equator to sea level at 62°, the same edge the M25 rebound belt
+remembers — with SplitMix64 margin wobble and a Vialov √distance
+thickness profile (BFS from the margin, 4 km cells, 4000 m cap).
+Frozen prehistory per ADR-0024: computed at the dawn, I-lane in
+`hash_state`, `ice=` in the deep-earth identity, never ticked. The
+earth lane grew four bands (share of land 39–41 % — twin polar
+landmasses run it above Earth's ~25 —, lowland margin ~60°, ELA
+poleward march 100 % monotone, dome ~2.3 km) plus a purity check;
+cross-runtime replay stays byte-identical with ice included. Suite:
+445 pass · 0 fail.
 
 ## The forge charter
 
