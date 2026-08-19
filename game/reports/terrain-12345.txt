@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 12345 · 640x512
 ========================================================================
-world: "Ithath" · generated in 1372 ms
+world: "Ithath" · generated in 1323 ms
 land: 114687 cells of 327680 (35.0%) · 1834992 km²
 hypsometry (land h): p5 0.019 · p25 0.086 · p50 0.199 · p75 0.373 · p95 0.548 · max 0.759
 bathymetry (sea h): p5 -0.592 · p50 -0.383 · p95 -0.034

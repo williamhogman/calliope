@@ -1,10 +1,10 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · DETERMINISM                  seed 12345 · size 512 · 120 mo
 ========================================================================
-generation: state A 37ce989e4fc6c6f9 · state B 37ce989e4fc6c6f9
-run ×12 chunks:  state c8f35824ba976f1c · events b44ece30697ab574 · towns 03479a2248dd2edd
-run ×12 again:   state c8f35824ba976f1c · events b44ece30697ab574 · towns 03479a2248dd2edd
-run ×60 chunks:  state c8f35824ba976f1c · events b44ece30697ab574 · towns 03479a2248dd2edd
+generation: state A f6bc6a994e64dc76 · state B f6bc6a994e64dc76
+run ×12 chunks:  state bf3eae273e503187 · events b44ece30697ab574 · towns 03479a2248dd2edd
+run ×12 again:   state bf3eae273e503187 · events b44ece30697ab574 · towns 03479a2248dd2edd
+run ×60 chunks:  state bf3eae273e503187 · events b44ece30697ab574 · towns 03479a2248dd2edd
 
 ---- checks ----------------------------------------------------------
 [PASS] generation reproducible                   identical   (same seed ⇒ identical world state)

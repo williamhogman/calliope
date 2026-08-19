@@ -3,9 +3,9 @@
 ========================================================================
  seed 777 · size 512 · 240 mo
  native: 7ef24fa665fbe366
- native: plates=3a1702958367cb09 rock=cc59bcf001b83a24 seismic=7ef24fa665fbe366 volcanism=87dda4a7005d576f sealevel=f6c0489b18a8fc38 landform=24b35aecc3de12c6
+ native: plates=3a1702958367cb09 rock=cc59bcf001b83a24 seismic=7ef24fa665fbe366 volcanism=87dda4a7005d576f sealevel=f6c0489b18a8fc38 landform=24b35aecc3de12c6 ice=801a41a47727908a
  wasm:   7ef24fa665fbe366
- wasm:   plates=3a1702958367cb09 rock=cc59bcf001b83a24 seismic=7ef24fa665fbe366 volcanism=87dda4a7005d576f sealevel=f6c0489b18a8fc38 landform=24b35aecc3de12c6
+ wasm:   plates=3a1702958367cb09 rock=cc59bcf001b83a24 seismic=7ef24fa665fbe366 volcanism=87dda4a7005d576f sealevel=f6c0489b18a8fc38 landform=24b35aecc3de12c6 ice=801a41a47727908a
 
 ---- checks ----------------------------------------------------------
 [PASS] seismic ledger agrees across runtimes        agree   (M22 gate: native and wasm replay one ledger)

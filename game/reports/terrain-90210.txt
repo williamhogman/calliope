@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 90210 · 640x512
 ========================================================================
-world: "Auraia" · generated in 1434 ms
+world: "Auraia" · generated in 1206 ms
 land: 116784 cells of 327680 (35.6%) · 1868544 km²
 hypsometry (land h): p5 0.016 · p25 0.087 · p50 0.208 · p75 0.329 · p95 0.467 · max 0.743
 bathymetry (sea h): p5 -0.593 · p50 -0.400 · p95 -0.030
