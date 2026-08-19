@@ -21,18 +21,24 @@ pub mod explain;
 pub mod famine;
 pub mod geo;
 pub mod hydrology;
+pub mod ice;
 pub mod ids;
 pub mod naming;
 pub mod ndimage;
 pub mod noisegen;
 pub mod pack;
 pub mod patina;
+pub mod plates;
 pub mod politics;
 pub mod prospecting;
 
 #[cfg(target_arch = "wasm32")]
 pub mod render;
 pub mod resources;
+pub mod rock;
+pub mod landform;
+pub mod sealevel;
+pub mod seismic;
 pub mod settlements;
 pub mod snapshot;
 pub mod society;
@@ -152,6 +158,31 @@ impl WasmWorld {
     /// Advance the simulation; returns {month, settlements, events, routes?} JSON.
     pub fn tick(&mut self, months: u32) -> String {
         self.inner.tick_json(months as i64)
+    }
+
+    /// M22 gate — FNV-1a over the fault table, renewal clocks and quake
+    /// log, hex-printed. `scripts/wasm-replay.mjs` compares this against
+    /// the native `diagnose seismic-hash` for the same seed and months.
+    pub fn seismic_hash(&self) -> String {
+        format!("{:016x}", self.inner.seismic.hash())
+    }
+
+    /// M27 gate — the deep-earth identity line: every Year-1 layer's
+    /// hash, labeled. `scripts/wasm-replay.mjs earth` compares this
+    /// against the native `diagnose earth-hash` for the same arguments.
+    pub fn earth_hash(&self) -> String {
+        self.inner.earth_hash_line()
+    }
+
+    /// M22 bisection instrument: plate-sketch and seismic sub-hashes so a
+    /// cross-runtime divergence names the layer it lives in.
+    pub fn seismic_debug(&self) -> String {
+        let (pt, pc, pb) = self.inner.plates.debug_parts();
+        let (sf, ss, sl) = self.inner.seismic.debug_parts();
+        format!(
+            "table={:016x} cell={:016x} boundary={:016x} faults={:016x} since={:016x} log={:016x}",
+            pt, pc, pb, sf, ss, sl
+        )
     }
 
     /// Term ledger for a derived quantity ("why is this so?") as JSON.

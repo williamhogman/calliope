@@ -274,6 +274,43 @@ existing suite stays green throughout.
 
 ## Ready (calibration queue)
 
+Findings from the M22 landing (staged, not gate failures):
+
+- Worst long task in the browser probe reads 588 ms on a quiet run
+  (1024 ms under suite contention) against the 220 ms headless
+  baseline; count of long tasks stays green (36 vs ≤53). The stall is
+  a single month-tick spike, not a trend — profile which monthly pass
+  spikes (suspect the yearly bundle: CivPulse + seam derivation now
+  share a month) and consider staggering yearly systems across months.
+- The `Perlin3` fixed-width shuffle (ADR-0025) re-rolled every noise
+  field: all report bands rebaselined 2026-08-18. Pre-existing warns
+  (forest share, kilns, tick rate) carried over at similar readings —
+  still the M19–M21 queue below, not new regressions.
+
+Findings from the M19–M21 landings (staged, not gate failures):
+
+- Year-100 tick rate reads 226–315 mo/s against the sweet ≥400 band
+  (baseline 459–544) on a day the whole machine ran ~25% slow (terrain
+  and erosion, untouched by M16–M21, drifted the same direction).
+  Re-measure on a quiet run before suspecting the geology landings;
+  if it holds, profile the year-100 tick, not the generation stages.
+- E10.1 bands for terrain, resources and gen total were re-cut beside
+  the system (E2.7 style) to absorb the measured cost of the plate
+  sketch (M16/M17) and rock provinces (M18/M19); the old numbers are
+  kept in the target strings so the growth stays visible.
+
+- Foreground `cargo build` and a background `report.sh` share
+  `target/release/`; the file lock serializes them but a mid-flight
+  report can leave a just-built binary stale against fresh edits (one
+  M21 sweep ran a binary without the classify change and read as a
+  no-op fix). Give `report.sh` its own `CARGO_TARGET_DIR` (as the
+  assay profile already does for tests) so instrument and workbench
+  never share a bench vise.
+- Extend the M15.3 placement properties with the M19 law: every
+  province-homed mineral's deposits sit in a home province whenever
+  the home mask offered ≥ `MIN_HOME_CELLS` — turning the diagnose
+  sweep's 100% observation into a quantified proptest invariant.
+
 Findings from the M15 assay landing (staged, not gate failures):
 
 - `validate_pack` guards the pack natively only: the worker's unpacker

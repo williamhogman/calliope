@@ -76,6 +76,69 @@ run "properties.txt" properties $PROPS
 run "era.txt" era $ERA
 run "patina.txt" patina $PATINA
 run "systems.txt" systems "${SEEDS[0]}" "$SIZE" "$CIV_YEARS"
+run "earth.txt" earth "$SIZE" "$CIV_YEARS" "${SEEDS[@]}"
+
+# ---- M22/M27 deep-earth replay across runtimes ------------------------------
+# The same seed and months must yield one seismic ledger (M22) and one
+# deep-earth identity line — plates, rock, seismic, volcanism, sealevel,
+# landform (M27) — in native and in the shipped wasm. Skipped (not
+# failed) when no wasm is built, bun is missing, or the binary predates
+# the exports.
+{
+  echo "========================================================================"
+  echo " CALLIOPE DIAGNOSTIC · DEEP-EARTH REPLAY         native vs shipped wasm"
+  echo "========================================================================"
+  RW="../web/js/wasm/calliope_bg.wasm"
+  if [ -f "$RW" ] && command -v bun >/dev/null 2>&1; then
+    NATIVE=$("$BIN" seismic-hash 777 "$SIZE" 240)
+    NATIVE27=$("$BIN" earth-hash 777 "$SIZE" 240)
+    set +e
+    WASMH=$(bun ../../scripts/wasm-replay.mjs 777 "$SIZE" 240 2>/tmp/wasm-replay-err.txt | tail -1)
+    RC=$?
+    WASM27=$(bun ../../scripts/wasm-replay.mjs 777 "$SIZE" 240 earth 2>/tmp/wasm-replay27-err.txt | tail -1)
+    RC27=$?
+    set -e
+    echo " seed 777 · size $SIZE · 240 mo"
+    echo " native: $NATIVE"
+    echo " native: $NATIVE27"
+    if [ "$RC" -eq 3 ] || [ "$RC27" -eq 3 ]; then
+      echo " wasm:   stale binary (missing replay export) — rebuild with scripts/build.sh"
+      echo " (skipped, not failed)"
+    elif [ "$RC" -ne 0 ] || [ "$RC27" -ne 0 ]; then
+      echo " wasm:   replay run failed (rc=$RC/rc27=$RC27):"
+      cat /tmp/wasm-replay-err.txt /tmp/wasm-replay27-err.txt 2>/dev/null | sed 's/^/   /' | head -5
+      echo
+      echo "---- checks ----------------------------------------------------------"
+      echo "[FAIL] wasm replay runs                        rc=$RC/$RC27   (M22/M27 gate: the wasm leg must execute)"
+      echo "CHECKS: 0 pass · 0 warn · 1 fail"
+    else
+      echo " wasm:   $WASMH"
+      echo " wasm:   $WASM27"
+      echo
+      echo "---- checks ----------------------------------------------------------"
+      P=0; F=0
+      if [ "$NATIVE" = "$WASMH" ]; then
+        echo "[PASS] seismic ledger agrees across runtimes        agree   (M22 gate: native and wasm replay one ledger)"
+        P=$((P+1))
+      else
+        echo "[FAIL] seismic ledger agrees across runtimes     DIVERGE   (M22 gate: native and wasm replay one ledger)"
+        F=$((F+1))
+      fi
+      if [ "$NATIVE27" = "$WASM27" ]; then
+        echo "[PASS] deep-earth layers agree across runtimes      agree   (M27 gate: plates·rock·seismic·volcanism·sealevel·landform, one identity)"
+        P=$((P+1))
+      else
+        echo "[FAIL] deep-earth layers agree across runtimes   DIVERGE   (M27 gate: the labeled line above names the layer)"
+        F=$((F+1))
+      fi
+      echo "CHECKS: $P pass · 0 warn · $F fail"
+    fi
+  else
+    echo " no wasm binary or no bun on PATH — cross-runtime leg not attempted"
+    echo " (skipped, not failed)"
+  fi
+} > "$OUT/earth-wasm.txt"
+echo "-- deep-earth replay (native vs wasm) -> earth-wasm.txt"
 
 # ---- wasm size budget (E10.4/E6.4) ----------------------------------------
 # The shipped binary is a build artifact, not a source claim — measure the
@@ -111,20 +174,22 @@ echo "-- wasm size -> wasm.txt"
 # Property-proofs over the resource path: ontology forest, placement laws,
 # price clamps, metamorphic market checks, conservation meters, hostile
 # unpack. proptest hunts for the world that breaks a law; one failing case
-# is a [FAIL] with its seed in the log. Panic override: the release profile
-# ships panic=abort (E6.2), but the test harness must unwind to report —
-# and the cdylib+rlib pair would otherwise collide on one rlib path.
+# is a [FAIL] with its seed in the log. The assay builds under its own
+# `assay` profile (panic=unwind, target/assay/): the release profile ships
+# panic=abort (E6.2), and letting the two flavors share target/release/
+# made them collide on one libcalliope.rlib path — the loser of that race
+# linked against the wrong flavor and died with phantom undefined symbols.
 echo "-- assay (property proofs) -> assay.txt"
 {
   echo "========================================================================"
   echo " CALLIOPE DIAGNOSTIC · ASSAY                    M15 property proofs"
   echo "========================================================================"
   if command -v cargo >/dev/null 2>&1; then
-    ASSAY_CMD=(cargo test --release --test assay)
+    ASSAY_CMD=(cargo test --profile assay --test assay)
   else
-    ASSAY_CMD=(nix shell nixpkgs#rustc nixpkgs#cargo -c cargo test --release --test assay)
+    ASSAY_CMD=(nix shell nixpkgs#rustc nixpkgs#cargo -c cargo test --profile assay --test assay)
   fi
-  if CARGO_PROFILE_RELEASE_PANIC=unwind "${ASSAY_CMD[@]}" > /tmp/assay-out.txt 2>&1; then
+  if "${ASSAY_CMD[@]}" > /tmp/assay-out.txt 2>&1; then
     grep -E '^test |^test result' /tmp/assay-out.txt | sed 's/^/ /'
     echo
     echo "---- checks ----------------------------------------------------------"

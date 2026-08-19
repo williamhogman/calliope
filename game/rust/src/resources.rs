@@ -723,6 +723,98 @@ pub const STRATEGIC_MINIMA: [(Good, usize, f64); 9] = [
     (Good::Gems, 2, 0.55),
 ];
 
+/// M19 — where ore belongs. Each tracked mineral names the rock provinces
+/// (M18) its seams favor: gold in the shields and the volcanic intrusions,
+/// coal in the sedimentary basins, marble in the metamorphic fold belts,
+/// iron in the banded shields and the stacked belts, copper and silver in
+/// the arcs. Placement narrows a good's suitability mask to its home
+/// provinces whenever the homes offer enough fitting ground; a world whose
+/// shields all lie under ice keeps the full mask — the floor of fate
+/// (ADR-0013) is untouched and runs after, province-blind, exactly as
+/// before. Mithril and stone sit where they will.
+pub const ORE_HOMES: &[(Good, &[u8])] = &[
+    (Good::Gold, &[crate::rock::SHIELD, crate::rock::VOLCANIC]),
+    (Good::Silver, &[crate::rock::VOLCANIC, crate::rock::FOLD_BELT]),
+    (Good::Copper, &[crate::rock::VOLCANIC, crate::rock::FOLD_BELT]),
+    (Good::Iron, &[crate::rock::SHIELD, crate::rock::FOLD_BELT]),
+    (Good::Coal, &[crate::rock::BASIN]),
+    (Good::Gems, &[crate::rock::SHIELD, crate::rock::VOLCANIC]),
+    (Good::Marble, &[crate::rock::FOLD_BELT]),
+];
+
+/// The home provinces of a good, if geology has an opinion (M19).
+pub fn homes_of(g: Good) -> Option<&'static [u8]> {
+    ORE_HOMES.iter().find(|(good, _)| *good == g).map(|&(_, h)| h)
+}
+
+/// M19 honesty floor: a narrowed mask must keep at least this many cells
+/// or the good falls back to its full mask — geology guides, it never
+/// starves a world of an essential seam.
+const MIN_HOME_CELLS: usize = 40;
+
+/// E10.1 — the in-mask 5×5 race, decided pointwise: true iff no in-mask
+/// cell in the reflected 5×5 window carries a strictly larger value.
+/// Exactly the blanked-`maximum_filter` test at a masked cell — the
+/// window includes the cell itself, so "equals the window max" and "no
+/// strictly larger in-mask rival" are the same predicate — without ever
+/// materializing the blanked grid.
+fn wins_masked_race(fj: &Array2<f64>, mask: &Array2<bool>, y: usize, x: usize) -> bool {
+    let (h, w) = fj.dim();
+    let v = fj[[y, x]];
+    for dy in -2isize..=2 {
+        let yy = ndimage::reflect(y as isize + dy, h as isize);
+        for dx in -2isize..=2 {
+            let xx = ndimage::reflect(x as isize + dx, w as isize);
+            if mask[[yy, xx]] && fj[[yy, xx]] > v {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// E10.1 — the whole-map 5×5 race, decided pointwise: true iff no cell
+/// in the reflected window carries a strictly larger value. Exactly the
+/// `fj == maximum_filter(fj, 5)` test, evaluated only where a candidate
+/// actually stands.
+fn wins_open_race(fj: &Array2<f64>, y: usize, x: usize) -> bool {
+    let (h, w) = fj.dim();
+    let v = fj[[y, x]];
+    for dy in -2isize..=2 {
+        let yy = ndimage::reflect(y as isize + dy, h as isize);
+        for dx in -2isize..=2 {
+            let xx = ndimage::reflect(x as isize + dx, w as isize);
+            if fj[[yy, xx]] > v {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// M19 lane — for each homed good: (good, seams in a home province,
+/// seams total). Deposit coordinates index the rock grid directly (the
+/// widen pass shifts both together).
+pub fn province_consistency(
+    deposits: &[Deposit],
+    rock: &Array2<u8>,
+) -> Vec<(Good, usize, usize)> {
+    ORE_HOMES
+        .iter()
+        .map(|&(good, homes)| {
+            let mut in_home = 0usize;
+            let mut total = 0usize;
+            for d in deposits.iter().filter(|d| d.r == good) {
+                total += 1;
+                if homes.contains(&rock[[d.y as usize, d.x as usize]]) {
+                    in_home += 1;
+                }
+            }
+            (good, in_home, total)
+        })
+        .collect()
+}
+
 /// M15.6 — the flow meter: cumulative reserve drawn and net stock movement
 /// per deposit, metered at the exact mutation sites in `prospecting.rs`.
 /// The conservation ledger in `diagnose economy` balances these meters
@@ -749,6 +841,7 @@ pub fn place_resources(
     height: &Array2<f32>,
     rivers: &Array2<bool>,
     lakes: &Array2<bool>,
+    rock: &Array2<u8>,
     seed: i64,
 ) -> Vec<Deposit> {
     let size = height.dim().0;
@@ -758,6 +851,33 @@ pub fn place_resources(
 
     for (i, &good) in ALL_PLACEABLE.iter().enumerate() {
         let mask = suitability(good, biomes, height, rivers, lakes);
+        // M19 — deposits re-seated: a homed mineral's mask narrows to its
+        // rock provinces when the homes offer enough fitting ground; the
+        // fallback keeps a starved world honest (MIN_HOME_CELLS). A
+        // narrowed good also runs its maxima race within the mask (below),
+        // for the same reason the shore goods do (M14.4): a province cell
+        // rarely tops its whole-map 5×5 neighborhood.
+        let mut homed = false;
+        let mask = if let Some(homes) = homes_of(good) {
+            // One fused pass: narrow and count together (E10.1).
+            let mut narrowed = mask.clone();
+            let mut kept = 0usize;
+            for (m, &r) in narrowed.iter_mut().zip(rock.iter()) {
+                if *m && homes.contains(&r) {
+                    kept += 1;
+                } else {
+                    *m = false;
+                }
+            }
+            if kept >= MIN_HOME_CELLS {
+                homed = true;
+                narrowed
+            } else {
+                mask
+            }
+        } else {
+            mask
+        };
         if !mask.iter().any(|&m| m) {
             continue;
         }
@@ -796,24 +916,20 @@ pub fn place_resources(
                 fj[[y, x]] = field[[y, x]] + rng.gen::<f64>() * 1e-6;
             }
         }
-        let maxima = ndimage::maximum_filter(&fj, 5);
-
         // M14.4 — shore goods live on one-cell strips: a coastal cell
         // almost never tops its full 5×5 neighborhood (inland and open
         // sea outbid it), so for `Place::Coast` the maxima race runs
-        // within the mask. Every other good keeps the whole-map race,
-        // byte-identical to before.
-        let maxima = if matches!(good.spec().place, Place::Coast(_)) {
-            let mut fm = fj.clone();
-            for ((y, x), v) in fm.indexed_iter_mut() {
-                if !mask[[y, x]] {
-                    *v = f64::NEG_INFINITY;
-                }
-            }
-            ndimage::maximum_filter(&fm, 5)
-        } else {
-            maxima
-        };
+        // within the mask. M19 widens the same rule to province-homed
+        // minerals: a narrowed mask races within itself, or the shields
+        // would never beat the basins that surround them. Every other
+        // good keeps the whole-map race, byte-identical to before.
+        //
+        // E10.1 — both races are decided pointwise at candidate cells
+        // (the same reflected 5×5 window `maximum_filter` reads; in-mask
+        // rivals only for the masked race) instead of materializing a
+        // full-grid filter per good: the budget pays O(candidates ×
+        // window), not O(grid × goods).
+        let masked_race = homed || matches!(good.spec().place, Place::Coast(_));
 
         // M14.2 — salt pans: coastal works are plain to see and the sea
         // renews them; buried rock-salt seams roll the dice like any ore.
@@ -831,7 +947,14 @@ pub fn place_resources(
         }
         for y in 0..size {
             for x in 0..size {
-                if mask[[y, x]] && field[[y, x]] >= thresh && fj[[y, x]] == maxima[[y, x]] {
+                let wins = mask[[y, x]]
+                    && field[[y, x]] >= thresh
+                    && if masked_race {
+                        wins_masked_race(&fj, &mask, y, x)
+                    } else {
+                        wins_open_race(&fj, y, x)
+                    };
+                if wins {
                     let rich = (field[[y, x]] - lo) / (hi - lo).max(1e-9);
                     let richv = crate::util::round2(0.35 + 0.65 * rich);
                     let pan = pans.as_ref().map_or(false, |p| p[[y, x]]);
@@ -873,6 +996,56 @@ pub fn place_resources(
                     rng.gen::<f64>() < initial_known_p(good),
                     reserve_months(good, richv, rng.gen::<f64>()),
                 ));
+            }
+        }
+
+        // M19 — the province keeps what it holds: a homed mineral whose
+        // race under-yields its ADR-0013 minimum tops up from the best
+        // remaining in-mask cells *now*, so the province-blind floor of
+        // fate below almost never has to fire for it. Same rescue shape
+        // as M14.4; the floor pass itself stays byte-identical.
+        if homed {
+            if let Some(&(_, min_n, _)) =
+                STRATEGIC_MINIMA.iter().find(|&&(g, _, _)| g == good)
+            {
+                let mut have = deposits.iter().filter(|d| d.r == good).count();
+                if have < min_n {
+                    let mut cands: Vec<(f64, usize, usize)> = Vec::new();
+                    for y in 0..size {
+                        for x in 0..size {
+                            if mask[[y, x]] {
+                                cands.push((fj[[y, x]], y, x));
+                            }
+                        }
+                    }
+                    cands.sort_by(|a, b| {
+                        b.0.partial_cmp(&a.0).unwrap().then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2))
+                    });
+                    for &(_, y, x) in cands.iter() {
+                        if have >= min_n {
+                            break;
+                        }
+                        let clear = deposits.iter().filter(|d| d.r == good).all(|d| {
+                            let dx = d.x - x as i64;
+                            let dy = d.y - y as i64;
+                            dx * dx + dy * dy >= 12 * 12
+                        });
+                        if !clear {
+                            continue;
+                        }
+                        let rich = (field[[y, x]] - lo) / (hi - lo).max(1e-9);
+                        let richv = crate::util::round2(0.35 + 0.65 * rich);
+                        deposits.push(Deposit::new(
+                            good,
+                            x as i64,
+                            y as i64,
+                            richv,
+                            rng.gen::<f64>() < initial_known_p(good),
+                            reserve_months(good, richv, rng.gen::<f64>()),
+                        ));
+                        have += 1;
+                    }
+                }
             }
         }
     }
@@ -1035,4 +1208,5 @@ pub const BANDS: &[Band] = &[
     Band { name: "deposits per 1000 land cells", sweet: (1.0, 6.0), hard: (0.5, 12.0), target: "sweet 1–6 · hard 0.5–12" },
     Band { name: "mineral hidden share at dawn", sweet: (0.45, 0.85), hard: (0.25, 0.95), target: "sweet 45–85% — leave an age of prospectors" },
     Band { name: "known seams worked", sweet: (0.35, 1.0), hard: (0.10, 1.0), target: "found ore must reach the market, not rust in the hills" },
+    Band { name: "ore seams in home province", sweet: (0.90, 1.0), hard: (0.80, 1.0), target: "M19 gate: geology says where ore sits — ≥90% pooled" },
 ];

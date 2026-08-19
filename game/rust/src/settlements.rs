@@ -105,7 +105,26 @@ pub struct Settlement {
     /// the map name. Shipped so the inspector can show the doubling.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub exonym: Option<String>,
+    /// M20 — the stone under the town: what its quarries cut, read off
+    /// the rock province at the site (granite / limestone / marble /
+    /// basalt). Set by `trade::goods_for` on every assignment path.
+    #[serde(skip_serializing_if = "str::is_empty")]
+    pub quarry: &'static str,
+    /// M24 — the rebuild arc: while the month sits before this deadline
+    /// and pop below `rebuild_peak`, kin return and growth runs hot.
+    /// Opened by disaster damage, closed on recovery or when the window
+    /// lapses. Engine-internal; never on the wire. 0 = no arc open.
+    #[serde(skip)]
+    pub rebuild_until: i64,
+    /// The population the arc regrows toward: the head-count the moment
+    /// before the disaster struck.
+    #[serde(skip)]
+    pub rebuild_peak: i64,
 }
+
+/// M24 — the rebuild window, months: a struck town regrows hot for at
+/// most forty years before the arc closes on whatever stands.
+pub const REBUILD_WINDOW: i64 = 480;
 
 /// Effective hinterland a town can actually farm, km² — a half-day's
 /// cart out and back, shared with its neighbours (M2.5 spacing).
@@ -356,6 +375,9 @@ pub fn found_settlements(
             drift: 0.0,
             drift_to: None,
             exonym: None,
+            quarry: "",
+            rebuild_until: 0,
+            rebuild_peak: 0,
         });
         for y in 0..size {
             for x in 0..size {

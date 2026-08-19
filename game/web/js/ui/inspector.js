@@ -159,7 +159,8 @@ function SettlementView(a) {
     if (!st) return html`<div class="insp-body"><div class="insp-note">Lost to the mists.</div></div>`;
     const w = world();
     const resources = w?.header.resources || {};
-    const tags = [st.port ? "harbour" : null, st.coastal ? "coastal" : null, st.river ? "fresh water" : null]
+    const tags = [st.port ? "harbour" : null, st.coastal ? "coastal" : null, st.river ? "fresh water" : null,
+      st.quarry ? `${st.quarry} quarries` : null]
       .filter(Boolean);
     const foreignCrown = realm() && people() && realm().people !== st.people;
     return html`<div class="insp-body">

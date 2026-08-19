@@ -13,9 +13,13 @@ impl Perlin3 {
         for (i, v) in p.iter_mut().enumerate() {
             *v = i;
         }
-        // Fisher–Yates
+        // Fisher–Yates with a fixed-width draw (u64 multiply-shift), never
+        // Uniform<usize>: usize is 32-bit on wasm32 and 64-bit natively,
+        // and the sample width changes how many PCG words a range draw
+        // consumes — the permutation, and every noise field built on it,
+        // would silently differ across runtimes (the M22 replay gate).
         for i in (1..256).rev() {
-            let j = rng.gen_range(0..=i);
+            let j = ((rng.gen::<u64>() as u128 * (i as u128 + 1)) >> 64) as usize;
             p.swap(i, j);
         }
         let mut perm = [0usize; 512];

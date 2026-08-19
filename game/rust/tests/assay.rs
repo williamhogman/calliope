@@ -271,6 +271,20 @@ fn placement_respects_the_land() {
                 "seed {seed}: only {n} {g} seams, floor is {min_n}"
             );
         }
+        // M19 — deposits re-seated: pooled across the homed minerals,
+        // at least 80% of seams sit in a home province (the floor pass
+        // is province-blind, so per-good shares may dip; the pool holds).
+        {
+            let rows =
+                calliope::resources::province_consistency(&w.deposits, &w.fields.rock);
+            let (in_home, total) = rows
+                .iter()
+                .fold((0usize, 0usize), |(a, b), &(_, ih, t)| (a + ih, b + t));
+            assert!(
+                total == 0 || (in_home as f64) / (total as f64) >= 0.80,
+                "seed {seed}: only {in_home} of {total} homed seams sit in their province"
+            );
+        }
         // the salting shore: at least one renewing pan, two sources total
         let pans = w
             .deposits
@@ -381,6 +395,13 @@ fn more_supply_never_raises_a_price() {
     let st = styles(w);
     for g in [Good::Timber, Good::Iron, Good::Fish] {
         let setts = w.peoples.settlements.clone();
+        // A good nobody lists has no market price to defend — the ledger
+        // answers with base_value(), a resting default, not a signal the
+        // law may compare against. (Found by M16: a reshaped 256² world
+        // where no town works iron.)
+        if !setts.iter().any(|s| s.goods.contains(&g)) {
+            continue;
+        }
         let p0 = settled_price(&setts, &st, g);
 
         // three more towns list the good — supply widens

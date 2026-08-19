@@ -45,6 +45,15 @@ codegen-units = 1
 # anyway. Debug builds keep unwinding (and the wasm console panic hook).
 panic = "abort"
 
+# M15.1 — the assay's own profile: the proptest harness must unwind to
+# report a counterexample, and sharing target/release/ with the
+# panic=abort bins collided both lib flavors on one libcalliope.rlib
+# (cargo #6313) — flaky phantom link errors. Separate profile, separate
+# target dir, zero interference.
+[profile.assay]
+inherits = "release"
+panic = "unwind"
+
 # E6.3 — explicit wasm-opt pass (wasm-pack runs this via binaryen on PATH;
 # scripts/build.sh's nix path provides it). -O3 measured against -Oz on the
 # real binary; producers/target-features metadata stripped (E6.6).

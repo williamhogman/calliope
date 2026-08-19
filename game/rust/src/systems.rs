@@ -119,6 +119,8 @@ pub trait System: Sync {
 pub static SYSTEMS: &[&dyn System] = &[
     &Towns,
     &Famine,
+    &Quakes,
+    &Volcanoes,
     &Colonize,
     &Prospect,
     &RushCamps,
@@ -167,6 +169,50 @@ impl System for Famine {
     fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
         let w = &mut *ctx.world;
         let evs = w.famine_pass(w.month);
+        sink.emit(evs);
+    }
+}
+
+/// M22/M24 — the deep earth acts and the towns feel it: fault seams
+/// load, break and log quakes (own RNG stream inside `Seismic`), then
+/// the world pass reads the month's log tail — deterministic damage,
+/// rebuild arcs, felled towns, chronicle beats. The ledger itself stays
+/// the cross-runtime replay identity: effects read it, never write it.
+struct Quakes;
+impl System for Quakes {
+    fn name(&self) -> &'static str {
+        "quakes"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        let month = w.month;
+        let from = w.seismic.log.len();
+        w.seismic.monthly(month);
+        let mut evs = Vec::new();
+        w.quake_effects(from, &mut evs);
+        sink.emit(evs);
+    }
+}
+
+/// M23/M24 — the cones blow and the towns feel it: reload clocks tick,
+/// eruptions log, ash lays permanent fertility under the plume (own RNG
+/// stream inside `Volcanism`), then the world pass reads the log tail —
+/// burn-and-bury damage, rebuild arcs, buried towns, chronicle beats.
+struct Volcanoes;
+impl System for Volcanoes {
+    fn name(&self) -> &'static str {
+        "volcanoes"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        let month = w.month;
+        let from = w.volcanism.log.len();
+        {
+            let World { volcanism, fields, .. } = w;
+            volcanism.monthly(month, &mut fields.fertility);
+        }
+        let mut evs = Vec::new();
+        w.eruption_effects(from, &mut evs);
         sink.emit(evs);
     }
 }
@@ -232,7 +278,7 @@ impl System for Goods {
     }
     fn run(&self, ctx: &mut SimCtx, _sink: &mut EventSink) {
         let w = &mut *ctx.world;
-        trade::assign_goods(&mut w.peoples.settlements, &w.deposits, &w.fields.fertility);
+        trade::assign_goods(&mut w.peoples.settlements, &w.deposits, &w.fields.fertility, &w.fields.rock);
     }
 }
 
@@ -255,7 +301,7 @@ impl System for Exonyms {
             &mut w.taken,
             &mut w.rng,
         );
-        for (fname, people, alt) in doubled {
+        for (fname, people, alt, x, y) in doubled {
             w.dirty.mark(Dirty::FEATURES);
             sink.emit([Event {
                 m: w.month,
@@ -265,6 +311,8 @@ impl System for Exonyms {
                     "Spread now into that country, the {} keep their own word for {} — in their tongue it is {}.",
                     people, fname, alt
                 ),
+                x,
+                y,
                 ..Default::default()
             }]);
         }
@@ -616,16 +664,16 @@ pub const BANDS: &[Band] = &[
     // E10.1 — per-stage generation budgets at 512, native release ms,
     // asserted against the WORST seed of the sweep (a budget that only
     // holds on the friendly seed is not a budget).
-    Band { name: "stage terrain ms", sweet: (0.0, 400.0), hard: (0.0, 900.0), target: "E10.1: plate+plume noise, warp, falloff" },
+    Band { name: "stage terrain ms", sweet: (0.0, 500.0), hard: (0.0, 1000.0), target: "E10.1: plate+plume noise, warp, falloff + plate-history sketch (M16/M17; measured ~280-455 ms)" },
     Band { name: "stage erosion ms", sweet: (0.0, 500.0), hard: (0.0, 1200.0), target: "E10.1: thermal+fluvial passes" },
     Band { name: "stage climate ms", sweet: (0.0, 200.0), hard: (0.0, 500.0), target: "E10.1: temperature, advection precip" },
     Band { name: "stage hydrology ms", sweet: (0.0, 250.0), hard: (0.0, 600.0), target: "E10.1: D8 routing, accumulation, lakes" },
     Band { name: "stage biomes ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: Whittaker classification" },
     Band { name: "stage fertility ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: soil + floodplain kernel" },
     Band { name: "stage naming ms", sweet: (0.0, 120.0), hard: (0.0, 350.0), target: "E10.1: feature detection + toponymy" },
-    Band { name: "stage resources ms", sweet: (0.0, 400.0), hard: (0.0, 900.0), target: "E10.1: deposit placement + suitability scan (baseline ~300 ms)" },
+    Band { name: "stage resources ms", sweet: (0.0, 650.0), hard: (0.0, 1200.0), target: "E10.1: rock classify + geology-seated placement (M18/M19; measured ~450-500 ms, was ~300 pre-geology)" },
     Band { name: "stage settlements ms", sweet: (0.0, 250.0), hard: (0.0, 700.0), target: "E10.1: founding, cultures, goods, routes" },
-    Band { name: "gen total ms", sweet: (0.0, 1600.0), hard: (0.0, 3500.0), target: "E10.1: native total; wasm ≈ 2× rides the 512-generation band" },
+    Band { name: "gen total ms", sweet: (0.0, 2100.0), hard: (0.0, 4000.0), target: "E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band" },
     // E10.2 — tick rate on a young world and the heavier year-100 world.
     Band { name: "tick rate year 0", sweet: (1000.0, f64::INFINITY), hard: (200.0, f64::INFINITY), target: "E10.2: sweet ≥1000 mo/s · hard ≥200 (native)" },
     Band { name: "tick rate year 100", sweet: (400.0, f64::INFINITY), hard: (100.0, f64::INFINITY), target: "E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544)" },

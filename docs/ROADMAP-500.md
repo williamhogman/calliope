@@ -31,6 +31,65 @@ unless all 500 phases are present, unique, in order, and properly
 worded. Era-by-era steering interviews continue on top of the
 complete draft.
 
+Progress: M16–M26 landed (plate history, orogeny ages, rock
+provinces, deposits re-seated, regional stone, geologic legibility,
+fault seams + dated earthquakes, live volcanism, disaster wiring,
+sea-level history, drowned and raised coasts) — each closed on its
+`diagnose` gate across the seed sweep. M22's replay gate is the
+first cross-runtime check: the seismic ledger is byte-identical
+native vs WASM (ADR-0025), enforced by the `earth-wasm` report lane.
+M23 reads cone ages straight off summit height (the generator writes
+age into height by construction) and lays permanent ash fertility
+under a distance-decay gate. M24 wires both hazards into one shared
+kill path (`fell_settlement`): every destroying-magnitude strike
+yields exactly one chronicle beat and one ruin, damage marks of a
+twelfth or worse open forty-year rebuild arcs (target capped just
+under carrying capacity; sqrt near-field falloff), and the `civ`
+lane gates 1:1 fall-to-ruin correspondence plus median arc closure
+inside the window. M25 gives every world a sea-level history: a
+seeded freeze point on the glacial sawtooth sets the eustatic stand
+while a post-glacial isostatic field (rebound above the old ice
+edge, a sinking forebulge collar below it) tilts the coasts — all
+applied before erosion, all IEEE-exact, hashed into `hash_state`,
+gated on the coastline holding the datum. The cone-age law it
+disturbed was recalibrated to height rank (the affine map had
+saturated: 2/3 of all cones read age 0.00 and the M23 cadence gate
+was measuring noise — now 2.19× young/old). M26 reads the coasts
+back out of that history: a pure classifier (`landform.rs`) tags
+raised beaches where the land outran the sea and rias/skerries where
+the sea won, naming mints firths, skerry fields and strands off the
+grid, and the terrain lane bands landform frequency per unit of
+waterline offset (raised 91–121, drowned ~92–99 across seeds and
+both stand signs — the amplitude law) plus a within-world gate that
+the rebound belt out-raises the forebulge collar. The classifier
+joins `hash_state` as the F-lane. Landed alongside: six settlement
+events (storms, golden harvests, caravans) now carry their ground
+coords, closing the one orphan-id path the telling lane could hit
+when a town is renamed the same tick. M27 closes Year 1: every
+deep-earth layer already rode `hash_state` (P/Q/V/L/F lines plus the
+rock grid in the field hash), so the phase's real work was widening
+the cross-runtime gate — a labeled deep-earth identity line
+(plates·rock·seismic·volcanism·sealevel·landform) computed by both
+`diagnose earth-hash` and a new `earth_hash()` wasm export, compared
+by the report lane. Measurement beat assumption: the terrain-
+downstream layers (rock, volcanism, landform) were presumed hostage
+to transcendental drift, but three seeds × 240 months came back
+byte-identical native vs wasm, so the gate covers all six layers
+instead of the seismic ledger alone. Generation budget held green
+(512² median 1371 ms) with the suite at 440 pass · 0 fail. M28
+gives the world its ice age: `ice.rs` cuts the LGM footprint from an
+equilibrium-line-altitude law — a parabola from 0.62 height units at
+the equator to sea level at 62°, the same edge the M25 rebound belt
+remembers — with SplitMix64 margin wobble and a Vialov √distance
+thickness profile (BFS from the margin, 4 km cells, 4000 m cap).
+Frozen prehistory per ADR-0024: computed at the dawn, I-lane in
+`hash_state`, `ice=` in the deep-earth identity, never ticked. The
+earth lane grew four bands (share of land 39–41 % — twin polar
+landmasses run it above Earth's ~25 —, lowland margin ~60°, ELA
+poleward march 100 % monotone, dome ~2.3 km) plus a purity check;
+cross-runtime replay stays byte-identical with ice included. Suite:
+445 pass · 0 fail.
+
 ## The forge charter
 
 Every forge interlude answers five standing questions, two quarters long:

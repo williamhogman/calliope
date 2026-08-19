@@ -30,10 +30,13 @@ export const LABEL_STYLE = {
   delta:     { color: "#93bfe6", pri: 15 },
   pass:      { color: "#d9c9a6", pri: 16 },
   ford:      { color: "#a6c6e6", pri: 17 },
+  skerries:  { color: "#9dbfde", pri: 18 },
+  firth:     { color: "#9dbfde", pri: 19 },
+  strand:    { color: "#d5cfc0", pri: 20 },
 };
 
 // fine-grain coastal detail only earns a label once you lean in
-const DETAIL_KINDS = new Set(["bay", "strait", "cape", "peak", "marsh", "delta", "pass", "ford"]);
+const DETAIL_KINDS = new Set(["bay", "strait", "cape", "peak", "marsh", "delta", "pass", "ford", "skerries", "firth", "strand"]);
 
 const TIER_RADIUS = { Camp: 3, Village: 4.5, Town: 6, City: 8 };
 

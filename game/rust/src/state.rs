@@ -51,6 +51,9 @@ pub struct Fields {
     pub flow_amp: Array2<f32>,
     /// Strahler stream order, 0 off-river.
     pub strahler: Array2<u8>,
+    /// Basement geology per cell (M18): 0 shield · 1 basin · 2 fold belt
+    /// · 3 volcanic. Frozen at genesis, read by deposit placement (M19).
+    pub rock: Array2<u8>,
     /// Influence-map territory: owner REALM per cell, −1 wilderness
     /// (M4.1, realm axis per ADR-0018).
     pub territory: Array2<i16>,

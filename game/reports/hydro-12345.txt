@@ -1,26 +1,26 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · HYDROLOGY                    seed 12345 · 640x512
 ========================================================================
-river cells: 4553 (4.1% of land) · lake cells: 1996 (1.8% of land)
-river systems (≥12 cells): 117 · longest network 163 cells ≈ 652 km
-discharge on rivers: p50 136.4 · p90 536.9 · p99 1460.4 · max 2585.4
+river cells: 4744 (4.1% of land) · lake cells: 2402 (2.1% of land)
+river systems (≥12 cells): 127 · longest network 225 cells ≈ 900 km
+discharge on rivers: p50 145.1 · p90 540.1 · p99 2520.1 · max 5795.0
 named: 3 deltas · 4 marshes
-  delta: The Galnor Delta @(266,239)
-  delta: The Aurmar Delta @(493,259)
-  delta: The Zaruath Delta @(496,242)
+  delta: The Dorath Delta @(510,261)
+  delta: The Ylaia Delta @(265,258)
+  delta: The Loroeth Delta @(351,165)
 river towns: 16 of 16
-strahler orders: 1:91 2:454 3:913 4:1671 5:1219 6:205 · top 6
-wadis: 726 cells · salt basins: 15 (473 cells) · river |flow amp| mean 0.18
+strahler orders: 1:20 2:400 3:880 4:1961 5:1324 6:159 · top 6
+wadis: 667 cells · salt basins: 16 (634 cells) · river |flow amp| mean 0.19
 
 ---- checks ----------------------------------------------------------
 [PASS] river share of land                            4.1%   (sweet 0.8–5% · hard 0.3–10%)
-[PASS] lake share of land                             1.8%   (sweet 0–3% · hard 0–8%)
-[PASS] river systems                                   117   (sweet 8–400 · hard 3–2000)
+[PASS] lake share of land                             2.1%   (sweet 0–3% · hard 0–8%)
+[PASS] river systems                                   127   (sweet 8–400 · hard 3–2000)
 [PASS] named deltas                                      3   (≥1 — great river mouths get names)
 [PASS] discharge finite                                yes   (no NaN/inf in flow accumulation)
 [PASS] dawn towns reach fresh water                 100.0%   (≥20% — rivers should pull the first peoples)
 [PASS] strahler top order                                6   (sweet 4–9 · hard 3–12)
-[PASS] river seasonal swing                           0.18   (mean |amp| · sweet .05–.50 · hard .01–.90)
-[PASS] endorheic salt basins                            15   (≥1 — the desert keeps its dead seas)
-[PASS] wadis                                           726   (≥1 — some rivers should run dry half the year)
+[PASS] river seasonal swing                           0.19   (mean |amp| · sweet .05–.50 · hard .01–.90)
+[PASS] endorheic salt basins                            16   (≥1 — the desert keeps its dead seas)
+[PASS] wadis                                           667   (≥1 — some rivers should run dry half the year)
 CHECKS: 10 pass · 0 warn · 0 fail

@@ -83,11 +83,35 @@ pub struct World {
     pub chronicle: Chronicle,
 
     pub deposits: Vec<Deposit>,
+    /// M16/ADR-0024 — the plate-history sketch: frozen prehistory, consumed
+    /// by generation, hashed, never advanced in tick time.
+    pub plates: crate::plates::Plates,
+    /// M22 — fault seams derived from the sketch, plus the renewal clocks
+    /// and the quake log. Own RNG stream: histories replay unchanged.
+    pub seismic: crate::seismic::Seismic,
+    /// M23 — live volcanism: cones read off the volcanic province, their
+    /// reload clocks, the eruption record and the ash ledger. Own stream.
+    pub volcanism: crate::seismic::Volcanism,
+    /// M25 — sea-level history: the glacial-cycle freeze point, eustatic
+    /// stand and isostatic row profile. Frozen prehistory (ADR-0024
+    /// discipline): consumed at genesis, hashed, never ticked.
+    pub sealevel: crate::sealevel::SeaLevel,
+    /// M26 — coastal landform tags (raised beach / ria / skerry), pure
+    /// derived state off the height field and the sea-level history.
+    /// Recomputed at the dawn, folded into `hash_state`, never ticked.
+    pub landform: ndarray::Array2<u8>,
+    /// M28 — the LGM ice-sheet footprint: per-cell peak thickness and
+    /// the ELA row profile. Frozen prehistory (ADR-0024): computed at
+    /// the dawn from the final height field, hashed, never ticked.
+    pub ice: crate::ice::Ice,
     pub features: Vec<Feature>,
     pub routes: Vec<Route>,
     pub world_name: String,
     /// M9.1 — where towns died: named remains on the map.
     pub ruins: Vec<Ruin>,
+    /// M24 — completed rebuild arcs: months from disaster damage back to
+    /// the pre-disaster population. Diagnostics ledger; never on the wire.
+    pub rebuild_log: Vec<u32>,
     /// M14.8 — timber scars on the biome map: (deposit, y, x, original
     /// biome code), remembered so recovery can restore the forest.
     pub scars: Vec<(usize, i64, i64, u8)>,
@@ -137,6 +161,9 @@ pub struct GenBuilder {
     t0: f64,
     timings: Vec<(&'static str, f64)>,
     // f64 physics intermediates (dropped as soon as their stage is done)
+    plates: Option<crate::plates::Plates>,
+    sealevel: Option<crate::sealevel::SeaLevel>,
+    ice: Option<crate::ice::Ice>,
     height64: Option<Array2<f64>>,
     water: Option<Array2<bool>>,
     tmean64: Option<Array2<f64>>,
@@ -159,14 +186,16 @@ pub struct GenBuilder {
     features: Option<Vec<Feature>>,
     world_name: Option<String>,
     deposits: Option<Vec<Deposit>>,
+    rock: Option<Array2<u8>>,
     world: Option<World>,
 }
 
 impl GenBuilder {
     /// The ladder, in running order. Names double as progress labels.
-    pub const STAGES: [&'static str; 9] = [
+    pub const STAGES: [&'static str; 10] = [
         "terrain",
         "erosion",
+        "glacial",
         "climate",
         "hydrology",
         "biomes",
@@ -184,6 +213,9 @@ impl GenBuilder {
             stage: 0,
             t0: now_ms(),
             timings: Vec::new(),
+            plates: None,
+            sealevel: None,
+            ice: None,
             height64: None,
             water: None,
             tmean64: None,
@@ -204,6 +236,7 @@ impl GenBuilder {
             features: None,
             world_name: None,
             deposits: None,
+            rock: None,
             world: None,
         }
     }
@@ -223,13 +256,14 @@ impl GenBuilder {
         match self.stage {
             0 => self.stage_terrain(),
             1 => self.stage_erosion(),
-            2 => self.stage_climate(),
-            3 => self.stage_hydrology(),
-            4 => self.stage_biomes(),
-            5 => self.stage_fertility(),
-            6 => self.stage_naming(),
-            7 => self.stage_resources(),
-            8 => self.stage_dawn(),
+            2 => self.stage_glacial(),
+            3 => self.stage_climate(),
+            4 => self.stage_hydrology(),
+            5 => self.stage_biomes(),
+            6 => self.stage_fertility(),
+            7 => self.stage_naming(),
+            8 => self.stage_resources(),
+            9 => self.stage_dawn(),
             _ => panic!("generation already complete"),
         }
         self.stage += 1;
@@ -242,8 +276,20 @@ impl GenBuilder {
     }
 
     fn stage_terrain(&mut self) {
+        // M16/ADR-0024 — the deep past first: the plate-history sketch is
+        // dealt before the land, and the land is drawn over it.
+        let tp = now_ms();
+        let plates = crate::plates::generate(self.seed, self.size);
+        self.timings.push(("plates", now_ms() - tp));
         let t = now_ms();
-        self.height64 = Some(geo::heightmap(self.seed, self.size));
+        let mut h = geo::heightmap(self.seed, self.size, &plates);
+        // M25 — the waterline remembers the ice ages: eustatic stand and
+        // post-glacial isostasy land before erosion fixes the coast.
+        let sl = crate::sealevel::generate(self.seed, self.size);
+        sl.apply(&mut h);
+        self.height64 = Some(h);
+        self.sealevel = Some(sl);
+        self.plates = Some(plates);
         self.timings.push(("terrain", now_ms() - t));
     }
 
@@ -254,6 +300,20 @@ impl GenBuilder {
         let water = height.mapv(|h| h < 0.0);
         self.water = Some(water);
         self.timings.push(("erosion", now_ms() - te));
+    }
+
+    /// M28/M29 — the ice ages: cut the LGM footprint from the eroded
+    /// land, then carve the relief the sheets left. Runs before climate
+    /// so every downstream layer reads the glaciated world.
+    fn stage_glacial(&mut self) {
+        let t = now_ms();
+        let h = self.height64.as_mut().unwrap();
+        let mut ice = crate::ice::compute(self.seed, h);
+        crate::ice::carve(h, &mut ice);
+        // the carve moves the waterline: fjords drown, floors drop
+        self.water = Some(h.mapv(|v| v < 0.0));
+        self.ice = Some(ice);
+        self.timings.push(("glacial", now_ms() - t));
     }
 
     fn stage_climate(&mut self) {
@@ -344,6 +404,8 @@ impl GenBuilder {
         let t5 = now_ms();
         let (features, world_name) = naming::name_features(
             self.height.as_ref().unwrap(),
+            self.sealevel.as_ref().unwrap(),
+            self.ice.as_ref().unwrap(),
             self.biome_map.as_ref().unwrap(),
             &self.hydro.as_ref().unwrap().rivers,
             &self.hydro.as_ref().unwrap().lakes,
@@ -359,13 +421,25 @@ impl GenBuilder {
 
     fn stage_resources(&mut self) {
         let t6 = now_ms();
+        // M18 — the basement is read once off the sketch and the relief:
+        // shield, basin, fold belt, volcanic. Frozen from here on. It is
+        // classified *before* the ore roll because M19 re-seats deposits
+        // on it: geology decides where ore belongs.
+        let rock = crate::rock::classify(
+            self.seed,
+            self.size,
+            self.plates.as_ref().unwrap(),
+            self.height.as_ref().unwrap(),
+        );
         let deposits = resources::place_resources(
             self.biome_map.as_ref().unwrap(),
             self.height.as_ref().unwrap(),
             &self.hydro.as_ref().unwrap().rivers,
             &self.hydro.as_ref().unwrap().lakes,
+            &rock,
             self.seed,
         );
+        self.rock = Some(rock);
         self.deposits = Some(deposits);
         self.timings.push(("resources", now_ms() - t6));
     }
@@ -389,6 +463,10 @@ impl GenBuilder {
         let mut features = self.features.take().unwrap();
         let world_name = self.world_name.take().unwrap();
         let mut deposits = self.deposits.take().unwrap();
+        let plates = self.plates.take().unwrap();
+        // M18 — the basement, classified back in stage_resources (M19
+        // reads it for ore placement). It rides into the fields here.
+        let rock = self.rock.take().unwrap();
 
         let t7 = now_ms();
         let mut taken: HashSet<String> = HashSet::new();
@@ -440,7 +518,7 @@ impl GenBuilder {
             ));
         }
         let cultures = culture::assign_cultures(&biome_map, &mut setts, &mut taken, seed);
-        trade::assign_goods(&mut setts, &deposits, &fertility);
+        trade::assign_goods(&mut setts, &deposits, &fertility, &rock);
 
         // E1.7 — fold the four hydrology masks into one CellFlags byte grid;
         // this is the exact byte the pack ships, so pack() is now a memcpy.
@@ -494,6 +572,17 @@ impl GenBuilder {
         // M3.1/M3.4 — the peoples lay their tongues over the nearby land;
         // border features gain an exonym from the second-closest people.
         naming::culture_toponyms(&mut features, &setts, &cultures, &mut taken, seed);
+        // Register every composed display phrase ("The Caleth Delta",
+        // "The Frost Bay") in the taken set — coin() only reserved the
+        // bare words, so runtime renamers (patina wear, M9.2 layers)
+        // checking `taken` could otherwise wear a name INTO an existing
+        // phrase and mint a silent duplicate (M3 gate).
+        for f in &features {
+            taken.insert(f.name.clone());
+            if !f.alt.is_empty() {
+                taken.insert(f.alt.clone());
+            }
+        }
         let societies = society::init(&cultures);
         let mut market = Market::default();
         let people_style: Vec<usize> =
@@ -594,6 +683,7 @@ impl GenBuilder {
                 pamp,
                 flow_amp,
                 strahler: hydro.strahler,
+                rock,
                 territory: Array2::from_elem((1, 1), -1),
                 peoples_map: Array2::from_elem((1, 1), -1),
             },
@@ -619,10 +709,17 @@ impl GenBuilder {
             },
             flows: resources::Flows::for_deposits(deposits.len()),
             deposits,
+            plates,
+            sealevel: self.sealevel.take().expect("sealevel generated"),
+            landform: ndarray::Array2::zeros((0, 0)),
+            ice: self.ice.take().expect("glacial stage ran"),
+            seismic: crate::seismic::Seismic::empty(),
+            volcanism: crate::seismic::Volcanism::empty(),
             features,
             routes,
             world_name,
             ruins: Vec::new(),
+            rebuild_log: Vec::new(),
             scars: Vec::new(),
             route_idle: Vec::new(),
             heat: 0.0,
@@ -644,6 +741,22 @@ impl GenBuilder {
         };
         // Open-ocean margins east and west: the world breathes a little wider.
         world.widen(size / 8);
+        // M22 — fault seams read off the *final* boundary grid, so every
+        // epicenter lands in shipped map coordinates. The sketch stays
+        // frozen; only the seams' renewal clocks tick from here on.
+        world.seismic = crate::seismic::derive(seed, &world.plates);
+        // M23 — cones read off the *final* height and province grids:
+        // every vent, ash apron and burn radius in shipped coordinates.
+        world.volcanism = crate::seismic::derive_volcanism(
+            seed,
+            &world.fields.height,
+            &world.fields.rock,
+            &world.sealevel,
+        );
+        // M26 — the coasts read their own history: raised beaches where
+        // the land outran the sea, rias and skerries where the sea won.
+        world.landform =
+            crate::landform::classify(&world.fields.height, &world.sealevel, &world.ice);
         // The dawn's own entries join the telling: subjects resolved to
         // registry ids, coordinates backfilled, great deeds legendized (M6).
         let mut dawn = std::mem::take(&mut world.chronicle.events);
@@ -754,6 +867,12 @@ impl World {
         self.fields.fertility = grow(&self.fields.fertility, pad, |_, _| 0.0);
         self.site_score = grow(&self.site_score, pad, |_, _| 0.0);
         self.food_grid = grow(&self.food_grid, pad, |_, _| 0.0);
+        // M28/M29 — the ice ledger rides along: margins are open water.
+        self.ice.thickness = grow(&self.ice.thickness, pad, |_, _| 0.0f32);
+        self.ice.carved = grow(&self.ice.carved, pad, |_, _| 0.0f32);
+        for p in self.ice.cirques.iter_mut().chain(self.ice.hangs.iter_mut()) {
+            p.1 += pad as u16;
+        }
         self.fields.biomes = {
             let a = &self.fields.biomes;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
@@ -791,6 +910,16 @@ impl World {
         self.coast = grow_bool(&self.coast, pad);
         self.fields.pamp = grow(&self.fields.pamp, pad, |e, _| e);
         self.fields.flow_amp = grow(&self.fields.flow_amp, pad, |_, _| 0.0);
+        // The plate sketch rides along (M16): margins extend the edge
+        // plate under the open ocean; no new boundaries appear.
+        self.plates.cell = grow(&self.plates.cell, pad, |e, _| e);
+        self.plates.boundary = grow(&self.plates.boundary, pad, |_, _| crate::plates::B_NONE);
+        self.plates.edge_dist = grow(&self.plates.edge_dist, pad, |e, _| e);
+        self.plates.seam_dist = grow(&self.plates.seam_dist, pad, |e, _| e);
+        self.plates.seam_age = grow(&self.plates.seam_age, pad, |e, _| e);
+        // The basement rides along (M18): the open-ocean margins are
+        // young sea floor under sediment — basin, never shield.
+        self.fields.rock = grow(&self.fields.rock, pad, |_, _| crate::rock::BASIN);
         self.fields.strahler = {
             let a = &self.fields.strahler;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
@@ -947,6 +1076,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Disaster,
                     text: format!("The earth shakes beneath {} — walls fall, {} are lost.", s.name, loss),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
@@ -964,6 +1095,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Disaster,
                     text: format!("Fire leaps the rooftops of {}; {} perish in the smoke.", s.name, loss),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
@@ -976,6 +1109,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Disaster,
                     text: format!("The river bursts its banks at {} — {} swept away in the brown water.", s.name, loss),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
@@ -988,6 +1123,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Disaster,
                     text: format!("A black storm off the open sea lashes {} — {} lost to the waves.", s.name, loss),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
@@ -998,6 +1135,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Growth,
                     text: format!("The harvest overflows in {}; granaries groan.", s.name),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
                 growth *= 2.0;
@@ -1010,6 +1149,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Trade,
                     text: format!("Caravans crowd the gates of {}; {} flows out to every shore.", s.name, good),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
                 growth += pop as f64 * 0.004;
@@ -1017,6 +1158,24 @@ impl World {
             // a harbour draws trade, sailors and coin
             if s.port {
                 growth += pop as f64 * 0.0012;
+            }
+            // M24 — the rebuild arc: a disaster-struck town regrows hot
+            // while kin return and the stone is re-cut, until it stands
+            // at its old strength or the window lapses (forty years).
+            if s.rebuild_until > 0 {
+                if pop >= s.rebuild_peak {
+                    let took = (settlements::REBUILD_WINDOW
+                        - (s.rebuild_until - month_abs))
+                        .max(1);
+                    self.rebuild_log.push(took as u32);
+                    s.rebuild_until = 0;
+                    s.rebuild_peak = 0;
+                } else if month_abs >= s.rebuild_until {
+                    s.rebuild_until = 0; // the window lapses; what stands, stands
+                    s.rebuild_peak = 0;
+                } else {
+                    growth += pop as f64 * 0.012;
+                }
             }
             // M9.1 — the emigration spiral. A town pinned for years below
             // two-fifths of its own peak has lost the reason people stayed;
@@ -1317,8 +1476,11 @@ impl World {
             drift: 0.0,
             drift_to: None,
             exonym: None,
+            quarry: "",
+            rebuild_until: 0,
+            rebuild_peak: 0,
         };
-        trade::goods_for(&mut s, &self.deposits, &self.fields.fertility);
+        trade::goods_for(&mut s, &self.deposits, &self.fields.fertility, &self.fields.rock);
         let mdc = self
             .peoples.societies
             .get(pid.0)
@@ -1657,21 +1819,57 @@ impl World {
             }
         }
         let Some(i) = worst else { return };
-        let dead = self.peoples.settlements[i].clone();
-        let cause = if dead.goods.is_empty() && dead.exports.is_none() {
-            "mines"
-        } else if dead.fort > 0 && dead.pop * 3 < dead.peak {
-            "war"
-        } else if dead.failing {
-            "decline" // the slow kind: ruin_why's default reading
-        } else {
-            "famine"
+        let cause = {
+            let dead = &self.peoples.settlements[i];
+            if dead.goods.is_empty() && dead.exports.is_none() {
+                "mines"
+            } else if dead.fort > 0 && dead.pop * 3 < dead.peak {
+                "war"
+            } else if dead.failing {
+                "decline" // the slow kind: ruin_why's default reading
+            } else {
+                "famine"
+            }
         };
+        let (dead, ruin_name, rid) = self.fell_settlement(i, month_abs, cause);
         let why = patina::ruin_why(cause);
+        evs.push(Event {
+            m: month_abs,
+            s: dead.name.clone(),
+            k: EventKind::Realm,
+            text: format!(
+                "The last hearth goes cold in {} — {}. Within ten years the roofs are fallen and the road grows grass; travellers call the place the {}.",
+                dead.name, why, ruin_name
+            ),
+            ids: smallvec![rid],
+            x: dead.x,
+            y: dead.y,
+            ..Default::default()
+        });
+    }
+
+    /// The one kill path (M24): closes the registry row, raises the
+    /// ruin, cuts the dead town's routes, re-knits the web and
+    /// recomputes territory. Every way a town dies — the slow
+    /// abandonment of M9 or the sudden fall of a disaster — walks
+    /// through here, so the ruin ledger and the chronicle can never
+    /// disagree. Returns the dead row, the ruin's name and its registry
+    /// id; the caller composes the beat.
+    fn fell_settlement(
+        &mut self,
+        i: usize,
+        month_abs: i64,
+        cause: &str,
+    ) -> (crate::settlements::Settlement, String, EntityId) {
+        let dead = self.peoples.settlements[i].clone();
+        let why = patina::ruin_why(cause);
+        let reason = match cause {
+            "quake" | "ash" => format!("fell — {}", why),
+            _ => format!("abandoned — {}", why),
+        };
         let ent = self.chronicle.registry.find_alive(EntityKind::Settlement, dead.x, dead.y);
         if let Some(id) = ent {
-            self.chronicle.registry
-                .close(id, month_abs, &format!("abandoned — {}", why));
+            self.chronicle.registry.close(id, month_abs, &reason);
         }
         let ruin_name = format!("Ruins of {}", dead.name);
         let rid = self
@@ -1734,19 +1932,176 @@ impl World {
         trade::mark_ports(&mut self.peoples.settlements, &self.routes);
         self.dirty.mark(Dirty::ROUTES);
         self.recompute_territory();
-        evs.push(Event {
-            m: month_abs,
-            s: dead.name.clone(),
-            k: EventKind::Realm,
-            text: format!(
-                "The last hearth goes cold in {} — {}. Within ten years the roofs are fallen and the road grows grass; travellers call the place the {}.",
-                dead.name, why, ruin_name
-            ),
-            ids: smallvec![rid],
-            x: dead.x,
-            y: dead.y,
-            ..Default::default()
-        });
+        (dead, ruin_name, rid)
+    }
+
+    /// M24 — the shaking reaches the towns. Damage is a pure function
+    /// of magnitude and distance (no RNG: the seismic ledger stays the
+    /// cross-runtime replay identity — effects read it, never write
+    /// it); a tenth of a town lost opens a rebuild arc; a great shock
+    /// close under the walls fells the town through the one kill path,
+    /// and every mark gets its chronicle beat.
+    pub fn quake_effects(&mut self, from: usize, evs: &mut Vec<Event>) {
+        let shocks: Vec<(i64, i64, i64, f64)> = self.seismic.log[from..]
+            .iter()
+            .map(|q| (q.m, q.y as i64, q.x as i64, q.mag))
+            .collect();
+        for (m, qy, qx, mag) in shocks {
+            let r_felt = 2.2 * (mag - 4.5).max(0.0);
+            let r_fell = (mag - 6.8).max(0.0) * 1.5;
+            let dmg_center = (0.08 * (mag - 5.0)).clamp(0.0, 0.55);
+            self.disaster_strike(
+                m, qy, qx, r_felt, r_fell, dmg_center, "quake",
+                &format!("magnitude {:.1}", mag),
+                evs,
+            );
+        }
+    }
+
+    /// M24 — the mountain reaches the towns. Burn-and-bury damage,
+    /// moved here from the volcanism pass so every mark opens its arc
+    /// and the buried get their ruin and their beat, through the one
+    /// kill path. Deterministic in the eruption log alone.
+    pub fn eruption_effects(&mut self, from: usize, evs: &mut Vec<Event>) {
+        let blows: Vec<(i64, i64, i64, f64)> = self.volcanism.log[from..]
+            .iter()
+            .map(|e| (e.m, e.y as i64, e.x as i64, e.vei))
+            .collect();
+        for (m, vy, vx, vei) in blows {
+            let r_burn = 1.0 + 0.55 * vei;
+            let r_fell = if vei >= 4.8 { 0.75 * r_burn } else { 0.0 };
+            let dmg_center = (0.06 * (vei - 1.0)).clamp(0.0, 0.5);
+            self.disaster_strike(
+                m, vy, vx, r_burn, r_fell, dmg_center, "ash",
+                &format!("VEI {:.1}", vei),
+                evs,
+            );
+        }
+    }
+
+    /// The shared strike: linear-falloff damage inside `r_felt`, rebuild
+    /// arcs on a tenth lost, at most one town felled inside `r_fell`
+    /// (nearest wins), and one beat per strike — the fall if there is
+    /// one, else the worst of the felt. Guards mirror the M9 floor:
+    /// never a people's last hearth, never below seven towns, never a
+    /// besieged town (sieges resolve their own endings).
+    #[allow(clippy::too_many_arguments)]
+    fn disaster_strike(
+        &mut self,
+        m: i64,
+        cy: i64,
+        cx: i64,
+        r_felt: f64,
+        r_fell: f64,
+        dmg_center: f64,
+        cause: &str,
+        size: &str,
+        evs: &mut Vec<Event>,
+    ) {
+        if r_felt <= 0.0 || dmg_center <= 0.0 {
+            return;
+        }
+        let mut counts = vec![0usize; self.peoples.peoples.len()];
+        for s in &self.peoples.settlements {
+            counts[s.people.idx()] += 1;
+        }
+        let besieged: HashSet<SettlementId> = self
+            .politics
+            .wars
+            .iter()
+            .filter_map(|w| w.siege.as_ref().map(|sg| sg.target))
+            .collect();
+        let n_towns = self.peoples.settlements.len();
+        let mut hit: Option<(String, i64, f64)> = None; // name, lost, dist
+        let mut felled: Option<(usize, f64)> = None; // index, dist
+        for (i, s) in self.peoples.settlements.iter_mut().enumerate() {
+            if s.pop <= 0 {
+                continue;
+            }
+            let d = (((s.y - cy).pow(2) + (s.x - cx).pow(2)) as f64).sqrt();
+            if d > r_felt {
+                continue;
+            }
+            let before = s.pop;
+            // Square-root falloff: near-field intensity decays slowly
+            // (Mercalli-like), so mid-strength shocks still bite hard
+            // within half the felt radius instead of only at the pin.
+            let dmg = dmg_center * (1.0 - d / r_felt.max(1e-9)).max(0.0).sqrt();
+            s.pop = ((s.pop as f64) * (1.0 - dmg)).round().max(20.0) as i64;
+            let lost = before - s.pop;
+            // A twelfth or worse lost: the town will rebuild (M24 arc).
+            // The target is the pre-disaster head-count capped just
+            // under carrying capacity — a town whose k has drifted below
+            // its old strength rebuilds to what the land now bears, not
+            // to a number the crops can no longer feed.
+            let target = before.min((s.k * 0.95).round() as i64);
+            if lost * 12 >= before && s.pop < target {
+                if target > s.rebuild_peak {
+                    s.rebuild_peak = target;
+                }
+                s.rebuild_until = m + settlements::REBUILD_WINDOW;
+            }
+            if lost > 0 && hit.as_ref().map_or(true, |h| lost > h.1) {
+                hit = Some((s.name.clone(), lost, d));
+            }
+            if d <= r_fell
+                && n_towns > 6
+                && counts[s.people.idx()] > 1
+                && !besieged.contains(&s.id)
+                && felled.as_ref().map_or(true, |f| d < f.1)
+            {
+                felled = Some((i, d));
+            }
+        }
+        if let Some((i, _)) = felled {
+            let (dead, ruin_name, rid) = self.fell_settlement(i, m, cause);
+            let text = if cause == "ash" {
+                format!(
+                    "Fire stands over the mountain and {} is gone by nightfall — {}; ash and stone take street and field alike. Travellers call the place the {}.",
+                    dead.name, size, ruin_name
+                )
+            } else {
+                format!(
+                    "The earth breaks under {} — a great shaking, {} — and the town falls in a single morning. Travellers call the place the {}.",
+                    dead.name, size, ruin_name
+                )
+            };
+            evs.push(Event {
+                m,
+                s: dead.name.clone(),
+                k: if cause == "ash" { EventKind::Eruption } else { EventKind::Quake },
+                text,
+                ids: smallvec![rid],
+                x: dead.x,
+                y: dead.y,
+                ..Default::default()
+            });
+        } else if let Some((name, lost, _)) = hit {
+            // the felt beat: only marks that drew real blood get told,
+            // so the chronicle speaks of hard years, not of tremors
+            if lost >= 25 {
+                let text = if cause == "ash" {
+                    format!(
+                        "The mountain above {} throws fire — {}; ash falls for days, roofs are shovelled like snow, and {} souls are lost to the burning.",
+                        name, size, lost
+                    )
+                } else {
+                    format!(
+                        "The earth heaves under {} — {}; walls crack, bells ring of themselves, and {} souls are pulled from the stones.",
+                        name, size, lost
+                    )
+                };
+                evs.push(Event {
+                    m,
+                    s: name,
+                    k: if cause == "ash" { EventKind::Eruption } else { EventKind::Quake },
+                    text,
+                    x: cx,
+                    y: cy,
+                    ..Default::default()
+                });
+            }
+        }
     }
 
     /// M9.4 — roads fall disused. A route that has carried nothing for a
@@ -1999,6 +2354,25 @@ impl World {
         (sink.events, sink.founded, sink.deposits_changed)
     }
 
+
+    /// M27 — the deep-earth identity line: every Year-1 layer's hash,
+    /// labeled, so a cross-runtime divergence names the layer it lives
+    /// in. The ADR-0025 replay family (plates, seismic, sealevel) is
+    /// IEEE-exact by construction; rock, volcanism and landform sit
+    /// downstream of transcendental terrain and are printed so the
+    /// wasm-replay leg can *measure* rather than assume their fate.
+    pub fn earth_hash_line(&self) -> String {
+        format!(
+            "plates={:016x} rock={:016x} seismic={:016x} volcanism={:016x} sealevel={:016x} landform={:016x} ice={:016x}",
+            self.plates.hash(),
+            crate::util::fnv1a64(self.fields.rock.as_slice().expect("rock grid is contiguous")),
+            self.seismic.hash(),
+            self.volcanism.hash(),
+            self.sealevel.hash(),
+            crate::landform::hash(&self.landform),
+            self.ice.hash(),
+        )
+    }
 
     /// The second reading of the month's events (M6): any entry whose
     /// subject the registry knows gets its ids back-filled, any entry

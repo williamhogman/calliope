@@ -52,7 +52,7 @@ fn splat_island(h: &mut Array2<f64>, cx: f64, cy: f64, peak: f64, sigma: f64) {
     }
 }
 
-pub fn heightmap(seed: i64, size: usize) -> Array2<f64> {
+pub fn heightmap(seed: i64, size: usize, plates: &crate::plates::Plates) -> Array2<f64> {
     let base = Perlin3::new(seed);
     let warp = Perlin3::new(seed + 101);
     let ridge = Perlin3::new(seed + 202);
@@ -75,10 +75,33 @@ pub fn heightmap(seed: i64, size: usize) -> Array2<f64> {
         let plate = base.fbm(fx * 0.45 + 91.0, fy * 0.45 + 47.0, 8.0, 2);
         let mut hh = (rad[[y, x]] * (0.82 + 0.42 * plate) + b * 1.15) / 2.0;
 
-        // Mountain ranges: ridged noise, applied inland only so coasts stay clean
+        // M16 — the plate-history sketch (ADR-0024): continental interiors
+        // ride a touch higher, oceanic interiors sink, so the coastlines
+        // wander along the polygons of the deep past instead of pure noise.
+        let pl = &plates.plates[plates.cell[[y, x]] as usize];
+        let interior = smoothstep(plates.edge_dist[[y, x]] as f64, 2.0, 0.055 * n);
+        hh += if pl.continental { 0.045 } else { -0.055 } * interior;
+
+        // Mountain ranges: ridged noise, applied inland only so coasts stay
+        // clean — and gated toward the collision seams of the sketch, so
+        // the great belts rise where plates close (M16).
         let r = ridge.ridged(fx * 1.6 + 31.0, fy * 1.6 + 17.0, 3.3, 4);
         let inland = smoothstep(hh, 0.05, 0.32);
-        hh += 0.55 * (r - 0.62).max(0.0) * inland;
+        let sd = plates.seam_dist[[y, x]] as f64 / (0.045 * n);
+        let seam = (-sd * sd).exp();
+        let thr = 0.62 - 0.07 * seam;
+
+        // M17 — orogeny ages: a belt is as sharp as it is young. The
+        // seam's birth-age (Myr) drives an erosional decay (sharpness
+        // ∝ e^(−age/τ), τ = 900 Myr): young collisions run high and
+        // jagged; old belts survive as low, rounded roots — the crest
+        // itself is worn down by compressing the top of the lift curve.
+        // The 0.78 scale rebalances total mountain mass against the
+        // decay so worlds keep their pre-M17 share (~8–13% of land).
+        let youth = (-(plates.seam_age[[y, x]] as f64) / 900.0).exp();
+        let amp = 0.78 * (0.40 + 0.85 * youth) * (0.68 + 0.50 * seam);
+        let lift = (r - thr).max(0.0);
+        hh += amp * lift.powf(1.0 + 0.6 * (1.0 - youth)) * inland;
 
         // Foothill belts: a finer, weaker ridged pass gives the great
         // ranges their aprons and raises stand-alone hill country the

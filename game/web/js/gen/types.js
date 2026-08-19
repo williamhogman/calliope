@@ -18,7 +18,7 @@
  * @property {Array<string>} entity_kinds
  * @property {Array<string>} event_kinds
  * @property {Array<{ids: Array<number>, k: number, m: number, s: string, text: string, x?: number, y?: number}>} events
- * @property {Array<{ety: string, name: string, people?: string, size: number, t: string, x: number, y: number}>} features
+ * @property {Array<{alt?: string, alt_people?: string, ety: string, name: string, people?: string, size: number, t: string, x: number, y: number}>} features
  * @property {number} height_cells
  * @property {string} id
  * @property {number} km_per_cell
@@ -35,7 +35,7 @@
  * @property {Array<unknown>} ruins
  * @property {number} sea_level
  * @property {number} seed
- * @property {Array<{coastal: boolean, connections: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} settlements
+ * @property {Array<{coastal: boolean, connections: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, quarry: string, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} settlements
  * @property {number} size
  * @property {Array<number>} territory
  * @property {Array<unknown>} wars
@@ -58,10 +58,10 @@
  * @property {number} month
  * @property {Array<number>} [peoples]
  * @property {Array<{asab: number, i: number, legit: number, treasury: number, unrest: number}>} [r_hot]
- * @property {Array<{alive: boolean, asab: number, color: string, founded: number, house: string, id: number, legit: number, name: string, people: number, ruler?: string, seat: number, treasury: number, unrest: number}>} [realms]
+ * @property {Array<{alive: boolean, asab: number, color: string, founded: number, house: string, id: number, legit: number, name: string, people: number, ruler: string, seat: number, treasury: number, unrest: number}>} [realms]
  * @property {Array<{a: number, b: number, cost: number, goods: Array<string>, m: Array<number>, path: Array<Array<number>>, ramp: number, sea: number, w: number}>} [routes]
- * @property {Array<Array<number | null>>} [s_hot]
- * @property {Array<{coastal: boolean, connections: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} [settlements]
+ * @property {Array<Array<number | null>>} s_hot
+ * @property {Array<{coastal: boolean, connections: number, ety: string, exonym?: string, exports: string, failing: boolean, food: number, formerly?: Array<string>, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, quarry: string, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} [settlements]
  * @property {Array<number>} [territory]
  */
 
@@ -98,7 +98,7 @@
 /**
  * One sifted microstory.
  * @typedef {Object} Story
- * @property {Array<{ids: Array<number>, k: number, legend?: string, m: number, s: string, text: string, x: number, y: number}>} beats
+ * @property {Array<{ids: Array<number>, k: number, legend?: string, m: number, s: string, text: string, veiled?: boolean, x?: number, y?: number}>} beats
  * @property {Array<number>} ids
  * @property {string} pattern
  * @property {number} score

@@ -1,0 +1,44 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · DEEP EARTH                   512² · 150y · seeds [12345, 777, 90210]
+========================================================================
+
+   seed  seams   conv km  trans km  quakes q/100km-cy   mean M    max M   M>=7.5
+  12345     44      6376      3236     122       0.85     6.09      9.0        5
+    777     57      6932      5884     175       0.91     5.99      7.9        5
+  90210     36      5248      2336     111       0.98     6.05      8.5        3
+
+   seed  cones eruptions erupt/cone-cy  mean VEI
+  12345     47        43         0.61      3.88
+    777     44        40         0.61      4.00
+  90210     21        13         0.41      4.04
+
+   seed   ice %  margin lat  ela bins   dome m  mono %
+  12345    40.3        60.1        27     2285     100
+    777    39.2        60.8        27     2352     100
+  90210    41.1        60.8        21     2285     100
+
+ replay: seed 12345 · 1800 mo · chunk 240 => 5aa7be864419f5d3 · chunk 12 => 5aa7be864419f5d3
+ native seismic hash (seed 12345 · size 512 · 1800 mo): 5aa7be864419f5d3
+
+ cadence by age tercile: young 0.72 · mid 0.67 · old 0.31 erupt/cone-cy
+
+---- checks ----------------------------------------------------------
+[PASS] fault seams                                      46   (M22: a mapped world holds tens of named seams, not confetti)
+[PASS] active fault km                            10004 km   (M22: convergent+transform seam length on a 512-world)
+[PASS] quakes per 100km-century                       0.91   (M22 gate: order-unity notable events per 100 km per century)
+[PASS] q/100km-cy (stingiest seed)                    0.85   (M22 gate: order-unity notable events per 100 km per century)
+[PASS] mean quake magnitude                         M 6.04   (M22: renewal model centers on strong-but-survivable)
+[PASS] great quakes share (M>=7.5)                    3.2%   (M22: the tail exists — long-quiet seams break big)
+[PASS] seismic replay is byte-identical              agree   (M22 gate: same seed, different chunking, one ledger)
+[PASS] volcano cones                                    37   (M23: a mapped world keeps tens of living vents)
+[PASS] eruptions per cone-century                     0.57   (M23: cones blow on decade-to-century clocks)
+[PASS] young/old cadence ratio                       2.28×   (M23 gate: young tercile erupts oftener than the old)
+[PASS] mean eruption VEI                          VEI 3.95   (M23: most blows are survivable; the tail is not)
+[PASS] ash bonus at the cone                        +0.084   (M23: fertile aprons form where ash falls)
+[PASS] ash decays with distance             vent 0.084 > r3 0.019 > r6 0.003   (M23 gate: the fertile apron thins away from the vent)
+[PASS] ice share of land at LGM                     40.2 %   (sweet 30–48 · hard 20–60 (% of land under the LGM sheets; twin polar landmasses run this above Earth's ~25))
+[PASS] lowland ice margin lat                        60.5°   (sweet 55–65 · hard 50–72 (p5 |lat|° of glaciated lowland, h<0.10; the L0=62° law puts it near 60))
+[PASS] ELA poleward monotone                         100 %   (sweet 85–100 · hard 70–100 (% of 3° bins where the lowest glaciated cell drops))
+[PASS] peak ice thickness m                         2352 m   (sweet 1200–4000 · hard 600–4000 (dome height; parabolic profile, Antarctic cap))
+[PASS] ice footprint regen byte-identical        identical   (M28 gate: pure function of seed + height; joins hash_state)
+CHECKS: 18 pass · 0 warn · 0 fail

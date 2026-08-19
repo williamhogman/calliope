@@ -11,12 +11,23 @@ fn main() {
     println!("stagetest seed {} size {}", seed, size);
 
     let t = Instant::now();
-    let mut height = geo::heightmap(seed, size);
+    let plates = calliope::plates::generate(seed, size);
+    println!("plates     {:>6} ms · {} polygons", t.elapsed().as_millis(), plates.plates.len());
+
+    let t = Instant::now();
+    let mut height = geo::heightmap(seed, size, &plates);
     println!("terrain    {:>6} ms", t.elapsed().as_millis());
 
     let t = Instant::now();
     calliope::erosion::erode(&mut height);
     println!("erosion    {:>6} ms", t.elapsed().as_millis());
+
+    // M28/M29 — the glacial stage, mirroring the GenBuilder: footprint
+    // then carve, before climate reads the land.
+    let t = Instant::now();
+    let mut ice = calliope::ice::compute(seed, &height);
+    calliope::ice::carve(&mut height, &mut ice);
+    println!("glacial    {:>6} ms · {} cirques · {} hangs", t.elapsed().as_millis(), ice.cirques.len(), ice.hangs.len());
 
     let water = height.mapv(|h| h < 0.0);
     let t = Instant::now();
@@ -46,13 +57,20 @@ fn main() {
     let discharge32 = hydro.discharge.mapv(|x| x as f32);
 
     let t = Instant::now();
+    // M25/M26 — naming reads the sea-level history for the coastal
+    // landform names; the stage bench regenerates it the same way the
+    // GenBuilder does.
+    let sealevel = calliope::sealevel::generate(seed, height.dim().0.max(height.dim().1));
     let (features, world_name) = naming::name_features(
-        &height32, &biome_map, &hydro.rivers, &hydro.lakes, &discharge32, &tmean32, &precip32, seed,
+        &height32, &sealevel, &ice, &biome_map, &hydro.rivers, &hydro.lakes, &discharge32, &tmean32, &precip32, seed,
     );
     println!("naming     {:>6} ms · {} features · world {}", t.elapsed().as_millis(), features.len(), world_name);
 
     let t = Instant::now();
-    let deposits = resources::place_resources(&biome_map, &height32, &hydro.rivers, &hydro.lakes, seed);
+    // M18/M19 — the basement classifies off the sketch and the relief,
+    // then the ore roll reads it.
+    let rock = calliope::rock::classify(seed, size, &plates, &height32);
+    let deposits = resources::place_resources(&biome_map, &height32, &hydro.rivers, &hydro.lakes, &rock, seed);
     println!("resources  {:>6} ms · {} deposits", t.elapsed().as_millis(), deposits.len());
 
     println!("ALL STAGES OK");

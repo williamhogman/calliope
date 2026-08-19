@@ -17,6 +17,8 @@
 //!   diagnose era         <size> <years> <n> <base> expressive range + oatmeal (M8.3/8.4)
 //!   diagnose bench                              generation + tick throughput
 //!   diagnose sweep       <size> <years> <seeds> cross-seed robustness table
+//!   diagnose earth       <size> <years> <seeds> fault seams + quake cadence (M22)
+//!   diagnose seismic-hash <seed> <size> <months> bare ledger hash (wasm replay leg)
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
@@ -67,6 +69,7 @@ use ndarray::Array2;
 use calliope::world::CellFlags;
 use calliope::constants as gc;
 use calliope::economy;
+use calliope::entity::EntityKind;
 use calliope::hydrology;
 use calliope::naming;
 use calliope::ndimage;
@@ -222,6 +225,18 @@ fn hash_state(w: &World) -> u64 {
     for (g, p) in w.economy.market.iter_some() {
         s.push_str(&format!("m{}|{:.2}\n", g, p));
     }
+    // M16/ADR-0024 — the plate sketch is state: polygons, kinds, ages.
+    s.push_str(&format!("P{:016x}\n", w.plates.hash()));
+    // M22 — the seismic ledger is state: seams, clocks, the quake log.
+    s.push_str(&format!("Q{:016x}\n", w.seismic.hash()));
+    // M23 — the volcanic record is state: cones, clocks, log, ash.
+    s.push_str(&format!("V{:016x}\n", w.volcanism.hash()));
+    // M25 — the waterline is state: freeze phase, stand, isostasy rows.
+    s.push_str(&format!("L{:016x}\n", w.sealevel.hash()));
+    // M26 — the coastal landform grid is state: the classifier held still.
+    s.push_str(&format!("F{:016x}\n", calliope::landform::hash(&w.landform)));
+    // M28 — the LGM ice footprint is state: thickness grid, ELA rows.
+    s.push_str(&format!("I{:016x}\n", w.ice.hash()));
     s.push_str(&format!("t{}\n", w.month));
     bytes.extend_from_slice(s.as_bytes());
     fnv(&bytes)
@@ -243,6 +258,292 @@ fn gini(vals: &[f64]) -> f64 {
         }
     }
     acc / (2.0 * (n * n) as f64 * mean)
+}
+
+// ================================================================ earth
+
+/// M22 — the deep earth lane: seam census, quake cadence per fault
+/// length, magnitude spread, and the replay identity (two independent
+/// runs of the flagship seed, chunked differently, must agree on the
+/// seismic hash byte-for-byte).
+fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
+    header("DEEP EARTH", &format!("{size}² · {years}y · seeds {seeds:?}"));
+
+    let months = (years * 12) as i64;
+    let mut mean_n = 0.0;
+    let mut mean_km = 0.0;
+    let mut mean_freq = 0.0;
+    let mut worst_freq = f64::INFINITY;
+    let mut mag_sum = 0.0;
+    let mut mag_n = 0usize;
+    let mut great = 0usize;
+    let mut max_mag: f64 = 0.0;
+    // M23 — volcanism aggregates (across all seeds, for robust terciles).
+    let mut v_rows: Vec<String> = Vec::new();
+    let mut v_cones = 0.0f64;
+    let mut v_erupt = 0usize;
+    let mut v_vei_sum = 0.0f64;
+    let mut vt_erupt = [0usize; 3]; // eruptions by age tercile (young/mid/old)
+    let mut vt_cones = [0usize; 3]; // cone counts by tercile
+    let mut ring_sum = [0.0f64; 3]; // ash at vent / mid ring / far ring
+    let mut ring_n = [0usize; 3];
+    // M28 — ice lane aggregates (the footprint is gen-time state, so
+    // the tick length does not move these).
+    let mut i_rows: Vec<String> = Vec::new();
+    let mut i_share = 0.0f64;
+    let mut i_margin = 0.0f64;
+    let mut i_mono = 0.0f64;
+    let mut i_dome = 0.0f64;
+
+    println!();
+    println!(
+        " {:>6} {:>6} {:>9} {:>9} {:>7} {:>10} {:>8} {:>8} {:>8}",
+        "seed", "seams", "conv km", "trans km", "quakes", "q/100km-cy", "mean M", "max M", "M>=7.5"
+    );
+    for &seed in &seeds {
+        let mut w = World::generate(seed, size);
+        let mut left = months;
+        while left > 0 {
+            let step = left.min(240);
+            w.tick(step);
+            left -= step;
+        }
+        let s = &w.seismic;
+        let conv = s.total_km(Some(calliope::plates::B_CONVERGENT));
+        let trans = s.total_km(Some(calliope::plates::B_TRANSFORM));
+        let km = conv + trans;
+        let quakes = s.log.len();
+        let freq = quakes as f64 / (km / 100.0).max(1e-9) / (years as f64 / 100.0);
+        let mags: Vec<f64> = s.log.iter().map(|q| q.mag).collect();
+        let m_mean = if mags.is_empty() { 0.0 } else { mags.iter().sum::<f64>() / mags.len() as f64 };
+        let m_max = mags.iter().cloned().fold(0.0f64, f64::max);
+        let g = mags.iter().filter(|&&m| m >= 7.5).count();
+        println!(
+            " {:>6} {:>6} {:>9.0} {:>9.0} {:>7} {:>10.2} {:>8.2} {:>8.1} {:>8}",
+            seed, s.faults.len(), conv, trans, quakes, freq, m_mean, m_max, g
+        );
+        mean_n += s.faults.len() as f64 / seeds.len() as f64;
+        mean_km += km / seeds.len() as f64;
+        mean_freq += freq / seeds.len() as f64;
+        worst_freq = worst_freq.min(freq);
+        mag_sum += mags.iter().sum::<f64>();
+        mag_n += mags.len();
+        great += g;
+        max_mag = max_mag.max(m_max);
+
+        // M23 — the volcanism lane: cadence by age tercile, ash decay.
+        let v = &w.volcanism;
+        let nc = v.cones.len();
+        v_cones += nc as f64 / seeds.len() as f64;
+        v_erupt += v.log.len();
+        v_vei_sum += v.log.iter().map(|e| e.vei).sum::<f64>();
+        // Terciles by cone age (young third .. old third), per seed so
+        // every world contributes cones to every tercile.
+        let mut order: Vec<usize> = (0..nc).collect();
+        order.sort_by(|&a, &b| v.cones[a].age.partial_cmp(&v.cones[b].age).unwrap().then(a.cmp(&b)));
+        let mut per_cone = vec![0usize; nc];
+        for e in &v.log {
+            per_cone[e.cone as usize] += 1;
+        }
+        for (rank, &ci) in order.iter().enumerate() {
+            let t = (rank * 3 / nc.max(1)).min(2);
+            vt_cones[t] += 1;
+            vt_erupt[t] += per_cone[ci];
+        }
+        // Ash decay rings around erupted cones: at the vent, a mid ring
+        // (Chebyshev 3) and a far ring (Chebyshev 6).
+        let (gh, gw) = v.ash.dim();
+        for (ci, c) in v.cones.iter().enumerate() {
+            if per_cone[ci] == 0 {
+                continue;
+            }
+            ring_sum[0] += v.ash[[c.y as usize, c.x as usize]] as f64;
+            ring_n[0] += 1;
+            for (ri, rad) in [(1usize, 3isize), (2usize, 6isize)] {
+                let mut sum = 0.0;
+                let mut n = 0usize;
+                for dy in -rad..=rad {
+                    for dx in -rad..=rad {
+                        if dy.abs().max(dx.abs()) != rad {
+                            continue;
+                        }
+                        let ny = c.y as isize + dy;
+                        let nx = c.x as isize + dx;
+                        if ny < 0 || nx < 0 || ny >= gh as isize || nx >= gw as isize {
+                            continue;
+                        }
+                        sum += v.ash[[ny as usize, nx as usize]] as f64;
+                        n += 1;
+                    }
+                }
+                if n > 0 {
+                    ring_sum[ri] += sum / n as f64;
+                    ring_n[ri] += 1;
+                }
+            }
+        }
+        let cad = v.log.len() as f64 / (nc.max(1) as f64) / (years as f64 / 100.0);
+        let vm = if v.log.is_empty() { 0.0 } else { v.log.iter().map(|e| e.vei).sum::<f64>() / v.log.len() as f64 };
+        v_rows.push(format!(
+            " {:>6} {:>6} {:>9} {:>12.2} {:>9.2}",
+            seed, nc, v.log.len(), cad, vm
+        ));
+
+        // M28 — the ice lane: footprint share, lowland margin latitude,
+        // the ELA's poleward march read back off the mask, dome height.
+        let ice = &w.ice;
+        let (ir, icw) = ice.thickness.dim();
+        let nf = ir as f64;
+        let mut land = 0usize;
+        let mut iced = 0usize;
+        let mut low_lats: Vec<f64> = Vec::new();
+        let mut bin_min: Vec<f64> = vec![f64::INFINITY; 30]; // 3° bins, 0..90
+        let mut dome = 0.0f64;
+        for y in 0..ir {
+            let lat = (-90.0 + (y as f64) * 180.0 / (nf - 1.0)).abs();
+            for x in 0..icw {
+                let h = w.fields.height[[y, x]] as f64;
+                if h < 0.0 {
+                    continue;
+                }
+                land += 1;
+                let t = ice.thickness[[y, x]] as f64;
+                if t > 0.0 {
+                    iced += 1;
+                    dome = dome.max(t);
+                    if h < 0.10 {
+                        low_lats.push(lat);
+                    }
+                    let b = ((lat / 3.0) as usize).min(29);
+                    bin_min[b] = bin_min[b].min(h);
+                }
+            }
+        }
+        let share = 100.0 * iced as f64 / land.max(1) as f64;
+        low_lats.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let margin = if low_lats.is_empty() {
+            90.0
+        } else {
+            low_lats[(low_lats.len() as f64 * 0.05) as usize]
+        };
+        // Equator→pole, does the lowest glaciated cell keep dropping?
+        let occ: Vec<f64> = bin_min.iter().copied().filter(|v| v.is_finite()).collect();
+        let mut steps = 0usize;
+        let mut drops = 0usize;
+        for pair in occ.windows(2) {
+            steps += 1;
+            if pair[1] <= pair[0] + 0.01 {
+                drops += 1;
+            }
+        }
+        let mono = if steps == 0 { 100.0 } else { 100.0 * drops as f64 / steps as f64 };
+        i_share += share / seeds.len() as f64;
+        i_margin += margin / seeds.len() as f64;
+        i_mono += mono / seeds.len() as f64;
+        i_dome = i_dome.max(dome);
+        i_rows.push(format!(
+            " {:>6} {:>7.1} {:>11.1} {:>9} {:>8.0} {:>7.0}",
+            seed, share, margin, occ.len(), dome, mono
+        ));
+    }
+
+    println!();
+    println!(
+        " {:>6} {:>6} {:>9} {:>12} {:>9}",
+        "seed", "cones", "eruptions", "erupt/cone-cy", "mean VEI"
+    );
+    for r in &v_rows {
+        println!("{r}");
+    }
+
+    println!();
+    println!(
+        " {:>6} {:>7} {:>11} {:>9} {:>8} {:>7}",
+        "seed", "ice %", "margin lat", "ela bins", "dome m", "mono %"
+    );
+    for r in &i_rows {
+        println!("{r}");
+    }
+
+    // Replay identity: the flagship seed run twice from scratch with
+    // different chunkings must agree on the ledger byte-for-byte.
+    let seed0 = seeds[0];
+    let hash_after = |chunk: i64| -> (u64, u64) {
+        let mut w = World::generate(seed0, size);
+        let mut left = months;
+        while left > 0 {
+            let step = left.min(chunk);
+            w.tick(step);
+            left -= step;
+        }
+        (w.seismic.hash(), w.ice.hash())
+    };
+    let ((ha, ia), (hb, ib)) = (hash_after(240), hash_after(12));
+    println!();
+    println!(" replay: seed {seed0} · {months} mo · chunk 240 => {ha:016x} · chunk 12 => {hb:016x}");
+    println!(" native seismic hash (seed {seed0} · size {size} · {months} mo): {ha:016x}");
+
+    let mut c = Checks::default();
+    c.band("fault seams", mean_n, format!("{:.0}", mean_n));
+    c.band("active fault km", mean_km, format!("{:.0} km", mean_km));
+    c.band("quakes per 100km-century", mean_freq, format!("{:.2}", mean_freq));
+    c.band_as("q/100km-cy (stingiest seed)", "quakes per 100km-century", worst_freq, format!("{:.2}", worst_freq));
+    let m_mean = if mag_n == 0 { 0.0 } else { mag_sum / mag_n as f64 };
+    c.band("mean quake magnitude", m_mean, format!("M {:.2}", m_mean));
+    let g_share = if mag_n == 0 { 0.0 } else { great as f64 / mag_n as f64 };
+    c.band("great quakes share (M>=7.5)", g_share, pct(g_share));
+    c.must(
+        "seismic replay is byte-identical",
+        ha == hb,
+        format!("{}", if ha == hb { "agree" } else { "DIVERGE" }),
+        "M22 gate: same seed, different chunking, one ledger",
+    );
+
+    // M23 — the volcanism checks: census, cadence, age law, ash decay.
+    let cy = years as f64 / 100.0;
+    let total_cones: usize = vt_cones.iter().sum();
+    c.band("volcano cones", v_cones, format!("{:.0}", v_cones));
+    let cad_all = v_erupt as f64 / total_cones.max(1) as f64 / cy;
+    c.band("eruptions per cone-century", cad_all, format!("{:.2}", cad_all));
+    let cad_t: Vec<f64> = (0..3)
+        .map(|t| vt_erupt[t] as f64 / vt_cones[t].max(1) as f64 / cy)
+        .collect();
+    println!();
+    println!(
+        " cadence by age tercile: young {:.2} · mid {:.2} · old {:.2} erupt/cone-cy",
+        cad_t[0], cad_t[1], cad_t[2]
+    );
+    let ratio = if cad_t[2] > 0.0 {
+        cad_t[0] / cad_t[2]
+    } else if cad_t[0] > 0.0 {
+        99.0
+    } else {
+        1.0
+    };
+    c.band("young/old cadence ratio", ratio, format!("{:.2}×", ratio));
+    let vei_mean = if v_erupt == 0 { 0.0 } else { v_vei_sum / v_erupt as f64 };
+    c.band("mean eruption VEI", vei_mean, format!("VEI {:.2}", vei_mean));
+    let ring: Vec<f64> = (0..3).map(|r| ring_sum[r] / ring_n[r].max(1) as f64).collect();
+    c.band("ash bonus at the cone", ring[0], format!("+{:.3}", ring[0]));
+    c.must(
+        "ash decays with distance",
+        ring[0] > ring[1] && ring[1] > ring[2],
+        format!("vent {:.3} > r3 {:.3} > r6 {:.3}", ring[0], ring[1], ring[2]),
+        "M23 gate: the fertile apron thins away from the vent",
+    );
+    // M28 — the ice checks: footprint, margin law, ELA march, dome, purity.
+    c.band("ice share of land at LGM", i_share, format!("{:.1} %", i_share));
+    c.band("lowland ice margin lat", i_margin, format!("{:.1}°", i_margin));
+    c.band("ELA poleward monotone", i_mono, format!("{:.0} %", i_mono));
+    c.band("peak ice thickness m", i_dome, format!("{:.0} m", i_dome));
+    c.must(
+        "ice ledger regen byte-identical",
+        ia == ib,
+        format!("{}", if ia == ib { "identical" } else { "DIVERGE" }),
+        "M28 gate: frozen prehistory replays; joins hash_state",
+    );
+
+    c.print();
 }
 
 // ================================================================ run log
@@ -453,21 +754,318 @@ fn cmd_terrain(seed: i64, size: usize) {
         println!("  {:>4.0}°–{:>4.0}°  {:>6}  {}", latitude(y0, rows), latitude(y1.saturating_sub(1), rows), l, pct(l as f64 / n as f64));
     }
 
+    // ---- sea-level history (M25) ----------------------------------------
+    let sl = &w.sealevel;
+    println!(
+        "sea level (M25): phase {:.3} · stand {:+.3} · eustatic {:+.4} h · rebound {:+.4} · forebulge {:+.4}",
+        sl.phase, sl.stand, sl.eustatic, sl.rebound, sl.forebulge
+    );
+
     let arch = w.features.iter().filter(|f| f.t == "archipelago").count();
     let named_isles = w.features.iter().filter(|f| f.t == "island").count();
     let ranges = w.features.iter().filter(|f| f.t == "range").count();
     println!("named: {} archipelagos · {} islands · {} mountain ranges", arch, named_isles, ranges);
+
+    // ---- the plate sketch (M16/ADR-0024) --------------------------------
+    let pl = &w.plates;
+    let n_plates = pl.plates.len();
+    let cont_n = pl.plates.iter().filter(|p| p.continental).count();
+    let mean_age = pl.mean_age();
+    let (mut conv, mut div, mut trans) = (0usize, 0usize, 0usize);
+    for &b in pl.boundary.iter() {
+        match b {
+            calliope::plates::B_CONVERGENT => conv += 1,
+            calliope::plates::B_DIVERGENT => div += 1,
+            calliope::plates::B_TRANSFORM => trans += 1,
+            _ => {}
+        }
+    }
+    let btot = (conv + div + trans).max(1);
+    let conv_share = conv as f64 / btot as f64;
+    println!("plates: {} polygons ({} continental) · mean drift-age {:.0} Myr", n_plates, cont_n, mean_age);
+    println!("seams: {} convergent · {} divergent · {} transform cells", conv, div, trans);
+
+    // M16 gate — same seed, twice: the sketch and the land it draws must
+    // agree byte for byte before anything else builds on them.
+    let pa = calliope::plates::generate(seed, size);
+    let pb = calliope::plates::generate(seed, size);
+    let hm_hash = |p: &calliope::plates::Plates| -> u64 {
+        let g = calliope::geo::heightmap(seed, size, p);
+        let mut bts: Vec<u8> = Vec::with_capacity(g.len() * 8);
+        for v in g.iter() {
+            bts.extend_from_slice(&v.to_bits().to_le_bytes());
+        }
+        fnv(&bts)
+    };
+    let (ha, hb) = (hm_hash(&pa), hm_hash(&pb));
+    let plates_same = pa.hash() == pb.hash();
+
+    // ---- orogeny ages (M17) ---------------------------------------------
+    // The age-decay curve probed causally: the SAME sketch re-aged to a
+    // uniform young / middle / old belt age must draw monotonically
+    // sinking belts. (An observational age-vs-height table over one
+    // world confounds with base terrain — the probe isolates the law.)
+    let belt_w = 0.06 * size as f64;
+    let belt_mask: Vec<(usize, usize)> = (0..size)
+        .flat_map(|y| (0..size).map(move |x| (y, x)))
+        .filter(|&(y, x)| (pa.seam_dist[[y, x]] as f64) <= belt_w)
+        .collect();
+    let mean_belt = |age_myr: f32| -> f64 {
+        let mut aged = pa.clone();
+        aged.seam_age.fill(age_myr);
+        let g = calliope::geo::heightmap(seed, size, &aged);
+        belt_mask.iter().map(|&(y, x)| g[[y, x]].max(0.0)).sum::<f64>() / belt_mask.len().max(1) as f64
+    };
+    let (bel_young, bel_mid, bel_old) = (mean_belt(200.0), mean_belt(900.0), mean_belt(2000.0));
+    println!(
+        "orogeny ages: mean belt relief re-aged  200 Myr {:.4} · 900 Myr {:.4} · 2000 Myr {:.4}  ({} belt cells)",
+        bel_young, bel_mid, bel_old, belt_mask.len()
+    );
+    let mono = belt_mask.is_empty()
+        || (bel_young > bel_mid + 0.002 && bel_mid > bel_old + 0.002);
+
     let bl = border_land(&w);
+
+    // ---- rock provinces (M18) -------------------------------------------
+    // The ground differs by history: every basement class must be present
+    // on land, none may swallow the map.
+    let shares = calliope::rock::land_shares(&w.fields.rock, &w.fields.height);
+    println!(
+        "rock provinces: shield {} · basin {} · fold belt {} · volcanic {}",
+        pct(shares[0]), pct(shares[1]), pct(shares[2]), pct(shares[3])
+    );
+
+    // ---- geologic legibility (M21) --------------------------------------
+    // Each province sampled against an independent landform correlate:
+    // the map must read true to a glance, not merely satisfy its own
+    // classifier.
+    let legi = calliope::rock::legibility(&w.fields.rock, &w.plates, &w.fields.height);
+    println!(
+        "legibility (M21): off-correlate shield {} · basin {} · fold belt {}",
+        pct(legi[0]), pct(legi[1]), pct(legi[2])
+    );
+    let legi_worst = legi.iter().cloned().fold(0.0f64, f64::max);
 
     let mut c = Checks::default();
     c.band("land fraction", land_frac, pct(land_frac));
     c.must("border land cells", bl == 0, format!("{}", bl), "must be 0 — no clipped landmasses");
+    // M25 gate — the coastline holds the datum: land area stays within
+    // ±5% (relative) of the pre-M25 baseline near mid-curve, widening
+    // slightly toward a full stand. Baselines are the pre-M25 report
+    // numbers for the three standing report seeds.
+    const M25_BASE: &[(i64, f64)] = &[
+        (12345, 111762.0 / 327680.0),
+        (777, 113084.0 / 327680.0),
+        (90210, 113658.0 / 327680.0),
+    ];
+    if let Some(&(_, base)) = M25_BASE.iter().find(|(sd, _)| *sd == seed) {
+        let drift = (land_frac - base).abs() / base;
+        let cap = 0.05 + 0.045 * sl.stand.abs();
+        c.must(
+            "coastline holds the datum (M25)",
+            drift <= cap,
+            format!("{} drift at stand {:+.2} (cap {})", pct(drift), sl.stand, pct(cap)),
+            "M25 gate: land area within ±5% of the pre-M25 baseline near mid-curve",
+        );
+    }
+    {
+        // M25 gate — the waterline is one history: regen must agree.
+        let sl2 = calliope::sealevel::generate(seed, size);
+        c.must(
+            "sea-level history regen byte-identical",
+            sl.hash() == sl2.hash(),
+            if sl.hash() == sl2.hash() { "identical".into() } else { "DIVERGED".into() },
+            "M25: same seed ⇒ same waterline; joins hash_state",
+        );
+    }
+    {
+        // ---- coastal landforms (M26) --------------------------------
+        let lf = &w.landform;
+        let hgt = &w.fields.height;
+        let (gh, gw) = hgt.dim();
+        let last = sl.row.len() - 1;
+        let mut n_raised = 0usize;
+        let mut n_ria = 0usize;
+        let mut n_skerry = 0usize;
+        let mut wrong_sign = 0usize;
+        // coast cells (land with a 4-neighbor sea) split into the
+        // rebound belt (isostatic uplift rows) and the forebulge collar
+        let mut coast = 0usize;
+        let mut coast_up = 0usize;
+        let mut raised_up = 0usize;
+        let mut coast_dn = 0usize;
+        let mut raised_dn = 0usize;
+        for y in 0..gh {
+            let iso = sl.row[y.min(last)];
+            let dz = iso - sl.eustatic;
+            for x in 0..gw {
+                match lf[[y, x]] {
+                    calliope::landform::RAISED => {
+                        n_raised += 1;
+                        if dz <= 0.0 { wrong_sign += 1; }
+                        if iso > 0.0 { raised_up += 1; } else if iso < 0.0 { raised_dn += 1; }
+                    }
+                    calliope::landform::RIA => {
+                        n_ria += 1;
+                        if dz >= 0.0 { wrong_sign += 1; }
+                    }
+                    calliope::landform::SKERRY => {
+                        n_skerry += 1;
+                        if dz >= 0.0 { wrong_sign += 1; }
+                    }
+                    _ => {}
+                }
+                if hgt[[y, x]] >= 0.0 {
+                    let sea_next = (y > 0 && hgt[[y - 1, x]] < 0.0)
+                        || (y + 1 < gh && hgt[[y + 1, x]] < 0.0)
+                        || (x > 0 && hgt[[y, x - 1]] < 0.0)
+                        || (x + 1 < gw && hgt[[y, x + 1]] < 0.0);
+                    if sea_next {
+                        coast += 1;
+                        if iso > 0.0 { coast_up += 1; } else if iso < 0.0 { coast_dn += 1; }
+                    }
+                }
+            }
+        }
+        println!(
+            "coastal landforms (M26): raised {} · ria {} · skerry {} · coast {} cells",
+            n_raised, n_ria, n_skerry, coast
+        );
+        // Amplitude the classifier actually sees: the mean per-row net
+        // offset, emergence and submergence separately (isostasy dwarfs
+        // the eustatic stand, so |stand| alone is the wrong yardstick).
+        let mut amp_up = 0.0f64;
+        let mut amp_dn = 0.0f64;
+        for y in 0..gh {
+            let dz = sl.row[y.min(last)] - sl.eustatic;
+            amp_up += dz.max(0.0);
+            amp_dn += (-dz).max(0.0);
+        }
+        amp_up /= gh as f64;
+        amp_dn /= gh as f64;
+        let raised_rate = n_raised as f64 / coast.max(1) as f64 / amp_up.max(1e-9);
+        c.band("raised coast per stand", raised_rate, format!("{:.3}", raised_rate));
+        if amp_dn > 1e-6 {
+            let drowned = (n_ria + n_skerry) as f64 / coast.max(1) as f64 / amp_dn;
+            c.band("drowned coast per stand", drowned, format!("{:.3}", drowned));
+        }
+        c.must(
+            "landform signs read true",
+            wrong_sign == 0,
+            format!("{} tags against the offset sign", wrong_sign),
+            "M26: raised only where the land rose, drowned only where the sea did",
+        );
+        let purity = calliope::landform::hash(&calliope::landform::classify(hgt, sl, &w.ice)) == calliope::landform::hash(lf);
+        c.must(
+            "landform grid regen byte-identical",
+            purity,
+            if purity { "identical".into() } else { "DIVERGED".into() },
+            "M26 gate: pure function of height + sea level; joins hash_state",
+        );
+
+        // M29 — glacial relief: U-valleys, cirques and hangs by belt.
+        {
+            let ice = &w.ice;
+            let (ir, icw) = ice.thickness.dim();
+            let nf = ir as f64;
+            let mut iced = [0usize; 2]; // alpine 40–62° · sheet >62°
+            let mut ucel = [0usize; 2];
+            let mut fjords = 0usize;
+            for y in 0..ir {
+                let lat = (-90.0 + (y as f64) * 180.0 / (nf - 1.0)).abs();
+                let belt = if lat >= 62.0 {
+                    1
+                } else if lat >= 40.0 {
+                    0
+                } else {
+                    continue;
+                };
+                for x in 0..icw {
+                    if w.fields.height[[y, x]] < 0.0 {
+                        continue;
+                    }
+                    if ice.thickness[[y, x]] > 0.0 {
+                        iced[belt] += 1;
+                        if ice.carved[[y, x]] >= 0.01 {
+                            ucel[belt] += 1;
+                        }
+                    }
+                }
+            }
+            for v in lf.iter() {
+                if *v == calliope::landform::FJORD {
+                    fjords += 1;
+                }
+            }
+            let cir_alp = ice
+                .cirques
+                .iter()
+                .filter(|&&(y, _)| {
+                    let lat = (-90.0 + (y as f64) * 180.0 / (nf - 1.0)).abs();
+                    (40.0..62.0).contains(&lat)
+                })
+                .count();
+            let u_alp = 1000.0 * ucel[0] as f64 / iced[0].max(1) as f64;
+            let u_sht = 1000.0 * ucel[1] as f64 / iced[1].max(1) as f64;
+            let c_alp = 1000.0 * cir_alp as f64 / iced[0].max(1) as f64;
+            println!();
+            println!(
+                "glacial relief: u-cells alpine {} / sheet {} · cirques {} ({} alpine) · hangs {} · fjord cells {}",
+                ucel[0], ucel[1], ice.cirques.len(), cir_alp, ice.hangs.len(), fjords
+            );
+            c.band("u-valley cells per 1000 iced, alpine", u_alp, format!("{:.0}", u_alp));
+            c.band("u-valley cells per 1000 iced, sheet", u_sht, format!("{:.0}", u_sht));
+            c.band("cirques per 1000 iced, alpine", c_alp, format!("{:.1}", c_alp));
+            c.band("hanging valleys per world", ice.hangs.len() as f64, format!("{}", ice.hangs.len()));
+            let finite = w.fields.height.iter().all(|v| v.is_finite());
+            c.must(
+                "height field NaN-free after the carve",
+                finite,
+                if finite { "finite".into() } else { "NaN".into() },
+                "M29 gate: the carve is pure lowering arithmetic",
+            );
+        }
+        if sl.eustatic < 0.0 && coast_up >= 150 && coast_dn >= 150 {
+            let d_up = raised_up as f64 / coast_up as f64;
+            let d_dn = raised_dn as f64 / coast_dn as f64;
+            c.must(
+                "raised beaches thicken with the rise",
+                d_up >= d_dn,
+                format!("rebound belt {} vs collar {}", pct(d_up), pct(d_dn)),
+                "M26 gate: landform frequency follows the amplitude within one world",
+            );
+        }
+    }
     c.band("largest landmass share of land", largest / land_n.max(1.0), pct(largest / land_n.max(1.0)));
     c.band("landmass count", li.n as f64, format!("{}", li.n));
     c.band("small isles+islets", (islands + islets) as f64, format!("{}", islands + islets));
     c.band("mountain share of land (h>0.5)", mtn, pct(mtn));
     c.band("coastline crenulation", coast_ratio, format!("{:.3}", coast_ratio));
     c.want("archipelagos named", arch >= 1, format!("{}", arch), "≥1 — island clusters should get names");
+    c.band("plate count", n_plates as f64, format!("{}", n_plates));
+    c.band("plate mean drift-age (Myr)", mean_age, format!("{:.0}", mean_age));
+    c.band("convergent share of boundary", conv_share, pct(conv_share));
+    c.must("plate sketch regen byte-identical", plates_same, if plates_same { "identical".into() } else { "DIVERGED".into() }, "M16: same seed ⇒ same polygons");
+    c.must("heightmap regen byte-identical", ha == hb, if ha == hb { "identical".into() } else { "DIVERGED".into() }, "M16: same sketch ⇒ same land");
+    c.must(
+        "belt relief falls with seam age",
+        mono,
+        format!("{:.4} → {:.4} → {:.4}", bel_young, bel_mid, bel_old),
+        "M17: the same sketch re-aged 200/900/2000 Myr sinks monotonically",
+    );
+    c.band("shield share of land", shares[calliope::rock::SHIELD as usize], pct(shares[calliope::rock::SHIELD as usize]));
+    c.band("basin share of land", shares[calliope::rock::BASIN as usize], pct(shares[calliope::rock::BASIN as usize]));
+    c.band("fold-belt share of land", shares[calliope::rock::FOLD_BELT as usize], pct(shares[calliope::rock::FOLD_BELT as usize]));
+    c.band("volcanic share of land", shares[calliope::rock::VOLCANIC as usize], pct(shares[calliope::rock::VOLCANIC as usize]));
+    c.must(
+        "province map reads true",
+        legi_worst <= 0.03,
+        format!(
+            "worst off-correlate {} (shield {} · basin {} · fold {})",
+            pct(legi_worst), pct(legi[0]), pct(legi[1]), pct(legi[2])
+        ),
+        "M21 gate: ≤3% of each province off its landform correlate",
+    );
     c.print();
 }
 
@@ -763,6 +1361,27 @@ fn cmd_resources(seed: i64, size: usize) {
             lint.join(" · ")
         },
         "M14.1: one declaration point — flags derive-checked against GOODS",
+    );
+
+    // ---- M19 — deposits re-seated: ore sits where geology says ----
+    let rows = resources::province_consistency(&w.deposits, &w.fields.rock);
+    let mut in_home = 0usize;
+    let mut total = 0usize;
+    println!();
+    println!("ore homes (M19): {}", rows
+        .iter()
+        .map(|&(g, ih, tot)| format!("{} {}/{}", g, ih, tot))
+        .collect::<Vec<_>>()
+        .join(" · "));
+    for &(_, ih, tot) in &rows {
+        in_home += ih;
+        total += tot;
+    }
+    let home_share = in_home as f64 / total.max(1) as f64;
+    c.band(
+        "ore seams in home province",
+        home_share,
+        format!("{} of {} ({})", in_home, total, pct(home_share)),
     );
     c.print();
 }
@@ -1192,6 +1811,55 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         c.band("famine events per century", per_c, format!("{:.1}", per_c));
     }
 
+    // ---- M24 disaster wiring: every fall told once, arcs that close ----
+    // A destroying-magnitude event fells a town through the one kill
+    // path, which raises exactly one ruin (with the disaster's why) and
+    // one chronicle beat citing the ruin's registry id. Felt beats cite
+    // the surviving town, so the Ruin-kind filter separates the two.
+    let disaster_whys = [
+        calliope::patina::ruin_why("quake"),
+        calliope::patina::ruin_why("ash"),
+    ];
+    let disaster_ruins = w
+        .ruins
+        .iter()
+        .filter(|r| disaster_whys.contains(&r.why.as_str()))
+        .count();
+    let falls = w
+        .chronicle
+        .events
+        .iter()
+        .filter(|e| e.k.name() == "quake" || e.k.name() == "eruption")
+        .filter(|e| {
+            e.ids.first().is_some_and(|id| {
+                w.chronicle
+                    .registry
+                    .items
+                    .get(id.idx())
+                    .is_some_and(|it| it.kind == EntityKind::Ruin)
+            })
+        })
+        .count();
+    c.must(
+        "disaster falls have their telling",
+        falls == disaster_ruins,
+        format!("{} falls · {} ruins", falls, disaster_ruins),
+        "M24 gate: every destroying-magnitude event → one chronicle entry + one ruin",
+    );
+    if !w.rebuild_log.is_empty() {
+        let mut arcs = w.rebuild_log.clone();
+        arcs.sort_unstable();
+        let med = arcs[arcs.len() / 2] as f64;
+        c.range(
+            "disaster recovery (median months)",
+            med,
+            format!("{:.0} mo over {} arcs", med, arcs.len()),
+            (6.0, 360.0),
+            (1.0, 480.0),
+            "M24 gate: rebuild arcs close inside the forty-year window",
+        );
+    }
+
     // ---- M3 gates: words and ways ----
     // M3.1 label audit: a town's name must classify to the tongue that
     // coined it — it starts with one of the bank's openers and ends with
@@ -1234,8 +1902,10 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         c.must("feature etymologies", f_ety == w.features.len(), format!("{}/{}", f_ety, w.features.len()), "M3.3: every feature name reads back");
 
         // M3 no name-collision regressions: towns, features, peoples.
+        // A failure prints the colliding names — the report must carry
+        // its own evidence (ADR-0009).
         let mut seen: BTreeSet<&str> = BTreeSet::new();
-        let mut dups = 0usize;
+        let mut dup_names: Vec<&str> = Vec::new();
         for n in w
             .peoples.settlements
             .iter()
@@ -1244,10 +1914,12 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             .chain(w.peoples.peoples.iter().map(|cu| cu.people.as_str()))
         {
             if !seen.insert(n) {
-                dups += 1;
+                dup_names.push(n);
             }
         }
-        c.must("name collisions", dups == 0, format!("{}", dups), "M3 gate: 0 duplicates");
+        let dups = dup_names.len();
+        let dup_note = if dups == 0 { "0".to_string() } else { format!("{} ({})", dups, dup_names.join(" · ")) };
+        c.must("name collisions", dups == 0, dup_note, "M3 gate: 0 duplicates");
 
         // M3.4 exonyms: where two peoples actually share country, a border
         // feature should carry a second name in the other tongue. Peoples
@@ -1597,6 +2269,33 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         let share = worked as f64 / known.len() as f64;
         c.band("known seams worked", share, pct(share));
     }
+
+    // ---- M20 — regional stone: the town's quarry names the rock under it ----
+    let mut quarry_census: BTreeMap<&str, usize> = BTreeMap::new();
+    let quarry_bad = w
+        .peoples
+        .settlements
+        .iter()
+        .filter(|s| {
+            *quarry_census.entry(s.quarry).or_default() += 1;
+            s.quarry != calliope::rock::quarry(w.fields.rock[[s.y as usize, s.x as usize]])
+        })
+        .count();
+    println!();
+    println!(
+        "quarries (M20): {}",
+        quarry_census
+            .iter()
+            .map(|(q, n)| format!("{} {}", q, n))
+            .collect::<Vec<_>>()
+            .join(" · ")
+    );
+    c.must(
+        "quarry stone matches rock province",
+        quarry_bad == 0,
+        format!("{} mismatched of {}", quarry_bad, w.peoples.settlements.len()),
+        "M20 gate: the stone a town cuts is the stone it stands on",
+    );
 
     // ---- M14.8 the wild stocks breathe: timber, fish and game carry memory ----
     println!();
@@ -2928,6 +3627,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
             match name {
                 "biomes" => &w.fields.biomes, "crops" => &w.fields.crops,
                 "strahler" => &w.fields.strahler, "flags" => &w.fields.flags,
+                "rock" => &w.fields.rock,
                 other => unreachable!("unknown u8 field {other}"),
             }
         };
@@ -3537,12 +4237,19 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
 
     // Walls each system writes, by inspection of systems.rs bodies.
     // P=peoples · E=economy · C=chronicle · G=grids · D=deposits ·
-    // N=names/features · R=draws the one rng stream · –=scratch only.
+    // N=names/features · R=draws the one rng stream · Q=seismic ledger
+    // (own stream, order-free — M22) · –=scratch only.
     // A system is SERIAL if it writes Peoples or draws the RNG: the single
     // PCG stream is a total order — determinism law makes it unsplittable.
     const ACCESS: &[(&str, &str, bool)] = &[
         ("towns", "P·R", true),
         ("famine", "P·R", true),
+        // Q=seismic ledger (own stream). M24: the effects pass also
+        // damages Peoples and fells towns into the chronicle: serial.
+        ("quakes", "Q·P·C", true),
+        // V=volcanic record + ash (own stream — M23) · M24 effects write
+        // Peoples (burn/bury), Grids (ash → fertility), chronicle: serial.
+        ("volcanoes", "V·P·G·C", true),
         ("colonize", "P·R", true),
         ("prospect", "D·R", true),
         ("rush-camps", "P·D·R", true),
@@ -3683,6 +4390,66 @@ fn main() {
                 seeds = vec![12345, 777, 90210];
             }
             cmd_properties(size, years, seeds);
+        }
+        "earth" => {
+            let size = sized(2, 512);
+            let years = num(3, 150) as usize;
+            let mut seeds: Vec<i64> = a.get(4..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 90210];
+            }
+            cmd_earth(size, years, seeds);
+        }
+        "earth-hash" => {
+            // Labeled layer hashes on stdout — the native leg of the M27
+            // deep-earth replay check; `wasm-replay.mjs earth` prints the
+            // wasm leg in the same format.
+            let seed = num(2, 777);
+            let size = sized(3, 512);
+            let months = num(4, 240);
+            let mut w = World::generate(seed, size);
+            let mut left = months;
+            while left > 0 {
+                let step = left.min(240);
+                w.tick(step);
+                left -= step;
+            }
+            println!("{}", w.earth_hash_line());
+        }
+        "seismic-hash" => {
+            // Bare hex on stdout — the native leg of the M22 cross-runtime
+            // replay check; scripts/wasm-replay.mjs prints the wasm leg.
+            let seed = num(2, 777);
+            let size = sized(3, 512);
+            let months = num(4, 240);
+            let mut w = World::generate(seed, size);
+            let mut left = months;
+            while left > 0 {
+                let step = left.min(240);
+                w.tick(step);
+                left -= step;
+            }
+            println!("{:016x}", w.seismic.hash());
+        }
+        "seismic-debug" => {
+            // Sub-hash bisection line, native leg — same format as the
+            // wasm `seismic_debug()` export.
+            let seed = num(2, 777);
+            let size = sized(3, 512);
+            let months = num(4, 0);
+            let mut w = World::generate(seed, size);
+            let mut left = months;
+            while left > 0 {
+                let step = left.min(240);
+                w.tick(step);
+                left -= step;
+            }
+            let (pt, pc, pb) = w.plates.debug_parts();
+            let (sf, ss, sl) = w.seismic.debug_parts();
+            println!(
+                "table={:016x} cell={:016x} boundary={:016x} faults={:016x} since={:016x} log={:016x}",
+                pt, pc, pb, sf, ss, sl
+            );
         }
         "era" => cmd_era(sized(2, 256), num(3, 60) as usize, num(4, 16) as usize, num(5, 12345)),
         "patina" => {

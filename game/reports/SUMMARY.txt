@@ -1,39 +1,45 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-18 01:01 UTC
+mode: full · size: 512 · generated: 2026-08-19 03:49 UTC
 
-totals: 368 pass · 12 warn · 0 fail
+totals: 445 pass · 13 warn · 0 fail
 
 -- assay.txt
    all checks pass
 
 -- bench.txt
-[WARN] median tick payload                          6645 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
+[WARN] pack bytes per cell                     21.0 B/cell   (sweet ≤21 · hard ≤24 (8×u16 + 4×u8 = 20 B/cell + header))
+[WARN] median tick payload                          8037 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
    all checks pass
 
 -- build.txt
-[WARN] wasm binary size                              3162446 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
+[WARN] wasm binary size                              3270808 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
 
 -- civ-12345.txt
 [WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                74.3   (sweet 2–48 · hard 0.5–100)
-[WARN] median town spacing                           51 km   (M2.5: market-town band ~15–30 km in settled cores)
+[WARN] events per year                                56.6   (sweet 2–48 · hard 0.5–100)
 
 -- civ-777.txt
 [WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                60.9   (sweet 2–48 · hard 0.5–100)
+[WARN] events per year                                58.1   (sweet 2–48 · hard 0.5–100)
 
 -- climate-12345.txt
    all checks pass
 
 -- climate-777.txt
-[WARN] forest share of land                          22.6%   (sweet 25–60% · hard 15–75%)
-
--- climate-90210.txt
    all checks pass
 
+-- climate-90210.txt
+[WARN] forest share of land                          23.7%   (sweet 25–60% · hard 15–75%)
+
 -- determinism.txt
+   all checks pass
+
+-- earth-wasm.txt
+   all checks pass
+
+-- earth.txt
    all checks pass
 
 -- economy-12345.txt
@@ -55,16 +61,16 @@ totals: 368 pass · 12 warn · 0 fail
    all checks pass
 
 -- patina.txt
-[WARN] ruins per century (after y100)                14.33   (M9.1 gate: mature worlds carry ruins)
+[WARN] ruins per century (after y100)                13.00   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-[WARN] tick rate year 100                   353 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] tick rate year 100                   299 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
    all checks pass
 
 -- resources-12345.txt
-   all checks pass
+[WARN] essential kinds all present               1 missing   (everything except mithril/bananas should place)
 
 -- resources-777.txt
    all checks pass
@@ -73,10 +79,10 @@ totals: 368 pass · 12 warn · 0 fail
    all checks pass
 
 -- sweep.txt
-[WARN] mean events/year                               48.3   (sweet 2–48 · hard 0.5–100)
+[WARN] mean forest share                             24.9%   (sweet 25–60% · hard 15–75%)
 
 -- systems.txt
-[WARN] ECS parallel ceiling stays low               1.650×   (ADR-0022: re-open the bevy_ecs question if this rises)
+[WARN] ECS parallel ceiling stays low               1.672×   (ADR-0022: re-open the bevy_ecs question if this rises)
 
 -- telling-12345.txt
    all checks pass

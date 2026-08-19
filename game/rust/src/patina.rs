@@ -149,6 +149,11 @@ pub fn ruin_why(cause: &str) -> &'static str {
         "famine" => "hunger emptied it",
         "mines" => "the seams gave out and the miners drifted away",
         "war" => "war broke it and none returned",
+        // M24 — the sudden endings: the disaster passes fell through the
+        // one kill path with these causes, and `diagnose civ` matches
+        // ruins to their chronicle beats by these exact strings.
+        "quake" => "the earth broke it in a single morning",
+        "ash" => "the mountain buried it in ash and fire",
         _ => "it dwindled year by year until the last hearth went cold",
     }
 }
