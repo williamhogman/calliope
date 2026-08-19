@@ -4,7 +4,7 @@
 kind           count dawn-known    rich   finite reserve mo  min dist
 bananas            5       5 100%    0.89        0     renews       15c
 blueberries        8       8 100%    0.86        0     renews       58c
-strawberries      11      11 100%    0.90        0     renews       62c
+strawberries      12      12 100%    0.89        0     renews       62c
 blackberries       7       7 100%    0.82        0     renews       47c
 cattle             4       4 100%    0.84        0     renews       74c
 sheep             28      28 100%    0.86        0     renews       64c
@@ -30,13 +30,13 @@ clay               4       4 100%    0.88        0     renews       43c
 marble             2       1 50%    0.83        2       1993       88c
 gems               2       0  0%    0.82        2        732       75c
 
-total deposits: 165 · 1.41 per 1000 land cells
+total deposits: 166 · 1.42 per 1000 land cells
 mineral seams hidden at dawn: 41 of 56 (73.2%)
 
 ore homes (M19): gold 3/3 · silver 5/5 · copper 5/5 · iron 4/4 · coal 17/17 · gems 2/2 · marble 0/2
 
 ---- checks ----------------------------------------------------------
-[PASS] deposits per 1000 land cells                   1.41   (sweet 1–6 · hard 0.5–12)
+[PASS] deposits per 1000 land cells                   1.42   (sweet 1–6 · hard 0.5–12)
 [PASS] mineral hidden share at dawn                  73.2%   (sweet 45–85% — leave an age of prospectors)
 [PASS] essential kinds all present               0 missing   (everything except mithril/bananas should place)
 [PASS] gold placed                                     yes   (a world without gold has a dull late game)

@@ -3,16 +3,16 @@
 ========================================================================
 kind           count dawn-known    rich   finite reserve mo  min dist
 bananas            2       2 100%    0.88        0     renews      107c
-blueberries       10      10 100%    0.87        0     renews       77c
+blueberries       10      10 100%    0.87        0     renews       80c
 strawberries       7       7 100%    0.85        0     renews       39c
-blackberries       5       5 100%    0.88        0     renews       48c
-cattle             3       3 100%    0.89        0     renews       71c
-sheep             20      20 100%    0.89        0     renews       54c
+blackberries       5       5 100%    0.88        0     renews       34c
+cattle             3       3 100%    0.89        0     renews       63c
+sheep             20      20 100%    0.89        0     renews       51c
 horse             10      10 100%    0.89        0     renews       50c
 pig                2       2 100%    0.88        0     renews       43c
-deer               3       3 100%    0.85        0     renews       37c
-elk                7       7 100%    0.93        0     renews       42c
-fish               4       4 100%    0.90        0     renews       71c
+deer               3       3 100%    0.85        0     renews       42c
+elk                7       7 100%    0.93        0     renews       83c
+fish               4       4 100%    0.90        0     renews       22c
 timber             9       9 100%    0.88        0     renews       26c
 stone              4       2 50%    0.81        0     renews       72c
 coal              20       4 20%    0.91       20       1383       50c
@@ -25,7 +25,7 @@ salt               9       3 33%    0.85        8       1473       54c
 furs               2       2 100%    0.98        0     renews       83c
 grapes             1       1 100%    0.91        0     renews       52c
 spices             2       2 100%    0.90        0     renews       20c
-dyes               3       3 100%    0.87        0     renews       83c
+dyes               3       3 100%    0.87        0     renews       62c
 clay               9       9 100%    0.90        0     renews       20c
 marble             2       1 50%    0.67        2       1984       73c
 gems               2       0  0%    0.89        2        656       73c

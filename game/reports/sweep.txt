@@ -2,32 +2,32 @@
  CALLIOPE DIAGNOSTIC · SWEEP                        size 512 · 100y · 5 seeds
 ========================================================================
    seed  land%   des%   for%  mtn%   isl  dep towns       pop   grw×   era arts strk camp  war   rt  ev/y  genms  flags
-  12345   35.0   20.0   23.6   8.8    26  172 16→99    853426 635.46     3   95   57    4  392  168  45.7   1634  ·
-    777   35.8   20.5   22.6   7.6    20  165 16→101    721098 559.86     3   78   44    3  313  173  45.2   1488  ·
-  31337   32.7   18.6   18.7   3.7    24  159 16→98    882986 630.70     3   64   51    5  404  175  43.8   2087  ·
-  90210   35.6   18.0   20.4   2.6    17  152 16→97    706680 473.33     3   69   47    2  272  171  39.0   1758  ·
-    555   34.6   20.5   22.2   3.5    23  139 16→102    737979 446.18     3   70   45    7  333  179  39.3   1646  ·
----mean   34.7   19.5   21.5   5.3                                     549.11                        42.6
+  12345   35.0   19.7   23.3   8.8    26  173 16→99    839150 624.83     3   86   47    3  311  169  45.6   1692  ·
+    777   35.8   20.1   22.3   7.6    20  166 16→100    803386 623.75     3   85   47    1  365  169  47.1   1679  ·
+  31337   32.7   18.1   18.4   3.7    24  156 16→98    843130 602.24     3   61   53    4  489  178  42.3   1598  ·
+  90210   35.6   17.5   20.2   2.6    17  152 16→100    741245 496.48     3   58   47    2  425  179  41.1   1470  ·
+    555   34.6   20.2   21.8   3.5    23  136 16→101    840326 508.06     3   66   44    7  490  176  46.3   1567  ·
+---mean   34.7   19.1   21.2   5.3                                     571.07                        44.5
 
 flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected · I malformed-ice
-sea ice (M37): icebound lanes per seed: 12345:7 · 777:5 · 31337:6 · 90210:6 · 555:1
+sea ice (M37): icebound lanes per seed: 12345:8 · 777:6 · 31337:7 · 90210:4 · 555:0
 
 ---- checks ----------------------------------------------------------
 [PASS] mean land fraction                            34.7%   (sweet 22–40% · hard 15–52%)
-[PASS] mean desert share                             19.5%   (sweet 12–28% · hard 6–38%)
-[WARN] mean forest share                             21.5%   (sweet 25–60% · hard 15–75%)
+[PASS] mean desert share                             19.1%   (sweet 12–28% · hard 6–38%)
+[WARN] mean forest share                             21.2%   (sweet 25–60% · hard 15–75%)
 [PASS] mean mountain share                            5.3%   (sweet 2–14% · hard 0.5–22%)
-[PASS] mean growth                                 549.11×   (M2 crop-package K: sweet 2–1200×)
-[PASS] mean events/year                               42.6   (sweet 2–48 · hard 0.5–100)
+[PASS] mean growth                                 571.07×   (M2 crop-package K: sweet 2–1200×)
+[PASS] mean events/year                               44.5   (sweet 2–48 · hard 0.5–100)
 [PASS] all seeds clean of hard flags             all clean   (no B/P/R/G/S/U flags on any seed)
 [PASS] strikes on every seed                           5/5   (prospecting fires everywhere)
 [PASS] icebound closures well-formed on every seed    0 malformed   (M37 gate: winter arcs only, hemisphere-true, across the sweep)
-[PASS] the winter sea closes somewhere in the sweep      5/5 seeds   (M37: some strait should freeze in a polar world)
+[PASS] the winter sea closes somewhere in the sweep      4/5 seeds   (M37: some strait should freeze in a polar world)
 [PASS] mining camps emerge (≥60% of seeds)             5/5   (ore pull creates colonies)
 [PASS] Iron Age reached (≥50% of seeds)                5/5   (history should not stall in bronze)
 [PASS] worlds still growing at half-run (≥60%)            5/5   (no century-long plateaus)
-[PASS] daughter peoples sunder (≥60% of seeds)            4/5   (M12.1: far branches become peoples of their own)
+[PASS] daughter peoples sunder (≥60% of seeds)            3/5   (M12.1: far branches become peoples of their own)
 [PASS] famine strikes somewhere (≥60% of seeds)            5/5   (M2.6: failed rains have a price)
-[PASS] famine bounded (<150/century worst seed)     17/century   (M2.6: hunger is a visitation, not the weather)
-[PASS] mean rank-size slope                 -1.03 over 5 seeds   (M2.3 gate: Zipf holds across the sweep)
+[PASS] famine bounded (<150/century worst seed)     13/century   (M2.6: hunger is a visitation, not the weather)
+[PASS] mean rank-size slope                 -1.05 over 5 seeds   (M2.3 gate: Zipf holds across the sweep)
 CHECKS: 16 pass · 1 warn · 0 fail

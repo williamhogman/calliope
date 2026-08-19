@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 90210 · 640x512
 ========================================================================
-world: "Oria" · generated in 1899 ms
+world: "Oria" · generated in 1596 ms
 land: 116499 cells of 327680 (35.6%) · 1863984 km²
 hypsometry (land h): p5 0.016 · p25 0.085 · p50 0.206 · p75 0.329 · p95 0.466 · max 0.743
 bathymetry (sea h): p5 -0.593 · p50 -0.400 · p95 -0.030
@@ -28,15 +28,15 @@ coastal landforms (M26): raised 3198 · ria 0 · skerry 0 · coast 3344 cells
 
 glacial relief: u-cells alpine 3250 / sheet 3897 · cirques 129 (86 alpine) · hangs 131 · fjord cells 97
 glacial legacy: till 24531 cells (71.4% of iced lowland) · moraine 1878 · drumlins 87 · esker cells 172 · loess 30111 cells (25.8% of land)
-till dividend (observational): -0.0408 fertility over 13 matched lat×h bins
-legacy counterfactual: 22567 of 54642 till+loess cells farmable · mean uplift +0.0444 there
+till dividend (observational): -0.0410 fertility over 13 matched lat×h bins
+legacy counterfactual: 22456 of 54642 till+loess cells farmable · mean uplift +0.0443 there
 proglacial (M31): 7 lakes (5 refilled today) · 0 chains · 54 spillway cells · widths 6/1/0 · 0 of 47 steps ascend
-outwash (M32): 368 corridor + 1162 apron cells · 209 of 4286 below-margin river cells braided (4.9%)
+outwash (M32): 368 corridor + 1162 apron cells · 209 of 4247 below-margin river cells braided (4.9%)
 outwash counterfactual: 1437 of 1530 plain cells farmable · mean uplift +0.0268 there
 
-cold rim (M38): treeline−frontier offset median -15.5° · IQR 4.8° over 150 column-legs · treeline GDD5 median 527 °C·day
-  regime breakdown: maritime median -15.5° (121 legs) · continental median -18.7° (29 legs) · treeline continentality p10 0.36 p50 0.47 p90 0.79 (split at 0.70)
-tundra subtypes: dry 20005 · wet 3261 cells · wet share 14.0% of the tundra
+cold rim (M38): treeline−frontier offset median -15.5° · IQR 4.8° over 150 column-legs · treeline GDD5 median 528 °C·day
+  regime breakdown: maritime median -15.5° (122 legs) · continental median -18.7° (28 legs) · treeline continentality p10 0.36 p50 0.47 p90 0.79 (split at 0.70)
+tundra subtypes: dry 20019 · wet 3291 cells · wet share 14.1% of the tundra
 
 ---- checks ----------------------------------------------------------
 [PASS] land fraction                                 35.6%   (sweet 22–40% · hard 15–52%)
@@ -61,7 +61,7 @@ tundra subtypes: dry 20005 · wet 3261 cells · wet share 14.0% of the tundra
 [PASS] esker cells per world                           172   (sweet 40–800 · hard 10–3000 (M30: chained subglacial ridge cells, chains ≥3; measured 159–213))
 [PASS] loess share of land %                        25.8 %   (sweet 4–30 · hard 1–45 (M30: mantle cells per 100 land cells; Earth ~10; measured 24–28 on six seeds))
 [PASS] till lies under old ice only          0 stray cells   (M30 gate: the sheet is the depositional footprint)
-[PASS] the legacy feeds the farms on it     +0.0444 uplift on 22567 farmable legacy cells   (M30 gate: zeroing till+loess must cost the farmable belt ≥ +0.005 (counterfactual))
+[PASS] the legacy feeds the farms on it     +0.0443 uplift on 22456 farmable legacy cells   (M30 gate: zeroing till+loess must cost the farmable belt ≥ +0.005 (counterfactual))
 [PASS] proglacial lakes per world                        7   (sweet 5–120 · hard 1–400 (M31: moraine-dammed basins ≥4 cells inside the LGM footprint))
 [PASS] spillway cells per world                         54   (sweet 20–1500 · hard 5–5000 (M31: outburst channel cells cut below the old sills))
 [PASS] spillway width scales with catchment wide-class basins avg 75 cells vs 16   (M31 gate: width bands follow the basins that fed them)
@@ -89,6 +89,6 @@ tundra subtypes: dry 20005 · wet 3261 cells · wet share 14.0% of the tundra
 [PASS] province map reads true              worst off-correlate 0.0% (shield 0.0% · basin 0.0% · fold 0.0%)   (M21 gate: ≤3% of each province off its landform correlate)
 [PASS] treeline−permafrost offset           -15.5° (150 legs)   (sweet −22..−8° · hard −28..−2 (M38 gate: median treeline latitude minus continuous-lowland-frontier latitude over cold-limited columns — negative, bounded, tracking; measured −16.9..−19.0))
 [PASS] treeline tracking spread                       4.8°   (sweet ≤12° · hard ≤18 (M38 gate: IQR of the per-column offset — tracks, not wanders; measured 8.5–10.6))
-[PASS] treeline GDD discipline                  527 °C·day   (sweet 350–850 · hard 200–1100 °C·day (M38: median GDD5 on the treeline cells straddles the 600 threshold))
-[PASS] wet share of the tundra                       14.0%   (sweet 8–60% · hard 2–85% (M38: polygon-mire lowlands are a real minority of the tundra; measured 10.4–17.7))
+[PASS] treeline GDD discipline                  528 °C·day   (sweet 350–850 · hard 200–1100 °C·day (M38: median GDD5 on the treeline cells straddles the 600 threshold))
+[PASS] wet share of the tundra                       14.1%   (sweet 8–60% · hard 2–85% (M38: polygon-mire lowlands are a real minority of the tundra; measured 10.4–17.7))
 CHECKS: 52 pass · 0 warn · 0 fail
