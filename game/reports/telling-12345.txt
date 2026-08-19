@@ -3,8 +3,6 @@
 ========================================================================
 chronicle: 8513 entries over 150y (56.8/y)
   ids on 100.0% · coords on 97.9% · legend layer on 2008/2008 loud entries
-  ID-LESS: growth ×1
-    m906 [growth] Baykent — The harvest overflows in Baykent; granaries groan.
 cast: artifact 16+0† · civilization 3+1† · culture 14+0† · feature 87+0† · good 36+0† · person 14+155† · realm 11+7† · ruin 1+0† · settlement 99+1† · war 0+30† · world 1+0†
 epithets earned: 147  (Boratau "the Young", Aelenglade "Seaborn", Thesdoikos "the Fair", Skjalvik "the Old")
 artifacts: 16 wrought · 14 held · 2 lost
@@ -20,7 +18,7 @@ stories sifted: 48 (bloody-circlet ×10 · empire-arc ×1 · high-noon ×1 · mi
   291.5  The Trials of Peldoikos  (y0–149, 12 beats)
 
 ---- checks ----------------------------------------------------------
-[FAIL] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
+[PASS] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
 [PASS] every carried id is valid                     0 bad   (ids index the registry)
 [PASS] events mappable (coords)                      97.9%   (most entries can fly the camera)
 [PASS] loud events carry a legend                2008/2008   (M6.9: two-layer telling on weight ≥ 3)
@@ -32,4 +30,4 @@ stories sifted: 48 (bloody-circlet ×10 · empire-arc ×1 · high-noon ×1 · mi
 [PASS] relics wrought                                   16   (M6.3: artifacts enter the world)
 [PASS] epithets earned                                 147   (M6.8: names are coined in the field)
 [PASS] chronicle unbounded                            8513   (no truncation: the full log persists)
-CHECKS: 11 pass · 0 warn · 1 fail
+CHECKS: 12 pass · 0 warn · 0 fail

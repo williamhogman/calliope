@@ -1,32 +1,3 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · ASSAY                    M15 property proofs
 ========================================================================
-    Compiling calliope v1.0.0 (/dev-server/game/rust)
- error[E0061]: this function takes 9 arguments but 8 arguments were supplied
-    --> src/bin/stagetest.rs:53:34
-     |
-  53 |     let (features, world_name) = naming::name_features(
-     |                                  ^^^^^^^^^^^^^^^^^^^^^
-  54 |         &height32, &biome_map, &hydro.rivers, &hydro.lakes, &discharge32, &tmean32, &precip32, seed,
-     |                    ---------- argument #2 of type `&SeaLevel` is missing
-     |
- note: function defined here
-    --> /dev-server/game/rust/src/naming.rs:300:8
-     |
- 300 | pub fn name_features(
-     |        ^^^^^^^^^^^^^
- help: provide the argument
-     |
-  53 -     let (features, world_name) = naming::name_features(
-  54 -         &height32, &biome_map, &hydro.rivers, &hydro.lakes, &discharge32, &tmean32, &precip32, seed,
-  55 -     );
-  53 +     let (features, world_name) = naming::name_features(&height32, /* &SeaLevel */, &biome_map, &hydro.lakes, &hydro.rivers, &tmean32, &precip32, &discharge32, seed);
-     |
- 
- For more information about this error, try `rustc --explain E0061`.
- error: could not compile `calliope` (bin "stagetest") due to 1 previous error
- warning: build failed, waiting for other jobs to finish...
-
----- checks ----------------------------------------------------------
-[FAIL] property lane broken                              (M15: a law found its counterexample — read above)
-CHECKS: see row above
