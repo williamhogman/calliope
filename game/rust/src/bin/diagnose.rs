@@ -2424,8 +2424,8 @@ fn cmd_climate(seed: i64, size: usize) {
     c.want("monsoon lives in the tropics", trop_m > mid_m, format!("{:.2} vs {:.2}", trop_m, mid_m), "ITCZ march beats continental swing");
     c.band("arable share of land", arable, pct(arable));
     c.band("pastoral share of land", pshare(4), pct(pshare(4)));
-    c.band("cold-rim rain suppression", cold_ratio, format!("{:.2}× ({} cells)", cold_ratio, cold_n));
-    c.band("warm-rim rain boost", warm_ratio, format!("{:.2}× ({} cells)", warm_ratio, warm_n));
+    c.band("cold-rim rain suppression", cold_ratio, format!("{:.2}× ({} cells)", cold_ratio, cold_n[0]));
+    c.band("warm-rim rain boost", warm_ratio, format!("{:.2}× ({} cells)", warm_ratio, warm_n[0]));
     c.want("rice hugs the water", pk[2] == 0 || pk[2] < pk[1] + pk[3], format!("rice {} vs wheat+maize {}", pk[2], pk[1] + pk[3]), "paddies are the exception, not the rule");
     c.band("ever-frozen share of ocean area", ice_area, pct(ice_area));
     if ice_ever > 0 {
