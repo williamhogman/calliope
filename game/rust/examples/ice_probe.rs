@@ -51,6 +51,7 @@ fn main() {
     }
     // hang side: distribution of trunk/trib cut ratios needs the carve — count junction geometry only
     let mut juncs = 0usize;
+    let mut diffs: Vec<f64> = Vec::new();
     for y in 0..rows {
         for x in 0..cols {
             if ice.thickness[[y,x]] <= 0.0 || water[[y,x]] { continue; }
@@ -61,8 +62,26 @@ fn main() {
             let (dy, dx) = hydrology::N8[d as usize];
             let ny = y as isize + dy; let nx = x as isize + dx;
             if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize { continue; }
-            if acc[[ny as usize, nx as usize]] >= 4.0 * a { juncs += 1; }
+            let at = acc[[ny as usize, nx as usize]];
+            if at < 4.0 * a { continue; }
+            juncs += 1;
+            // centerline depth law from ice::carve, both sides
+            let tf_a = ice.thickness[[y, x]] as f64 / 4000.0;
+            let tf_t = ice.thickness[[ny as usize, nx as usize]] as f64 / 4000.0;
+            let af_a = (a / 240.0).sqrt().min(1.0);
+            let af_t = (at / 240.0).sqrt().min(1.0);
+            let da = 0.055 * tf_a * (0.35 + 0.65 * af_a);
+            let dt = 0.055 * tf_t * (0.35 + 0.65 * af_t);
+            diffs.push(dt - da);
         }
     }
+    diffs.sort_by(|a, b| a.partial_cmp(b).unwrap());
     println!("iced junctions with 4x trunk: {juncs}");
+    if !diffs.is_empty() {
+        let pd = |p: f64| diffs[((diffs.len() - 1) as f64 * p) as usize];
+        println!("centerline depth diff p10 {:.5} p50 {:.5} p90 {:.5} max {:.5}", pd(0.1), pd(0.5), pd(0.9), diffs[diffs.len()-1]);
+        for t in [0.0005, 0.001, 0.002, 0.004, 0.008] {
+            println!("diff >= {:.4}: {}", t, diffs.iter().filter(|&&d| d >= t).count());
+        }
+    }
 }
