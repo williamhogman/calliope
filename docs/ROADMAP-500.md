@@ -65,7 +65,18 @@ the rebound belt out-raises the forebulge collar. The classifier
 joins `hash_state` as the F-lane. Landed alongside: six settlement
 events (storms, golden harvests, caravans) now carry their ground
 coords, closing the one orphan-id path the telling lane could hit
-when a town is renamed the same tick.
+when a town is renamed the same tick. M27 closes Year 1: every
+deep-earth layer already rode `hash_state` (P/Q/V/L/F lines plus the
+rock grid in the field hash), so the phase's real work was widening
+the cross-runtime gate — a labeled deep-earth identity line
+(plates·rock·seismic·volcanism·sealevel·landform) computed by both
+`diagnose earth-hash` and a new `earth_hash()` wasm export, compared
+by the report lane. Measurement beat assumption: the terrain-
+downstream layers (rock, volcanism, landform) were presumed hostage
+to transcendental drift, but three seeds × 240 months came back
+byte-identical native vs wasm, so the gate covers all six layers
+instead of the seismic ledger alone. Generation budget held green
+(512² median 1371 ms) with the suite at 440 pass · 0 fail.
 
 ## The forge charter
 
