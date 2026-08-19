@@ -227,6 +227,9 @@ fn templates(kind: &str) -> &'static [&'static str] {
         "delta" => &["The {w} Delta", "The Mouths of the {w}"],
         "pass" => &["The {w} Pass", "{w} Gap", "The Gates of {w}"],
         "ford" => &["{w} Ford", "The {w} Crossing", "The Fords of {w}"],
+        "skerries" => &["The {w} Skerries", "The {w} Scatter", "The Drowned Rocks of {w}"],
+        "firth" => &["The {w} Firth", "The Firth of {w}", "{w} Fjord"],
+        "strand" => &["The {w} Strand", "The Raised Shores of {w}", "The {w} Terraces"],
         _ => &["{w}"],
     }
 }
@@ -296,6 +299,7 @@ fn add_features(
 /// Returns (features, world_name).
 pub fn name_features(
     height: &Array2<f32>,
+    sealevel: &crate::sealevel::SeaLevel,
     biomes: &Array2<u8>,
     rivers: &Array2<bool>,
     lakes: &Array2<bool>,
@@ -677,6 +681,24 @@ pub fn name_features(
     add_features(&mut features, &mut rng, &mut taken, "marsh", &mlab, &mcomps, Anchor::Interior);
 
     let world_name = make_word(&mut rng, "old", &mut taken);
+    // M26 — the drowned and raised coasts earn names: skerry fields,
+    // firths and strands read straight off the landform grid (the
+    // sea-level history made visible). Minted last so every elder name
+    // above keeps its draw from the stream.
+    let lf = crate::landform::classify(height, sealevel);
+    let skerry = lf.mapv(|t| t == crate::landform::SKERRY);
+    let lab = ndimage::label(&skerry, true);
+    let comps = ndimage::top_components(&lab, 5.0 * sc, 5);
+    add_features(&mut features, &mut rng, &mut taken, "skerries", &lab, &comps, Anchor::Interior);
+    let ria = lf.mapv(|t| t == crate::landform::RIA);
+    let lab = ndimage::label(&ria, true);
+    let comps = ndimage::top_components(&lab, 4.0 * sc, 5);
+    add_features(&mut features, &mut rng, &mut taken, "firth", &lab, &comps, Anchor::Interior);
+    let raised = lf.mapv(|t| t == crate::landform::RAISED);
+    let lab = ndimage::label(&raised, true);
+    let comps = ndimage::top_components(&lab, 10.0 * sc, 5);
+    add_features(&mut features, &mut rng, &mut taken, "strand", &lab, &comps, Anchor::Interior);
+
     (features, world_name)
 }
 
@@ -950,15 +972,16 @@ pub fn culture_toponyms(
 /// a feature named at the dawn comes within reach of a second people, who
 /// keep their own word for it. This pass only ADDS exonyms: the map's
 /// first names are conservative and stand (renaming under conquest is
-/// M9.2's affair). Returns (feature name, other people, alt name) per
-/// new doubling, for the chronicle to speak of.
+/// M9.2's affair). Returns (feature name, other people, alt name, x, y)
+/// per new doubling — the ground anchor lets the chronicle pin the event
+/// to the feature even if the name itself later turns (M9.2).
 pub fn exonym_pass(
     features: &mut [Feature],
     settlements: &[crate::settlements::Settlement],
     cultures: &[crate::culture::People],
     taken: &mut HashSet<String>,
     rng: &mut Pcg64Mcg,
-) -> Vec<(String, String, String)> {
+) -> Vec<(String, String, String, i64, i64)> {
     let mut out = Vec::new();
     if cultures.len() < 2 || settlements.is_empty() {
         return out;
@@ -1000,8 +1023,9 @@ pub fn exonym_pass(
         let cu = &cultures[oi];
         let oc = coin(rng, &cu.style, taken);
         f.alt = styled_phrase(rng, &cu.style, &f.t, &oc.word);
+        taken.insert(f.alt.clone());
         f.alt_people = cu.people.clone();
-        out.push((f.name.clone(), cu.people.clone(), f.alt.clone()));
+        out.push((f.name.clone(), cu.people.clone(), f.alt.clone(), f.x, f.y));
     }
     out
 }

@@ -63,8 +63,16 @@ pub struct Route {
     pub old: bool,
 }
 
-/// Work out what a settlement produces from its hinterland.
-pub fn goods_for(s: &mut Settlement, deposits: &[Deposit], fertility: &Array2<f32>) {
+/// Work out what a settlement produces from its hinterland. Also stamps
+/// the M20 quarry tag — the stone its province cuts — so every path that
+/// assigns goods keeps the tag in step with the rock under the town.
+pub fn goods_for(
+    s: &mut Settlement,
+    deposits: &[Deposit],
+    fertility: &Array2<f32>,
+    rock: &Array2<u8>,
+) {
+    s.quarry = crate::rock::quarry(rock[[s.y as usize, s.x as usize]]);
     let r = crate::settlements::work_radius(s.pop);
     let r2 = r * r;
     let mut near: Vec<&Deposit> = deposits
@@ -116,9 +124,14 @@ pub fn goods_for(s: &mut Settlement, deposits: &[Deposit], fertility: &Array2<f3
     s.goods = goods;
 }
 
-pub fn assign_goods(settlements: &mut [Settlement], deposits: &[Deposit], fertility: &Array2<f32>) {
+pub fn assign_goods(
+    settlements: &mut [Settlement],
+    deposits: &[Deposit],
+    fertility: &Array2<f32>,
+    rock: &Array2<u8>,
+) {
     for s in settlements.iter_mut() {
-        goods_for(s, deposits, fertility);
+        goods_for(s, deposits, fertility, rock);
     }
 }
 

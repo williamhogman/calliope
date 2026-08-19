@@ -404,7 +404,7 @@ impl World {
             let ddx = (dx0 - s.x) as f64;
             let ddy = (dy0 - s.y) as f64;
             if ddx * ddx + ddy * ddy <= r * r {
-                trade::goods_for(&mut self.peoples.settlements[i], &self.deposits, &self.fields.fertility);
+                trade::goods_for(&mut self.peoples.settlements[i], &self.deposits, &self.fields.fertility, &self.fields.rock);
             }
         }
     }

@@ -73,7 +73,14 @@ fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
     let g4 = g3 * coin;
     let g5 = g4 * crowd;
     let port = if s.port { pop * 0.0012 } else { 0.0 };
-    let total = g5 + port;
+    // M24 — the rebuild arc: kin return while the arc is open and the
+    // town still stands below its pre-disaster strength.
+    let rebuild = if s.rebuild_until > 0 && s.pop < s.rebuild_peak {
+        pop * 0.012
+    } else {
+        0.0
+    };
+    let total = g5 + port + rebuild;
 
     let mut terms = vec![json!({ "l": "Hearth & kin", "v": g0 })];
     if cold < 1.0 {
@@ -98,6 +105,9 @@ fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
     }));
     if s.port {
         terms.push(json!({ "l": "Harbour", "v": port }));
+    }
+    if rebuild > 0.0 {
+        terms.push(json!({ "l": "Rebuilding", "v": rebuild }));
     }
 
     Some(json!({

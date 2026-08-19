@@ -324,6 +324,7 @@ field_registry! {
     strahler:  U8,  units "stream order, 0 off-river",       hash true,  gpu true,  wire raw;
     flags:     U8,  units "CellFlags bits",                  hash true,  gpu true,  wire raw;
     territory: I16, units "owner realm, −1 wild",            hash false, gpu false, wire raw;
+    rock:      U8,  units "rock province id (M18)",          hash true,  gpu false, wire raw;
 }
 
 /// Wire quantization mode for a registry field (E3.4).

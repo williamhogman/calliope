@@ -25,6 +25,7 @@ export const FIELDS = [
   { name: "strahler", dtype: "uint8", units: "stream order, 0 off-river", gpu: true },
   { name: "flags", dtype: "uint8", units: "CellFlags bits", gpu: true },
   { name: "territory", dtype: "int16", units: "owner realm, −1 wild", gpu: false },
+  { name: "rock", dtype: "uint8", units: "rock province id (M18)", gpu: false },
 ];
 
 export const EVENT_KINDS = [
@@ -48,6 +49,7 @@ export const EVENT_KINDS = [
   { name: "wonder", family: "realm", weight: 2 },
   { name: "kindred", family: "realm", weight: 3 },
   { name: "era", family: "realm", weight: 4 },
+  { name: "quake", family: "nature", weight: 3 },
 ];
 
 export const ENTITY_KINDS = ["artifact", "culture", "feature", "good", "person", "ruin", "settlement", "war", "world", "realm", "civilization"];

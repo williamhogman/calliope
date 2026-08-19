@@ -1,30 +1,54 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 90210 · 640x512
 ========================================================================
-world: "Karwyn" · generated in 997 ms
-land: 115663 cells of 327680 (35.3%) · 1850608 km²
-hypsometry (land h): p5 0.019 · p25 0.096 · p50 0.230 · p75 0.397 · p95 0.573 · max 0.799
-bathymetry (sea h): p5 -0.593 · p50 -0.393 · p95 -0.035
-relief of land: hills(h>.35) 31.2% · mountains(h>.5) 12.3% · alpine(h>.65) 1.3%
-landmasses: 26 total · 2 continents(≥3000c) · 1 major isles(≥400c) · 13 islands(≥40c) · 10 islets
-largest landmass: 57706 cells = 49.9% of all land
-coastline: 3068 coastal cells · crenulation 0.027 (coast/land)
+world: "Auraia" · generated in 1356 ms
+land: 116784 cells of 327680 (35.6%) · 1868544 km²
+hypsometry (land h): p5 0.016 · p25 0.087 · p50 0.208 · p75 0.329 · p95 0.467 · max 0.743
+bathymetry (sea h): p5 -0.593 · p50 -0.400 · p95 -0.030
+relief of land: hills(h>.35) 21.2% · mountains(h>.5) 2.7% · alpine(h>.65) 0.4%
+landmasses: 17 total · 2 continents(≥3000c) · 0 major isles(≥400c) · 7 islands(≥40c) · 8 islets
+largest landmass: 60704 cells = 52.0% of all land
+coastline: 3177 coastal cells · crenulation 0.027 (coast/land)
 land share by latitude band:
-    90°–  60°   13044  24.0%
-    60°–  30°   22972  42.2%
-    30°–   0°   23227  42.2%
-     0°–  30°   22617  41.6%
-    30°–  60°   22846  42.0%
-    60°–  90°   10957  19.9%
-named: 3 archipelagos · 4 islands · 5 mountain ranges
+    90°–  60°   13443  24.7%
+    60°–  30°   23416  43.0%
+    30°–   0°   21812  39.6%
+     0°–  30°   20917  38.5%
+    30°–  60°   21875  40.2%
+    60°–  90°   15321  27.8%
+sea level (M25): phase 0.281 · stand -0.244 · eustatic -0.0044 h · rebound +0.0097 · forebulge -0.0034
+named: 1 archipelagos · 0 islands · 2 mountain ranges
+plates: 11 polygons (6 continental) · mean drift-age 1257 Myr
+seams: 1312 convergent · 2526 divergent · 584 transform cells
+orogeny ages: mean belt relief re-aged  200 Myr 0.1032 · 900 Myr 0.0888 · 2000 Myr 0.0833  (59956 belt cells)
+rock provinces: shield 10.4% · basin 80.8% · fold belt 5.5% · volcanic 3.3%
+legibility (M21): off-correlate shield 0.0% · basin 0.0% · fold belt 0.0%
+coastal landforms (M26): raised 2990 · ria 0 · skerry 0 · coast 3177 cells
 
 ---- checks ----------------------------------------------------------
-[PASS] land fraction                                 35.3%   (sweet 22–40% · hard 15–52%)
+[PASS] land fraction                                 35.6%   (sweet 22–40% · hard 15–52%)
 [PASS] border land cells                                 0   (must be 0 — no clipped landmasses)
-[PASS] largest landmass share of land                49.9%   (sweet 25–85% · hard 10–93%)
-[PASS] landmass count                                   26   (sweet 15–400 · hard 6–2000)
-[PASS] small isles+islets                               23   (sweet 10–380 · hard 3–1900)
-[PASS] mountain share of land (h>0.5)                12.3%   (sweet 2–14% · hard 0.5–22%)
+[PASS] coastline holds the datum (M25)      2.8% drift at stand -0.24 (cap 6.1%)   (M25 gate: land area within ±5% of the pre-M25 baseline near mid-curve)
+[PASS] sea-level history regen byte-identical      identical   (M25: same seed ⇒ same waterline; joins hash_state)
+[PASS] raised coast per stand                      121.424   (sweet 70–150 · hard 40–250 (share of coast per mean emergence, ≈1/coastal slope))
+[PASS] landform signs read true             0 tags against the offset sign   (M26: raised only where the land rose, drowned only where the sea did)
+[PASS] landform grid regen byte-identical        identical   (M26 gate: pure function of height + sea level; joins hash_state)
+[PASS] raised beaches thicken with the rise rebound belt 152.9% vs collar 11.9%   (M26 gate: landform frequency follows the amplitude within one world)
+[PASS] largest landmass share of land                52.0%   (sweet 25–85% · hard 10–93%)
+[PASS] landmass count                                   17   (sweet 15–400 · hard 6–2000)
+[PASS] small isles+islets                               15   (sweet 10–380 · hard 3–1900)
+[PASS] mountain share of land (h>0.5)                 2.7%   (sweet 2–14% · hard 0.5–22%)
 [PASS] coastline crenulation                         0.027   (sweet 0.02–0.30 at 4 km cells)
-[PASS] archipelagos named                                3   (≥1 — island clusters should get names)
-CHECKS: 8 pass · 0 warn · 0 fail
+[PASS] archipelagos named                                1   (≥1 — island clusters should get names)
+[PASS] plate count                                      11   (M16: a coarse sketch — continents, not crazy paving)
+[PASS] plate mean drift-age (Myr)                     1257   (M16: deep time, neither newborn nor exhausted)
+[PASS] convergent share of boundary                  29.7%   (M16: some seams close, some open, some slide)
+[PASS] plate sketch regen byte-identical         identical   (M16: same seed ⇒ same polygons)
+[PASS] heightmap regen byte-identical            identical   (M16: same sketch ⇒ same land)
+[PASS] belt relief falls with seam age      0.1032 → 0.0888 → 0.0833   (M17: the same sketch re-aged 200/900/2000 Myr sinks monotonically)
+[PASS] shield share of land                          10.4%   (M18 gate: every province present at ≥2% of land)
+[PASS] basin share of land                           80.8%   (M18 gate: every province present at ≥2% of land)
+[PASS] fold-belt share of land                        5.5%   (M18 gate: every province present at ≥2% of land)
+[PASS] volcanic share of land                         3.3%   (M18 gate: every province present at ≥2% of land)
+[PASS] province map reads true              worst off-correlate 0.0% (shield 0.0% · basin 0.0% · fold 0.0%)   (M21 gate: ≤3% of each province off its landform correlate)
+CHECKS: 25 pass · 0 warn · 0 fail

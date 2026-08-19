@@ -31,6 +31,30 @@ unless all 500 phases are present, unique, in order, and properly
 worded. Era-by-era steering interviews continue on top of the
 complete draft.
 
+Progress: M16–M25 landed (plate history, orogeny ages, rock
+provinces, deposits re-seated, regional stone, geologic legibility,
+fault seams + dated earthquakes, live volcanism, disaster wiring) —
+each closed on its `diagnose` gate across the seed sweep. M22's
+replay gate is the first cross-runtime check: the seismic ledger is
+byte-identical native vs WASM (ADR-0025), enforced by the
+`earth-wasm` report lane. M23 reads cone ages straight off summit
+height (the generator writes age into height by construction) and
+lays permanent ash fertility under a distance-decay gate. M24 wires
+both hazards into one shared kill path (`fell_settlement`): every
+destroying-magnitude strike yields exactly one chronicle beat and one
+ruin, damage marks of a twelfth or worse open forty-year rebuild arcs
+(target capped just under carrying capacity; sqrt near-field falloff),
+and the `civ` lane gates 1:1 fall-to-ruin correspondence plus median
+arc closure inside the window. M25 gives every world a sea-level history: a seeded freeze
+point on the glacial sawtooth sets the eustatic stand while a
+post-glacial isostatic field (rebound above the old ice edge, a
+sinking forebulge collar below it) tilts the coasts — all applied
+before erosion, all IEEE-exact, hashed into `hash_state`, gated on
+the coastline holding the datum. The cone-age law it disturbed was
+recalibrated to height rank (the affine map had saturated: 2/3 of
+all cones read age 0.00 and the M23 cadence gate was measuring
+noise — now 2.19× young/old).
+
 ## The forge charter
 
 Every forge interlude answers five standing questions, two quarters long:

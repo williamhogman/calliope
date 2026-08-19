@@ -82,11 +82,16 @@ pub struct Band {
 pub fn all_bands() -> impl Iterator<Item = &'static Band> {
     crate::geo::BANDS
         .iter()
+        .chain(crate::plates::BANDS)
+        .chain(crate::rock::BANDS)
         .chain(crate::climate::BANDS)
         .chain(crate::biomes::BANDS)
         .chain(crate::agriculture::BANDS)
         .chain(crate::hydrology::BANDS)
         .chain(crate::resources::BANDS)
+        .chain(crate::seismic::BANDS)
+        .chain(crate::seismic::VOLCANO_BANDS)
+        .chain(crate::landform::BANDS)
         .chain(crate::naming::BANDS)
         .chain(crate::culture::BANDS)
         .chain(crate::trade::BANDS)

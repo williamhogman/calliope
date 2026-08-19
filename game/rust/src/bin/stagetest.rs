@@ -11,7 +11,11 @@ fn main() {
     println!("stagetest seed {} size {}", seed, size);
 
     let t = Instant::now();
-    let mut height = geo::heightmap(seed, size);
+    let plates = calliope::plates::generate(seed, size);
+    println!("plates     {:>6} ms · {} polygons", t.elapsed().as_millis(), plates.plates.len());
+
+    let t = Instant::now();
+    let mut height = geo::heightmap(seed, size, &plates);
     println!("terrain    {:>6} ms", t.elapsed().as_millis());
 
     let t = Instant::now();
@@ -52,7 +56,10 @@ fn main() {
     println!("naming     {:>6} ms · {} features · world {}", t.elapsed().as_millis(), features.len(), world_name);
 
     let t = Instant::now();
-    let deposits = resources::place_resources(&biome_map, &height32, &hydro.rivers, &hydro.lakes, seed);
+    // M18/M19 — the basement classifies off the sketch and the relief,
+    // then the ore roll reads it.
+    let rock = calliope::rock::classify(seed, size, &plates, &height32);
+    let deposits = resources::place_resources(&biome_map, &height32, &hydro.rivers, &hydro.lakes, &rock, seed);
     println!("resources  {:>6} ms · {} deposits", t.elapsed().as_millis(), deposits.len());
 
     println!("ALL STAGES OK");

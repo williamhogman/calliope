@@ -2,45 +2,49 @@
  CALLIOPE DIAGNOSTIC · RESOURCES                    seed 12345 · 640x512
 ========================================================================
 kind           count dawn-known    rich   finite reserve mo  min dist
-bananas            5       5 100%    0.87        0     renews       34c
-blueberries        7       7 100%    0.88        0     renews       36c
-strawberries       9       9 100%    0.85        0     renews       49c
-blackberries       3       3 100%    0.88        0     renews       28c
-cattle             4       4 100%    0.92        0     renews       52c
-sheep             23      23 100%    0.92        0     renews       52c
-horse              4       4 100%    0.92        0     renews       26c
-pig                2       2 100%    0.93        0     renews       43c
-deer               4       4 100%    0.87        0     renews       42c
-elk                4       4 100%    0.92        0     renews       45c
-fish               4       4 100%    0.86        0     renews       49c
-timber             9       9 100%    0.88        0     renews       40c
-stone              4       4 100%    0.86        0     renews       51c
-coal              16       1  6%    0.86       16       1284       42c
-copper            13       5 38%    0.88       13       1355       43c
-iron              10       1 10%    0.86       10       1314       51c
-silver             2       0  0%    0.90        2        871       66c
-gold               2       0  0%    0.59        2        579       61c
-mithril            1       0  0%    0.66        1       2077       51c
-salt               6       2 33%    0.87        5       1496       50c
-furs               3       3 100%    0.94        0     renews       67c
-grapes             2       2 100%    0.85        0     renews       35c
-spices             3       3 100%    0.86        0     renews       39c
-dyes               2       2 100%    0.89        0     renews       35c
-clay               8       8 100%    0.92        0     renews       46c
-marble             2       1 50%    0.91        2       2099       60c
-gems               2       0  0%    0.90        2        692       79c
+bananas            2       2 100%    0.91        0     renews       13c
+blueberries        7       7 100%    0.89        0     renews       47c
+strawberries      11      11 100%    0.89        0     renews       45c
+blackberries       5       5 100%    0.86        0     renews       51c
+cattle             0          —       —        —          —         —
+sheep             25      25 100%    0.91        0     renews       64c
+horse              5       5 100%    0.90        0     renews       60c
+pig                5       5 100%    0.95        0     renews       52c
+deer               4       4 100%    0.88        0     renews       76c
+elk                9       9 100%    0.86        0     renews       66c
+fish               6       6 100%    0.85        0     renews       60c
+timber            11      11 100%    0.89        0     renews       36c
+stone              5       5 100%    0.87        0     renews       60c
+coal              25       3 12%    0.85       25       1282       45c
+copper             8       3 38%    0.90        8       1352       54c
+iron               5       0  0%    0.84        5       1295       47c
+silver             2       0  0%    0.89        2        918       55c
+gold               2       0  0%    0.85        2        702       48c
+mithril            1       0  0%    0.66        1       2077       74c
+salt               8       3 38%    0.90        7       1504       54c
+furs               5       5 100%    0.97        0     renews       50c
+grapes             2       2 100%    0.91        0     renews       32c
+spices             3       3 100%    0.87        0     renews       23c
+dyes               3       3 100%    0.88        0     renews       28c
+clay               9       9 100%    0.87        0     renews       55c
+marble             4       1 25%    0.92        4       2194       51c
+gems               3       0  0%    0.89        3        776       50c
 
-total deposits: 154 · 1.37 per 1000 land cells
-mineral seams hidden at dawn: 44 of 58 (75.9%)
+total deposits: 175 · 1.53 per 1000 land cells
+mineral seams hidden at dawn: 48 of 63 (76.2%)
+kinds absent from this world: ["cattle"]
+
+ore homes (M19): gold 2/2 · silver 2/2 · copper 8/8 · iron 5/5 · coal 25/25 · gems 3/3 · marble 4/4
 
 ---- checks ----------------------------------------------------------
-[PASS] deposits per 1000 land cells                   1.37   (sweet 1–6 · hard 0.5–12)
-[PASS] mineral hidden share at dawn                  75.9%   (sweet 45–85% — leave an age of prospectors)
-[PASS] essential kinds all present               0 missing   (everything except mithril/bananas should place)
+[PASS] deposits per 1000 land cells                   1.53   (sweet 1–6 · hard 0.5–12)
+[PASS] mineral hidden share at dawn                  76.2%   (sweet 45–85% — leave an age of prospectors)
+[WARN] essential kinds all present               1 missing   (everything except mithril/bananas should place)
 [PASS] gold placed                                     yes   (a world without gold has a dull late game)
 [PASS] mithril placed                                  yes   (the legendary seam should exist somewhere)
-[PASS] coastal salt pan exists              1 pans · 5 rock seams   (M14.2: every world gets at least one renewing pan on an arid shore)
-[PASS] salt sources ≥2                                   6   (M14.2 floor: one source is a monopoly, not an economy)
+[PASS] coastal salt pan exists              1 pans · 7 rock seams   (M14.2: every world gets at least one renewing pan on an arid shore)
+[PASS] salt sources ≥2                                   8   (M14.2 floor: one source is a monopoly, not an economy)
 [PASS] pans known at dawn                           1 of 1   (a salt pan is plain to see — never hidden, never exhausted)
 [PASS] goods table agrees with closure flags 38 rows consistent   (M14.1: one declaration point — flags derive-checked against GOODS)
-CHECKS: 9 pass · 0 warn · 0 fail
+[PASS] ore seams in home province           49 of 49 (100.0%)   (M19 gate: geology says where ore sits — ≥90% pooled)
+CHECKS: 9 pass · 1 warn · 0 fail

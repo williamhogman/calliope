@@ -1,0 +1,34 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · DEEP EARTH                   512² · 150y · seeds [12345, 777, 90210]
+========================================================================
+
+   seed  seams   conv km  trans km  quakes q/100km-cy   mean M    max M   M>=7.5
+  12345     44      6376      3236     122       0.85     6.09      9.0        5
+    777     57      6932      5884     175       0.91     5.99      7.9        5
+  90210     36      5248      2336     111       0.98     6.05      8.5        3
+
+   seed  cones eruptions erupt/cone-cy  mean VEI
+  12345     47        43         0.61      3.88
+    777     44        40         0.61      4.00
+  90210     21        13         0.41      4.04
+
+ replay: seed 12345 · 1800 mo · chunk 240 => 5aa7be864419f5d3 · chunk 12 => 5aa7be864419f5d3
+ native seismic hash (seed 12345 · size 512 · 1800 mo): 5aa7be864419f5d3
+
+ cadence by age tercile: young 0.72 · mid 0.67 · old 0.31 erupt/cone-cy
+
+---- checks ----------------------------------------------------------
+[PASS] fault seams                                      46   (M22: a mapped world holds tens of named seams, not confetti)
+[PASS] active fault km                            10004 km   (M22: convergent+transform seam length on a 512-world)
+[PASS] quakes per 100km-century                       0.91   (M22 gate: order-unity notable events per 100 km per century)
+[PASS] q/100km-cy (stingiest seed)                    0.85   (M22 gate: order-unity notable events per 100 km per century)
+[PASS] mean quake magnitude                         M 6.04   (M22: renewal model centers on strong-but-survivable)
+[PASS] great quakes share (M>=7.5)                    3.2%   (M22: the tail exists — long-quiet seams break big)
+[PASS] seismic replay is byte-identical              agree   (M22 gate: same seed, different chunking, one ledger)
+[PASS] volcano cones                                    37   (M23: a mapped world keeps tens of living vents)
+[PASS] eruptions per cone-century                     0.57   (M23: cones blow on decade-to-century clocks)
+[PASS] young/old cadence ratio                       2.28×   (M23 gate: young tercile erupts oftener than the old)
+[PASS] mean eruption VEI                          VEI 3.95   (M23: most blows are survivable; the tail is not)
+[PASS] ash bonus at the cone                        +0.084   (M23: fertile aprons form where ash falls)
+[PASS] ash decays with distance             vent 0.084 > r3 0.019 > r6 0.003   (M23 gate: the fertile apron thins away from the vent)
+CHECKS: 13 pass · 0 warn · 0 fail

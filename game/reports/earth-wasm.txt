@@ -1,0 +1,10 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · SEISMIC REPLAY            native vs shipped wasm
+========================================================================
+ seed 777 · size 512 · 240 mo
+ native: 7ef24fa665fbe366
+ wasm:   7ef24fa665fbe366
+
+---- checks ----------------------------------------------------------
+[PASS] seismic ledger agrees across runtimes        agree   (M22 gate: native and wasm replay one ledger)
+CHECKS: 1 pass · 0 warn · 0 fail

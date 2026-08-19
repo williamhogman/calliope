@@ -51,6 +51,14 @@ pub enum EventKind {
     /// dawns, the court rots, the empire breaks, successors are named).
     /// Appended last; wire discriminants hold.
     Era,
+    /// M22 — the deep earth speaks: earthquakes off the fault seams.
+    /// Vocabulary lands here; M24 wires the chronicle beats. Appended
+    /// last; wire discriminants hold.
+    Quake,
+    /// M24 — the mountain gives its answer: eruptions off the cone
+    /// record, felled towns and all. Appended last; wire discriminants
+    /// hold.
+    Eruption,
 }
 
 impl EventKind {
@@ -106,6 +114,8 @@ event_table! {
     Wonder    => family realm,   weight 2, fortune 1;
     Kindred   => family realm,   weight 3, fortune 0;
     Era       => family realm,   weight 4, fortune 0;
+    Quake     => family nature,  weight 3, fortune -1;
+    Eruption  => family nature,  weight 3, fortune -1;
 }
 
 /// E5.5 — inline storage for the common 0–2 entity ids per event.
@@ -156,6 +166,8 @@ pub fn headline_worthy(k: EventKind) -> bool {
             | EventKind::Myth
             | EventKind::Kindred
             | EventKind::Era
+            | EventKind::Quake
+            | EventKind::Eruption
     )
 }
 

@@ -2,43 +2,43 @@
  CALLIOPE DIAGNOSTIC · CLIMATE                      seed 90210 · 640x512
 ========================================================================
 biome shares of land:
-  Desert                     21192  18.3%
-  Savanna                    19715  17.0%
-  Tropical Rainforest        11179  9.7%
-  Grasslands                 11907  10.3%
-  Woodlands                  14098  12.2%
-  Seasonal Rainforest         1525  1.3%
-  Temperate Rainforest        1542  1.3%
-  Boreal Forest               2954  2.6%
-  Tundra                     19975  17.3%
-  Ice                         8957  7.7%
-land temperature °C: mean 6.7 · p10 -8.7 · p50 8.3 · p90 20.2
-land precipitation mm/yr: mean 771 · p10 156 · p50 405 · p90 1962
-seasonal swing |amp| °C: mean 5.7 · p90 9.2
-land freezing in deep winter: 44.6%
+  Desert                     20874  17.9%
+  Savanna                    21212  18.2%
+  Tropical Rainforest        12443  10.7%
+  Grasslands                 14336  12.3%
+  Woodlands                   9418  8.1%
+  Seasonal Rainforest         1155  1.0%
+  Temperate Rainforest        1685  1.4%
+  Boreal Forest               2968  2.5%
+  Tundra                     19532  16.7%
+  Ice                        11269  9.6%
+land temperature °C: mean 6.5 · p10 -9.8 · p50 7.2 · p90 20.9
+land precipitation mm/yr: mean 793 · p10 164 · p50 373 · p90 2037
+seasonal swing |amp| °C: mean 5.9 · p90 9.6
+land freezing in deep winter: 47.9%
 latitude bands (land only):
   band          cells   T mean    P mean  dominant biome
-  90°–60°       13044    -8.9C     290mm  Tundra
-  60°–30°       22972     6.2C     698mm  Woodlands
-  30°–0°        23227    17.3C    1147mm  Savanna
-  0°–30°        22617    15.5C    1078mm  Savanna
-  30°–60°       22846     3.5C     643mm  Grasslands
-  60°–90°       10957    -7.6C     338mm  Tundra
-monsoon |amp| of annual rain: tropics 0.30 · extratropics 0.01
+  90°–60°       13443    -8.9C     297mm  Tundra
+  60°–30°       23416     4.5C     672mm  Grasslands
+  30°–0°        21812    18.0C    1253mm  Savanna
+  0°–30°        20917    17.7C    1237mm  Savanna
+  30°–60°       21875     6.4C     705mm  Desert
+  60°–90°       15321    -8.3C     276mm  Tundra
+monsoon |amp| of annual rain: tropics 0.30 · extratropics 0.00
 
-crop packages of the land: wheat 23.3% · rice 3.4% · maize 9.0% · pastoral 33.6% · wildland 30.7%
+crop packages of the land: wheat 18.3% · rice 4.8% · maize 12.3% · pastoral 35.3% · wildland 29.3%
 
 ---- checks ----------------------------------------------------------
-[PASS] desert share of land                          18.3%   (sweet 12–28% · hard 6–38%)
-[PASS] tundra+ice share of land                      25.0%   (sweet 5–30% · hard 1–45%)
-[PASS] forest share of land                          27.1%   (sweet 25–60% · hard 15–75%)
-[PASS] grass+savanna share of land                   27.3%   (sweet 10–45% · hard 4–60%)
-[PASS] land mean temperature                         6.7°C   (sweet 5–20°C · hard -2–28°C)
-[PASS] land mean precipitation                       771mm   (sweet 500–1500 · hard 250–2400)
-[PASS] mean seasonal swing                           5.7°C   (sweet 4–14°C · hard 2–20°C)
+[PASS] desert share of land                          17.9%   (sweet 12–28% · hard 6–38%)
+[PASS] tundra+ice share of land                      26.4%   (sweet 5–30% · hard 1–45%)
+[WARN] forest share of land                          23.7%   (sweet 25–60% · hard 15–75%)
+[PASS] grass+savanna share of land                   30.4%   (sweet 10–45% · hard 4–60%)
+[PASS] land mean temperature                         6.5°C   (sweet 5–20°C · hard -2–28°C)
+[PASS] land mean precipitation                       793mm   (sweet 500–1500 · hard 250–2400)
+[PASS] mean seasonal swing                           5.9°C   (sweet 4–14°C · hard 2–20°C)
 [PASS] tropical monsoon amplitude                     0.30   (sweet .12–.55 · hard .05–.85)
-[PASS] monsoon lives in the tropics           0.30 vs 0.01   (ITCZ march beats continental swing)
-[PASS] arable share of land                          35.7%   (M2.1: wheat+rice+maize belts cover the good land)
-[PASS] pastoral share of land                        33.6%   (M2.1: the dry steppe carries herds)
-[PASS] rice hugs the water                  rice 3946 vs wheat+maize 37335   (paddies are the exception, not the rule)
-CHECKS: 12 pass · 0 warn · 0 fail
+[PASS] monsoon lives in the tropics           0.30 vs 0.00   (ITCZ march beats continental swing)
+[PASS] arable share of land                          35.4%   (M2.1: wheat+rice+maize belts cover the good land)
+[PASS] pastoral share of land                        35.3%   (M2.1: the dry steppe carries herds)
+[PASS] rice hugs the water                  rice 5644 vs wheat+maize 35709   (paddies are the exception, not the rule)
+CHECKS: 11 pass · 1 warn · 0 fail
