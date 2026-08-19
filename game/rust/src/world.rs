@@ -163,6 +163,7 @@ pub struct GenBuilder {
     // f64 physics intermediates (dropped as soon as their stage is done)
     plates: Option<crate::plates::Plates>,
     sealevel: Option<crate::sealevel::SeaLevel>,
+    ice: Option<crate::ice::Ice>,
     height64: Option<Array2<f64>>,
     water: Option<Array2<bool>>,
     tmean64: Option<Array2<f64>>,
@@ -191,9 +192,10 @@ pub struct GenBuilder {
 
 impl GenBuilder {
     /// The ladder, in running order. Names double as progress labels.
-    pub const STAGES: [&'static str; 9] = [
+    pub const STAGES: [&'static str; 10] = [
         "terrain",
         "erosion",
+        "glacial",
         "climate",
         "hydrology",
         "biomes",
@@ -213,6 +215,7 @@ impl GenBuilder {
             timings: Vec::new(),
             plates: None,
             sealevel: None,
+            ice: None,
             height64: None,
             water: None,
             tmean64: None,
@@ -253,13 +256,14 @@ impl GenBuilder {
         match self.stage {
             0 => self.stage_terrain(),
             1 => self.stage_erosion(),
-            2 => self.stage_climate(),
-            3 => self.stage_hydrology(),
-            4 => self.stage_biomes(),
-            5 => self.stage_fertility(),
-            6 => self.stage_naming(),
-            7 => self.stage_resources(),
-            8 => self.stage_dawn(),
+            2 => self.stage_glacial(),
+            3 => self.stage_climate(),
+            4 => self.stage_hydrology(),
+            5 => self.stage_biomes(),
+            6 => self.stage_fertility(),
+            7 => self.stage_naming(),
+            8 => self.stage_resources(),
+            9 => self.stage_dawn(),
             _ => panic!("generation already complete"),
         }
         self.stage += 1;
@@ -296,6 +300,20 @@ impl GenBuilder {
         let water = height.mapv(|h| h < 0.0);
         self.water = Some(water);
         self.timings.push(("erosion", now_ms() - te));
+    }
+
+    /// M28/M29 — the ice ages: cut the LGM footprint from the eroded
+    /// land, then carve the relief the sheets left. Runs before climate
+    /// so every downstream layer reads the glaciated world.
+    fn stage_glacial(&mut self) {
+        let t = now_ms();
+        let h = self.height64.as_mut().unwrap();
+        let mut ice = crate::ice::compute(self.seed, h);
+        crate::ice::carve(h, &mut ice);
+        // the carve moves the waterline: fjords drown, floors drop
+        self.water = Some(h.mapv(|v| v < 0.0));
+        self.ice = Some(ice);
+        self.timings.push(("glacial", now_ms() - t));
     }
 
     fn stage_climate(&mut self) {
@@ -693,7 +711,7 @@ impl GenBuilder {
             plates,
             sealevel: self.sealevel.take().expect("sealevel generated"),
             landform: ndarray::Array2::zeros((0, 0)),
-            ice: crate::ice::Ice::empty(),
+            ice: self.ice.take().expect("glacial stage ran"),
             seismic: crate::seismic::Seismic::empty(),
             volcanism: crate::seismic::Volcanism::empty(),
             features,
@@ -736,8 +754,8 @@ impl GenBuilder {
         );
         // M26 — the coasts read their own history: raised beaches where
         // the land outran the sea, rias and skerries where the sea won.
-        world.landform = crate::landform::classify(&world.fields.height, &world.sealevel);
-        world.ice = crate::ice::compute(world.seed, &world.fields.height);
+        world.landform =
+            crate::landform::classify(&world.fields.height, &world.sealevel, &world.ice);
         // The dawn's own entries join the telling: subjects resolved to
         // registry ids, coordinates backfilled, great deeds legendized (M6).
         let mut dawn = std::mem::take(&mut world.chronicle.events);
@@ -848,6 +866,12 @@ impl World {
         self.fields.fertility = grow(&self.fields.fertility, pad, |_, _| 0.0);
         self.site_score = grow(&self.site_score, pad, |_, _| 0.0);
         self.food_grid = grow(&self.food_grid, pad, |_, _| 0.0);
+        // M28/M29 — the ice ledger rides along: margins are open water.
+        self.ice.thickness = grow(&self.ice.thickness, pad, |_, _| 0.0f32);
+        self.ice.carved = grow(&self.ice.carved, pad, |_, _| 0.0f32);
+        for p in self.ice.cirques.iter_mut().chain(self.ice.hangs.iter_mut()) {
+            p.1 += pad as u16;
+        }
         self.fields.biomes = {
             let a = &self.fields.biomes;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {

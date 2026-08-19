@@ -29,6 +29,9 @@ pub const NONE: u8 = 0;
 pub const RAISED: u8 = 1;
 pub const RIA: u8 = 2;
 pub const SKERRY: u8 = 3;
+/// M29 — a drowned glacial trough: the ice overdeepened the valley
+/// below the waterline and the sea took it.
+pub const FJORD: u8 = 4;
 
 /// A drowned cell counts as a ria when land at least this tall stands
 /// within `WALL_R` cells — valley walls, not open flats.
@@ -37,9 +40,20 @@ const WALL_R: isize = 2;
 
 /// Classify every cell of the (possibly widened) grid. Rows map 1:1 to
 /// the sea-level row profile — the widen adds columns only.
-pub fn classify(height: &Array2<f32>, sl: &SeaLevel) -> Array2<u8> {
+pub fn classify(height: &Array2<f32>, sl: &SeaLevel, ice: &crate::ice::Ice) -> Array2<u8> {
     let (h, w) = height.dim();
     let mut out: Array2<u8> = Array2::zeros((h, w));
+    // M29 — fjords first: a drowned cell the ice carved is a fjord no
+    // matter what the sea-level ledger says about it.
+    if ice.carved.dim() == (h, w) {
+        for y in 0..h {
+            for x in 0..w {
+                if height[[y, x]] < 0.0 && ice.carved[[y, x]] >= crate::ice::FJORD_MIN {
+                    out[[y, x]] = FJORD;
+                }
+            }
+        }
+    }
     let last = sl.row.len().saturating_sub(1);
     for y in 0..h {
         let dz = (sl.row[y.min(last)] - sl.eustatic) as f32;
@@ -49,6 +63,9 @@ pub fn classify(height: &Array2<f32>, sl: &SeaLevel) -> Array2<u8> {
         for x in 0..w {
             let hv = height[[y, x]];
             let h0 = hv - dz;
+            if out[[y, x]] == FJORD {
+                continue;
+            }
             if hv >= 0.0 && h0 < 0.0 {
                 out[[y, x]] = RAISED;
             } else if hv < 0.0 && h0 >= 0.0 {

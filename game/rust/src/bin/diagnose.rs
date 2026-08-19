@@ -294,7 +294,6 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
     let mut i_margin = 0.0f64;
     let mut i_mono = 0.0f64;
     let mut i_dome = 0.0f64;
-    let mut i_pure = true;
 
     println!();
     println!(
@@ -442,8 +441,6 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
         i_margin += margin / seeds.len() as f64;
         i_mono += mono / seeds.len() as f64;
         i_dome = i_dome.max(dome);
-        // Purity: recompute off the same height field, same footprint.
-        i_pure &= calliope::ice::compute(w.seed, &w.fields.height).hash() == ice.hash();
         i_rows.push(format!(
             " {:>6} {:>7.1} {:>11.1} {:>9} {:>8.0} {:>7.0}",
             seed, share, margin, occ.len(), dome, mono
@@ -471,7 +468,7 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
     // Replay identity: the flagship seed run twice from scratch with
     // different chunkings must agree on the ledger byte-for-byte.
     let seed0 = seeds[0];
-    let hash_after = |chunk: i64| -> u64 {
+    let hash_after = |chunk: i64| -> (u64, u64) {
         let mut w = World::generate(seed0, size);
         let mut left = months;
         while left > 0 {
@@ -479,9 +476,9 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
             w.tick(step);
             left -= step;
         }
-        w.seismic.hash()
+        (w.seismic.hash(), w.ice.hash())
     };
-    let (ha, hb) = (hash_after(240), hash_after(12));
+    let ((ha, ia), (hb, ib)) = (hash_after(240), hash_after(12));
     println!();
     println!(" replay: seed {seed0} · {months} mo · chunk 240 => {ha:016x} · chunk 12 => {hb:016x}");
     println!(" native seismic hash (seed {seed0} · size {size} · {months} mo): {ha:016x}");
@@ -540,10 +537,10 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
     c.band("ELA poleward monotone", i_mono, format!("{:.0} %", i_mono));
     c.band("peak ice thickness m", i_dome, format!("{:.0} m", i_dome));
     c.must(
-        "ice footprint regen byte-identical",
-        i_pure,
-        format!("{}", if i_pure { "identical" } else { "DIVERGE" }),
-        "M28 gate: pure function of seed + height; joins hash_state",
+        "ice ledger regen byte-identical",
+        ia == ib,
+        format!("{}", if ia == ib { "identical" } else { "DIVERGE" }),
+        "M28 gate: frozen prehistory replays; joins hash_state",
     );
 
     c.print();
@@ -958,7 +955,7 @@ fn cmd_terrain(seed: i64, size: usize) {
             format!("{} tags against the offset sign", wrong_sign),
             "M26: raised only where the land rose, drowned only where the sea did",
         );
-        let purity = calliope::landform::hash(&calliope::landform::classify(hgt, sl)) == calliope::landform::hash(lf);
+        let purity = calliope::landform::hash(&calliope::landform::classify(hgt, sl, &w.ice)) == calliope::landform::hash(lf);
         c.must(
             "landform grid regen byte-identical",
             purity,
