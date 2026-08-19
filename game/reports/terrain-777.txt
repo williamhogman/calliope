@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 777 · 640x512
 ========================================================================
-world: "Norunor" · generated in 1249 ms
+world: "Norunor" · generated in 1677 ms
 land: 117330 cells of 327680 (35.8%) · 1877280 km²
 hypsometry (land h): p5 0.022 · p25 0.107 · p50 0.252 · p75 0.391 · p95 0.528 · max 0.687
 bathymetry (sea h): p5 -0.591 · p50 -0.393 · p95 -0.039
