@@ -357,9 +357,12 @@ impl GenBuilder {
         // everything downstream read it — Gulf-Stream warm rims,
         // Humboldt cold rims, ice calendars that obey the currents.
         let cur = crate::currents::Currents::compute(water);
-        let tmean = tmean + &climate::current_bias(water, &cur.v);
+        let heat = climate::current_bias(water, &cur.v);
+        let tmean = tmean + &heat;
         let tamp = climate::temperature_amplitude(&lat, &cont);
-        let (mut precip, pamp) = climate::precipitation(height, water, &tmean, &lat, &cont);
+        // M42 — the rain march reads the same anomaly: cold rims cap the
+        // marine layer downwind (coastal deserts), warm rims feed it.
+        let (mut precip, pamp) = climate::precipitation(height, water, &tmean, &lat, &cont, &heat);
         if self.precip_scale != 1.0 {
             let s = self.precip_scale;
             precip.mapv_inplace(|p| p * s);
