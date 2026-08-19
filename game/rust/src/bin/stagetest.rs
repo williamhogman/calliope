@@ -22,6 +22,13 @@ fn main() {
     calliope::erosion::erode(&mut height);
     println!("erosion    {:>6} ms", t.elapsed().as_millis());
 
+    // M28/M29 — the glacial stage, mirroring the GenBuilder: footprint
+    // then carve, before climate reads the land.
+    let t = Instant::now();
+    let mut ice = calliope::ice::compute(seed, &height);
+    calliope::ice::carve(&mut height, &mut ice);
+    println!("glacial    {:>6} ms · {} cirques · {} hangs", t.elapsed().as_millis(), ice.cirques.len(), ice.hangs.len());
+
     let water = height.mapv(|h| h < 0.0);
     let t = Instant::now();
     let lat = climate::latitude_deg(size);
@@ -55,7 +62,7 @@ fn main() {
     // GenBuilder does.
     let sealevel = calliope::sealevel::generate(seed, height.dim().0.max(height.dim().1));
     let (features, world_name) = naming::name_features(
-        &height32, &sealevel, &biome_map, &hydro.rivers, &hydro.lakes, &discharge32, &tmean32, &precip32, seed,
+        &height32, &sealevel, &ice, &biome_map, &hydro.rivers, &hydro.lakes, &discharge32, &tmean32, &precip32, seed,
     );
     println!("naming     {:>6} ms · {} features · world {}", t.elapsed().as_millis(), features.len(), world_name);
 
