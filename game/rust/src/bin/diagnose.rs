@@ -2316,11 +2316,14 @@ fn cmd_climate(seed: i64, size: usize) {
 
     // ---- current-aware rain (M42) ---------------------------------------
     // The same anomaly the dawn folded into tmean, re-run post-widen and
-    // read against the rain it shaped. The zonal *land* mean is the wrong
-    // yardstick — interiors are the driest cells at any latitude, so every
-    // coast beats it. The law is coast against coast: land the cold rims
-    // reach must run drier than neutral coastal land at its latitude (the
-    // Atacama law), land the warm rims reach wetter (the Gulf-Stream law).
+    // read against the rain it shaped. Two confounds are controlled away:
+    // the zonal *land* mean is the wrong yardstick (interiors are the
+    // driest cells at any latitude — every coast beats them), and aspect
+    // is the stronger law still (windward coasts drench, leeward coasts
+    // starve, currents or none). So the law is coast against coast *of
+    // the same aspect*: land the cold rims reach must run drier than
+    // aspect-matched neutral coastal land at its latitude (the Atacama
+    // law), land the warm rims reach wetter (the Gulf-Stream law).
     // Ratios are aggregates, so a lone wet outlier cannot buy the pass.
     let water_g = w.fields.height.mapv(|h| h < 0.0);
     let heat = calliope::climate::current_bias(&water_g, &w.currents.v);
@@ -2343,13 +2346,34 @@ fn cmd_climate(seed: i64, size: usize) {
             }
         }
     }
-    let mut zonal_p = vec![0.0f64; rows];
-    let mut zonal_n = vec![0usize; rows];
+    // wind direction per row, as the march deals it
+    let dir_of = |y: usize| -> isize {
+        let l = latitude(y, rows).abs();
+        if l < 30.0 {
+            -1
+        } else if l < 60.0 {
+            1
+        } else {
+            -1
+        }
+    };
+    // windward = the parcel crossed sea within the last few upwind cells
+    let is_windward = |y: usize, x: usize| -> bool {
+        let d = dir_of(y);
+        (1..=6isize).any(|j| {
+            let xx = (x as isize - d * j).rem_euclid(cols as isize) as usize;
+            water_g[[y, xx]]
+        })
+    };
+    // per-row neutral-coast baselines, split by aspect [leeward, windward]
+    let mut zonal_p = vec![[0.0f64; 2]; rows];
+    let mut zonal_n = vec![[0usize; 2]; rows];
     for y in 0..rows {
         for x in 0..cols {
             if land[[y, x]] && near[[y, x]] && heat[[y, x]].abs() < 0.5 {
-                zonal_p[y] += w.fields.precip[[y, x]] as f64;
-                zonal_n[y] += 1;
+                let a = is_windward(y, x) as usize;
+                zonal_p[y][a] += w.fields.precip[[y, x]] as f64;
+                zonal_n[y][a] += 1;
             }
         }
     }
@@ -2367,26 +2391,30 @@ fn cmd_climate(seed: i64, size: usize) {
     let (mut cold_p, mut cold_e, mut cold_n) = ([0.0f64; 4], [0.0f64; 4], [0usize; 4]);
     let (mut warm_p, mut warm_e, mut warm_n) = ([0.0f64; 4], [0.0f64; 4], [0usize; 4]);
     for y in 0..rows {
-        if zonal_n[y] < 8 {
-            continue; // a lone island row proves nothing
-        }
-        let zm = zonal_p[y] / zonal_n[y] as f64;
-        if zm < 1.0 {
-            continue; // polar bone-dry rows divide to noise
-        }
         let belt = belt_of(y);
         for x in 0..cols {
             if !land[[y, x]] {
                 continue;
             }
             let b = heat[[y, x]];
+            if b.abs() < 0.5 {
+                continue;
+            }
+            let a = is_windward(y, x) as usize;
+            if zonal_n[y][a] < 4 {
+                continue; // no aspect-matched peers on this row — proves nothing
+            }
+            let zm = zonal_p[y][a] / zonal_n[y][a] as f64;
+            if zm < 1.0 {
+                continue; // polar bone-dry rows divide to noise
+            }
             if b <= -0.5 {
                 for i in [0, belt] {
                     cold_p[i] += w.fields.precip[[y, x]] as f64;
                     cold_e[i] += zm;
                     cold_n[i] += 1;
                 }
-            } else if b >= 0.5 {
+            } else {
                 for i in [0, belt] {
                     warm_p[i] += w.fields.precip[[y, x]] as f64;
                     warm_e[i] += zm;
@@ -2400,7 +2428,7 @@ fn cmd_climate(seed: i64, size: usize) {
     let warm_ratio = ratio(warm_p[0], warm_e[0]);
     println!();
     println!(
-        "current-aware rain (M42): cold-rim land {} cells at {:.2}× the neutral coast · warm-rim {} cells at {:.2}×",
+        "current-aware rain (M42): cold-rim land {} cells at {:.2}× its aspect-matched coast · warm-rim {} cells at {:.2}×",
         cold_n[0], cold_ratio, warm_n[0], warm_ratio
     );
     println!(
