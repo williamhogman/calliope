@@ -100,6 +100,10 @@ pub struct World {
     /// derived state off the height field and the sea-level history.
     /// Recomputed at the dawn, folded into `hash_state`, never ticked.
     pub landform: ndarray::Array2<u8>,
+    /// M28 — the LGM ice-sheet footprint: per-cell peak thickness and
+    /// the ELA row profile. Frozen prehistory (ADR-0024): computed at
+    /// the dawn from the final height field, hashed, never ticked.
+    pub ice: crate::ice::Ice,
     pub features: Vec<Feature>,
     pub routes: Vec<Route>,
     pub world_name: String,
@@ -689,6 +693,7 @@ impl GenBuilder {
             plates,
             sealevel: self.sealevel.take().expect("sealevel generated"),
             landform: ndarray::Array2::zeros((0, 0)),
+            ice: crate::ice::Ice::empty(),
             seismic: crate::seismic::Seismic::empty(),
             volcanism: crate::seismic::Volcanism::empty(),
             features,
@@ -732,6 +737,7 @@ impl GenBuilder {
         // M26 — the coasts read their own history: raised beaches where
         // the land outran the sea, rias and skerries where the sea won.
         world.landform = crate::landform::classify(&world.fields.height, &world.sealevel);
+        world.ice = crate::ice::compute(world.seed, &world.fields.height);
         // The dawn's own entries join the telling: subjects resolved to
         // registry ids, coordinates backfilled, great deeds legendized (M6).
         let mut dawn = std::mem::take(&mut world.chronicle.events);
@@ -2332,13 +2338,14 @@ impl World {
     /// wasm-replay leg can *measure* rather than assume their fate.
     pub fn earth_hash_line(&self) -> String {
         format!(
-            "plates={:016x} rock={:016x} seismic={:016x} volcanism={:016x} sealevel={:016x} landform={:016x}",
+            "plates={:016x} rock={:016x} seismic={:016x} volcanism={:016x} sealevel={:016x} landform={:016x} ice={:016x}",
             self.plates.hash(),
             crate::util::fnv1a64(self.fields.rock.as_slice().expect("rock grid is contiguous")),
             self.seismic.hash(),
             self.volcanism.hash(),
             self.sealevel.hash(),
             crate::landform::hash(&self.landform),
+            self.ice.hash(),
         )
     }
 

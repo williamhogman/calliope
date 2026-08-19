@@ -235,6 +235,8 @@ fn hash_state(w: &World) -> u64 {
     s.push_str(&format!("L{:016x}\n", w.sealevel.hash()));
     // M26 — the coastal landform grid is state: the classifier held still.
     s.push_str(&format!("F{:016x}\n", calliope::landform::hash(&w.landform)));
+    // M28 — the LGM ice footprint is state: thickness grid, ELA rows.
+    s.push_str(&format!("I{:016x}\n", w.ice.hash()));
     s.push_str(&format!("t{}\n", w.month));
     bytes.extend_from_slice(s.as_bytes());
     fnv(&bytes)

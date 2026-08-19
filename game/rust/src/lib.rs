@@ -21,6 +21,7 @@ pub mod explain;
 pub mod famine;
 pub mod geo;
 pub mod hydrology;
+pub mod ice;
 pub mod ids;
 pub mod naming;
 pub mod ndimage;
