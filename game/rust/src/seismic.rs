@@ -450,9 +450,10 @@ impl Volcanism {
     }
 
     /// FNV-1a over cones, clocks, the log and the ash ledger — folded
-    /// into the determinism hash (ADR-0003). Native replay identity;
-    /// the cross-runtime gate stays on the quake ledger (ADR-0025 —
-    /// cones sit downstream of transcendental terrain).
+    /// into the determinism hash (ADR-0003) and, since M27, into the
+    /// cross-runtime deep-earth identity: the wasm-replay lane measured
+    /// the terrain-downstream layers byte-identical across runtimes,
+    /// so the gate covers them rather than assuming they drift.
     pub fn hash(&self) -> u64 {
         let mut b: Vec<u8> = Vec::with_capacity(self.log.len() * 24 + self.cones.len() * 16);
         for c in &self.cones {
