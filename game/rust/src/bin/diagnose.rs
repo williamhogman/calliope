@@ -2316,18 +2316,38 @@ fn cmd_climate(seed: i64, size: usize) {
 
     // ---- current-aware rain (M42) ---------------------------------------
     // The same anomaly the dawn folded into tmean, re-run post-widen and
-    // read against the rain it shaped: land the cold rims reach must run
-    // drier than its latitude's land mean (the Atacama law), land the
-    // warm rims reach wetter (the Gulf-Stream law). Ratios are aggregate
-    // rim rain over the zonal expectation for the same cells, so a lone
-    // wet outlier cannot buy the pass.
+    // read against the rain it shaped. The zonal *land* mean is the wrong
+    // yardstick — interiors are the driest cells at any latitude, so every
+    // coast beats it. The law is coast against coast: land the cold rims
+    // reach must run drier than neutral coastal land at its latitude (the
+    // Atacama law), land the warm rims reach wetter (the Gulf-Stream law).
+    // Ratios are aggregates, so a lone wet outlier cannot buy the pass.
     let water_g = w.fields.height.mapv(|h| h < 0.0);
     let heat = calliope::climate::current_bias(&water_g, &w.currents.v);
+    // coastal = land within the same reach the heat bias walks inland
+    let mut near = water_g.clone();
+    for _ in 0..calliope::climate::HEAT_COAST_RINGS {
+        let prev = near.clone();
+        for y in 0..rows {
+            for x in 0..cols {
+                if near[[y, x]] {
+                    continue;
+                }
+                if (y > 0 && prev[[y - 1, x]])
+                    || (y + 1 < rows && prev[[y + 1, x]])
+                    || (x > 0 && prev[[y, x - 1]])
+                    || (x + 1 < cols && prev[[y, x + 1]])
+                {
+                    near[[y, x]] = true;
+                }
+            }
+        }
+    }
     let mut zonal_p = vec![0.0f64; rows];
     let mut zonal_n = vec![0usize; rows];
     for y in 0..rows {
         for x in 0..cols {
-            if land[[y, x]] {
+            if land[[y, x]] && near[[y, x]] && heat[[y, x]].abs() < 0.5 {
                 zonal_p[y] += w.fields.precip[[y, x]] as f64;
                 zonal_n[y] += 1;
             }
@@ -2363,7 +2383,7 @@ fn cmd_climate(seed: i64, size: usize) {
     let warm_ratio = if warm_e > 0.0 { warm_p / warm_e } else { 1.0 };
     println!();
     println!(
-        "current-aware rain (M42): cold-rim land {} cells at {:.2}× its zonal law · warm-rim {} cells at {:.2}×",
+        "current-aware rain (M42): cold-rim land {} cells at {:.2}× the neutral coast · warm-rim {} cells at {:.2}×",
         cold_n, cold_ratio, warm_n, warm_ratio
     );
 
