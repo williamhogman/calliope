@@ -1,36 +1,39 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-19 22:53 UTC
+mode: full · size: 512 · generated: 2026-08-19 23:42 UTC
 
-totals: 577 pass · 14 warn · 0 fail
+totals: 578 pass · 18 warn · 0 fail
 
 -- assay.txt
    all checks pass
 
 -- bench.txt
 [WARN] pack bytes per cell                     21.0 B/cell   (sweet ≤21 · hard ≤24 (8×u16 + 4×u8 = 20 B/cell + header))
-[WARN] median tick payload                          6303 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
+[WARN] median tick payload                          6820 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
    all checks pass
 
 -- build.txt
-[WARN] wasm binary size                              3353882 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
+[WARN] wasm binary size                              3354474 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
 
 -- civ-12345.txt
-[WARN] events per year                                58.6   (sweet 2–48 · hard 0.5–100)
+[WARN] assimilation cadence                 0.7 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
+[WARN] events per year                                54.9   (sweet 2–48 · hard 0.5–100)
 
 -- civ-777.txt
 [WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                57.7   (sweet 2–48 · hard 0.5–100)
+[WARN] events per year                                60.1   (sweet 2–48 · hard 0.5–100)
+[WARN] median town spacing                           49 km   (M2.5: market-town band ~15–30 km in settled cores)
+[WARN] disaster recovery (median months)    5 mo over 1 arcs   (M24 gate: rebuild arcs close inside the forty-year window)
 
 -- climate-12345.txt
-[WARN] forest share of land                          23.6%   (sweet 25–60% · hard 15–75%)
+[WARN] forest share of land                          23.3%   (sweet 25–60% · hard 15–75%)
 
 -- climate-777.txt
-[WARN] forest share of land                          22.6%   (sweet 25–60% · hard 15–75%)
+[WARN] forest share of land                          22.3%   (sweet 25–60% · hard 15–75%)
 
 -- climate-90210.txt
-[WARN] forest share of land                          20.4%   (sweet 25–60% · hard 15–75%)
+[WARN] forest share of land                          20.2%   (sweet 25–60% · hard 15–75%)
 
 -- determinism.txt
    all checks pass
@@ -60,10 +63,11 @@ totals: 577 pass · 14 warn · 0 fail
    all checks pass
 
 -- patina.txt
-[WARN] ruins per century (after y100)                12.50   (M9.1 gate: mature worlds carry ruins)
+[WARN] ruins per century (after y100)                13.33   (M9.1 gate: mature worlds carry ruins)
+[WARN] civ arcs completed per 300 y         5.3 (gold 11 · arcs 16)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
 
 -- perf.txt
-[WARN] tick rate year 100                   316 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] tick rate year 100                   310 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
    all checks pass
@@ -78,10 +82,10 @@ totals: 577 pass · 14 warn · 0 fail
    all checks pass
 
 -- sweep.txt
-[WARN] mean forest share                             21.5%   (sweet 25–60% · hard 15–75%)
+[WARN] mean forest share                             21.2%   (sweet 25–60% · hard 15–75%)
 
 -- systems.txt
-[WARN] ECS parallel ceiling stays low               1.696×   (ADR-0022: re-open the bevy_ecs question if this rises)
+[WARN] ECS parallel ceiling stays low               1.738×   (ADR-0022: re-open the bevy_ecs question if this rises)
 
 -- telling-12345.txt
    all checks pass
