@@ -70,7 +70,7 @@ pub const WARM_INJECT: f64 = 0.020;
 /// rates are a few % per cell); Earth's humid-subtropical east coasts
 /// are watered exactly by this import, so it rains where it lands and
 /// never debits the parcel — the sea paid for it, not the march.
-pub const WARM_RAIN: f64 = 0.0015;
+pub const WARM_RAIN: f64 = 0.006;
 /// Over land the marine memory decays toward neutral — except where a
 /// warm rim keeps the boundary layer convective: the land target is
 /// pulled up by the local positive bias at this fraction of the sea
