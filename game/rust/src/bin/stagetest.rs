@@ -50,8 +50,12 @@ fn main() {
     let discharge32 = hydro.discharge.mapv(|x| x as f32);
 
     let t = Instant::now();
+    // M25/M26 — naming reads the sea-level history for the coastal
+    // landform names; the stage bench regenerates it the same way the
+    // GenBuilder does.
+    let sealevel = calliope::sealevel::generate(seed, height.dim().0.max(height.dim().1));
     let (features, world_name) = naming::name_features(
-        &height32, &biome_map, &hydro.rivers, &hydro.lakes, &discharge32, &tmean32, &precip32, seed,
+        &height32, &sealevel, &biome_map, &hydro.rivers, &hydro.lakes, &discharge32, &tmean32, &precip32, seed,
     );
     println!("naming     {:>6} ms · {} features · world {}", t.elapsed().as_millis(), features.len(), world_name);
 
