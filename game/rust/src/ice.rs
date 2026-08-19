@@ -211,8 +211,8 @@ use crate::util::Band;
 /// lowland margin latitude, the ELA's poleward march read back off the
 /// mask itself, and the dome ceiling. Calibrated on the report seeds.
 pub const BANDS: &[Band] = &[
-    Band { name: "ice share of land at LGM", sweet: (8.0, 32.0), hard: (4.0, 45.0), target: "sweet 8–32 · hard 4–45 (% of land under the LGM sheets; Earth ran ~25)" },
-    Band { name: "lowland ice margin lat", sweet: (53.0, 63.0), hard: (48.0, 70.0), target: "sweet 53–63 · hard 48–70 (p5 |lat|° of glaciated lowland, h<0.10; law says ~57)" },
+    Band { name: "ice share of land at LGM", sweet: (30.0, 48.0), hard: (20.0, 60.0), target: "sweet 30–48 · hard 20–60 (% of land under the LGM sheets; twin polar landmasses run this above Earth's ~25)" },
+    Band { name: "lowland ice margin lat", sweet: (55.0, 65.0), hard: (50.0, 72.0), target: "sweet 55–65 · hard 50–72 (p5 |lat|° of glaciated lowland, h<0.10; the L0=62° law puts it near 60)" },
     Band { name: "ELA poleward monotone", sweet: (85.0, 100.0), hard: (70.0, 100.0), target: "sweet 85–100 · hard 70–100 (% of 3° bins where the lowest glaciated cell drops)" },
     Band { name: "peak ice thickness m", sweet: (1200.0, 4000.0), hard: (600.0, 4000.0), target: "sweet 1200–4000 · hard 600–4000 (dome height; parabolic profile, Antarctic cap)" },
 ];
