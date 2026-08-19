@@ -3,8 +3,6 @@
 ========================================================================
 chronicle: 8819 entries over 150y (58.8/y)
   ids on 100.0% · coords on 97.8% · legend layer on 2083/2083 loud entries
-  ID-LESS: discovery ×1
-    m1800 [discovery] Joreholm — Green returns to the logged-out hills near Joreholm; the woods stand tall again.
 cast: artifact 14+0† · civilization 1+1† · culture 12+0† · feature 88+0† · good 36+0† · person 15+151† · realm 12+10† · ruin 1+0† · settlement 99+1† · war 0+34† · world 1+0†
 epithets earned: 114  (Thalwydell "the Young", Orene "the Young", Khargol "the Unlucky", Thoradal "the Wise")
 artifacts: 14 wrought · 12 held · 2 lost
@@ -16,11 +14,11 @@ stories sifted: 48 (bloody-circlet ×6 · empire-arc ×1 · high-noon ×1 · min
   316.0  The Trials of Thorevik  (y0–149, 12 beats)
   283.0  The Trials of Havdal  (y47–148, 12 beats)
   281.0  The Trials of Dzungegan  (y0–146, 12 beats)
+  276.8  The Trials of Jorolm  (y58–150, 12 beats)
   275.6  The Trials of Aelordell  (y69–149, 12 beats)
-  275.0  The Trials of Briarwymere  (y0–150, 12 beats)
 
 ---- checks ----------------------------------------------------------
-[FAIL] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
+[PASS] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
 [PASS] every carried id is valid                     0 bad   (ids index the registry)
 [PASS] events mappable (coords)                      97.8%   (most entries can fly the camera)
 [PASS] loud events carry a legend                2083/2083   (M6.9: two-layer telling on weight ≥ 3)
@@ -32,4 +30,4 @@ stories sifted: 48 (bloody-circlet ×6 · empire-arc ×1 · high-noon ×1 · min
 [PASS] relics wrought                                   14   (M6.3: artifacts enter the world)
 [PASS] epithets earned                                 114   (M6.8: names are coined in the field)
 [PASS] chronicle unbounded                            8819   (no truncation: the full log persists)
-CHECKS: 11 pass · 0 warn · 1 fail
+CHECKS: 12 pass · 0 warn · 0 fail

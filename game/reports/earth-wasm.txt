@@ -1,13 +1,3 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · DEEP-EARTH REPLAY         native vs shipped wasm
 ========================================================================
- seed 777 · size 512 · 240 mo
- native: 7ef24fa665fbe366
- native: plates=3a1702958367cb09 rock=80257b755198e97e seismic=7ef24fa665fbe366 volcanism=6c98290a8bf1d0ca sealevel=f6c0489b18a8fc38 landform=d78010b8eb57beb4 ice=8c97a84072b5fd29 permafrost=bf71640aa8bf6596
- wasm:   7ef24fa665fbe366
- wasm:   plates=3a1702958367cb09 rock=80257b755198e97e seismic=7ef24fa665fbe366 volcanism=6c98290a8bf1d0ca sealevel=f6c0489b18a8fc38 landform=d78010b8eb57beb4 ice=8c97a84072b5fd29 permafrost=bf71640aa8bf6596
-
----- checks ----------------------------------------------------------
-[PASS] seismic ledger agrees across runtimes        agree   (M22 gate: native and wasm replay one ledger)
-[PASS] deep-earth layers agree across runtimes      agree   (M27 gate: plates·rock·seismic·volcanism·sealevel·landform, one identity)
-CHECKS: 2 pass · 0 warn · 0 fail
