@@ -28,6 +28,104 @@ pub fn temperature_mean(height: &Array2<f64>, lat_deg: &Array2<f64>) -> Array2<f
     out
 }
 
+// ------------------------------------------------------ heat transport
+
+/// M41 — heat transport: rows of remembered journey per unit current.
+pub const HEAT_RES: f64 = 25.0;
+/// Clamp on the remembered journey, rows.
+pub const HEAT_MAX_DISP: f64 = 60.0;
+/// °C cap on the open-sea anomaly.
+pub const HEAT_ANOM_CAP: f64 = 8.0;
+/// Per-ring decay walking the anomaly inland.
+pub const HEAT_COAST_DECAY: f64 = 0.55;
+/// How far inland the sea reaches, rings of cells (×4 km).
+pub const HEAT_COAST_RINGS: usize = 6;
+
+/// M41 — heat transport: the current-driven sea-surface anomaly and
+/// its coastal reach. Water remembers the latitude it came from: each
+/// ocean cell's meridional current displaces its origin `HEAT_RES`
+/// rows upstream, and the anomaly is the zonal sea-surface law read
+/// at the origin minus at home — poleward flow warms (Gulf Stream),
+/// equatorward flow cools (Humboldt), no sign rule beyond that
+/// subtraction. Smoothed with the shared kernel over open water, then
+/// walked inland in decaying rings so the coasts the current touches
+/// bend with it while the interior keeps its continental truth.
+/// Returned over the whole grid: ocean cells carry the SST anomaly
+/// (the sea-ice calendar obeys the currents too), land cells carry
+/// the coastal reach, the far interior carries zero.
+pub fn current_bias(water: &Array2<bool>, cur_v: &Array2<f32>) -> Array2<f64> {
+    let (rows, cols) = water.dim();
+    if rows < 8 || cols < 8 {
+        return Array2::zeros((rows, cols));
+    }
+    let nf = rows as f64;
+    let t_sea = |yy: f64| -> f64 {
+        let lat = ((-90.0 + yy * 180.0 / (nf - 1.0)) / 90.0).abs();
+        28.0 - 53.0 * lat.powf(1.7)
+    };
+    let mut a = Array2::<f64>::zeros((rows, cols));
+    for y in 0..rows {
+        let here = t_sea(y as f64);
+        for x in 0..cols {
+            if !water[[y, x]] {
+                continue;
+            }
+            let disp =
+                (cur_v[[y, x]] as f64 * HEAT_RES).clamp(-HEAT_MAX_DISP, HEAT_MAX_DISP);
+            let y0 = (y as f64 - disp).clamp(0.0, nf - 1.0);
+            a[[y, x]] = (t_sea(y0) - here).clamp(-HEAT_ANOM_CAP, HEAT_ANOM_CAP);
+        }
+    }
+    // knit the anomaly along the flow; the land carries none of it yet
+    let mut a = ndimage::gaussian_filter(&a, 2.0);
+    for y in 0..rows {
+        for x in 0..cols {
+            if !water[[y, x]] {
+                a[[y, x]] = 0.0;
+            }
+        }
+    }
+    // walk inland ring by ring: each ring reads the mean of already-
+    // reached 8-neighbors and decays — raster order never matters
+    // because every ring reads only the previous ring's snapshot.
+    let mut reached = water.clone();
+    for _ in 0..HEAT_COAST_RINGS {
+        let prev = reached.clone();
+        let pa = a.clone();
+        for y in 0..rows {
+            for x in 0..cols {
+                if prev[[y, x]] {
+                    continue;
+                }
+                let mut s = 0.0f64;
+                let mut n = 0usize;
+                for dy in -1i64..=1 {
+                    for dx in -1i64..=1 {
+                        if dy == 0 && dx == 0 {
+                            continue;
+                        }
+                        let yy = y as i64 + dy;
+                        let xx = x as i64 + dx;
+                        if yy < 0 || xx < 0 || yy >= rows as i64 || xx >= cols as i64 {
+                            continue;
+                        }
+                        let (yy, xx) = (yy as usize, xx as usize);
+                        if prev[[yy, xx]] {
+                            s += pa[[yy, xx]];
+                            n += 1;
+                        }
+                    }
+                }
+                if n > 0 {
+                    a[[y, x]] = HEAT_COAST_DECAY * s / n as f64;
+                    reached[[y, x]] = true;
+                }
+            }
+        }
+    }
+    a
+}
+
 /// 0.35 (maritime) .. 1.0 (deep continental interior).
 /// E5.11 — computed once per generation in world.rs and shared by
 /// `temperature_amplitude` and `precipitation`; the EDT is the expensive
@@ -310,4 +408,7 @@ pub const BANDS: &[Band] = &[
     Band { name: "land mean precipitation", sweet: (500.0, 1500.0), hard: (250.0, 2400.0), target: "sweet 500–1500 · hard 250–2400" },
     Band { name: "mean seasonal swing", sweet: (4.0, 14.0), hard: (2.0, 20.0), target: "sweet 4–14°C · hard 2–20°C" },
     Band { name: "tropical monsoon amplitude", sweet: (0.12, 0.55), hard: (0.05, 0.85), target: "sweet .12–.55 · hard .05–.85" },
+    Band { name: "warm-coast heat delta", sweet: (0.75, 6.0), hard: (0.3, 10.0), target: "sweet +0.75..+6 °C · hard +0.3..+10 (M41: mean bias over land the warm rims reach (≥ +0.5); Gulf-Stream coasts run a few degrees over their zonal law)" },
+    Band { name: "cold-coast heat delta", sweet: (-6.0, -0.75), hard: (-10.0, -0.3), target: "sweet −6..−0.75 °C · hard −10..−0.3 (M41: mean bias over land the cold rims reach (≤ −0.5); Humboldt/Benguela coasts run a few degrees under)" },
+    Band { name: "heat transport net bias", sweet: (0.0, 0.3), hard: (0.0, 0.6), target: "sweet ≤0.3 °C · hard ≤0.6 (M41: |world-mean bias| — advection redistributes heat, it must not mint it)" },
 ];
