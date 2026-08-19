@@ -357,6 +357,23 @@ impl World {
         (events, changed)
     }
 
+    /// M6.1 — resolve the nearest town to its registry entity by ground.
+    /// Deposit-anchored events can't lean on resolve_events' fallbacks: the
+    /// name lookup dies on a same-tick rename and the position fallback
+    /// reads the event's anchor — the pit, where no settlement stands.
+    /// Position survives renames, so the id is attached at the source.
+    fn near_settlement_ent(&self, near_i: Option<usize>) -> crate::event::EventIds {
+        near_i
+            .and_then(|i| {
+                let s = &self.peoples.settlements[i];
+                self.chronicle
+                    .registry
+                    .find_alive(crate::entity::EntityKind::Settlement, s.x, s.y)
+            })
+            .into_iter()
+            .collect()
+    }
+
     /// M14.8 — a stripped timber ground shows on the map: forest-family
     /// biome cells within `radius` of the deposit go over to grassland,
     /// with the original code remembered in `self.scars` for restoration.
