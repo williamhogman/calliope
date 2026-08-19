@@ -63,7 +63,14 @@ pub const EVAP_GAIN: f64 = 0.05;
 /// Earth's warm-current east coasts humid even leeward of a continent.
 /// Asymmetric by design: cold rims dry through stability, they do not
 /// steal moisture twice.
-pub const WARM_INJECT: f64 = 0.040;
+pub const WARM_INJECT: f64 = 0.020;
+/// Direct lateral rain off a warm rim, per °C of positive land bias:
+/// the share of the onshore transient feed that falls at the coast
+/// itself. Routed through `w` it would blow 98% past the rim (rain
+/// rates are a few % per cell); Earth's humid-subtropical east coasts
+/// are watered exactly by this import, so it rains where it lands and
+/// never debits the parcel — the sea paid for it, not the march.
+pub const WARM_RAIN: f64 = 0.0015;
 /// Over land the marine memory decays toward neutral — except where a
 /// warm rim keeps the boundary layer convective: the land target is
 /// pulled up by the local positive bias at this fraction of the sea
@@ -390,6 +397,11 @@ pub fn precipitation(
             // would grow wetter from their own lowered cap.
             rain += 0.5 * (w - cap).max(0.0) * if wat { 1.0 } else { stab };
             w -= rain;
+            if !wat {
+                // M42 — the warm-rim import falls here, off the sea's
+                // account: recorded as rain, never subtracted from w.
+                rain += WARM_RAIN * heat[[y, xcur]].max(0.0);
+            }
             if step >= (wraps - 1) * size {
                 // record only the settled final wrap
                 p[[y, xcur]] += rain;
@@ -467,6 +479,6 @@ pub const BANDS: &[Band] = &[
     Band { name: "warm-coast heat delta", sweet: (0.75, 6.0), hard: (0.3, 10.0), target: "sweet +0.75..+6 °C · hard +0.3..+10 (M41: mean bias over land the warm rims reach (≥ +0.5); Gulf-Stream coasts run a few degrees over their zonal law)" },
     Band { name: "cold-coast heat delta", sweet: (-6.0, -0.75), hard: (-10.0, -0.3), target: "sweet −6..−0.75 °C · hard −10..−0.3 (M41: mean bias over land the cold rims reach (≤ −0.5); Humboldt/Benguela coasts run a few degrees under)" },
     Band { name: "heat transport net bias", sweet: (0.0, 0.3), hard: (0.0, 0.6), target: "sweet ≤0.3 °C · hard ≤0.6 (M41: |world-mean bias| — advection redistributes heat, it must not mint it)" },
-    Band { name: "cold-rim rain suppression", sweet: (0.30, 0.90), hard: (0.10, 0.98), target: "sweet 0.30–0.90 · hard 0.10–0.98 (M42: cold-current coastal land rains at this ratio of its latitude's land mean — Atacama/Namib run far under)" },
-    Band { name: "warm-rim rain boost", sweet: (1.02, 2.20), hard: (0.98, 3.50), target: "sweet 1.02–2.20 · hard 0.98–3.50 (M42: warm-current coastal land over its latitude's land mean — Gulf-Stream coasts run wet)" },
+    Band { name: "cold-rim rain suppression", sweet: (0.25, 0.80), hard: (0.10, 0.95), target: "sweet 0.25–0.80 · hard 0.10–0.95 (M42: sub-polar cold-rim coastal land against aspect-matched neutral coasts at its latitude — the Atacama law)" },
+    Band { name: "warm-rim rain boost", sweet: (1.02, 2.20), hard: (0.98, 3.50), target: "sweet 1.02–2.20 · hard 0.98–3.50 (M42: sub-polar warm-rim coastal land against aspect-matched neutral coasts at its latitude — the Gulf-Stream law)" },
 ];

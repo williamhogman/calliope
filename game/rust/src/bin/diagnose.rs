@@ -2408,14 +2408,18 @@ fn cmd_climate(seed: i64, size: usize) {
             if zm < 1.0 {
                 continue; // polar bone-dry rows divide to noise
             }
+            // the checked aggregate [0] is sub-polar: Earth anchors the
+            // law at Atacama/Namib/Carolina latitudes — polar rims ride
+            // sea-ice and near-zero rain, and are reported, not judged
+            let idxs: &[usize] = if belt == 3 { &[3] } else { &[0, belt] };
             if b <= -0.5 {
-                for i in [0, belt] {
+                for &i in idxs {
                     cold_p[i] += w.fields.precip[[y, x]] as f64;
                     cold_e[i] += zm;
                     cold_n[i] += 1;
                 }
             } else {
-                for i in [0, belt] {
+                for &i in idxs {
                     warm_p[i] += w.fields.precip[[y, x]] as f64;
                     warm_e[i] += zm;
                     warm_n[i] += 1;
@@ -2428,7 +2432,7 @@ fn cmd_climate(seed: i64, size: usize) {
     let warm_ratio = ratio(warm_p[0], warm_e[0]);
     println!();
     println!(
-        "current-aware rain (M42): cold-rim land {} cells at {:.2}× its aspect-matched coast · warm-rim {} cells at {:.2}×",
+        "current-aware rain (M42): sub-polar cold-rim land {} cells at {:.2}× its aspect-matched coast · warm-rim {} cells at {:.2}×",
         cold_n[0], cold_ratio, warm_n[0], warm_ratio
     );
     println!(
