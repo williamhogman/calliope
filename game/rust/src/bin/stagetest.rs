@@ -45,8 +45,13 @@ fn main() {
     let lat = climate::latitude_deg(size);
     let cont = climate::continentality(&water);
     let tmean = climate::temperature_mean(&height, &lat);
+    // M41/M42 — mirror stage_climate: the currents bend the coasts and
+    // the rain march reads the same anomaly.
+    let cur = calliope::currents::Currents::compute(&water);
+    let heat = climate::current_bias(&water, &cur.v);
+    let tmean = tmean + &heat;
     let tamp = climate::temperature_amplitude(&lat, &cont);
-    let (precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat, &cont);
+    let (precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat, &cont, &heat);
     // M34/M35 — the modern glacier balance rides the climate stage.
     let modern = calliope::ice::modern_glaciers(&water, &tmean, &tamp, &precip, &pamp);
     println!("climate    {:>6} ms", t.elapsed().as_millis());

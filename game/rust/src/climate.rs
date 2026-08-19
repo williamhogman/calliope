@@ -447,4 +447,6 @@ pub const BANDS: &[Band] = &[
     Band { name: "warm-coast heat delta", sweet: (0.75, 6.0), hard: (0.3, 10.0), target: "sweet +0.75..+6 °C · hard +0.3..+10 (M41: mean bias over land the warm rims reach (≥ +0.5); Gulf-Stream coasts run a few degrees over their zonal law)" },
     Band { name: "cold-coast heat delta", sweet: (-6.0, -0.75), hard: (-10.0, -0.3), target: "sweet −6..−0.75 °C · hard −10..−0.3 (M41: mean bias over land the cold rims reach (≤ −0.5); Humboldt/Benguela coasts run a few degrees under)" },
     Band { name: "heat transport net bias", sweet: (0.0, 0.3), hard: (0.0, 0.6), target: "sweet ≤0.3 °C · hard ≤0.6 (M41: |world-mean bias| — advection redistributes heat, it must not mint it)" },
+    Band { name: "cold-rim rain suppression", sweet: (0.30, 0.90), hard: (0.10, 0.98), target: "sweet 0.30–0.90 · hard 0.10–0.98 (M42: cold-current coastal land rains at this ratio of its latitude's land mean — Atacama/Namib run far under)" },
+    Band { name: "warm-rim rain boost", sweet: (1.02, 2.20), hard: (0.98, 3.50), target: "sweet 1.02–2.20 · hard 0.98–3.50 (M42: warm-current coastal land over its latitude's land mean — Gulf-Stream coasts run wet)" },
 ];
