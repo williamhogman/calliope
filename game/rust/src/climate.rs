@@ -305,12 +305,21 @@ pub fn melt_throughput(
 /// Wind-advected moisture -> annual precipitation in mm/yr, plus the
 /// signed monsoon amplitude: how strongly the year's rain leans into
 /// the local summer as the ITCZ marches between the tropics.
+///
+/// M42 — the march is current-aware: each parcel carries a marine-layer
+/// stability alongside its moisture. Over water it relaxes toward the
+/// local SST anomaly's verdict (cold rim → capped inversion, warm rim →
+/// convective); over land it decays back to neutral while scaling the
+/// rain rate — so a Humboldt coast starves its downwind desert, a
+/// Gulf-Stream coast feeds its downwind green, and the deep interior
+/// answers only to its own uplift and warmth, exactly as before.
 pub fn precipitation(
     height: &Array2<f64>,
     water: &Array2<bool>,
     tmean: &Array2<f64>,
     lat_deg: &Array2<f64>,
     cont: &Array2<f64>,
+    heat: &Array2<f64>,
 ) -> (Array2<f64>, Array2<f64>) {
     let size = height.dim().0;
     let mut p = Array2::<f64>::zeros((size, size));
@@ -327,15 +336,24 @@ pub fn precipitation(
             -1
         };
         let mut w = 0.4f64;
+        let mut stab = 1.0f64;
         for step in 0..wraps * size {
             let xcur = (d * step as isize).rem_euclid(size as isize) as usize;
             let xprev = (xcur as isize - d).rem_euclid(size as isize) as usize;
             let wat = water[[y, xcur]];
             let t = tmean[[y, xcur]];
+            // M42 — the marine layer remembers the water it crossed.
+            if wat {
+                let target = (1.0 + STAB_GAIN * heat[[y, xcur]]).clamp(STAB_MIN, STAB_MAX);
+                stab += STAB_SEA_RELAX * (target - stab);
+            } else {
+                stab += STAB_LAND_RELAX * (1.0 - stab);
+            }
             // Land evapotranspiration recycles a real share of moisture —
             // without it every continental interior turns to bone-dry waste.
             let evap = if wat {
-                0.018 + 0.030 * t.clamp(0.0, 30.0) / 30.0
+                (0.018 + 0.030 * t.clamp(0.0, 30.0) / 30.0)
+                    * (1.0 + EVAP_GAIN * heat[[y, xcur]]).clamp(0.75, 1.25)
             } else {
                 0.009 + 0.004 * t.clamp(0.0, 30.0) / 30.0
             };
@@ -346,7 +364,7 @@ pub fn precipitation(
             let rate = if wat {
                 0.012
             } else {
-                (0.023 + 0.40 * uplift).clamp(0.0, 0.65)
+                ((0.023 + 0.40 * uplift) * stab).clamp(0.0, 0.65)
             };
             let cap = (1.0 + t / 22.0).clamp(0.15, 2.3); // warm air holds more
             let mut rain = w * rate;
