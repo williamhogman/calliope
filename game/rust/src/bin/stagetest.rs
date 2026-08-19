@@ -22,32 +22,57 @@ fn main() {
     calliope::erosion::erode(&mut height);
     println!("erosion    {:>6} ms", t.elapsed().as_millis());
 
-    // M28/M29 — the glacial stage, mirroring the GenBuilder: footprint
-    // then carve, before climate reads the land.
+    // M28/M29/M30 — the glacial stage, mirroring the GenBuilder:
+    // footprint, carve, then the depositional legacy, before climate.
     let t = Instant::now();
     let mut ice = calliope::ice::compute(seed, &height);
     calliope::ice::carve(&mut height, &mut ice);
-    println!("glacial    {:>6} ms · {} cirques · {} hangs", t.elapsed().as_millis(), ice.cirques.len(), ice.hangs.len());
+    calliope::ice::deposit(seed, &mut height, &mut ice);
+    calliope::ice::proglacial(&mut height, &mut ice);
+    calliope::ice::outwash(&mut height, &mut ice);
+    calliope::ice::loess_mantle(&height, &mut ice);
+    println!(
+        "glacial    {:>6} ms · {} cirques · {} hangs · {} moraine · {} drumlins · {} esker cells · {} lakes/{} chains · {} loess cells · {} outwash cells",
+        t.elapsed().as_millis(), ice.cirques.len(), ice.hangs.len(),
+        ice.moraines.len(), ice.drumlins.len(), ice.eskers.len(),
+        ice.proglacial.len(), ice.chains,
+        ice.loess.iter().filter(|&&v| v > 0.0).count(),
+        ice.outwash.iter().filter(|&&v| v > 0.0).count()
+    );
 
     let water = height.mapv(|h| h < 0.0);
     let t = Instant::now();
     let lat = climate::latitude_deg(size);
     let cont = climate::continentality(&water);
     let tmean = climate::temperature_mean(&height, &lat);
-    let _tamp = climate::temperature_amplitude(&lat, &cont);
-    let (precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat, &cont);
+    // M41/M42 — mirror stage_climate: the currents bend the coasts and
+    // the rain march reads the same anomaly.
+    let cur = calliope::currents::Currents::compute(&water);
+    let heat = climate::current_bias(&water, &cur.v);
+    let tmean = tmean + &heat;
+    let tamp = climate::temperature_amplitude(&lat, &cont);
+    let (precip, pamp) = climate::precipitation(&height, &water, &tmean, &lat, &cont, &heat);
+    // M34/M35 — the modern glacier balance rides the climate stage.
+    let modern = calliope::ice::modern_glaciers(&water, &tmean, &tamp, &precip, &pamp);
     println!("climate    {:>6} ms", t.elapsed().as_millis());
 
     let t = Instant::now();
-    let hydro = hydrology::hydrology(&height, &water, &precip, &pamp, &tmean);
+    let hydro = hydrology::hydrology(
+        &height, &water, &precip, &pamp, &tmean, &tamp, &ice.outwash, &modern,
+    );
     println!("hydrology  {:>6} ms", t.elapsed().as_millis());
 
     let t = Instant::now();
-    let biome_map = biomes_mod::classify(&height, &tmean, &precip, &hydro.lakes);
+    // M38 — the biome pass reads the permafrost table depth off the
+    // same continentality, exactly as GenBuilder::stage_biomes does.
+    let pf = ndarray::Array2::from_shape_fn(tmean.dim(), |(y, x)| {
+        calliope::permafrost::extent_class(tmean[[y, x]], cont[[y, x]])
+    });
+    let biome_map = biomes_mod::classify(&height, &tmean, &tamp, &precip, &hydro.lakes, &pf);
     println!("biomes     {:>6} ms", t.elapsed().as_millis());
 
     let t = Instant::now();
-    let _fert = agriculture::fertility(&height, &tmean, &precip, &hydro.rivers, &hydro.lakes, &hydro.discharge);
+    let _fert = agriculture::fertility(&height, &tmean, &precip, &hydro.rivers, &hydro.lakes, &hydro.discharge, &ice.till, &ice.loess, &ice.outwash);
     println!("fertility  {:>6} ms", t.elapsed().as_millis());
 
     // E3.2 — the human stages read the world's resting f32 grids.

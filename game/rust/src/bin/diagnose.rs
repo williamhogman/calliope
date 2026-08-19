@@ -146,12 +146,52 @@ fn land_mask(w: &World) -> Array2<bool> {
     w.fields.height.mapv(|h| h >= 0.0)
 }
 
+/// M37 — census the icebound lanes: (winter-closed, perennially shut,
+/// malformed masks). A well-formed closure is one contiguous winter arc,
+/// hemisphere-true for the water that actually froze along the way.
+fn ice_route_stats(w: &World, frozen: &Array2<u16>) -> (usize, usize, usize) {
+    use calliope::{seaice, trade};
+    let (rows, cols) = w.fields.height.dim();
+    let mut iced = 0usize;
+    let mut perennial = 0usize;
+    let mut bad = 0usize;
+    for r in &w.routes {
+        if r.closed == 0 {
+            continue;
+        }
+        if r.closed == seaice::MONTHS_MASK {
+            perennial += 1;
+            continue;
+        }
+        iced += 1;
+        // hemisphere = mean row of the frozen water along the way
+        let (mut sy, mut n) = (0.0f64, 0usize);
+        for (p, &m) in r.path.iter().zip(r.m.iter()) {
+            if m == trade::MODE_SEA
+                && p[0] >= 0
+                && p[1] >= 0
+                && (p[0] as usize) < cols
+                && (p[1] as usize) < rows
+                && frozen[[p[1] as usize, p[0] as usize]] != 0
+            {
+                sy += p[1] as f64;
+                n += 1;
+            }
+        }
+        let southern = n > 0 && sy / n as f64 >= rows as f64 / 2.0;
+        if n == 0 || !seaice::is_winter_arc(r.closed, southern) {
+            bad += 1;
+        }
+    }
+    (iced, perennial, bad)
+}
+
 fn masked<T: Copy + Into<f64>>(a: &Array2<T>, m: &Array2<bool>) -> Vec<f64> {
     a.iter().zip(m.iter()).filter(|(_, &b)| b).map(|(&v, _)| v.into()).collect()
 }
 
-fn biome_counts(w: &World) -> [usize; 11] {
-    let mut c = [0usize; 11];
+fn biome_counts(w: &World) -> [usize; 12] {
+    let mut c = [0usize; 12];
     for &b in w.fields.biomes.iter() {
         c[b as usize] += 1;
     }
@@ -237,6 +277,10 @@ fn hash_state(w: &World) -> u64 {
     s.push_str(&format!("F{:016x}\n", calliope::landform::hash(&w.landform)));
     // M28 — the LGM ice footprint is state: thickness grid, ELA rows.
     s.push_str(&format!("I{:016x}\n", w.ice.hash()));
+    // M33 — the frozen-ground ledger is state: extent + pattern grids.
+    s.push_str(&format!("G{:016x}\n", w.permafrost.hash()));
+    // M40 — the circulation is state: the gyres hold still.
+    s.push_str(&format!("C{:016x}\n", w.currents.hash()));
     s.push_str(&format!("t{}\n", w.month));
     bytes.extend_from_slice(s.as_bytes());
     fnv(&bytes)
@@ -294,6 +338,47 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
     let mut i_margin = 0.0f64;
     let mut i_mono = 0.0f64;
     let mut i_dome = 0.0f64;
+    // M33 — permafrost aggregates: extent, texture, frontier vs isotherm.
+    let mut p_rows: Vec<String> = Vec::new();
+    let mut p_share = 0.0f64;
+    let mut p_pat = 0.0f64;
+    let mut p_front = 0.0f64;
+    let mut p_off = 0.0f64;
+    let mut p_jac = 0.0f64;
+    // M34 — modern glacier aggregates: census, snowline law, LGM nesting.
+    // (gl_ prefix: `g_share` further down is the great-quakes local.)
+    let mut g_rows: Vec<String> = Vec::new();
+    let mut gl_share = 0.0f64;
+    let mut gl_snow = 0.0f64;
+    let mut gl_snow_n = 0usize;
+    let mut gl_lgm = 0.0f64;
+    // M36 — ice-cadence aggregates: fjord density on the polar coast,
+    // proglacial-lake and moraine cadence in the margin belt (50–75°),
+    // and the two belt-discipline shares.
+    let mut k_rows: Vec<String> = Vec::new();
+    let mut k_fj = 0.0f64;
+    let mut k_fjd = 0.0f64;
+    let mut k_lk = 0.0f64;
+    let mut k_mor = 0.0f64;
+    let mut k_morc = 0.0f64;
+    // M39 — earth-calibration aggregates: the fjord latitude
+    // distribution, proglacial-lake density per formerly iced area,
+    // and the glacier elevation-vs-latitude curve, each held against
+    // the terrestrial ranges rather than our own internal belts.
+    let mut e_rows: Vec<String> = Vec::new();
+    let mut e_fmed: Vec<f64> = Vec::new();
+    let mut e_fiqr: Vec<f64> = Vec::new();
+    let mut e_lkm: Vec<f64> = Vec::new();
+    let mut e_curve: Vec<f64> = Vec::new();
+    let mut e_polar: Vec<f64> = Vec::new();
+    // M40 — gyre aggregates: rotation census, speed scale, west wall.
+    let mut c_rows: Vec<String> = Vec::new();
+    let mut g40_n = 0usize;
+    let mut g40_ok = 0usize;
+    let mut g40_basins: Vec<f64> = Vec::new();
+    let mut g40_p95: Vec<f64> = Vec::new();
+    let mut g40_wbx: Vec<f64> = Vec::new();
+
 
     println!();
     println!(
@@ -445,6 +530,436 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
             " {:>6} {:>7.1} {:>11.1} {:>9} {:>8.0} {:>7.0}",
             seed, share, margin, occ.len(), dome, mono
         ));
+
+        // M33 — the frozen rim: extent census, micro-texture, and the
+        // frontier read against the −2 °C mean-annual isotherm in two
+        // legs — maritime (shift ≈ 0, must hug −2) and continental
+        // (must run warmer by the reach; the Siberia asymmetry).
+        let pf = &w.permafrost;
+        let (pr2, pc2) = pf.extent.dim();
+        let pf_water = w.fields.height.mapv(|h| h < 0.0);
+        let pf_cont = calliope::climate::continentality(&pf_water);
+        let mut pf_land = 0usize;
+        let mut pf_ext = [0usize; 4];
+        let mut pf_pat = 0usize;
+        let mut pf_mar: Vec<f64> = Vec::new();
+        let mut pf_int: Vec<f64> = Vec::new();
+        let mut pf_inter = 0usize;
+        let mut pf_union = 0usize;
+        for y in 0..pr2 {
+            for x in 0..pc2 {
+                if w.fields.height[[y, x]] < 0.0 {
+                    continue;
+                }
+                pf_land += 1;
+                let e = pf.extent[[y, x]];
+                pf_ext[e as usize] += 1;
+                if pf.pattern[[y, x]] != 0 {
+                    pf_pat += 1;
+                }
+                let cold = w.fields.tmean[[y, x]] <= -2.0;
+                if e > 0 || cold {
+                    pf_union += 1;
+                }
+                if e > 0 && cold {
+                    pf_inter += 1;
+                }
+                if e > 0 {
+                    let mut edge = false;
+                    for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                        let ny = y as isize + dy;
+                        let nx = x as isize + dx;
+                        if ny < 0 || nx < 0 || ny >= pr2 as isize || nx >= pc2 as isize {
+                            continue;
+                        }
+                        let (ny, nx) = (ny as usize, nx as usize);
+                        if w.fields.height[[ny, nx]] >= 0.0 && pf.extent[[ny, nx]] == 0 {
+                            edge = true;
+                            break;
+                        }
+                    }
+                    if edge {
+                        let cn = ((pf_cont[[y, x]] - 0.35) / 0.65).clamp(0.0, 1.0);
+                        let t = w.fields.tmean[[y, x]] as f64;
+                        if cn <= 0.25 {
+                            pf_mar.push(t);
+                        } else if cn >= 0.75 {
+                            pf_int.push(t);
+                        }
+                    }
+                }
+            }
+        }
+        let median = |v: &mut Vec<f64>| -> Option<f64> {
+            if v.is_empty() {
+                return None;
+            }
+            v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            Some(v[v.len() / 2])
+        };
+        let pf_any = pf_ext[1] + pf_ext[2] + pf_ext[3];
+        let pf_real = pf_ext[2] + pf_ext[3];
+        let pfs = 100.0 * pf_any as f64 / pf_land.max(1) as f64;
+        let pfc = 100.0 * pf_ext[3] as f64 / pf_land.max(1) as f64;
+        let pfp = 100.0 * pf_pat as f64 / pf_real.max(1) as f64;
+        let pfm = median(&mut pf_mar).unwrap_or(-2.0);
+        let pfo = median(&mut pf_int).map(|m| m - pfm).unwrap_or(0.0);
+        let pfj = 100.0 * pf_inter as f64 / pf_union.max(1) as f64;
+        p_share += pfs / seeds.len() as f64;
+        p_pat += pfp / seeds.len() as f64;
+        p_front += pfm / seeds.len() as f64;
+        p_off += pfo / seeds.len() as f64;
+        p_jac += pfj / seeds.len() as f64;
+        p_rows.push(format!(
+            " {:>6} {:>7.1} {:>8.1} {:>10.1} {:>9.2} {:>8.2} {:>9.1}",
+            seed, pfs, pfc, pfp, pfm, pfo, pfj
+        ));
+
+        // M34 — modern glaciers: census, the snowline law (mean glacier
+        // elevation vs the balance-zero elevation solved from belt-mean
+        // climate, per 15° |lat| belt), and nesting inside the LGM.
+        let gl = &w.ice.modern;
+        let (gr, gc) = gl.dim();
+        let nrows = gr as f64;
+        let mut b_t0 = [0.0f64; 6]; // belt-mean sea-level-equivalent temp
+        let mut b_ta = [0.0f64; 6]; // belt-mean |tamp|
+        let mut b_pr = [0.0f64; 6]; // belt-mean annual precip
+        let mut b_pa = [0.0f64; 6]; // belt-mean pamp, phase-aligned to tamp
+        let mut b_land = [0usize; 6];
+        let mut b_gn = [0usize; 6];
+        let mut b_gh = [0.0f64; 6];
+        let mut g_cells = 0usize;
+        let mut g_land = 0usize;
+        let mut g_in_lgm = 0usize;
+        for y in 0..gr {
+            let lat = (-90.0 + (y as f64) * 180.0 / (nrows - 1.0)).abs();
+            let belt = ((lat / 15.0) as usize).min(5);
+            for x in 0..gc {
+                let h = w.fields.height[[y, x]] as f64;
+                if h < 0.0 {
+                    continue;
+                }
+                g_land += 1;
+                b_land[belt] += 1;
+                b_t0[belt] += w.fields.tmean[[y, x]] as f64 + 26.0 * h;
+                let ta = w.fields.tamp[[y, x]] as f64;
+                let sg = if ta < 0.0 { -1.0 } else { 1.0 };
+                b_ta[belt] += ta * sg;
+                b_pr[belt] += w.fields.precip[[y, x]] as f64;
+                b_pa[belt] += w.fields.pamp[[y, x]] as f64 * sg;
+                if gl[[y, x]] > 0.0 {
+                    g_cells += 1;
+                    b_gn[belt] += 1;
+                    b_gh[belt] += h;
+                    if w.ice.thickness[[y, x]] > 0.0 {
+                        g_in_lgm += 1;
+                    }
+                }
+            }
+        }
+        let mut off_sum = 0.0f64;
+        let mut off_n = 0usize;
+        for b in 0..6 {
+            if b_gn[b] < 25 || b_land[b] == 0 {
+                continue;
+            }
+            let n = b_land[b] as f64;
+            let (t0, ta, pr, pa) = (b_t0[b] / n, b_ta[b] / n, b_pr[b] / n, b_pa[b] / n);
+            let bal = |h: f64| calliope::climate::ice_balance(t0 - 26.0 * h, ta, pr, pa);
+            if bal(2.5) <= 0.0 {
+                continue; // no snowline below the ceiling in this belt
+            }
+            if bal(0.0) > 0.0 {
+                continue; // cap country: ice at the shore, no alpine snowline
+            }
+            let mut hi = 2.5f64;
+            let mut lo = 0.0f64;
+            for _ in 0..48 {
+                let mid = 0.5 * (lo + hi);
+                if bal(mid) > 0.0 {
+                    hi = mid;
+                } else {
+                    lo = mid;
+                }
+            }
+            off_sum += (b_gh[b] / b_gn[b] as f64 - hi) * 4000.0 * b_gn[b] as f64;
+            off_n += b_gn[b];
+        }
+        let gsh = 100.0 * g_cells as f64 / g_land.max(1) as f64;
+        let gelev = b_gh.iter().sum::<f64>() / g_cells.max(1) as f64 * 4000.0;
+        let glgm = 100.0 * g_in_lgm as f64 / g_cells.max(1) as f64;
+        gl_share += gsh / seeds.len() as f64;
+        if off_n > 0 {
+            gl_snow += off_sum / off_n as f64;
+            gl_snow_n += 1;
+        }
+        gl_lgm += glgm / seeds.len() as f64;
+        g_rows.push(format!(
+            " {:>6} {:>7} {:>8.2} {:>8.0} {:>9.0} {:>9.1}",
+            seed,
+            g_cells,
+            gsh,
+            gelev,
+            if off_n > 0 { off_sum / off_n as f64 } else { f64::NAN },
+            glgm
+        ));
+
+        // M36 — ice cadence: the three ice landform families read by
+        // latitude belt. Fjords are polar-coast creatures (the Norway/
+        // Chile/Greenland analogs run 42–83°, nothing equatorward of
+        // the alpine coasts); proglacial lakes and terminal moraines
+        // live in the margin belt (50–75°: the Laurentide/Fennoscandian
+        // fringe), and the moraine string hugs the measured margin.
+        let lfm = &w.landform;
+        let hgt = &w.fields.height;
+        let (kr, kc) = hgt.dim();
+        let knf = kr as f64;
+        let mut co_polar = 0usize; // coast cells |lat| ≥ 55°
+        let mut fj_polar = 0usize; // fjord cells |lat| ≥ 55°
+        let mut fj_all = 0usize;
+        let mut fj_pole = 0usize; // fjord cells |lat| ≥ 45°
+        let mut iced_mb = 0usize; // formerly iced land cells, 50–75°
+        let mut iced_all = 0usize; // formerly iced land cells, all lats (M39)
+        let mut fj_lats: Vec<f64> = Vec::new(); // |lat| of every fjord cell (M39)
+        for y in 0..kr {
+            let lat = (-90.0 + (y as f64) * 180.0 / (knf - 1.0)).abs();
+            for x in 0..kc {
+                let land = hgt[[y, x]] >= 0.0;
+                if lfm[[y, x]] == calliope::landform::FJORD {
+                    fj_all += 1;
+                    fj_lats.push(lat);
+                    if lat >= 45.0 {
+                        fj_pole += 1;
+                    }
+                    if lat >= 55.0 {
+                        fj_polar += 1;
+                    }
+                }
+                if land && lat >= 55.0 {
+                    let mut coast = false;
+                    for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                        let (ny, nx) = (y as isize + dy, x as isize + dx);
+                        if ny < 0 || nx < 0 || ny >= kr as isize || nx >= kc as isize {
+                            continue;
+                        }
+                        if hgt[[ny as usize, nx as usize]] < 0.0 {
+                            coast = true;
+                            break;
+                        }
+                    }
+                    if coast {
+                        co_polar += 1;
+                    }
+                }
+                if land && w.ice.thickness[[y, x]] > 0.0 {
+                    iced_all += 1;
+                    if (50.0..75.0).contains(&lat) {
+                        iced_mb += 1;
+                    }
+                }
+            }
+        }
+        let lat_of = |yy: u16| (-90.0 + (yy as f64) * 180.0 / (knf - 1.0)).abs();
+        let mut mor_mb = 0usize;
+        let mut mor_low = 0usize; // lowland moraines (h < 0.30)
+        let mut mor_near = 0usize; // ...of those, within ±6° of the margin
+        for &(my, mx) in &w.ice.moraines {
+            let lat = lat_of(my);
+            if (50.0..75.0).contains(&lat) {
+                mor_mb += 1;
+            }
+            // The margin-latitude discipline is a lowland law: alpine
+            // moraines follow their local snowline wherever the ranges
+            // stand, only the lowland string records the great margin.
+            if hgt[[my as usize, mx as usize]] < 0.30 {
+                mor_low += 1;
+                if (lat - margin).abs() <= 6.0 {
+                    mor_near += 1;
+                }
+            }
+        }
+        let lk_mb = w
+            .ice
+            .proglacial
+            .iter()
+            .filter(|&&(yy, _)| (50.0..75.0).contains(&lat_of(yy)))
+            .count();
+        let fjd = 1000.0 * fj_polar as f64 / co_polar.max(1) as f64;
+        let fjp = if fj_all == 0 { 100.0 } else { 100.0 * fj_pole as f64 / fj_all as f64 };
+        let lkd = 1000.0 * lk_mb as f64 / iced_mb.max(1) as f64;
+        let mord = 1000.0 * mor_mb as f64 / iced_mb.max(1) as f64;
+        let morc = 100.0 * mor_near as f64 / mor_low.max(1) as f64;
+        k_fj += fjd / seeds.len() as f64;
+        k_fjd += fjp / seeds.len() as f64;
+        k_lk += lkd / seeds.len() as f64;
+        k_mor += mord / seeds.len() as f64;
+        k_morc += morc / seeds.len() as f64;
+        k_rows.push(format!(
+            " {:>6} {:>8.1} {:>8.1} {:>9.2} {:>9.1} {:>9.1}",
+            seed, fjd, fjp, lkd, mord, morc
+        ));
+
+        // M39 — glacial calibration vs Earth. The M36 rows band our
+        // landforms against our own belts; these three comparisons pin
+        // them to Earth's measured bones: where the fjord coasts sit
+        // (Norway 58–71°, Chile 42–56°, Greenland 60–83°), how many
+        // moraine-dammed giants the retreat left per million km² of
+        // formerly iced ground (the Laurentide/Fennoscandian fringe),
+        // and how the surviving ice climbs equatorward — Earth's
+        // glaciation level runs ~5–6 km in the dry subtropics and
+        // falls to sea level at the poles.
+        let (fmed, fiqr) = if fj_lats.is_empty() {
+            (f64::NAN, f64::NAN)
+        } else {
+            (
+                quantile(&fj_lats, 0.5),
+                quantile(&fj_lats, 0.75) - quantile(&fj_lats, 0.25),
+            )
+        };
+        // cells are 4 km on a side (ADR-0004): 16 km² each.
+        let lkm = 1e6 * w.ice.proglacial.len() as f64 / (iced_all.max(1) as f64 * 16.0);
+        // Per-15°-belt mean glacier elevation, equator → pole. The
+        // curve must descend poleward of its crest; Earth's crest sits
+        // in the dry subtropics (~25–30°), so an equatorward rise into
+        // the crest is honest and only the poleward limb is judged.
+        let mut belt_elev: Vec<(usize, f64)> = Vec::new();
+        for b in 0..6 {
+            if b_gn[b] >= 25 {
+                belt_elev.push((b, 4000.0 * b_gh[b] / b_gn[b] as f64));
+            }
+        }
+        let crest = belt_elev
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1 .1.partial_cmp(&b.1 .1).unwrap())
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        let mut pairs = 0usize;
+        let mut descend = 0usize;
+        for wnd in belt_elev[crest..].windows(2) {
+            pairs += 1;
+            if wnd[1].1 <= wnd[0].1 + 150.0 {
+                descend += 1;
+            }
+        }
+        let curve = if pairs == 0 { 100.0 } else { 100.0 * descend as f64 / pairs as f64 };
+        let polar = belt_elev.iter().find(|&&(b, _)| b == 5).map(|&(_, e)| e);
+        if !fmed.is_nan() {
+            e_fmed.push(fmed);
+            e_fiqr.push(fiqr);
+        }
+        e_lkm.push(lkm);
+        e_curve.push(curve);
+        if let Some(pe) = polar {
+            e_polar.push(pe);
+        }
+        e_rows.push(format!(
+            " {:>6} {:>8.1} {:>8.1} {:>10.2} {:>7.0} {:>8}   {}",
+            seed,
+            fmed,
+            fiqr,
+            lkm,
+            curve,
+            polar.map(|e| format!("{:.0}", e)).unwrap_or_else(|| "-".into()),
+            belt_elev
+                .iter()
+                .map(|&(b, e)| format!("{}-{}°:{:.0}m", b * 15, b * 15 + 15, e))
+                .collect::<Vec<_>>()
+                .join(" · "),
+        ));
+
+        // M40 — wind-driven gyres: the rotation-sense census. Label
+        // the ocean into basins; for each basin and hemisphere read
+        // the mean streamfunction over the subtropical band
+        // (10–40°|lat|). Positive ψ turns clockwise on screen
+        // (north-up), so the north wants ψ > 0 and the south ψ < 0 —
+        // anticyclonic subtropical gyres both ways, Earth's sense.
+        let water_m = w.fields.height.mapv(|h| h < 0.0);
+        let lab = ndimage::label(&water_m, false);
+        let basins = ndimage::top_components(&lab, 2500.0, 8);
+        let (cr, cc) = w.fields.height.dim();
+        let cnf = cr as f64;
+        let mut gy_n = 0usize; // qualifying basin-hemisphere gyres
+        let mut gy_ok = 0usize; // ...spinning the earthly way
+        let mut gy_basins = 0usize; // basins carrying ≥1 qualifying gyre
+        let mut band_speeds: Vec<f64> = Vec::new();
+        let mut west_speeds: Vec<f64> = Vec::new();
+        let mut int_speeds: Vec<f64> = Vec::new();
+        for &(bi, _) in &basins {
+            let mut any = false;
+            for hemi in 0..2 {
+                let mut n = 0usize;
+                let mut psum = 0.0f64;
+                for y in 0..cr {
+                    let lat_s = -90.0 + y as f64 * 180.0 / (cnf - 1.0);
+                    let north = lat_s < 0.0; // negative = north (grid law)
+                    if (hemi == 0) != north {
+                        continue;
+                    }
+                    let th = lat_s.abs();
+                    if !(10.0..=40.0).contains(&th) {
+                        continue;
+                    }
+                    // walk this row's runs of the basin so the 4-cell
+                    // western strip splits off for the Stommel ratio
+                    let mut x = 0usize;
+                    while x < cc {
+                        if lab.lab[[y, x]] != bi as i32 {
+                            x += 1;
+                            continue;
+                        }
+                        let x0 = x;
+                        while x < cc && lab.lab[[y, x]] == bi as i32 {
+                            x += 1;
+                        }
+                        for xi in x0..x {
+                            n += 1;
+                            psum += w.currents.psi[[y, xi]] as f64;
+                            let sp = (w.currents.u[[y, xi]] as f64)
+                                .hypot(w.currents.v[[y, xi]] as f64);
+                            band_speeds.push(sp);
+                            if xi < x0 + 4 {
+                                west_speeds.push(sp);
+                            } else {
+                                int_speeds.push(sp);
+                            }
+                        }
+                    }
+                }
+                if n >= 250 {
+                    gy_n += 1;
+                    any = true;
+                    let mp = psum / n as f64;
+                    let want_pos = hemi == 0; // north: clockwise = ψ > 0
+                    if mp != 0.0 && (mp > 0.0) == want_pos {
+                        gy_ok += 1;
+                    }
+                }
+            }
+            if any {
+                gy_basins += 1;
+            }
+        }
+        let sp95 = quantile(&band_speeds, 0.95);
+        let wbx = if west_speeds.is_empty() || int_speeds.is_empty() {
+            0.0
+        } else {
+            quantile(&west_speeds, 0.95) / quantile(&int_speeds, 0.95).max(1e-12)
+        };
+        g40_n += gy_n;
+        g40_ok += gy_ok;
+        g40_basins.push(gy_basins as f64);
+        g40_p95.push(sp95);
+        g40_wbx.push(wbx);
+        c_rows.push(format!(
+            " {:>6} {:>7} {:>7} {:>7} {:>9.3} {:>8.1}",
+            seed,
+            basins.len(),
+            gy_n,
+            gy_ok,
+            sp95,
+            wbx
+        ));
     }
 
     println!();
@@ -465,10 +980,55 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
         println!("{r}");
     }
 
+    println!();
+    println!(
+        " {:>6} {:>7} {:>8} {:>10} {:>9} {:>8} {:>9}",
+        "seed", "pf %", "cont %", "pattern %", "mar °C", "off °C", "agree %"
+    );
+    for r in &p_rows {
+        println!("{r}");
+    }
+
+    println!();
+    println!(
+        " {:>6} {:>7} {:>8} {:>8} {:>9} {:>9}",
+        "seed", "gcells", "share %", "elev m", "Δsnow m", "in-LGM %"
+    );
+    for r in &g_rows {
+        println!("{r}");
+    }
+
+    println!();
+    println!(
+        " {:>6} {:>8} {:>8} {:>9} {:>9} {:>9}",
+        "seed", "fj/1kco", "fj>=45%", "lk/1kice", "mor/1k", "mor±6°%"
+    );
+    for r in &k_rows {
+        println!("{r}");
+    }
+
+    println!();
+    println!(
+        " {:>6} {:>8} {:>8} {:>10} {:>7} {:>8}   {}",
+        "seed", "fj med°", "fj IQR°", "lk/Mkm²", "curve%", "polar m", "glacier elev by belt (equator→pole)"
+    );
+    for r in &e_rows {
+        println!("{r}");
+    }
+
+    println!();
+    println!(
+        " {:>6} {:>7} {:>7} {:>7} {:>9} {:>8}",
+        "seed", "basins", "gyres", "earthly", "sp p95", "west ×"
+    );
+    for r in &c_rows {
+        println!("{r}");
+    }
+
     // Replay identity: the flagship seed run twice from scratch with
     // different chunkings must agree on the ledger byte-for-byte.
     let seed0 = seeds[0];
-    let hash_after = |chunk: i64| -> (u64, u64) {
+    let hash_after = |chunk: i64| -> (u64, u64, u64) {
         let mut w = World::generate(seed0, size);
         let mut left = months;
         while left > 0 {
@@ -476,9 +1036,9 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
             w.tick(step);
             left -= step;
         }
-        (w.seismic.hash(), w.ice.hash())
+        (w.seismic.hash(), w.ice.hash(), w.currents.hash())
     };
-    let ((ha, ia), (hb, ib)) = (hash_after(240), hash_after(12));
+    let ((ha, ia, ca), (hb, ib, cb)) = (hash_after(240), hash_after(12));
     println!();
     println!(" replay: seed {seed0} · {months} mo · chunk 240 => {ha:016x} · chunk 12 => {hb:016x}");
     println!(" native seismic hash (seed {seed0} · size {size} · {months} mo): {ha:016x}");
@@ -541,6 +1101,66 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
         ia == ib,
         format!("{}", if ia == ib { "identical" } else { "DIVERGE" }),
         "M28 gate: frozen prehistory replays; joins hash_state",
+    );
+    // M33 — the permafrost checks: extent, texture, the isotherm law.
+    c.band("permafrost share of land", p_share, format!("{:.1} %", p_share));
+    c.band("patterned share of permafrost", p_pat, format!("{:.1} %", p_pat));
+    c.band("maritime frontier MAAT", p_front, format!("{:.2} °C", p_front));
+    c.band("continental frontier offset", p_off, format!("+{:.2} °C", p_off));
+    c.band("isotherm agreement", p_jac, format!("{:.1} %", p_jac));
+    // M34 — the modern-glacier checks: census, snowline law, LGM nesting.
+    c.band("modern glacier share of land %", gl_share, format!("{:.2} %", gl_share));
+    let gl_snow_m = if gl_snow_n == 0 { 0.0 } else { gl_snow / gl_snow_n as f64 };
+    c.band(
+        "glacier elev above snowline m",
+        gl_snow_m,
+        format!("{:+.0} m", gl_snow_m),
+    );
+    c.band("modern ice inside LGM footprint %", gl_lgm, format!("{:.1} %", gl_lgm));
+    // M36 — the ice-cadence checks: the three landform families banded
+    // by latitude belt against their earth analogs (fjords on the polar
+    // coast; lakes and moraines in the 50–75° margin belt; the moraine
+    // string concentrated on the measured margin latitude).
+    c.band("fjord cells per 1000 polar coast", k_fj, format!("{:.1}", k_fj));
+    c.band("fjord cells poleward of 45° %", k_fjd, format!("{:.1} %", k_fjd));
+    c.band("proglacial lakes per 1000 iced, margin belt", k_lk, format!("{:.2}", k_lk));
+    c.band("moraine cells per 1000 iced, margin belt", k_mor, format!("{:.1}", k_mor));
+    c.band("lowland moraine cells near the margin %", k_morc, format!("{:.1} %", k_morc));
+    // M39 — the earth-calibration checks: fjord latitudes, giant-lake
+    // density per formerly iced area, and the elevation-vs-latitude
+    // curve, banded against terrestrial analogs (Norway/Greenland/
+    // Chile fjord coasts; the Laurentide fringe; Earth's glaciation
+    // level falling from the subtropics to the poles).
+    let mean = |v: &Vec<f64>| {
+        if v.is_empty() { f64::NAN } else { v.iter().sum::<f64>() / v.len() as f64 }
+    };
+    let (m_fmed, m_fiqr) = (mean(&e_fmed), mean(&e_fiqr));
+    let (m_lkm, m_curve, m_polar) = (mean(&e_lkm), mean(&e_curve), mean(&e_polar));
+    c.band("fjord median latitude", m_fmed, format!("{:.1}°", m_fmed));
+    c.band("fjord latitude IQR", m_fiqr, format!("{:.1}°", m_fiqr));
+    c.band("proglacial lakes per Mkm² iced", m_lkm, format!("{:.2}", m_lkm));
+    c.band("glacier curve descends poleward", m_curve, format!("{:.0} %", m_curve));
+    c.band("polar-belt glacier elevation", m_polar, format!("{:.0} m", m_polar));
+    // M40 — the gyre checks: every qualifying subtropical gyre spins
+    // the earthly way, the west wall crowds, the field replays.
+    c.must(
+        "gyre sense matches hemisphere",
+        g40_n > 0 && g40_ok == g40_n,
+        format!("{}/{}", g40_ok, g40_n),
+        "M40 gate: clockwise north · counterclockwise south, every basin in the sweep",
+    );
+    c.band("gyre basins per seed", mean(&g40_basins), format!("{:.1}", mean(&g40_basins)));
+    c.band("surface current speed p95", mean(&g40_p95), format!("{:.3}", mean(&g40_p95)));
+    c.band(
+        "western boundary intensification",
+        mean(&g40_wbx),
+        format!("{:.1}×", mean(&g40_wbx)),
+    );
+    c.must(
+        "current field replays identical",
+        ca == cb,
+        format!("{}", if ca == cb { "agree" } else { "DIVERGE" }),
+        "M40 gate: same seed, two chunkings, one circulation",
     );
 
     c.print();
@@ -846,8 +1466,53 @@ fn cmd_terrain(seed: i64, size: usize) {
     );
     let legi_worst = legi.iter().cloned().fold(0.0f64, f64::max);
 
+    // ---- heat transport (M41) -------------------------------------------
+    // The law re-run on the post-widen ledger: the same `current_bias`
+    // the dawn folded into tmean, measured where it touches land. Warm
+    // rims and cold rims must both exist, sit a few °C off their zonal
+    // law, and the world-mean must stay near zero — advection moves
+    // heat, it does not mint it.
+    let water_g = w.fields.height.mapv(|h| h < 0.0);
+    let heat = calliope::climate::current_bias(&water_g, &w.currents.v);
+    let mut hw_n = 0usize;
+    let mut hw_sum = 0.0f64;
+    let mut hc_n = 0usize;
+    let mut hc_sum = 0.0f64;
+    let mut h_net = 0.0f64;
+    for y in 0..rows {
+        for x in 0..cols {
+            let b = heat[[y, x]];
+            h_net += b;
+            if land[[y, x]] {
+                if b >= 0.5 {
+                    hw_n += 1;
+                    hw_sum += b;
+                } else if b <= -0.5 {
+                    hc_n += 1;
+                    hc_sum += b;
+                }
+            }
+        }
+    }
+    let hw_mean = if hw_n > 0 { hw_sum / hw_n as f64 } else { 0.0 };
+    let hc_mean = if hc_n > 0 { hc_sum / hc_n as f64 } else { 0.0 };
+    let h_net_mean = h_net / (rows * cols) as f64;
+    println!(
+        "heat transport (M41): warm rim {} cells mean {:+.2} °C · cold rim {} cells mean {:+.2} °C · net {:+.3} °C",
+        hw_n, hw_mean, hc_n, hc_mean, h_net_mean
+    );
+
     let mut c = Checks::default();
     c.band("land fraction", land_frac, pct(land_frac));
+    c.must(
+        "warm and cold rims both exist (M41)",
+        hw_n > 0 && hc_n > 0,
+        format!("{} warm · {} cold cells", hw_n, hc_n),
+        "M41: the currents must touch coasts both ways — Gulf Stream and Humboldt analogs",
+    );
+    c.band("warm-coast heat delta", hw_mean, format!("{:+.2} °C ({} cells)", hw_mean, hw_n));
+    c.band("cold-coast heat delta", hc_mean, format!("{:+.2} °C ({} cells)", hc_mean, hc_n));
+    c.band("heat transport net bias", h_net_mean.abs(), format!("{:+.3} °C", h_net_mean));
     c.must("border land cells", bl == 0, format!("{}", bl), "must be 0 — no clipped landmasses");
     // M25 gate — the coastline holds the datum: land area stays within
     // ±5% (relative) of the pre-M25 baseline near mid-curve, widening
@@ -955,12 +1620,17 @@ fn cmd_terrain(seed: i64, size: usize) {
             format!("{} tags against the offset sign", wrong_sign),
             "M26: raised only where the land rose, drowned only where the sea did",
         );
-        let purity = calliope::landform::hash(&calliope::landform::classify(hgt, sl, &w.ice)) == calliope::landform::hash(lf);
+        // M33 — the shipped grid carries the patterned-ground stamp,
+        // which runs after classify(); the regen leg must walk the
+        // same two steps or the compare reads its own omission.
+        let mut regen = calliope::landform::classify(hgt, sl, &w.ice);
+        calliope::landform::stamp_patterned(&mut regen, &w.permafrost.pattern, hgt);
+        let purity = calliope::landform::hash(&regen) == calliope::landform::hash(lf);
         c.must(
             "landform grid regen byte-identical",
             purity,
             if purity { "identical".into() } else { "DIVERGED".into() },
-            "M26 gate: pure function of height + sea level; joins hash_state",
+            "M26 gate: pure function of height + sea level (+ the M33 patterned stamp); joins hash_state",
         );
 
         // M29 — glacial relief: U-valleys, cirques and hangs by belt.
@@ -1024,6 +1694,323 @@ fn cmd_terrain(seed: i64, size: usize) {
                 if finite { "finite".into() } else { "NaN".into() },
                 "M29 gate: the carve is pure lowering arithmetic",
             );
+
+            // M30 — the depositional legacy: till share, moraine strings,
+            // drumlin swarms, esker chains; till strictly under old ice.
+            let (tr, tc) = ice.till.dim();
+            let mut iced_all = 0usize;
+            let mut iced_low = 0usize;
+            let mut till_cells = 0usize;
+            let mut till_off_ice = 0usize;
+            for y in 0..tr {
+                for x in 0..tc {
+                    if w.fields.height[[y, x]] < 0.0 {
+                        continue;
+                    }
+                    let on_ice = ice.thickness[[y, x]] > 0.0;
+                    if on_ice {
+                        iced_all += 1;
+                        if w.fields.height[[y, x]] < 0.30 {
+                            iced_low += 1;
+                        }
+                    }
+                    if ice.till[[y, x]] > 0.0 {
+                        till_cells += 1;
+                        if !on_ice {
+                            till_off_ice += 1;
+                        }
+                    }
+                }
+            }
+            let t_share = 100.0 * till_cells as f64 / iced_low.max(1) as f64;
+            let m_per = 1000.0 * ice.moraines.len() as f64 / iced_all.max(1) as f64;
+            let d_per = 1000.0 * ice.drumlins.len() as f64 / till_cells.max(1) as f64;
+            let loess_cells = ice.loess.iter().filter(|&&v| v > 0.0).count();
+            let land_cells = (0..tr)
+                .flat_map(|y| (0..tc).map(move |x| (y, x)))
+                .filter(|&(y, x)| w.fields.height[[y, x]] >= 0.0)
+                .count();
+            let l_share = 100.0 * loess_cells as f64 / land_cells.max(1) as f64;
+            println!(
+                "glacial legacy: till {} cells ({:.1}% of iced lowland) · moraine {} · drumlins {} · esker cells {} · loess {} cells ({:.1}% of land)",
+                till_cells, t_share, ice.moraines.len(), ice.drumlins.len(), ice.eskers.len(),
+                loess_cells, l_share
+            );
+            c.band("till share of iced lowland %", t_share, format!("{:.1} %", t_share));
+            c.band("moraine cells per 1000 iced", m_per, format!("{:.1}", m_per));
+            c.band("drumlins per 1000 till", d_per, format!("{:.1}", d_per));
+            c.band("esker cells per world", ice.eskers.len() as f64, format!("{}", ice.eskers.len()));
+            c.band("loess share of land %", l_share, format!("{:.1} %", l_share));
+            c.must(
+                "till lies under old ice only",
+                till_off_ice == 0,
+                format!("{} stray cells", till_off_ice),
+                "M30 gate: the sheet is the depositional footprint",
+            );
+
+            // The till dividend, latitude- AND height-matched: within
+            // each (3° lat × 0.03 height) bin, gentle lowland on till vs
+            // the same ground off it. The double match matters: within a
+            // latitude belt, glaciation selected for elevation near the
+            // ELA, so till ground sits higher (colder, drier) than the
+            // belt at large — lat-only bins read that confound as a
+            // negative dividend. Matched on both, the weighted mean
+            // difference reads the bonus straight off the shipped field.
+            const HB: usize = 10; // height bins over [0, 0.30)
+            let mut bin_t = vec![(0.0f64, 0usize); 30 * HB];
+            let mut bin_o = vec![(0.0f64, 0usize); 30 * HB];
+            for y in 0..tr {
+                let lat = (-90.0 + (y as f64) * 180.0 / (tr as f64 - 1.0)).abs();
+                if lat < 35.0 {
+                    continue;
+                }
+                let lb = ((lat / 3.0) as usize).min(29);
+                for x in 0..tc {
+                    let h = w.fields.height[[y, x]];
+                    if h < 0.0 || h >= 0.30 {
+                        continue;
+                    }
+                    let mut s = 0.0f32;
+                    for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                        let ny = y as isize + dy;
+                        let nx = x as isize + dx;
+                        if ny < 0 || nx < 0 || ny >= tr as isize || nx >= tc as isize {
+                            continue;
+                        }
+                        s = s.max((w.fields.height[[ny as usize, nx as usize]] - h).abs());
+                    }
+                    if s > 0.015 {
+                        continue;
+                    }
+                    let b = lb * HB + ((h as f64 / 0.03) as usize).min(HB - 1);
+                    let f = w.fields.fertility[[y, x]] as f64;
+                    if ice.till[[y, x]] > 0.0 {
+                        bin_t[b].0 += f;
+                        bin_t[b].1 += 1;
+                    } else {
+                        bin_o[b].0 += f;
+                        bin_o[b].1 += 1;
+                    }
+                }
+            }
+            let (mut dsum, mut wsum, mut bins) = (0.0f64, 0usize, 0usize);
+            for b in 0..30 * HB {
+                if bin_t[b].1 >= 20 && bin_o[b].1 >= 20 {
+                    let d = bin_t[b].0 / bin_t[b].1 as f64 - bin_o[b].0 / bin_o[b].1 as f64;
+                    let wt = bin_t[b].1.min(bin_o[b].1);
+                    dsum += d * wt as f64;
+                    wsum += wt;
+                    bins += 1;
+                }
+            }
+            if bins >= 5 {
+                let d = dsum / wsum.max(1) as f64;
+                println!(
+                    "till dividend (observational): {:+.4} fertility over {} matched lat×h bins",
+                    d, bins
+                );
+            } else {
+                println!("till dividend: too few matched bins to compare ({} bins)", bins);
+            }
+
+            // The gate itself is counterfactual, not observational: rerun
+            // the shipped fertility law with the till grid zeroed and read
+            // the uplift on till cells. Glaciation is not randomly
+            // assigned — sheet-interior ground is drier at matched lat and
+            // height, so even the double-matched observational diff stays
+            // slightly negative. The counterfactual isolates the causal
+            // term exactly and fails if the wiring breaks or the
+            // temperature gate zeroes the bonus in practice.
+            let h64 = w.fields.height.mapv(|v| v as f64);
+            let t64 = w.fields.tmean.mapv(|v| v as f64);
+            let p64 = w.fields.precip.mapv(|v| v as f64);
+            let q64 = w.fields.discharge.mapv(|v| v as f64);
+            let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
+            let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
+            let none: ndarray::Array2<f32> = ndarray::Array2::zeros((tr, tc));
+            let f_with = calliope::agriculture::fertility(
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash,
+            );
+            let f_bare = calliope::agriculture::fertility(
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &none, &none, &ice.outwash,
+            );
+            // Measured on the farmable footprint only (bare fertility
+            // ≥ 0.05): the sheet interior is tundra where the temperature
+            // gate rightly zeroes farming — averaging over it dilutes the
+            // belt where the farms and towns actually are. Loess is the
+            // warm end of the footprint; it carries most of the dividend.
+            let (mut up, mut un, mut tn) = (0.0f64, 0usize, 0usize);
+            for y in 0..tr {
+                for x in 0..tc {
+                    if ice.till[[y, x]] > 0.0 || ice.loess[[y, x]] > 0.0 {
+                        tn += 1;
+                        if f_bare[[y, x]] >= 0.05 {
+                            up += f_with[[y, x]] - f_bare[[y, x]];
+                            un += 1;
+                        }
+                    }
+                }
+            }
+            let uplift = up / un.max(1) as f64;
+            println!(
+                "legacy counterfactual: {} of {} till+loess cells farmable · mean uplift {:+.4} there",
+                un, tn, uplift
+            );
+            c.must(
+                "the legacy feeds the farms on it",
+                un >= 300 && uplift >= 0.005,
+                format!("{:+.4} uplift on {} farmable legacy cells", uplift, un),
+                "M30 gate: zeroing till+loess must cost the farmable belt ≥ +0.005 (counterfactual)",
+            );
+        }
+
+        // M31 — proglacial lakes and spillways: the melt ponded behind
+        // the fresh moraines; the outbursts cut the channels that
+        // outlive the lakes. Registries land post-widen, so they index
+        // the shipped grid directly.
+        {
+            let ice = &w.ice;
+            let n_lakes = ice.proglacial.len();
+            let sp_cells: usize = ice.spillways.iter().map(|ch| ch.len()).sum();
+            let (fh, fw) = w.fields.height.dim();
+            let mut widths = [0usize; 3];
+            for &(_, _, wd) in &ice.prog_meta {
+                widths[(wd as usize).clamp(1, 3) - 1] += 1;
+            }
+            let mut refilled = 0usize;
+            for &(y, x) in &ice.proglacial {
+                let (y, x) = (y as usize, x as usize);
+                if y < fh && x < fw && w.fields.flags[[y, x]] & CellFlags::LAKE.bits() != 0 {
+                    refilled += 1;
+                }
+            }
+            // Channels must drain in the shipped relief. The staircase
+            // is strict per channel; a later channel crossing an earlier
+            // one may notch its middle, so a small ascent share passes.
+            let (mut steps, mut ascents) = (0usize, 0usize);
+            for ch in &ice.spillways {
+                for k in 1..ch.len() {
+                    let (ay, ax) = (ch[k - 1].0 as usize, ch[k - 1].1 as usize);
+                    let (by, bx) = (ch[k].0 as usize, ch[k].1 as usize);
+                    if ay >= fh || ax >= fw || by >= fh || bx >= fw {
+                        continue;
+                    }
+                    steps += 1;
+                    if w.fields.height[[by, bx]] > w.fields.height[[ay, ax]] + 1e-6 {
+                        ascents += 1;
+                    }
+                }
+            }
+            println!(
+                "proglacial (M31): {} lakes ({} refilled today) · {} chains · {} spillway cells · widths {}/{}/{} · {} of {} steps ascend",
+                n_lakes, refilled, ice.chains, sp_cells,
+                widths[0], widths[1], widths[2], ascents, steps
+            );
+            c.band("proglacial lakes per world", n_lakes as f64, format!("{}", n_lakes));
+            c.band("spillway cells per world", sp_cells as f64, format!("{}", sp_cells));
+            // Width classes derive from impounded volume; the gate reads
+            // them against basin area — the correlation is physical
+            // (deep water stands in wide basins), not definitional.
+            let (mut a1, mut n1, mut a2, mut n2) = (0.0f64, 0usize, 0.0f64, 0usize);
+            for &(_, area, wd) in &ice.prog_meta {
+                if wd >= 2 {
+                    a2 += area as f64;
+                    n2 += 1;
+                } else {
+                    a1 += area as f64;
+                    n1 += 1;
+                }
+            }
+            if n1 >= 2 && n2 >= 1 {
+                let (m1, m2) = (a1 / n1 as f64, a2 / n2 as f64);
+                c.must(
+                    "spillway width scales with catchment",
+                    m2 >= m1,
+                    format!("wide-class basins avg {:.0} cells vs {:.0}", m2, m1),
+                    "M31 gate: width bands follow the basins that fed them",
+                );
+            }
+            if steps >= 20 {
+                let share = ascents as f64 / steps as f64;
+                c.must(
+                    "spillways drain downhill",
+                    share <= 0.02,
+                    format!("{} of {} steps ascend", ascents, steps),
+                    "M31 gate: outburst channels descend in the shipped relief (≤2% crossing tolerance)",
+                );
+            }
+        }
+
+        // M32 — outwash plains and braided meltwater rivers: the melt
+        // planed aprons below the margin; today's rivers braid where
+        // they cross them, and the plain eats measurably better. The
+        // fertility gate is counterfactual, like M30: rerun the shipped
+        // law with the outwash grid zeroed and read the uplift.
+        {
+            let ice = &w.ice;
+            let (ir, icn) = ice.outwash.dim();
+            let mut corridor = 0usize;
+            let mut apron = 0usize;
+            for &v in ice.outwash.iter() {
+                if v >= 0.9 {
+                    corridor += 1;
+                } else if v > 0.0 {
+                    apron += 1;
+                }
+            }
+            let (mut riv_below, mut braided) = (0usize, 0usize);
+            for y in 0..ir {
+                for x in 0..icn {
+                    if w.fields.flags[[y, x]] & CellFlags::RIVER.bits() == 0 {
+                        continue;
+                    }
+                    if ice.thickness[[y, x]] > 0.0 {
+                        continue;
+                    }
+                    riv_below += 1;
+                    if w.fields.flags[[y, x]] & CellFlags::BRAIDED.bits() != 0 {
+                        braided += 1;
+                    }
+                }
+            }
+            let share = 100.0 * braided as f64 / riv_below.max(1) as f64;
+            println!(
+                "outwash (M32): {} corridor + {} apron cells · {} of {} below-margin river cells braided ({:.1}%)",
+                corridor, apron, braided, riv_below, share
+            );
+            c.band("outwash cells per world", (corridor + apron) as f64, format!("{}", corridor + apron));
+            c.band("braided share of ice-fed rivers %", share, format!("{:.1} %", share));
+
+            let h64 = w.fields.height.mapv(|v| v as f64);
+            let t64 = w.fields.tmean.mapv(|v| v as f64);
+            let p64 = w.fields.precip.mapv(|v| v as f64);
+            let q64 = w.fields.discharge.mapv(|v| v as f64);
+            let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
+            let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
+            let none: ndarray::Array2<f32> = ndarray::Array2::zeros((ir, icn));
+            let f_with = calliope::agriculture::fertility(
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash,
+            );
+            let f_bare = calliope::agriculture::fertility(
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &none,
+            );
+            let (mut up, mut un) = (0.0f64, 0usize);
+            for y in 0..ir {
+                for x in 0..icn {
+                    if ice.outwash[[y, x]] > 0.0 && f_bare[[y, x]] >= 0.05 {
+                        up += f_with[[y, x]] - f_bare[[y, x]];
+                        un += 1;
+                    }
+                }
+            }
+            let uplift = up / un.max(1) as f64;
+            println!(
+                "outwash counterfactual: {} of {} plain cells farmable · mean uplift {:+.4} there",
+                un,
+                corridor + apron,
+                uplift
+            );
+            c.band("outwash fertility uplift", uplift, format!("{:+.4} on {} cells", uplift, un));
         }
         if sl.eustatic < 0.0 && coast_up >= 150 && coast_dn >= 150 {
             let d_up = raised_up as f64 / coast_up as f64;
@@ -1066,6 +2053,125 @@ fn cmd_terrain(seed: i64, size: usize) {
         ),
         "M21 gate: ≤3% of each province off its landform correlate",
     );
+
+    // ---- M38 — the cold rim: treeline vs the frozen ground ---------------
+    // Per column and hemisphere, walk pole → equator: the first tree
+    // biome whose poleward land neighbour is tundra or ice is the
+    // *thermal* treeline (drought-limited edges against steppe don't
+    // count); the last continuous-permafrost lowland cell is the
+    // frontier's equatorward reach (alpine islands at h≥0.5 don't
+    // count). The offset (treeline lat − frontier lat) is the tracking
+    // law, banded on the pooled legs: in this world it is one-signed
+    // (see biomes::BANDS) — the frontier sits poleward of the treeline.
+    // The regime breakdown by continentality is printed as data; the
+    // treeline cells also confess their GDD5 — the classifier's own
+    // currency, read back from the shipped f32 climate.
+    {
+        let biomes = &w.fields.biomes;
+        let ext = &w.permafrost.extent;
+        let (rows, cols) = biomes.dim();
+        let tree = |b: u8| {
+            b == gc::WOODLAND
+                || b == gc::BOREAL_FOREST
+                || b == gc::SEASONAL_RAIN_FOREST
+                || b == gc::TEMPERATE_RAIN_FOREST
+                || b == gc::TROPICAL_RAIN_FOREST
+        };
+        let cold = |b: u8| b == gc::TUNDRA || b == gc::WET_TUNDRA || b == gc::ICE;
+        // Regime split at the treeline cell: |tamp| = base(lat)·cont,
+        // so cont = |tamp|/base(lat) recovers the EDT continentality
+        // (0.35 coast → 1.0 interior) — the two regimes obey
+        // opposite-signed tracking laws.
+        const CONT_SPLIT: f64 = 0.70;
+        let mut offs_m: Vec<f64> = Vec::new();
+        let mut offs_c: Vec<f64> = Vec::new();
+        let mut conts: Vec<f64> = Vec::new();
+        let mut gdds: Vec<f64> = Vec::new();
+        for x in 0..cols {
+            for hemi in 0..2 {
+                // pole → equator in both legs
+                let ys: Vec<usize> = if hemi == 0 {
+                    (0..rows / 2).collect()
+                } else {
+                    (rows / 2..rows).rev().collect()
+                };
+                let mut tree_y: Option<usize> = None;
+                let mut cont_y: Option<usize> = None;
+                let mut poleward_land: Option<u8> = None;
+                let mut cold_limited = false;
+                for &y in &ys {
+                    let land = w.fields.height[[y, x]] >= 0.0;
+                    if land && tree_y.is_none() && tree(biomes[[y, x]]) {
+                        tree_y = Some(y);
+                        cold_limited = poleward_land.map_or(false, cold);
+                    }
+                    if land {
+                        poleward_land = Some(biomes[[y, x]]);
+                        if w.fields.height[[y, x]] < 0.5
+                            && ext[[y, x]] == calliope::permafrost::CONTINUOUS
+                        {
+                            cont_y = Some(y);
+                        }
+                    }
+                }
+                if !cold_limited {
+                    continue;
+                }
+                if let (Some(ty), Some(cy)) = (tree_y, cont_y) {
+                    let off = latitude(ty, rows) - latitude(cy, rows);
+                    let base = 3.0 + 19.0 * (latitude(ty, rows) / 90.0).powf(1.2);
+                    let cont = (w.fields.tamp[[ty, x]] as f64).abs() / base;
+                    conts.push(cont);
+                    if cont < CONT_SPLIT {
+                        offs_m.push(off);
+                    } else {
+                        offs_c.push(off);
+                    }
+                    gdds.push(calliope::climate::gdd5(
+                        w.fields.tmean[[ty, x]] as f64,
+                        w.fields.tamp[[ty, x]] as f64,
+                    ));
+                }
+            }
+        }
+        let (mut dry, mut wet) = (0usize, 0usize);
+        for &b in biomes.iter() {
+            if b == gc::TUNDRA {
+                dry += 1;
+            } else if b == gc::WET_TUNDRA {
+                wet += 1;
+            }
+        }
+        let wet_share = 100.0 * wet as f64 / (wet + dry).max(1) as f64;
+        let iqr = |v: &[f64]| quantile(v, 0.75) - quantile(v, 0.25);
+        let mut offs: Vec<f64> = Vec::with_capacity(offs_m.len() + offs_c.len());
+        offs.extend_from_slice(&offs_m);
+        offs.extend_from_slice(&offs_c);
+        println!();
+        println!(
+            "cold rim (M38): treeline−frontier offset median {:+.1}° · IQR {:.1}° over {} column-legs · treeline GDD5 median {:.0} °C·day",
+            quantile(&offs, 0.5), iqr(&offs), offs.len(), quantile(&gdds, 0.5),
+        );
+        println!(
+            "  regime breakdown: maritime median {:+.1}° ({} legs) · continental median {:+.1}° ({} legs) · treeline continentality p10 {:.2} p50 {:.2} p90 {:.2} (split at {:.2})",
+            quantile(&offs_m, 0.5), offs_m.len(),
+            quantile(&offs_c, 0.5), offs_c.len(),
+            quantile(&conts, 0.10), quantile(&conts, 0.50), quantile(&conts, 0.90), CONT_SPLIT,
+        );
+        println!(
+            "tundra subtypes: dry {} · wet {} cells · wet share {:.1}% of the tundra",
+            dry, wet, wet_share
+        );
+        if offs.len() >= 20 {
+            let med = quantile(&offs, 0.5);
+            c.band("treeline−permafrost offset", med, format!("{:+.1}° ({} legs)", med, offs.len()));
+            c.band("treeline tracking spread", iqr(&offs), format!("{:.1}°", iqr(&offs)));
+            c.band("treeline GDD discipline", quantile(&gdds, 0.5), format!("{:.0} °C·day", quantile(&gdds, 0.5)));
+        }
+        if wet + dry > 0 {
+            c.band("wet share of the tundra", wet_share, format!("{:.1}%", wet_share));
+        }
+    }
     c.print();
 }
 
@@ -1081,11 +2187,11 @@ fn cmd_climate(seed: i64, size: usize) {
     let share = |b: u8| bc[b as usize] as f64 / land_n.max(1.0);
 
     println!("biome shares of land:");
-    for b in 1..11u8 {
+    for b in 1..12u8 {
         println!("  {:<24} {:>7}  {}", gc::Biome::from_code(b), bc[b as usize], pct(share(b)));
     }
     let desert = share(gc::DESERT);
-    let frozen = share(gc::TUNDRA) + share(gc::ICE);
+    let frozen = share(gc::TUNDRA) + share(gc::WET_TUNDRA) + share(gc::ICE);
     let forest = share(gc::WOODLAND) + share(gc::SEASONAL_RAIN_FOREST) + share(gc::TEMPERATE_RAIN_FOREST) + share(gc::BOREAL_FOREST) + share(gc::TROPICAL_RAIN_FOREST);
     let open = share(gc::GRASSLAND) + share(gc::SAVANNA);
 
@@ -1111,7 +2217,7 @@ fn cmd_climate(seed: i64, size: usize) {
         let mut n = 0usize;
         let mut tsum = 0.0;
         let mut psum = 0.0;
-        let mut counts = [0usize; 11];
+        let mut counts = [0usize; 12];
         for y in y0..y1 {
             for x in 0..cols {
                 if !land[[y, x]] {
@@ -1128,7 +2234,7 @@ fn cmd_climate(seed: i64, size: usize) {
             println!("  {:<12} {:>6} {:>8} {:>9}  —", label, 0, "—", "—");
             continue;
         }
-        let dom = (1..11).max_by_key(|&i| counts[i]).unwrap_or(1);
+        let dom = (1..12).max_by_key(|&i| counts[i]).unwrap_or(1);
         println!("  {:<12} {:>6} {:>7.1}C {:>7.0}mm  {}", label, n, tsum / n as f64, psum / n as f64, gc::Biome::from_code(dom as u8));
     }
 
@@ -1152,6 +2258,47 @@ fn cmd_climate(seed: i64, size: usize) {
     let mid_m = mid_amp.iter().sum::<f64>() / mid_amp.len().max(1) as f64;
     println!("monsoon |amp| of annual rain: tropics {:.2} · extratropics {:.2}", trop_m, mid_m);
 
+    // ---- M37 sea ice: the pack and its seasonal fringe ----
+    // Extent is judged cos(lat)-weighted: the equirectangular grid
+    // overweights polar rows, and the pack lives exactly there. The
+    // weighted share is the Earth-comparable number (~4–8% of ocean
+    // area at annual maximum).
+    let fro = calliope::seaice::frozen_months(&w.fields.height, &w.fields.tmean, &w.fields.tamp);
+    let sea_n = (rows * cols) as f64 - land_n;
+    let mut ice_ever = 0usize;
+    let mut ice_perennial = 0usize;
+    let mut ice_lat_min = 90.0f64;
+    let (mut wsea, mut wice) = (0.0f64, 0.0f64);
+    for y in 0..rows {
+        let wgt = (latitude(y, rows).to_radians()).cos().max(0.0);
+        for x in 0..cols {
+            if w.fields.height[[y, x]] < 0.0 {
+                wsea += wgt;
+            }
+            let m = fro[[y, x]];
+            if m == 0 {
+                continue;
+            }
+            ice_ever += 1;
+            wice += wgt;
+            if m == calliope::seaice::MONTHS_MASK {
+                ice_perennial += 1;
+            }
+            ice_lat_min = ice_lat_min.min(latitude(y, rows).abs());
+        }
+    }
+    let ice_seasonal = ice_ever - ice_perennial;
+    let ice_area = wice / wsea.max(1e-9);
+    println!();
+    if ice_ever > 0 {
+        println!(
+            "sea ice (M37): {} of ocean area ever frozen ({} of cells) · perennial {} cells · seasonal fringe {} cells · pack reaches {:.0}°",
+            pct(ice_area), pct(ice_ever as f64 / sea_n.max(1.0)), ice_perennial, ice_seasonal, ice_lat_min
+        );
+    } else {
+        println!("sea ice (M37): no sea cell ever freezes on this seed");
+    }
+
     // ---- M2.1 crop belts: the agricultural map of the world ----
     let mut pk = [0usize; 5];
     for (&cpk, &l) in w.fields.crops.iter().zip(land.iter()) {
@@ -1167,6 +2314,136 @@ fn cmd_climate(seed: i64, size: usize) {
     );
     let arable = pshare(1) + pshare(2) + pshare(3);
 
+    // ---- current-aware rain (M42) ---------------------------------------
+    // The same anomaly the dawn folded into tmean, re-run post-widen and
+    // read against the rain it shaped. Two confounds are controlled away:
+    // the zonal *land* mean is the wrong yardstick (interiors are the
+    // driest cells at any latitude — every coast beats them), and aspect
+    // is the stronger law still (windward coasts drench, leeward coasts
+    // starve, currents or none). So the law is coast against coast *of
+    // the same aspect*: land the cold rims reach must run drier than
+    // aspect-matched neutral coastal land at its latitude (the Atacama
+    // law), land the warm rims reach wetter (the Gulf-Stream law).
+    // Ratios are aggregates, so a lone wet outlier cannot buy the pass.
+    let water_g = w.fields.height.mapv(|h| h < 0.0);
+    let heat = calliope::climate::current_bias(&water_g, &w.currents.v);
+    // coastal = land within the same reach the heat bias walks inland
+    let mut near = water_g.clone();
+    for _ in 0..calliope::climate::HEAT_COAST_RINGS {
+        let prev = near.clone();
+        for y in 0..rows {
+            for x in 0..cols {
+                if near[[y, x]] {
+                    continue;
+                }
+                if (y > 0 && prev[[y - 1, x]])
+                    || (y + 1 < rows && prev[[y + 1, x]])
+                    || (x > 0 && prev[[y, x - 1]])
+                    || (x + 1 < cols && prev[[y, x + 1]])
+                {
+                    near[[y, x]] = true;
+                }
+            }
+        }
+    }
+    // wind direction per row, as the march deals it
+    let dir_of = |y: usize| -> isize {
+        let l = latitude(y, rows).abs();
+        if l < 30.0 {
+            -1
+        } else if l < 60.0 {
+            1
+        } else {
+            -1
+        }
+    };
+    // windward = the parcel crossed sea within the last few upwind cells
+    let is_windward = |y: usize, x: usize| -> bool {
+        let d = dir_of(y);
+        (1..=6isize).any(|j| {
+            let xx = (x as isize - d * j).rem_euclid(cols as isize) as usize;
+            water_g[[y, xx]]
+        })
+    };
+    // per-row neutral-coast baselines, split by aspect [leeward, windward]
+    let mut zonal_p = vec![[0.0f64; 2]; rows];
+    let mut zonal_n = vec![[0usize; 2]; rows];
+    for y in 0..rows {
+        for x in 0..cols {
+            if land[[y, x]] && near[[y, x]] && heat[[y, x]].abs() < 0.5 {
+                let a = is_windward(y, x) as usize;
+                zonal_p[y][a] += w.fields.precip[[y, x]] as f64;
+                zonal_n[y][a] += 1;
+            }
+        }
+    }
+    // aggregates: [all, trades <30°, westerlies 30–60°, polar >60°]
+    let belt_of = |y: usize| -> usize {
+        let l = latitude(y, rows).abs();
+        if l < 30.0 {
+            1
+        } else if l < 60.0 {
+            2
+        } else {
+            3
+        }
+    };
+    let (mut cold_p, mut cold_e, mut cold_n) = ([0.0f64; 4], [0.0f64; 4], [0usize; 4]);
+    let (mut warm_p, mut warm_e, mut warm_n) = ([0.0f64; 4], [0.0f64; 4], [0usize; 4]);
+    for y in 0..rows {
+        let belt = belt_of(y);
+        for x in 0..cols {
+            if !land[[y, x]] {
+                continue;
+            }
+            let b = heat[[y, x]];
+            if b.abs() < 0.5 {
+                continue;
+            }
+            let a = is_windward(y, x) as usize;
+            if zonal_n[y][a] < 4 {
+                continue; // no aspect-matched peers on this row — proves nothing
+            }
+            let zm = zonal_p[y][a] / zonal_n[y][a] as f64;
+            if zm < 1.0 {
+                continue; // polar bone-dry rows divide to noise
+            }
+            // the checked aggregate [0] is sub-polar: Earth anchors the
+            // law at Atacama/Namib/Carolina latitudes — polar rims ride
+            // sea-ice and near-zero rain, and are reported, not judged
+            let idxs: &[usize] = if belt == 3 { &[3] } else { &[0, belt] };
+            if b <= -0.5 {
+                for &i in idxs {
+                    cold_p[i] += w.fields.precip[[y, x]] as f64;
+                    cold_e[i] += zm;
+                    cold_n[i] += 1;
+                }
+            } else {
+                for &i in idxs {
+                    warm_p[i] += w.fields.precip[[y, x]] as f64;
+                    warm_e[i] += zm;
+                    warm_n[i] += 1;
+                }
+            }
+        }
+    }
+    let ratio = |p: f64, e: f64| if e > 0.0 { p / e } else { 1.0 };
+    let cold_ratio = ratio(cold_p[0], cold_e[0]);
+    let warm_ratio = ratio(warm_p[0], warm_e[0]);
+    println!();
+    println!(
+        "current-aware rain (M42): sub-polar cold-rim land {} cells at {:.2}× its aspect-matched coast · warm-rim {} cells at {:.2}×",
+        cold_n[0], cold_ratio, warm_n[0], warm_ratio
+    );
+    println!(
+        "  by wind belt: cold trades {:.2}× ({}) · westerlies {:.2}× ({}) · polar {:.2}× ({})",
+        ratio(cold_p[1], cold_e[1]), cold_n[1], ratio(cold_p[2], cold_e[2]), cold_n[2], ratio(cold_p[3], cold_e[3]), cold_n[3]
+    );
+    println!(
+        "  by wind belt: warm trades {:.2}× ({}) · westerlies {:.2}× ({}) · polar {:.2}× ({})",
+        ratio(warm_p[1], warm_e[1]), warm_n[1], ratio(warm_p[2], warm_e[2]), warm_n[2], ratio(warm_p[3], warm_e[3]), warm_n[3]
+    );
+
     let mut c = Checks::default();
     c.band("desert share of land", desert, pct(desert));
     c.band("tundra+ice share of land", frozen, pct(frozen));
@@ -1179,7 +2456,20 @@ fn cmd_climate(seed: i64, size: usize) {
     c.want("monsoon lives in the tropics", trop_m > mid_m, format!("{:.2} vs {:.2}", trop_m, mid_m), "ITCZ march beats continental swing");
     c.band("arable share of land", arable, pct(arable));
     c.band("pastoral share of land", pshare(4), pct(pshare(4)));
+    c.band("cold-rim rain suppression", cold_ratio, format!("{:.2}× ({} cells)", cold_ratio, cold_n[0]));
+    c.band("warm-rim rain boost", warm_ratio, format!("{:.2}× ({} cells)", warm_ratio, warm_n[0]));
     c.want("rice hugs the water", pk[2] == 0 || pk[2] < pk[1] + pk[3], format!("rice {} vs wheat+maize {}", pk[2], pk[1] + pk[3]), "paddies are the exception, not the rule");
+    c.band("ever-frozen share of ocean area", ice_area, pct(ice_area));
+    if ice_ever > 0 {
+        let fringe = ice_seasonal as f64 / ice_ever as f64;
+        c.band("seasonal share of the pack", fringe, pct(fringe));
+        c.must(
+            "pack ice keeps to the polar seas",
+            ice_lat_min >= 45.0,
+            format!("reaches {:.0}°", ice_lat_min),
+            "M37: no icebound tropics — Earth's pack stays poleward of ~44°",
+        );
+    }
     c.print();
 }
 
@@ -1245,6 +2535,73 @@ fn cmd_hydro(seed: i64, size: usize) {
         wadi_n, salt_comp, salt_cells, famp_mean
     );
 
+    // --- M35: glacier-fed discharge — the melt ledger down the net,
+    // and the twelve-month curve rebuilt per river cell from the two
+    // lanes (rain harmonic + summer-phased melt harmonic).
+    let melt_g = &w.ice.melt;
+    let mamp_g = &w.ice.melt_amp;
+    let (rr, cc) = w.fields.discharge.dim();
+    let mut glac_n = 0usize;
+    let mut warm_peak = 0usize;
+    let mut bad_month = 0usize;
+    let mut glacial_wadis = 0usize;
+    let mut shares: Vec<f64> = Vec::new();
+    for y in 0..rr {
+        for x in 0..cc {
+            if w.fields.flags[[y, x]] & CellFlags::RIVER.bits() == 0 {
+                continue;
+            }
+            let d = w.fields.discharge[[y, x]] as f64;
+            if d <= 0.0 {
+                continue;
+            }
+            let m = melt_g[[y, x]] as f64;
+            let am = mamp_g[[y, x]] as f64;
+            let rain = (d - m).max(0.0);
+            let ar = if rain > 1e-9 {
+                (((w.fields.flow_amp[[y, x]] as f64) * d - am * m) / rain).clamp(-1.0, 1.0)
+            } else {
+                0.0
+            };
+            let mut peak = 0usize;
+            let mut q_peak = f64::MIN;
+            for (i, ph) in calliope::climate::COS12.iter().enumerate() {
+                let q = (rain / 12.0 * (1.0 + ar * ph)).max(0.0)
+                    + (m / 12.0 * (1.0 + am * ph)).max(0.0);
+                if !q.is_finite() || q < 0.0 {
+                    bad_month += 1;
+                }
+                if q > q_peak {
+                    q_peak = q;
+                    peak = i;
+                }
+            }
+            let frac = m / d;
+            if frac >= calliope::hydrology::GLACIAL_MIN {
+                glac_n += 1;
+                shares.push(frac);
+                if (w.fields.tamp[[y, x]] as f64) * calliope::climate::COS12[peak] > 0.0 {
+                    warm_peak += 1;
+                }
+                if w.fields.flags[[y, x]] & CellFlags::SEASONAL.bits() != 0 {
+                    glacial_wadis += 1;
+                }
+            }
+        }
+    }
+    shares.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let g_share_pct = 100.0 * glac_n as f64 / river_n.max(1.0);
+    let warm_share = warm_peak as f64 / glac_n.max(1) as f64;
+    let med_share = if shares.is_empty() { 0.0 } else { quantile(&shares, 0.5) };
+    println!(
+        "glacier-fed rivers (melt ≥ {:.0}% of flow): {} cells ({} of rivers) · median melt share {} · warm-month peaks {}",
+        100.0 * calliope::hydrology::GLACIAL_MIN,
+        glac_n,
+        pct(glac_n as f64 / river_n.max(1.0)),
+        pct(med_share),
+        pct(warm_share)
+    );
+
     let finite = dis.iter().all(|d| d.is_finite());
     let mut c = Checks::default();
     c.band("river share of land", river_n / land_n.max(1.0), pct(river_n / land_n.max(1.0)));
@@ -1260,6 +2617,25 @@ fn cmd_hydro(seed: i64, size: usize) {
     c.band("river seasonal swing", famp_mean, format!("{:.2}", famp_mean));
     c.want("endorheic salt basins", salt_comp >= 1, format!("{}", salt_comp), "≥1 — the desert keeps its dead seas");
     c.want("wadis", wadi_n >= 1, format!("{}", wadi_n), "≥1 — some rivers should run dry half the year");
+    c.band("glacier-fed river share %", g_share_pct, format!("{:.1}%", g_share_pct));
+    c.must(
+        "monthly discharge sane on rivers",
+        bad_month == 0,
+        if bad_month == 0 { "clean".into() } else { format!("{} bad", bad_month) },
+        "M35 gate: 12-month curves non-negative and NaN-free on every river cell",
+    );
+    c.want(
+        "glacier-fed rivers peak in warm months",
+        glac_n == 0 || warm_share >= 0.8,
+        pct(warm_share),
+        "≥80% — melt follows the sun, whatever the rain does (M35 gate)",
+    );
+    c.must(
+        "no glacier-fed wadis",
+        glacial_wadis == 0,
+        format!("{}", glacial_wadis),
+        "M35: the melt returns every summer — the wadi stamp yields",
+    );
     c.print();
 }
 
@@ -1455,6 +2831,51 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         c.want("still growing at half-run", pace <= 0.92, format!("{:.0}% of final", 100.0 * pace), "pop at half-run ≤92% of final");
     }
     c.want("settlements grew", w.peoples.settlements.len() >= setts0, format!("{}→{}", setts0, w.peoples.settlements.len()), "colonies should outnumber the dawn towns");
+
+    // M30 — the legacy dividend at town level, counterfactual: towns
+    // sitting on till or loess must eat measurably better than the same
+    // sites would with the deposits zeroed. Observational belt compares
+    // are confounded (off-footprint controls include low-latitude river
+    // deltas), so the gate asks the causal question exactly, as the
+    // terrain lane does for cells.
+    {
+        let (ir, ic) = w.ice.till.dim();
+        let h64 = w.fields.height.mapv(|v| v as f64);
+        let t64 = w.fields.tmean.mapv(|v| v as f64);
+        let p64 = w.fields.precip.mapv(|v| v as f64);
+        let q64 = w.fields.discharge.mapv(|v| v as f64);
+        let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
+        let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
+        let none: ndarray::Array2<f32> = ndarray::Array2::zeros((ir, ic));
+        let f_with = calliope::agriculture::fertility(
+            &h64, &t64, &p64, &rivers, &lakes, &q64, &w.ice.till, &w.ice.loess, &w.ice.outwash,
+        );
+        let f_bare = calliope::agriculture::fertility(
+            &h64, &t64, &p64, &rivers, &lakes, &q64, &none, &none, &w.ice.outwash,
+        );
+        let (mut up, mut n) = (0.0f64, 0usize);
+        for s in &w.peoples.settlements {
+            let (y, x) = (s.y as usize, s.x as usize);
+            if y >= ir || x >= ic {
+                continue;
+            }
+            if w.ice.till[[y, x]] > 0.0 || w.ice.loess[[y, x]] > 0.0 {
+                up += f_with[[y, x]] - f_bare[[y, x]];
+                n += 1;
+            }
+        }
+        if n >= 3 {
+            let mean = up / n as f64;
+            c.want(
+                "legacy towns eat off the deposit",
+                mean >= 0.005,
+                format!("{:+.4} uplift on {} footprint towns", mean, n),
+                "M30 gate: zeroing till+loess must cost the towns on it ≥ +0.005",
+            );
+        } else {
+            println!("legacy dividend: too few footprint towns to compare ({})", n);
+        }
+    }
     if years >= 100 {
         // by the century mark the colonies should have broken the river
         // monoculture: dry-coast harbours, cistern towns, mining camps.
@@ -2132,6 +3553,15 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     let mut w = World::generate(seed, size);
     header("ECONOMY", &format!("seed {} · {}x{} · {}y", seed, w.width, size, years));
 
+    // M37 gate — route costs stay deterministic across reruns: the
+    // founding web is snapshotted here and a second world, generated
+    // from the same seed after the run, must price it identically.
+    let routes0: Vec<_> = w
+        .routes
+        .iter()
+        .map(|r| (r.a, r.b, r.cost, r.closed))
+        .collect();
+
     // M15.6 — conservation ledger baselines: what every seam and ground
     // held at the founding, so the books can be balanced at the end.
     let left0: Vec<f64> = w.deposits.iter().map(|d| d.left).collect();
@@ -2231,6 +3661,71 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         println!("  {:<22} {:>9.0}", r.name, r.treasury);
     }
 
+    // ---- M37 sea ice: the winter schedule of the lanes ----
+    let frozen_g = calliope::seaice::frozen_months(&w.fields.height, &w.fields.tmean, &w.fields.tamp);
+    let (iced, ice_perennial, ice_bad) = ice_route_stats(&w, &frozen_g);
+    let sea_touch = w.routes.iter().filter(|r| r.sea > 0.0).count();
+    println!();
+    println!(
+        "sea ice on the lanes (M37): {} winter-closed of {} sea-touching routes · {} perennially shut · {} malformed masks",
+        iced, sea_touch, ice_perennial, ice_bad
+    );
+    if let Some(r) = w
+        .routes
+        .iter()
+        .filter(|r| r.closed != 0 && r.closed != calliope::seaice::MONTHS_MASK)
+        .max_by_key(|r| (r.closed.count_ones(), r.cost as i64))
+    {
+        let cal: String = (0..12)
+            .map(|m| if r.closed >> m & 1 == 1 { '■' } else { '·' })
+            .collect();
+        let name = |id: calliope::ids::SettlementId| {
+            w.peoples
+                .settlements
+                .iter()
+                .find(|s| s.id == id)
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| "?".into())
+        };
+        println!(
+            "  hardest lane: {} — {} · calendar [{}] · {} months shut",
+            name(r.a), name(r.b), cal, r.closed.count_ones()
+        );
+    }
+    // The reopening, shown on the books: twelve more months ticked
+    // through the market — flow must be zero exactly when the mask says
+    // shut, and alive the month the water opens.
+    let mut ice_mism = 0usize;
+    if iced + ice_perennial > 0 {
+        let by_id = economy::sidx(&w.peoples.settlements);
+        let mut prng = calliope::util::rng(seed + 3737);
+        for m in 0..12i64 {
+            let month_abs = months as i64 + m;
+            let _ = economy::monthly(&mut w.economy, &mut w.peoples, &w.routes, month_abs, &mut prng, &by_id);
+            let mon = month_abs.rem_euclid(12);
+            for (ri, r) in w.routes.iter().enumerate() {
+                if r.closed == 0 {
+                    continue;
+                }
+                let shut = r.closed >> mon & 1 == 1;
+                let f = w.economy.route_flow.get(ri).copied().unwrap_or(0.0);
+                if (shut && f != 0.0) || (!shut && f <= 0.0) {
+                    ice_mism += 1;
+                }
+            }
+        }
+    }
+
+    // M37 — the rerun: same seed, second world, same founding web.
+    let w2 = World::generate(seed, size);
+    let routes1: Vec<_> = w2
+        .routes
+        .iter()
+        .map(|r| (r.a, r.b, r.cost, r.closed))
+        .collect();
+    let det_ok = routes0 == routes1;
+    drop(w2);
+
     let finite_ok = w.economy.market.iter_some().all(|(_, p)| p.is_finite()) && wealth.iter().all(|v| v.is_finite());
     let treasuries_ok = w.peoples.realms.iter().all(|r| r.treasury >= 0.0 && r.treasury.is_finite());
 
@@ -2240,6 +3735,24 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     c.must("routes exist", !w.routes.is_empty(), format!("{}", w.routes.len()), "the web of trade must hold");
     c.want("no unconnected towns", unconnected == 0, format!("{}", unconnected), "every town trades");
     c.want("harbours exist", ports >= 1, format!("{}", ports), "coastal trade should produce ports");
+    c.must(
+        "route costs deterministic across reruns",
+        det_ok,
+        format!("{} routes", routes0.len()),
+        "M37 gate: same seed, same web, same prices",
+    );
+    c.must(
+        "icebound lanes freeze in one winter arc",
+        ice_bad == 0,
+        format!("{} malformed of {}", ice_bad, iced),
+        "M37 gate: closure is a single hemisphere-true season",
+    );
+    c.must(
+        "the ledger obeys the ice",
+        ice_mism == 0,
+        format!("{} mismatched route-months", ice_mism),
+        "M37 gate: flow zero when shut, alive when the water opens",
+    );
     c.must("prices finite", finite_ok, if finite_ok { "yes".into() } else { "NO".into() }, "no NaN in the market");
     c.must("treasuries sane", treasuries_ok, if treasuries_ok { "yes".into() } else { "NO".into() }, "≥0 and finite");
     if years >= 60 {
@@ -3281,6 +4794,9 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         flags: String,
         /// M12.1 — a daughter people sundered off during the run
         sundered: bool,
+        /// M37 — icebound lanes (winter-closed + perennial) and malformed masks
+        iced: usize,
+        ice_bad: usize,
     }
     let mut rows: Vec<Row> = Vec::new();
 
@@ -3314,6 +4830,11 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         let arts: usize = w.peoples.societies.iter().map(|s| s.techs.len()).sum();
         let evyr = log.total_events as f64 / years.max(1) as f64;
         let unconnected = w.peoples.settlements.iter().filter(|s| s.connections == 0).count();
+
+        // M37 — the winter schedule of this seed's lanes
+        let fro = calliope::seaice::frozen_months(&w.fields.height, &w.fields.tmean, &w.fields.tamp);
+        let (ice_seasonal, ice_perennial, ice_bad) = ice_route_stats(&w, &fro);
+        let iced = ice_seasonal + ice_perennial;
 
         // M2.3: per-seed rank-size slope (NaN when too few towns to judge)
         let mut pops: Vec<f64> = w.peoples.settlements.iter().map(|s| s.pop as f64).filter(|&p| p >= 120.0).collect();
@@ -3350,13 +4871,16 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         if unconnected > 0 {
             flags.push('U'); // lonely towns
         }
+        if ice_bad > 0 {
+            flags.push('I'); // malformed ice closure
+        }
         if flags.is_empty() {
             flags.push('·');
         }
 
         println!("{:>7} {:>6.1} {:>6.1} {:>6.1} {:>5.1} {:>5} {:>4} {:>2}→{:<2} {:>9} {:>6.2} {:>5} {:>4} {:>4} {:>4} {:>4} {:>4} {:>5.1} {:>6}  {}", seed, 100.0 * land_frac, 100.0 * desert, 100.0 * forest, 100.0 * mtn, li.n, w.deposits.len(), setts0, w.peoples.settlements.len(), pop1, growth, era, arts, log.strikes, log.camps, log.wars, w.routes.len(), evyr, gen_ms, flags);
 
-        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags, sundered: log.peoples_rose });
+        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags, sundered: log.peoples_rose, iced, ice_bad });
     }
 
     let n = rows.len() as f64;
@@ -3369,7 +4893,11 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
     let m_evy = mean(&|r| r.evyr);
     println!("{:->7} {:>6.1} {:>6.1} {:>6.1} {:>5.1} {:>35} {:>6.2} {:>27.1}", "mean", 100.0 * m_land, 100.0 * m_des, 100.0 * m_for, 100.0 * m_mtn, "", m_grw, m_evy);
     println!();
-    println!("flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected");
+    println!("flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected · I malformed-ice");
+    println!(
+        "sea ice (M37): icebound lanes per seed: {}",
+        rows.iter().map(|r| format!("{}:{}", r.seed, r.iced)).collect::<Vec<_>>().join(" · ")
+    );
 
     let camp_seeds = rows.iter().filter(|r| r.camps > 0).count();
     let strike_seeds = rows.iter().filter(|r| r.strikes > 0).count();
@@ -3386,6 +4914,20 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
     c.band_as("mean events/year", "events per year", m_evy, format!("{:.1}", m_evy));
     c.must("all seeds clean of hard flags", clean == rows.len(), if worst_flags.is_empty() { "all clean".into() } else { worst_flags.join(" ") }, "no B/P/R/G/S/U flags on any seed");
     c.want("strikes on every seed", strike_seeds == rows.len(), format!("{}/{}", strike_seeds, rows.len()), "prospecting fires everywhere");
+    let ice_bad_total: usize = rows.iter().map(|r| r.ice_bad).sum();
+    let iced_seeds = rows.iter().filter(|r| r.iced > 0).count();
+    c.must(
+        "icebound closures well-formed on every seed",
+        ice_bad_total == 0,
+        format!("{} malformed", ice_bad_total),
+        "M37 gate: winter arcs only, hemisphere-true, across the sweep",
+    );
+    c.want(
+        "the winter sea closes somewhere in the sweep",
+        iced_seeds >= 1,
+        format!("{}/{} seeds", iced_seeds, rows.len()),
+        "M37: some strait should freeze in a polar world",
+    );
     if years >= 80 {
         c.want("mining camps emerge (≥60% of seeds)", camp_seeds * 10 >= rows.len() * 6, format!("{}/{}", camp_seeds, rows.len()), "ore pull creates colonies");
         c.want("Iron Age reached (≥50% of seeds)", iron_seeds * 2 >= rows.len(), format!("{}/{}", iron_seeds, rows.len()), "history should not stall in bronze");

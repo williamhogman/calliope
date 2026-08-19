@@ -17,6 +17,14 @@ bitflags::bitflags! {
         const LAKE     = 1 << 1;
         const SALT     = 1 << 2;
         const SEASONAL = 1 << 3;
+        /// M32 — river braided over an outwash plain.
+        const BRAIDED  = 1 << 4;
+        /// M33 — real permafrost beneath (discontinuous or continuous).
+        const PERMAFROST = 1 << 5;
+        /// M33 — patterned ground at the surface (polygons / stripes).
+        const PATTERNED  = 1 << 6;
+        /// M34 — a modern mountain glacier crowns this cell.
+        const GLACIER    = 1 << 7;
     }
 }
 
@@ -43,7 +51,8 @@ pub struct Fields {
     pub biomes: Array2<u8>,
     /// Crop package per cell (M2.1): 0 wild · 1 wheat · 2 rice · 3 maize · 4 pastoral.
     pub crops: Array2<u8>,
-    /// Per-cell `CellFlags` bits: river / lake / salt / seasonal.
+    /// Per-cell `CellFlags` bits: river / lake / salt / seasonal /
+    /// braided / permafrost / patterned.
     pub flags: Array2<u8>,
     /// Signed monsoon share of the year's rain (positive peaks month 0).
     pub pamp: Array2<f32>,

@@ -31,7 +31,7 @@
  * @property {Array<number>} peoples
  * @property {Array<{alive: boolean, asab: number, color: string, founded: number, house: string, id: number, legit: number, name: string, people: number, ruler: string, seat: number, treasury: number, unrest: number}>} realms
  * @property {Object<string, {abundance: string, category: string, color: string, isa: Array<string>, perishable: boolean, requires: null | string, transport: string, virtual?: boolean}>} resources
- * @property {Array<{a: number, b: number, cost: number, goods: Array<string>, m: Array<number>, path: Array<Array<number>>, ramp: number, sea: number, w: number}>} routes
+ * @property {Array<{a: number, b: number, closed?: number, cost: number, goods: Array<string>, m: Array<number>, path: Array<Array<number>>, ramp: number, sea: number, w: number}>} routes
  * @property {Array<unknown>} ruins
  * @property {number} sea_level
  * @property {number} seed
@@ -59,9 +59,9 @@
  * @property {Array<number>} [peoples]
  * @property {Array<{asab: number, i: number, legit: number, treasury: number, unrest: number}>} [r_hot]
  * @property {Array<{alive: boolean, asab: number, color: string, founded: number, house: string, id: number, legit: number, name: string, people: number, ruler: string, seat: number, treasury: number, unrest: number}>} [realms]
- * @property {Array<{a: number, b: number, cost: number, goods: Array<string>, m: Array<number>, path: Array<Array<number>>, ramp: number, sea: number, w: number}>} [routes]
+ * @property {Array<{a: number, b: number, closed?: number, cost: number, goods: Array<string>, m: Array<number>, path: Array<Array<number>>, ramp: number, sea: number, w: number}>} [routes]
  * @property {Array<Array<number | null>>} s_hot
- * @property {Array<{coastal: boolean, connections: number, ety: string, exonym?: string, exports: string, failing: boolean, food: number, formerly?: Array<string>, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, quarry: string, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} [settlements]
+ * @property {Array<{coastal: boolean, connections: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, quarry: string, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} [settlements]
  * @property {Array<number>} [territory]
  */
 
@@ -98,7 +98,7 @@
 /**
  * One sifted microstory.
  * @typedef {Object} Story
- * @property {Array<{ids: Array<number>, k: number, legend?: string, m: number, s: string, text: string, veiled?: boolean, x?: number, y?: number}>} beats
+ * @property {Array<{ids: Array<number>, k: number, legend?: string, m: number, s: string, text: string, veiled?: boolean, x: number, y: number}>} beats
  * @property {Array<number>} ids
  * @property {string} pattern
  * @property {number} score

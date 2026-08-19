@@ -2,43 +2,55 @@
  CALLIOPE DIAGNOSTIC · CLIMATE                      seed 777 · 640x512
 ========================================================================
 biome shares of land:
-  Desert                     24106  20.6%
-  Savanna                    19888  17.0%
-  Tropical Rainforest        13655  11.7%
-  Grasslands                 11886  10.1%
-  Woodlands                  11050  9.4%
-  Seasonal Rainforest         1197  1.0%
-  Temperate Rainforest        1795  1.5%
-  Boreal Forest               3043  2.6%
-  Tundra                     19576  16.7%
-  Ice                         8841  7.5%
+  Desert                     23612  20.1%
+  Savanna                    20612  17.6%
+  Tropical Rainforest        13540  11.6%
+  Grasslands                 12081  10.3%
+  Woodlands                   9017  7.7%
+  Seasonal Rainforest         1170  1.0%
+  Temperate Rainforest        1869  1.6%
+  Boreal Forest                584  0.5%
+  Tundra                     21428  18.3%
+  Ice                         8873  7.6%
+  Wet Tundra                  2562  2.2%
 land temperature °C: mean 7.2 · p10 -8.7 · p50 8.9 · p90 20.7
-land precipitation mm/yr: mean 817 · p10 162 · p50 389 · p90 2250
+land precipitation mm/yr: mean 815 · p10 163 · p50 392 · p90 2277
 seasonal swing |amp| °C: mean 5.7 · p90 9.4
-land freezing in deep winter: 44.1%
+land freezing in deep winter: 44.2%
 latitude bands (land only):
   band          cells   T mean    P mean  dominant biome
-  90°–60°       12566    -7.7C     312mm  Tundra
-  60°–30°       23720     4.7C     639mm  Desert
-  30°–0°        24712    17.3C    1208mm  Savanna
-  0°–30°        23132    16.6C    1254mm  Savanna
-  30°–60°       23247     4.8C     643mm  Desert
-  60°–90°        9812    -9.4C     297mm  Ice
+  90°–60°       12566    -7.7C     297mm  Tundra
+  60°–30°       23720     4.6C     646mm  Desert
+  30°–0°        24712    17.3C    1202mm  Savanna
+  0°–30°        23132    16.6C    1252mm  Savanna
+  30°–60°       23247     4.8C     650mm  Desert
+  60°–90°        9812    -9.5C     270mm  Ice
 monsoon |amp| of annual rain: tropics 0.30 · extratropics 0.01
 
-crop packages of the land: wheat 21.8% · rice 5.2% · maize 9.6% · pastoral 34.9% · wildland 28.6%
+sea ice (M37): 17.1% of ocean area ever frozen (42.6% of cells) · perennial 66445 cells · seasonal fringe 23149 cells · pack reaches 52°
+
+crop packages of the land: wheat 22.3% · rice 5.2% · maize 9.5% · pastoral 34.5% · wildland 28.5%
+
+current-aware rain (M42): sub-polar cold-rim land 624 cells at 0.52× its aspect-matched coast · warm-rim 608 cells at 1.04×
+  by wind belt: cold trades 1.00× (0) · westerlies 0.52× (624) · polar 0.99× (714)
+  by wind belt: warm trades 1.03× (190) · westerlies 1.04× (418) · polar 0.77× (4)
 
 ---- checks ----------------------------------------------------------
-[PASS] desert share of land                          20.6%   (sweet 12–28% · hard 6–38%)
-[PASS] tundra+ice share of land                      24.2%   (sweet 5–30% · hard 1–45%)
-[PASS] forest share of land                          26.2%   (sweet 25–60% · hard 15–75%)
-[PASS] grass+savanna share of land                   27.1%   (sweet 10–45% · hard 4–60%)
+[PASS] desert share of land                          20.1%   (sweet 12–28% · hard 6–38%)
+[PASS] tundra+ice share of land                      28.0%   (sweet 5–30% · hard 1–45%)
+[WARN] forest share of land                          22.3%   (sweet 25–60% · hard 15–75%)
+[PASS] grass+savanna share of land                   27.9%   (sweet 10–45% · hard 4–60%)
 [PASS] land mean temperature                         7.2°C   (sweet 5–20°C · hard -2–28°C)
-[PASS] land mean precipitation                       817mm   (sweet 500–1500 · hard 250–2400)
+[PASS] land mean precipitation                       815mm   (sweet 500–1500 · hard 250–2400)
 [PASS] mean seasonal swing                           5.7°C   (sweet 4–14°C · hard 2–20°C)
 [PASS] tropical monsoon amplitude                     0.30   (sweet .12–.55 · hard .05–.85)
 [PASS] monsoon lives in the tropics           0.30 vs 0.01   (ITCZ march beats continental swing)
-[PASS] arable share of land                          36.5%   (M2.1: wheat+rice+maize belts cover the good land)
-[PASS] pastoral share of land                        34.9%   (M2.1: the dry steppe carries herds)
-[PASS] rice hugs the water                  rice 6080 vs wheat+maize 36721   (paddies are the exception, not the rule)
-CHECKS: 12 pass · 0 warn · 0 fail
+[PASS] arable share of land                          37.0%   (M2.1: wheat+rice+maize belts cover the good land)
+[PASS] pastoral share of land                        34.5%   (M2.1: the dry steppe carries herds)
+[PASS] cold-rim rain suppression            0.52× (624 cells)   (sweet 0.25–0.80 · hard 0.10–0.95 (M42: sub-polar cold-rim coastal land against aspect-matched neutral coasts at its latitude — the Atacama law))
+[PASS] warm-rim rain boost                  1.04× (608 cells)   (sweet 1.02–2.20 · hard 0.98–3.50 (M42: sub-polar warm-rim coastal land against aspect-matched neutral coasts at its latitude — the Gulf-Stream law))
+[PASS] rice hugs the water                  rice 6084 vs wheat+maize 37261   (paddies are the exception, not the rule)
+[PASS] ever-frozen share of ocean area               17.1%   (M37 gate: pack ice real, but polar (Earth ~4–8%))
+[PASS] seasonal share of the pack                    25.8%   (M37 gate: a fringe that opens in summer)
+[PASS] pack ice keeps to the polar seas        reaches 52°   (M37: no icebound tropics — Earth's pack stays poleward of ~44°)
+CHECKS: 16 pass · 1 warn · 0 fail

@@ -193,6 +193,10 @@ impl World {
             let near = near_i
                 .map(|i| self.peoples.settlements[i].name.clone())
                 .unwrap_or_else(|| "the wilds".to_string());
+            // M6.1 — name the town by its ground, not its name: the event
+            // anchors at the pit, so a same-tick rename would orphan it if
+            // we left the id for resolve_events' name lookup to find.
+            let near_ent = self.near_settlement_ent(near_i);
             self.economy.market.shock(kind, 1.22);
             // the pit's own market feels the silence first (M5.2)
             if let Some(i) = near_i {
@@ -213,6 +217,7 @@ impl World {
                 // settlement stands near
                 x: dx0,
                 y: dy0,
+                ids: near_ent,
                 ..Default::default()
             });
             self.refresh_goods_near(di);
@@ -260,6 +265,10 @@ impl World {
             let near = near_i
                 .map(|i| self.peoples.settlements[i].name.clone())
                 .unwrap_or_else(|| "the wilds".to_string());
+            // M6.1 — deposit-anchored entries carry the town's id from the
+            // start; the ground fallback in resolve_events can't find a
+            // settlement standing on a stand of timber or a fishing shoal.
+            let near_ent = self.near_settlement_ent(near_i);
             use resources::Good;
             let text = {
                 match (kind, to) {
@@ -293,6 +302,7 @@ impl World {
                         text: text.clone(),
                         x: dx0,
                         y: dy0,
+                        ids: near_ent,
                         ..Default::default()
                     });
                 }
@@ -316,6 +326,7 @@ impl World {
                         text: text.clone(),
                         x: dx0,
                         y: dy0,
+                        ids: near_ent,
                         ..Default::default()
                     });
                     self.refresh_goods_near(di);
@@ -335,6 +346,7 @@ impl World {
                             text: text.clone(),
                             x: dx0,
                             y: dy0,
+                            ids: near_ent,
                             ..Default::default()
                         });
                         self.refresh_goods_near(di);
@@ -343,6 +355,23 @@ impl World {
             }
         }
         (events, changed)
+    }
+
+    /// M6.1 — resolve the nearest town to its registry entity by ground.
+    /// Deposit-anchored events can't lean on resolve_events' fallbacks: the
+    /// name lookup dies on a same-tick rename and the position fallback
+    /// reads the event's anchor — the pit, where no settlement stands.
+    /// Position survives renames, so the id is attached at the source.
+    fn near_settlement_ent(&self, near_i: Option<usize>) -> crate::event::EventIds {
+        near_i
+            .and_then(|i| {
+                let s = &self.peoples.settlements[i];
+                self.chronicle
+                    .registry
+                    .find_alive(crate::entity::EntityKind::Settlement, s.x, s.y)
+            })
+            .into_iter()
+            .collect()
     }
 
     /// M14.8 — a stripped timber ground shows on the map: forest-family

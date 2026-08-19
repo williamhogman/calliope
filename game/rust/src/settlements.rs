@@ -315,7 +315,7 @@ pub fn found_settlements(
                 + 2.6 * fert[[y, x]] as f64
                 - 2.5 * ((b == gc::DESERT) as u8 as f64)
                 - 3.5 * ((b == gc::ICE) as u8 as f64)
-                - 1.5 * ((b == gc::TUNDRA) as u8 as f64)
+                - 1.5 * ((b == gc::TUNDRA || b == gc::WET_TUNDRA) as u8 as f64)
                 - 2.0 * (height[[y, x]] as f64 - 0.5).clamp(0.0, 1.0) * 4.0;
         }
     }

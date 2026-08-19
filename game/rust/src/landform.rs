@@ -32,6 +32,20 @@ pub const SKERRY: u8 = 3;
 /// M29 — a drowned glacial trough: the ice overdeepened the valley
 /// below the waterline and the sea took it.
 pub const FJORD: u8 = 4;
+/// M30 — the depositional legacy: ridge of the former ice margin,
+/// flow-combed swarm hill, subglacial meltwater ridge.
+pub const MORAINE: u8 = 5;
+pub const DRUMLIN: u8 = 6;
+pub const ESKER: u8 = 7;
+/// M31 — an outburst spillway: the oversized abandoned valley a
+/// proglacial lake cut below its moraine sill.
+pub const SPILLWAY: u8 = 8;
+/// M32 — a braided outwash corridor: the flat gravel plain the
+/// meltwater planed below the former ice margin.
+pub const OUTWASH: u8 = 9;
+/// M33 — patterned ground: frost-sorted polygon nets and solifluction
+/// stripes where real permafrost meets the surface.
+pub const PATTERNED: u8 = 10;
 
 /// A drowned cell counts as a ria when land at least this tall stands
 /// within `WALL_R` cells — valley walls, not open flats.
@@ -89,7 +103,61 @@ pub fn classify(height: &Array2<f32>, sl: &SeaLevel, ice: &crate::ice::Ice) -> A
             }
         }
     }
+    // M30 — the depositional legacy joins the vocabulary: land cells
+    // only, and the coastal story wins where the two overlap.
+    for (reg, tag) in [
+        (&ice.moraines, MORAINE),
+        (&ice.drumlins, DRUMLIN),
+        (&ice.eskers, ESKER),
+    ] {
+        for &(y, x) in reg.iter() {
+            let (y, x) = (y as usize, x as usize);
+            if y < h && x < w && height[[y, x]] >= 0.0 && out[[y, x]] == NONE {
+                out[[y, x]] = tag;
+            }
+        }
+    }
+    // M31 — the spillways: outburst valleys on land, same precedence.
+    for ch in &ice.spillways {
+        for &(y, x) in ch.iter() {
+            let (y, x) = (y as usize, x as usize);
+            if y < h && x < w && height[[y, x]] >= 0.0 && out[[y, x]] == NONE {
+                out[[y, x]] = SPILLWAY;
+            }
+        }
+    }
+    // M32 — the outwash corridors: braided plains on land, same
+    // precedence (the coastal story and the ridge registries win).
+    if ice.outwash.dim() == (h, w) {
+        for y in 0..h {
+            for x in 0..w {
+                if height[[y, x]] >= 0.0
+                    && out[[y, x]] == NONE
+                    && ice.outwash[[y, x]] >= crate::ice::OUT_BRAID_MIN
+                {
+                    out[[y, x]] = OUTWASH;
+                }
+            }
+        }
+    }
     out
+}
+
+/// M33 — patterned ground joins the vocabulary after the permafrost
+/// pass (which runs post-classify): land cells only, and the coastal
+/// story and the glacial registries win where they overlap.
+pub fn stamp_patterned(out: &mut Array2<u8>, pattern: &Array2<u8>, height: &Array2<f32>) {
+    let (h, w) = out.dim();
+    if pattern.dim() != (h, w) {
+        return;
+    }
+    for y in 0..h {
+        for x in 0..w {
+            if height[[y, x]] >= 0.0 && out[[y, x]] == NONE && pattern[[y, x]] != 0 {
+                out[[y, x]] = PATTERNED;
+            }
+        }
+    }
 }
 
 /// FNV-1a over the tag grid — joins `hash_state` so the classifier

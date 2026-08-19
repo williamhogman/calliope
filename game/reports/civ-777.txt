@@ -4,189 +4,188 @@
 world "Halios" · 4 peoples · 4 realms · 16 settlements at dawn
 
   yr      pop  towns  routes     wealth  treasury   arts  seams  ev/y
-   6     2255     16      21        400       105      6    133     4
-  12     3458     16      21        692        93     13    136    22
-  18     5970     20      29       1071       122     17    136     9
-  24     8966     21      31       1837       167     23    138    15
-  30    13743     23      34       3142       252     26    140    19
-  36    19962     25      37       4445       383     30    141    18
-  42    25361     29      44       7118       713     37    146    45
-  48    38434     35      55      11363       438     43    149    41
-  54    62503     44      70      20270       607     48    154    43
-  60    92557     54      88      35011       902     56    157    45
-  66   151081     71     120      65084      1736     62    158    58
-  72   228348     86     149     112531      5533     66    161    76
-  78   327802     97     169     194854      9538     85    161    86
-  84   451011     98     171     306814     19881     86    165   112
-  90   590337     99     172     483019     33219     86    168    92
-  96   751739     99     172     695190     64354     86    168    81
- 102   855514     99     172     940914    105122     86    169    95
- 108   954738    101     174    1228171    148584     86    169    77
- 114  1050788    102     175    1552172    179736    103    169   111
- 120  1135322    101     174    1969253    221599    103    169    76
- 126  1159504    101     174    2302713    275833    103    170    92
- 132  1228137    101     174    2652609    335090    103    171    99
- 138  1325036    102     175    2908128    426332    157    172   105
- 144  1438188    103     176    3166238    483633    174    172   106
- 150  1495841    103     176    3435003    533271    208    172   109
+   6     2050     16      20        520       108      6    127    10
+  12     3553     17      21       1126       114     13    132    10
+  18     5358     17      21       1391        64     17    133     8
+  24     7768     20      25       1792       122     21    136    10
+  30    11312     21      26       2673       187     24    137    21
+  36    18594     23      30       4885       341     28    141    15
+  42    29180     27      35       8806       561     36    143    23
+  48    43376     36      51      14447       936     42    147    37
+  54    61984     43      64      25408       721     49    149    40
+  60    93990     53      82      42961      1368     57    151    72
+  66   141861     74     123      72773      2125     62    154    62
+  72   206036     96     162     116428      4023     64    156    68
+  78   302053     96     162     181331      7120     66    161    74
+  84   408787     96     162     285394     11815     66    161   101
+  90   562705     97     164     438655     25239     67    163    78
+  96   724956     98     166     648537     50111     84    164    93
+ 102   856024    100     169     956765     74857    106    165    69
+ 108   907595    102     173    1250643    110837    106    165    91
+ 114   982457    102     173    1547234    148682    106    165    83
+ 120  1096745    102     173    1843608    194678    140    165    94
+ 126  1177388    102     173    2246180    236500    140    165    84
+ 132  1229497    104     175    2514004    299388    157    165    87
+ 138  1247346    104     175    2695570    388761    187    165    73
+ 144  1333013    104     175    2907138    442374    242    165   102
+ 150  1361067    104     175    3212505    489642    263    165    77
 
-event census: depletion:103 · disaster:1224 · discovery:71 · economy:31 · era:17 · famine:33 · festival:166 · found:88 · growth:1333 · kindred:18 · myth:38 · omen:12 · quake:1 · realm:354 · ruler:103 · society:451 · tech:70 · trade:4163 · war:848 · wonder:381
-strikes 71 · depletions 103 · mining camps 4 · wars 848
-statecraft: 848 war events · 255 towns changed hands · 27 secessions · polities 4–16 · coalitions yes · vassals ≤5
+event census: depletion:101 · disaster:1195 · discovery:68 · economy:42 · era:13 · famine:31 · festival:193 · found:88 · growth:1295 · kindred:17 · myth:37 · omen:15 · quake:1 · realm:368 · ruler:104 · society:392 · tech:68 · trade:4021 · war:597 · wonder:374
+strikes 68 · depletions 101 · mining camps 2 · wars 597
+statecraft: 597 war events · 217 towns changed hands · 27 secessions · polities 4–13 · coalitions yes · vassals ≤3
 longest silence between events: 11 months
 
 the arc of the ages (tech & society events):
-  y1    The Borchiaks learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y2    The Borchiaks learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y2    The Aelmerekin learn to bend seasoned yew — no beast nor foe outruns an arrow.
   y2    The Skjalavikfolk learn to bend seasoned yew — no beast nor foe outruns an arrow.
   y2    The Delmoionians learn to bend seasoned yew — no beast nor foe outruns an arrow.
-  y3    The Aelmerekin learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y4    The scattered camps of the Borchiaks bind themselves under one chief.
   y4    The Borchiaks shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y5    The scattered camps of the Borchiaks bind themselves under one chief.
   y5    Weavers among the Skjalavikfolk string the first tall looms; good cloth becomes as good as coin.
-  y6    Weavers among the Borchiaks string the first tall looms; good cloth becomes as good as coin.
-  y7    Weavers among the Aelmerekin string the first tall looms; good cloth becomes as good as coin.
-  y7    Weavers among the Delmoionians string the first tall looms; good cloth becomes as good as coin.
-  y7    The scattered camps of the Skjalavikfolk bind themselves under one chief.
-  y8    The Skjalavikfolk shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y9    The wise-women of the Borchiaks set down which roots cure and which kill.
-  y11   The Aelmerekin shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y11   The Delmoionians shape river clay into jars and kilns — the harvest no longer rots before spring.
-  y11   The scattered camps of the Aelmerekin bind themselves under one chief.
-  y12   The wise-women of the Skjalavikfolk set down which roots cure and which kill.
-  y13   The scattered camps of the Delmoionians bind themselves under one chief.
-  … and 503 more
+  y6    The Aelmerekin shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y6    Weavers among the Delmoionians string the first tall looms; good cloth becomes as good as coin.
+  y7    Weavers among the Borchiaks string the first tall looms; good cloth becomes as good as coin.
+  y9    The Skjalavikfolk shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y9    Weavers among the Aelmerekin string the first tall looms; good cloth becomes as good as coin.
+  y10   Spread now into that country, the Borchiaks keep their own word for The Haloum Plateau — in their tongue it is The Altaakum Steppe.
+  y10   The Delmoionians shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y10   The scattered camps of the Skjalavikfolk bind themselves under one chief.
+  y10   The wise-women of the Borchiaks set down which roots cure and which kill.
+  y12   The scattered camps of the Aelmerekin bind themselves under one chief.
+  y13   The wise-women of the Skjalavikfolk set down which roots cure and which kill.
+  … and 442 more
 
 societies at year 150:
-  Aelmerekin             empire     the High Age   20 arts · lore 264575
-  Delmoionians           empire     the High Age   16 arts · lore 190440
-  Borchiaks              empire     the High Age   17 arts · lore 260497
-  Skjalavikfolk          empire     the High Age   17 arts · lore 377238
-  Bayganaks              kingdom    the High Age   16 arts · lore 108749
-  Borgesaraiaks          empire     the High Age   17 arts · lore 165313
-  Dzunaganaks            empire     the High Age   17 arts · lore 254855
-  Thalendellkin          empire     the High Age   20 arts · lore 224523
-  Bryndalfolk            empire     the High Age   17 arts · lore 318760
-  Altatagolaks           empire     the High Age   17 arts · lore 252287
-  Yurtatauaks            empire     the High Age   17 arts · lore 254291
-  Dzunasaraiaks          empire     the High Age   17 arts · lore 253048
+  Aelmerekin             empire     the High Age   21 arts · lore 200919
+  Delmoionians           empire     the High Age   13 arts · lore 246216
+  Borchiaks              empire     the High Age   17 arts · lore 330325
+  Skjalavikfolk          empire     the High Age   17 arts · lore 237270
+  Temtauaks              empire     the High Age   17 arts · lore 107041
+  Yewthornkin            empire     the High Age   21 arts · lore  88368
+  Temgetauaks            empire     the High Age   17 arts · lore 201196
+  Ulfurstadfolk          empire     the High Age   17 arts · lore 168745
+  Brynstadfolk           empire     the High Age   17 arts · lore 197152
+  Thesionians            empire     the High Age   13 arts · lore 210100
+  Keshuganaks            empire     the High Age   17 arts · lore 314733
+  Skjalurbergfolk        empire     the High Age   17 arts · lore 228595
+  Temkumaks              empire     the High Age   17 arts · lore 309903
+  Fenorwickkin           empire     the High Age   21 arts · lore  91822
+  Wilthornkin            empire     the High Age   21 arts · lore 200191
 crowns at year 150:
-  Bortachi               treasury    13543
-  Eirheim                treasury     8118
-  Keradag                treasury    59919
-  Xanliion               treasury    15331
-  Wildell                treasury   146826
-  Kaldagard              treasury    32024
-  Orikos                 treasury    30803
-  Glenorshade            treasury    44640
-  Fenenwick              treasury   145627
+  Bortachi               treasury    17880
+  Aelorrun               treasury    36457
+  Koranikos              treasury    53568
+  Skjalestad             treasury   118531
+  Eryanossa              treasury    15687
+  Yurasu                 treasury     6387
+  Briarenleaf            treasury   216426
+  Altatau                treasury     6711
+  Dzuntakent             treasury     6213
 
 ---- unrest ladder (M11) ----------------------------------------------
- riots 131 · charters  74 · coups  56 · crises   7 (resolved   7) · secessions  27
- unrest now: mean 0.27 · max 1.00 over 31 realms
+ riots 123 · charters  96 · coups  66 · crises   4 (resolved   4) · secessions  27
+ unrest now: mean 0.19 · max 1.00 over 31 realms
 
 ---- kindred and crown (M12) ------------------------------------------
- foreign-crowned towns  52 of 103 · drifting  29 · max drift 0.72
-   Aelmerekin       under Borchiaks          1 towns · kinship 0.09
-   Aelmerekin       under Thalendellkin      4 towns · kinship 0.76
-   Borchiaks        under Aelmerekin         4 towns · kinship 0.09
-   Skjalavikfolk    under Aelmerekin         5 towns · kinship 0.03
-   Skjalavikfolk    under Delmoionians       3 towns · kinship 0.03
-   Skjalavikfolk    under Borchiaks          1 towns · kinship 0.02
-   Bayganaks        under Borchiaks          1 towns · kinship 0.94
-   Borgesaraiaks    under Aelmerekin         1 towns · kinship 0.03
-   Borgesaraiaks    under Borchiaks          3 towns · kinship 0.81
-   Dzunaganaks      under Aelmerekin         2 towns · kinship 0.01
-   Dzunaganaks      under Borchiaks          4 towns · kinship 0.78
-   Thalendellkin    under Aelmerekin         1 towns · kinship 0.76
-   Thalendellkin    under Borchiaks          2 towns · kinship 0.01
-   Bryndalfolk      under Skjalavikfolk      7 towns · kinship 0.79
-   Altatagolaks     under Aelmerekin         1 towns · kinship 0.00
-   Altatagolaks     under Borchiaks          4 towns · kinship 0.77
-   Yurtatauaks      under Aelmerekin         2 towns · kinship 0.01
-   Yurtatauaks      under Borchiaks          1 towns · kinship 0.75
-   Dzunasaraiaks    under Delmoionians       1 towns · kinship 0.00
-   Dzunasaraiaks    under Borchiaks          4 towns · kinship 0.50
- moves: 4 flips · 8 sunderings · 0 fusions · 12 unions · 38 crown exonyms
-   union gate: Bortachi           + Keradag            kin 1.00 · opinion   30/  30 · vassal true
-   union gate: Eirheim            + Kaldagard          kin 1.00 · opinion   30/  30 · vassal true
-   union gate: Xanliion           + Orikos             kin 1.00 · opinion   27/  24 · vassal true
-   union gate: Wildell            + Glenorshade        kin 0.76 · opinion    7/   7 · vassal false
-   union gate: Wildell            + Fenenwick          kin 1.00 · opinion    9/   9 · vassal false
-   union gate: Glenorshade        + Fenenwick          kin 0.76 · opinion   30/  30 · vassal false
+ foreign-crowned towns  51 of 104 · drifting  44 · max drift 0.92
+   Borchiaks        under Aelmerekin         1 towns · kinship 0.01
+   Temtauaks        under Borchiaks          3 towns · kinship 0.88
+   Yewthornkin      under Aelmerekin         3 towns · kinship 0.85
+   Temgetauaks      under Borchiaks          3 towns · kinship 0.82
+   Ulfurstadfolk    under Skjalavikfolk      3 towns · kinship 0.82
+   Brynstadfolk     under Aelmerekin         1 towns · kinship 0.01
+   Brynstadfolk     under Skjalavikfolk      2 towns · kinship 0.79
+   Thesionians      under Delmoionians       4 towns · kinship 0.78
+   Keshuganaks      under Aelmerekin         3 towns · kinship 0.01
+   Keshuganaks      under Borchiaks          6 towns · kinship 0.77
+   Skjalurbergfolk  under Aelmerekin         1 towns · kinship 0.00
+   Skjalurbergfolk  under Delmoionians       1 towns · kinship 0.00
+   Skjalurbergfolk  under Skjalavikfolk      5 towns · kinship 0.77
+   Temkumaks        under Borchiaks          3 towns · kinship 0.77
+   Fenorwickkin     under Aelmerekin         3 towns · kinship 0.52
+   Wilthornkin      under Aelmerekin         9 towns · kinship 0.75
+ moves: 0 flips · 11 sunderings · 0 fusions · 16 unions · 10 crown exonyms
+   union gate: Bortachi           + Yurasu             kin 1.00 · opinion   30/  30 · vassal true
+   union gate: Bortachi           + Altatau            kin 1.00 · opinion   -2/ -19 · vassal true
+   union gate: Bortachi           + Dzuntakent         kin 0.77 · opinion   11/  11 · vassal true
+   union gate: Aelorrun           + Briarenleaf        kin 1.00 · opinion   -5/   3 · vassal true
+   union gate: Koranikos          + Eryanossa          kin 1.00 · opinion   30/  30 · vassal false
+   union gate: Yurasu             + Altatau            kin 1.00 · opinion   30/  30 · vassal false
+   union gate: Yurasu             + Dzuntakent         kin 0.77 · opinion  -44/ -44 · vassal false
+   union gate: Altatau            + Dzuntakent         kin 0.77 · opinion   13/  13 · vassal false
 
 ---- the arc of empires (M13) -----------------------------------------
-   the Circle of Kharusarai   interregnum  2 tongues [Borchiaks, Bayganaks] · golden ages 0 · monuments 0 · ENDED
-     drivers: legit 0.44 · asab 0.41 · wealth 6003 · stretch 1.00   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
-     span: 5 crowns · 33 towns · admin 91.1 vs capacity 91.0   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
-   the Roeadell Concord       interregnum  2 tongues [Aelmerekin, Thalendellkin] · golden ages 1 · monuments 3 · ENDED
-     drivers: legit 0.57 · asab 0.46 · wealth 214300 · stretch 1.80   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
-     span: 2 crowns · 36 towns · admin 67.6 vs capacity 37.5   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
-   the Thorvik Concord        golden       2 tongues [Skjalavikfolk, Bryndalfolk] · golden ages 1 · monuments 3
-     drivers: legit 0.85 · asab 0.88 · wealth 40086 · stretch 0.80   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
-     span: 2 crowns · 17 towns · admin 37.7 vs capacity 47.2   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
-   the Circle of Eryliopia    interregnum  1 tongues [Delmoionians] · golden ages 1 · monuments 3 · ENDED
-     drivers: legit 0.63 · asab 0.65 · wealth 34358 · stretch 0.94   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
-     span: 2 crowns · 21 towns · admin 39.6 vs capacity 41.9   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
-   the Baygol Concord         golden       7 tongues [Borchiaks, Bayganaks, Borgesaraiaks, Dzunaganaks, Altatagolaks, Yurtatauaks, Dzunasaraiaks] · golden ages 1 · monuments 2
-     drivers: legit 0.90 · asab 0.99 · wealth 73444 · stretch 1.16   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
-     span: 2 crowns · 24 towns · admin 57.9 vs capacity 49.8   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
- arc events: 5 minted · 4 golden dawns · 3 falls · 3 interregna closed
+   the Circle of Linwick      waning       4 tongues [Aelmerekin, Yewthornkin, Fenorwickkin, Wilthornkin] · golden ages 1 · monuments 3
+     drivers: legit 0.87 · asab 0.64 · wealth 252555 · stretch 1.58   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
+     span: 2 crowns · 31 towns · admin 65.6 vs capacity 41.6   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
+   the Weal of Yurtau         interregnum  3 tongues [Borchiaks, Temtauaks, Temgetauaks] · golden ages 0 · monuments 0 · ENDED
+     drivers: legit 0.58 · asab 0.48 · wealth 12379 · stretch 0.95   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
+     span: 4 crowns · 35 towns · admin 71.9 vs capacity 75.8   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
+   the Oddarstrand Concord    interregnum  1 tongues [Skjalavikfolk] · golden ages 0 · monuments 0 · ENDED
+     drivers: legit 0.63 · asab 0.46 · wealth 43666 · stretch 0.46   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
+     span: 5 crowns · 21 towns · admin 43.4 vs capacity 93.5   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
+   the Armoopia Concord       golden       2 tongues [Delmoionians, Thesionians] · golden ages 1 · monuments 3
+     drivers: legit 0.94 · asab 0.99 · wealth 69206 · stretch 0.74   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
+     span: 2 crowns · 19 towns · admin 36.8 vs capacity 49.8   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
+ arc events: 4 minted · 2 golden dawns · 2 falls · 2 interregna closed
 
 ---- checks ----------------------------------------------------------
-[PASS] population growth ×                        1161.37×   (M2 crop-package K: sweet 2–1200×)
-[PASS] still growing at half-run              19% of final   (pop at half-run ≤92% of final)
-[PASS] settlements grew                             16→103   (colonies should outnumber the dawn towns)
-[PASS] dry-country towns exist                   13 of 103   (≥1 town beyond fresh water by the century mark)
-[PASS] routes exist                                    176   (a world without trade is broken)
+[PASS] population growth ×                        1056.73×   (M2 crop-package K: sweet 2–1200×)
+[PASS] still growing at half-run              18% of final   (pop at half-run ≤92% of final)
+[PASS] settlements grew                             16→104   (colonies should outnumber the dawn towns)
+[PASS] legacy towns eat off the deposit     +0.0580 uplift on 18 footprint towns   (M30 gate: zeroing till+loess must cost the towns on it ≥ +0.005)
+[PASS] dry-country towns exist                   15 of 104   (≥1 town beyond fresh water by the century mark)
+[PASS] routes exist                                    175   (a world without trade is broken)
 [PASS] no unconnected towns                              0   (every town should reach the web of trade)
 [PASS] no template placeholders                          0   (no {P}/{S} may leak into chronicle text)
 [PASS] no empty event texts                              0   (every event tells its story)
-[PASS] settlement names unique              103 names / 103 towns   (the taken-set must hold)
-[PASS] realm seats under their own banner   0 dangling · 34 seat moves   (M10.4: a lost seat re-homes the same month)
+[PASS] settlement names unique              104 names / 104 towns   (the taken-set must hold)
+[PASS] realm seats under their own banner   0 dangling · 26 seat moves   (M10.4: a lost seat re-homes the same month)
 [PASS] unrest stays a 0..1 gauge                 31 realms   (M11.1: finite, clamped)
-[PASS] the unrest ladder speaks             288 rungs fired   (M11: riots/charters/coups/secessions on the century scale)
+[PASS] the unrest ladder speaks             312 rungs fired   (M11: riots/charters/coups/secessions on the century scale)
 [PASS] no realm convulses monthly            min gap 12 mo   (M11.6: cooldowns keep risings years apart)
 [PASS] no war of the circlet outlives its term        0 stuck   (M11.3: crises resolve the month they come due)
-[PASS] co-residence ledger squares with the roster 12×12 for 12 peoples   (M12.1: the ledger grows with divergence, stays finite)
+[PASS] co-residence ledger squares with the roster 15×15 for 15 peoples   (M12.1: the ledger grows with divergence, stays finite)
 [PASS] no drift across non-kindred pairs        0 breaches   (M12 gate: below kinship 0.20 the minority stands and remembers)
-[PASS] kindred moves per century                      16.0   (M12: the kindred clock ticks, but slowly)
-[PASS] assimilation cadence                 2.7 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[PASS] assimilation drift is turning        29 of 29 kindred foreign-crowned towns drift   (M12.2: towns under kindred crowns lean, however slowly)
-[PASS] living civilizations                    2 of 5 ever   (M13.1: the tier exists without swallowing the world)
+[PASS] kindred moves per century                      18.0   (M12: the kindred clock ticks, but slowly)
+[WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
+[PASS] assimilation drift is turning        44 of 44 kindred foreign-crowned towns drift   (M12.2: towns under kindred crowns lean, however slowly)
+[PASS] living civilizations                    2 of 4 ever   (M13.1: the tier exists without swallowing the world)
 [PASS] civ membership is a partition        0 shared tongues   (M13.1: kinship-closure — one tongue, one civilization)
 [PASS] no crownless civilization stands           0 hollow   (M13.4: losing every crown opens the interregnum)
-[PASS] successor realms per collapse        2.3 over 3 falls   (M13.4: fragmentation through the M11 ladder, not deletion)
-[WARN] events per year                                63.4   (sweet 2–48 · hard 0.5–100)
+[PASS] successor realms per collapse        2.0 over 2 falls   (M13.4: fragmentation through the M11 ladder, not deletion)
+[WARN] events per year                                60.1   (sweet 2–48 · hard 0.5–100)
 [PASS] no long silences                              11 mo   (≤36 months between chronicle entries)
-[PASS] strikes happened                                 71   (the age of prospectors must actually happen)
+[PASS] strikes happened                                 68   (the age of prospectors must actually happen)
 [PASS] era advanced past Stone                the High Age   (≥ Age of Bronze by now)
-[PASS] arts accumulate                      208 arts / 12 peoples   (≥3 arts per people)
+[PASS] arts accumulate                      263 arts / 15 peoples   (≥3 arts per people)
 [PASS] era reached Iron                       the High Age   (≥ Age of Iron by now)
 [PASS] numbers stay finite                             yes   (no NaN pops, wealth or prices)
-[PASS] rank-size slope (Zipf)               -1.04 over 102 towns   (M2.3 gate: −1.3…−0.8)
-[PASS] median town spacing                           43 km   (M2.5: market-town band ~15–30 km in settled cores)
-[PASS] famine events per century                      22.0   (M2.6: the rains must fail sometimes)
+[PASS] rank-size slope (Zipf)               -1.03 over 104 towns   (M2.3 gate: −1.3…−0.8)
+[WARN] median town spacing                           49 km   (M2.5: market-town band ~15–30 km in settled cores)
+[PASS] famine events per century                      20.7   (M2.6: the rains must fail sometimes)
 [PASS] disaster falls have their telling    0 falls · 0 ruins   (M24 gate: every destroying-magnitude event → one chronicle entry + one ruin)
-[PASS] disaster recovery (median months)    6 mo over 1 arcs   (M24 gate: rebuild arcs close inside the forty-year window)
-[PASS] toponyms classify to culture                 100.0%   (M3 gate: sampled toponyms ≥ 90%)
+[WARN] disaster recovery (median months)    5 mo over 1 arcs   (M24 gate: rebuild arcs close inside the forty-year window)
+[PASS] toponyms classify to culture                  99.0%   (M3 gate: sampled toponyms ≥ 90%)
 [PASS] gloss coverage of name banks                204/204   (M3.3 gate: 100% of fragments glossed)
-[PASS] settlement etymologies                      103/103   (M3.3: every town name reads back)
-[PASS] feature etymologies                         103/103   (M3.3: every feature name reads back)
+[PASS] settlement etymologies                      104/104   (M3.3: every town name reads back)
+[PASS] feature etymologies                           94/94   (M3.3: every feature name reads back)
 [PASS] name collisions                                   0   (M3 gate: 0 duplicates)
-[PASS] border exonyms present               71 of 65 shared   (M3.4: doubled names on shared features)
-[PASS] pantheons complete                            12/12   (M3.5: ≥ 3 named gods per people)
-[PASS] gods cited in the chronicle                     204   (M3.5: omens/festivals/wars name the gods)
+[PASS] border exonyms present               65 of 58 shared   (M3.4: doubled names on shared features)
+[PASS] pantheons complete                            15/15   (M3.5: ≥ 3 named gods per people)
+[PASS] gods cited in the chronicle                     219   (M3.5: omens/festivals/wars name the gods)
 [PASS] territory owners valid                  0 bad cells   (M4.1: every owned cell names a live realm)
-[PASS] land under banners                            73.0%   (M4.1: realms claim some — never all — of the wild)
-[PASS] wars kindle                                     848   (M4: a century without war is a broken game)
-[PASS] land changes hands                   255 transfers / 848 war events   (M4.2 gate: border change per major war)
-[PASS] polity count moves                             4–16   (M4.5 gate: realms must rise and fall)
-[PASS] largest realm pop share                       21.3%   (M4 gate: no runaway single empire)
+[PASS] land under banners                            75.1%   (M4.1: realms claim some — never all — of the wild)
+[PASS] wars kindle                                     597   (M4: a century without war is a broken game)
+[PASS] land changes hands                   217 transfers / 597 war events   (M4.2 gate: border change per major war)
+[PASS] polity count moves                             4–13   (M4.5 gate: realms must rise and fall)
+[PASS] largest realm pop share                       25.7%   (M4 gate: no runaway single empire)
 [PASS] coalitions form                                 yes   (M4.3 gate: dread should unite the wary)
-[PASS] market areas carved                  7 areas / 103 towns   (M5.2: the route web splits into local markets)
-[PASS] inter-area price divergence          ×3.56 mean spread   (M5.2 gate: local markets disagree, but not madly)
-[PASS] von Thünen ordering                  bulk ×4.49 · ordinary ×3.67 · precious ×1.59   (M14.7: bulk stays local and dispersed, precious arbitrages flat — rings emerge, not painted)
-[PASS] recipe towns emerge                  17 towns craft   (M5.1 gate: ore, fuel and art make finished goods)
-[PASS] merchants take the roads                    39 ever   (M5.5: coin-wise realms send out traders)
-[PASS] gravity-model correlation            r=0.60 over 176 routes   (M5.4 gate: big close pairs carry the trade)
-CHECKS: 55 pass · 1 warn · 0 fail
+[PASS] market areas carved                  7 areas / 104 towns   (M5.2: the route web splits into local markets)
+[PASS] inter-area price divergence          ×3.83 mean spread   (M5.2 gate: local markets disagree, but not madly)
+[PASS] von Thünen ordering                  bulk ×4.61 · ordinary ×3.97 · precious ×1.64   (M14.7: bulk stays local and dispersed, precious arbitrages flat — rings emerge, not painted)
+[PASS] recipe towns emerge                   7 towns craft   (M5.1 gate: ore, fuel and art make finished goods)
+[PASS] merchants take the roads                    34 ever   (M5.5: coin-wise realms send out traders)
+[PASS] gravity-model correlation            r=0.50 over 172 routes   (M5.4 gate: big close pairs carry the trade)
+CHECKS: 53 pass · 4 warn · 0 fail

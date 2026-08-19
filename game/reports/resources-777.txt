@@ -4,39 +4,39 @@
 kind           count dawn-known    rich   finite reserve mo  min dist
 bananas            5       5 100%    0.89        0     renews       15c
 blueberries        8       8 100%    0.86        0     renews       58c
-strawberries      15      15 100%    0.89        0     renews       62c
-blackberries       7       7 100%    0.84        0     renews       44c
-cattle             4       4 100%    0.84        0     renews       76c
-sheep             29      29 100%    0.86        0     renews       61c
-horse              7       7 100%    0.89        0     renews       38c
+strawberries      12      12 100%    0.89        0     renews       62c
+blackberries       7       7 100%    0.82        0     renews       47c
+cattle             4       4 100%    0.84        0     renews       74c
+sheep             28      28 100%    0.86        0     renews       64c
+horse              7       7 100%    0.89        0     renews       39c
 pig                2       2 100%    0.87        0     renews       38c
-deer               5       5 100%    0.88        0     renews       62c
-elk                7       7 100%    0.95        0     renews       90c
-fish               6       6 100%    0.92        0     renews       61c
-timber            11      11 100%    0.90        0     renews       41c
-stone              7       4 57%    0.85        0     renews       61c
-coal              17       4 24%    0.86       17       1282       51c
+deer               5       5 100%    0.88        0     renews       70c
+elk                6       6 100%    0.95        0     renews       84c
+fish               4       4 100%    0.89        0     renews       72c
+timber            10      10 100%    0.90        0     renews       44c
+stone              7       4 57%    0.85        0     renews       63c
+coal              17       4 24%    0.86       17       1282       52c
 copper             5       0  0%    0.90        5       1424       51c
 iron               4       1 25%    0.92        4       1475       83c
 silver             5       0  0%    0.77        5        818       53c
 gold               3       0  0%    0.88        3        675       74c
 mithril            1       0  0%    0.57        1       1844       77c
 salt              10       5 50%    0.94        9       1502       54c
-furs               2       2 100%    0.97        0     renews      101c
+furs               3       3 100%    0.95        0     renews      101c
 grapes             2       2 100%    0.89        0     renews       39c
 spices             2       2 100%    0.95        0     renews       38c
 dyes               1       1 100%    0.96        0     renews       52c
 clay               4       4 100%    0.88        0     renews       43c
 marble             2       1 50%    0.83        2       1993       88c
-gems               2       0  0%    0.82        2        732       72c
+gems               2       0  0%    0.82        2        732       75c
 
-total deposits: 173 · 1.48 per 1000 land cells
+total deposits: 166 · 1.42 per 1000 land cells
 mineral seams hidden at dawn: 41 of 56 (73.2%)
 
 ore homes (M19): gold 3/3 · silver 5/5 · copper 5/5 · iron 4/4 · coal 17/17 · gems 2/2 · marble 0/2
 
 ---- checks ----------------------------------------------------------
-[PASS] deposits per 1000 land cells                   1.48   (sweet 1–6 · hard 0.5–12)
+[PASS] deposits per 1000 land cells                   1.42   (sweet 1–6 · hard 0.5–12)
 [PASS] mineral hidden share at dawn                  73.2%   (sweet 45–85% — leave an age of prospectors)
 [PASS] essential kinds all present               0 missing   (everything except mithril/bananas should place)
 [PASS] gold placed                                     yes   (a world without gold has a dull late game)

@@ -104,6 +104,16 @@ pub struct World {
     /// the ELA row profile. Frozen prehistory (ADR-0024): computed at
     /// the dawn from the final height field, hashed, never ticked.
     pub ice: crate::ice::Ice,
+    /// M33 — the frozen-ground ledger: permafrost extent class and
+    /// patterned-ground micro-texture. Pure derived state off the final
+    /// temperature and height fields (like `landform`): recomputed at
+    /// the dawn, folded into `hash_state`, never ticked.
+    pub permafrost: crate::permafrost::Permafrost,
+    /// M40 — wind-driven gyres: basin-scale surface currents solved
+    /// from the zonal wind bands over the final coastline geometry.
+    /// Pure derived state (like `landform`/`permafrost`): recomputed
+    /// at the dawn, folded into `hash_state`, never ticked.
+    pub currents: crate::currents::Currents,
     pub features: Vec<Feature>,
     pub routes: Vec<Route>,
     pub world_name: String,
@@ -170,6 +180,9 @@ pub struct GenBuilder {
     tamp64: Option<Array2<f64>>,
     precip64: Option<Array2<f64>>,
     pamp64: Option<Array2<f64>>,
+    /// M38 — the climate stage's continentality, kept alive one stage
+    /// longer so the biome pass can read the permafrost table depth.
+    cont64: Option<Array2<f64>>,
     hydro: Option<hydrology::Hydrology>,
     biome_map: Option<Array2<u8>>,
     crops: Option<Array2<u8>>,
@@ -222,6 +235,7 @@ impl GenBuilder {
             tamp64: None,
             precip64: None,
             pamp64: None,
+            cont64: None,
             hydro: None,
             biome_map: None,
             crops: None,
@@ -310,6 +324,17 @@ impl GenBuilder {
         let h = self.height64.as_mut().unwrap();
         let mut ice = crate::ice::compute(self.seed, h);
         crate::ice::carve(h, &mut ice);
+        // M30 — the legacy: till, moraines, drumlins, eskers (land-only raises)
+        crate::ice::deposit(self.seed, h, &mut ice);
+        // M31 — proglacial lakes behind the fresh moraines; their
+        // outburst spillways cut the relief before the soil settles
+        crate::ice::proglacial(h, &mut ice);
+        // M32 — outwash plains: the melt planes braided aprons below
+        // the margin before the loess blows off them
+        crate::ice::outwash(h, &mut ice);
+        // M30 — the loess mantle: glacial silt blown equatorward off the
+        // aprons, the warm end of the depositional footprint (soil only)
+        crate::ice::loess_mantle(h, &mut ice);
         // the carve moves the waterline: fjords drown, floors drop
         self.water = Some(h.mapv(|v| v < 0.0));
         self.ice = Some(ice);
@@ -324,8 +349,20 @@ impl GenBuilder {
         // E5.11 — one continentality (EDT) shared by amplitude + monsoon.
         let cont = climate::continentality(water);
         let tmean = climate::temperature_mean(height, &lat);
+        // M41 — heat transport: the currents bend the coasts they
+        // touch. Solve the gyres on the pre-widen coastline (the very
+        // law the dawn re-runs post-widen for the hashed ledger), let
+        // the meridional flow remember its origin latitude, and fold
+        // the anomaly into the annual mean before amplitude, rain and
+        // everything downstream read it — Gulf-Stream warm rims,
+        // Humboldt cold rims, ice calendars that obey the currents.
+        let cur = crate::currents::Currents::compute(water);
+        let heat = climate::current_bias(water, &cur.v);
+        let tmean = tmean + &heat;
         let tamp = climate::temperature_amplitude(&lat, &cont);
-        let (mut precip, pamp) = climate::precipitation(height, water, &tmean, &lat, &cont);
+        // M42 — the rain march reads the same anomaly: cold rims cap the
+        // marine layer downwind (coastal deserts), warm rims feed it.
+        let (mut precip, pamp) = climate::precipitation(height, water, &tmean, &lat, &cont, &heat);
         if self.precip_scale != 1.0 {
             let s = self.precip_scale;
             precip.mapv_inplace(|p| p * s);
@@ -334,6 +371,20 @@ impl GenBuilder {
         self.tamp64 = Some(tamp);
         self.precip64 = Some(precip);
         self.pamp64 = Some(pamp);
+        // M38 — the biome pass reads the frozen ground off the same
+        // continentality; dropped right after (stage_fertility).
+        self.cont64 = Some(cont);
+        // M34/M35 — the modern glacier balance is climate: computed
+        // here over the pre-widen f64 grids so hydrology can feed the
+        // melt to the rivers below; widened later with the ice ledger.
+        let modern = crate::ice::modern_glaciers(
+            self.water.as_ref().unwrap(),
+            self.tmean64.as_ref().unwrap(),
+            self.tamp64.as_ref().unwrap(),
+            self.precip64.as_ref().unwrap(),
+            self.pamp64.as_ref().unwrap(),
+        );
+        self.ice.as_mut().expect("glacial stage ran").modern = modern;
         self.timings.push(("climate", now_ms() - t1));
     }
 
@@ -345,18 +396,40 @@ impl GenBuilder {
             self.precip64.as_ref().unwrap(),
             self.pamp64.as_ref().unwrap(),
             self.tmean64.as_ref().unwrap(),
+            self.tamp64.as_ref().unwrap(),
+            &self.ice.as_ref().unwrap().outwash,
+            &self.ice.as_ref().unwrap().modern,
         );
+        // M35 — the meltwater ledger rides the ice struct to the
+        // finished world (f32 at rest, E3.2): diagnostics and
+        // inspectors read melt/discharge for the glacier-fed regime.
+        {
+            let ice = self.ice.as_mut().unwrap();
+            ice.melt = hydro.melt.mapv(|x| x as f32);
+            ice.melt_amp = hydro.melt_amp.mapv(|x| x as f32);
+        }
         self.hydro = Some(hydro);
         self.timings.push(("hydrology", now_ms() - t2));
     }
 
     fn stage_biomes(&mut self) {
         let t3 = now_ms();
+        // M38 — the biome pass reads the frozen ground: the same
+        // extent law the canonical (post-widen, hashed) M33 ledger
+        // applies, evaluated on the pre-widen climate so the tundra
+        // can split wet/dry on the permafrost table depth.
+        let tmean = self.tmean64.as_ref().unwrap();
+        let cont = self.cont64.as_ref().unwrap();
+        let pf = Array2::from_shape_fn(tmean.dim(), |(y, x)| {
+            crate::permafrost::extent_class(tmean[[y, x]], cont[[y, x]])
+        });
         let biome_map = biomes_mod::classify(
             self.height64.as_ref().unwrap(),
-            self.tmean64.as_ref().unwrap(),
+            tmean,
+            self.tamp64.as_ref().unwrap(),
             self.precip64.as_ref().unwrap(),
             &self.hydro.as_ref().unwrap().lakes,
+            &pf,
         );
         self.biome_map = Some(biome_map);
         self.timings.push(("biomes", now_ms() - t3));
@@ -376,6 +449,9 @@ impl GenBuilder {
                 &hydro.rivers,
                 &hydro.lakes,
                 &hydro.discharge,
+                &self.ice.as_ref().unwrap().till,
+                &self.ice.as_ref().unwrap().loess,
+                &self.ice.as_ref().unwrap().outwash,
             );
             let crops =
                 agriculture::crop_packages(height, tmean, precip, &hydro.rivers, &hydro.lakes);
@@ -398,6 +474,7 @@ impl GenBuilder {
         self.discharge = Some(discharge);
         self.flow_amp = Some(flow_amp);
         self.water = None;
+        self.cont64 = None; // M38 — the biome pass was its last reader
     }
 
     fn stage_naming(&mut self) {
@@ -520,24 +597,21 @@ impl GenBuilder {
         let cultures = culture::assign_cultures(&biome_map, &mut setts, &mut taken, seed);
         trade::assign_goods(&mut setts, &deposits, &fertility, &rock);
 
-        // E1.7 — fold the four hydrology masks into one CellFlags byte grid;
+        // E1.7 — fold the five hydrology masks into one CellFlags byte grid;
         // this is the exact byte the pack ships, so pack() is now a memcpy.
         let flags = {
-            let mut f = Array2::<u8>::zeros(hydro.rivers.dim());
-            for (o, (((&r, &l), &s), &sw)) in f.iter_mut().zip(
-                hydro
-                    .rivers
-                    .iter()
-                    .zip(hydro.lakes.iter())
-                    .zip(hydro.salt.iter())
-                    .zip(hydro.seasonal.iter()),
-            ) {
-                let mut c = CellFlags::empty();
-                c.set(CellFlags::RIVER, r);
-                c.set(CellFlags::LAKE, l);
-                c.set(CellFlags::SALT, s);
-                c.set(CellFlags::SEASONAL, sw);
-                *o = c.bits();
+            let (fr, fc) = hydro.rivers.dim();
+            let mut f = Array2::<u8>::zeros((fr, fc));
+            for y in 0..fr {
+                for x in 0..fc {
+                    let mut c = CellFlags::empty();
+                    c.set(CellFlags::RIVER, hydro.rivers[[y, x]]);
+                    c.set(CellFlags::LAKE, hydro.lakes[[y, x]]);
+                    c.set(CellFlags::SALT, hydro.salt[[y, x]]);
+                    c.set(CellFlags::SEASONAL, hydro.seasonal[[y, x]]);
+                    c.set(CellFlags::BRAIDED, hydro.braided[[y, x]]);
+                    f[[y, x]] = c.bits();
+                }
             }
             f
         };
@@ -547,6 +621,8 @@ impl GenBuilder {
             &flags,
             &biome_map,
             &discharge,
+            &tmean,
+            &tamp,
             (size / 128).max(1),
         );
         let routes = trade::build_routes(
@@ -713,6 +789,8 @@ impl GenBuilder {
             sealevel: self.sealevel.take().expect("sealevel generated"),
             landform: ndarray::Array2::zeros((0, 0)),
             ice: self.ice.take().expect("glacial stage ran"),
+            permafrost: crate::permafrost::Permafrost::empty(),
+            currents: crate::currents::Currents::empty(),
             seismic: crate::seismic::Seismic::empty(),
             volcanism: crate::seismic::Volcanism::empty(),
             features,
@@ -757,6 +835,55 @@ impl GenBuilder {
         // the land outran the sea, rias and skerries where the sea won.
         world.landform =
             crate::landform::classify(&world.fields.height, &world.sealevel, &world.ice);
+        // M33 — the cold rim reads its own signature: permafrost extent
+        // off the continentality-shifted MAAT, micro-texture where the
+        // frozen flats sort themselves into polygons and stripes.
+        // Post-widen, like the coasts: every cell in shipped coordinates.
+        world.permafrost = crate::permafrost::Permafrost::compute(
+            &world.fields.height,
+            &world.fields.tmean,
+            &world.fields.flags,
+        );
+        crate::landform::stamp_patterned(
+            &mut world.landform,
+            &world.permafrost.pattern,
+            &world.fields.height,
+        );
+        // The wire learns the frozen ground for free: two CellFlags bits
+        // in the byte the pack already ships (E1.7).
+        {
+            let (fr, fc) = world.fields.flags.dim();
+            for y in 0..fr {
+                for x in 0..fc {
+                    if world.permafrost.extent[[y, x]] >= crate::permafrost::DISCONTINUOUS {
+                        world.fields.flags[[y, x]] |= CellFlags::PERMAFROST.bits();
+                    }
+                    if world.permafrost.pattern[[y, x]] != crate::permafrost::PAT_NONE {
+                        world.fields.flags[[y, x]] |= CellFlags::PATTERNED.bits();
+                    }
+                }
+            }
+        }
+        // M40 — the ocean answers the winds: basin-scale gyres solved
+        // over the final coastline geometry, western walls and all.
+        // Post-widen, like the coasts: the margins widen the basins.
+        let water_now = world.fields.height.mapv(|h| h < 0.0);
+        world.currents = crate::currents::Currents::compute(&water_now);
+        // M34 — the ice that remains: modern mountain glaciers wherever
+        // today's climate keeps the annual mass balance positive. Since
+        // M35 the balance is computed at the climate stage (hydrology
+        // feeds the melt to the rivers) and widened with the ice ledger;
+        // here it only stamps the eighth (and last) flag bit.
+        {
+            let (fr, fc) = world.fields.flags.dim();
+            for y in 0..fr {
+                for x in 0..fc {
+                    if world.ice.modern[[y, x]] > 0.0 {
+                        world.fields.flags[[y, x]] |= CellFlags::GLACIER.bits();
+                    }
+                }
+            }
+        }
         // The dawn's own entries join the telling: subjects resolved to
         // registry ids, coordinates backfilled, great deeds legendized (M6).
         let mut dawn = std::mem::take(&mut world.chronicle.events);
@@ -867,10 +994,28 @@ impl World {
         self.fields.fertility = grow(&self.fields.fertility, pad, |_, _| 0.0);
         self.site_score = grow(&self.site_score, pad, |_, _| 0.0);
         self.food_grid = grow(&self.food_grid, pad, |_, _| 0.0);
-        // M28/M29 — the ice ledger rides along: margins are open water.
+        // M28/M29/M30 — the ice ledger rides along: margins are open water.
         self.ice.thickness = grow(&self.ice.thickness, pad, |_, _| 0.0f32);
         self.ice.carved = grow(&self.ice.carved, pad, |_, _| 0.0f32);
-        for p in self.ice.cirques.iter_mut().chain(self.ice.hangs.iter_mut()) {
+        self.ice.till = grow(&self.ice.till, pad, |_, _| 0.0f32);
+        self.ice.loess = grow(&self.ice.loess, pad, |_, _| 0.0f32);
+        self.ice.outwash = grow(&self.ice.outwash, pad, |_, _| 0.0f32);
+        // M34/M35 — the modern balance and the meltwater ledger:
+        // margins are open ocean, no ice and no melt.
+        self.ice.modern = grow(&self.ice.modern, pad, |_, _| 0.0f32);
+        self.ice.melt = grow(&self.ice.melt, pad, |_, _| 0.0f32);
+        self.ice.melt_amp = grow(&self.ice.melt_amp, pad, |_, _| 0.0f32);
+        for p in self
+            .ice
+            .cirques
+            .iter_mut()
+            .chain(self.ice.hangs.iter_mut())
+            .chain(self.ice.moraines.iter_mut())
+            .chain(self.ice.drumlins.iter_mut())
+            .chain(self.ice.eskers.iter_mut())
+            .chain(self.ice.proglacial.iter_mut())
+            .chain(self.ice.spillways.iter_mut().flat_map(|c| c.iter_mut()))
+        {
             p.1 += pad as u16;
         }
         self.fields.biomes = {
@@ -953,6 +1098,15 @@ impl World {
             } else {
                 true
             }
+        });
+        // M37 — the freeze rides along: the margins are open ocean at the
+        // same latitude with edge-extended climate, so the edge column's
+        // ice calendar extends west and east unchanged.
+        let fz = self.trade.frozen.clone();
+        let (fh, fw) = fz.dim();
+        self.trade.frozen = Array2::from_shape_fn((fh, fw + 2 * pad), |(y, x)| {
+            let xi = (x as isize - p).clamp(0, fw as isize - 1) as usize;
+            fz[[y, xi]]
         });
 
         // Everything with an x slides east.
@@ -1390,7 +1544,7 @@ impl World {
             // colonists carry both their tongue and their banner (ADR-0018)
             let pid = self.peoples.settlements[pi].people;
             let rid = self.peoples.settlements[pi].realm;
-            let idx = self.found_settlement(y, x, migrants, pid, rid);
+            let (idx, eid) = self.found_settlement(y, x, migrants, pid, rid);
             founded = true;
             let name = self.peoples.settlements[idx].name.clone();
             let coastal = self.peoples.settlements[idx].coastal;
@@ -1415,6 +1569,9 @@ impl World {
                 s: name.clone(),
                 k: EventKind::Found,
                 text,
+                ids: smallvec![eid],
+                x: x as i64,
+                y: y as i64,
                 ..Default::default()
             });
         }
@@ -1432,7 +1589,7 @@ impl World {
         migrants: i64,
         pid: PeopleId,
         rid: RealmId,
-    ) -> usize {
+    ) -> (usize, EntityId) {
         let style = if !self.peoples.peoples.is_empty() {
             self.peoples.peoples[pid.0].style.clone()
         } else {
@@ -1499,11 +1656,11 @@ impl World {
         self.peoples.settlements.push(s);
         let idx = self.peoples.settlements.len() - 1;
         // the new town enters the telling (M6.1)
-        {
+        let eid = {
             let t = &self.peoples.settlements[idx];
             self.chronicle.registry
-                .add(EntityKind::Settlement, &t.name, self.month, Some(t.people), t.x, t.y);
-        }
+                .add(EntityKind::Settlement, &t.name, self.month, Some(t.people), t.x, t.y)
+        };
         trade::connect_settlement(
             idx,
             &mut self.peoples.settlements,
@@ -1514,7 +1671,7 @@ impl World {
             &self.fields.discharge,
             &self.fields.flow_amp,
         );
-        idx
+        (idx, eid)
     }
 
     /// The rush: a rich seam, known but unworked, calls chancers on its
@@ -1600,7 +1757,7 @@ impl World {
             let pid = self.peoples.settlements[src].people;
             let rid = self.peoples.settlements[src].realm;
             let sname = self.peoples.settlements[src].name.clone();
-            let idx = self.found_settlement(y, x, migrants, pid, rid);
+            let (idx, eid) = self.found_settlement(y, x, migrants, pid, rid);
             founded = true;
             let name = self.peoples.settlements[idx].name.clone();
             events.push(Event {
@@ -1611,6 +1768,9 @@ impl World {
                     "Word of the {} above {} draws chancers and mule-trains — the camp of {} springs up hard by the diggings.",
                     kind, sname, name
                 ),
+                ids: smallvec![eid],
+                x: x as i64,
+                y: y as i64,
                 ..Default::default()
             });
         }
@@ -2363,7 +2523,7 @@ impl World {
     /// wasm-replay leg can *measure* rather than assume their fate.
     pub fn earth_hash_line(&self) -> String {
         format!(
-            "plates={:016x} rock={:016x} seismic={:016x} volcanism={:016x} sealevel={:016x} landform={:016x} ice={:016x}",
+            "plates={:016x} rock={:016x} seismic={:016x} volcanism={:016x} sealevel={:016x} landform={:016x} ice={:016x} permafrost={:016x}",
             self.plates.hash(),
             crate::util::fnv1a64(self.fields.rock.as_slice().expect("rock grid is contiguous")),
             self.seismic.hash(),
@@ -2371,6 +2531,7 @@ impl World {
             self.sealevel.hash(),
             crate::landform::hash(&self.landform),
             self.ice.hash(),
+            self.permafrost.hash(),
         )
     }
 

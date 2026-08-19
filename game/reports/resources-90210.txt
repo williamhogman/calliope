@@ -2,41 +2,41 @@
  CALLIOPE DIAGNOSTIC · RESOURCES                    seed 90210 · 640x512
 ========================================================================
 kind           count dawn-known    rich   finite reserve mo  min dist
-bananas            2       2 100%    0.88        0     renews       58c
-blueberries       10      10 100%    0.87        0     renews       91c
-strawberries       9       9 100%    0.85        0     renews       53c
-blackberries       5       5 100%    0.88        0     renews       48c
-cattle             2       2 100%    0.92        0     renews       73c
-sheep             19      19 100%    0.89        0     renews       54c
-horse             11      11 100%    0.89        0     renews       49c
-pig                3       3 100%    0.88        0     renews       43c
-deer               4       4 100%    0.85        0     renews       49c
+bananas            2       2 100%    0.88        0     renews      107c
+blueberries       10      10 100%    0.87        0     renews       80c
+strawberries       7       7 100%    0.85        0     renews       39c
+blackberries       5       5 100%    0.88        0     renews       34c
+cattle             3       3 100%    0.89        0     renews       63c
+sheep             20      20 100%    0.89        0     renews       51c
+horse             10      10 100%    0.89        0     renews       50c
+pig                2       2 100%    0.88        0     renews       43c
+deer               3       3 100%    0.85        0     renews       42c
 elk                7       7 100%    0.93        0     renews       83c
-fish               4       4 100%    0.90        0     renews       71c
+fish               4       4 100%    0.90        0     renews       22c
 timber             9       9 100%    0.88        0     renews       26c
 stone              4       2 50%    0.81        0     renews       72c
 coal              20       4 20%    0.91       20       1383       50c
-copper             7       0  0%    0.76        7       1215       60c
+copper             7       0  0%    0.76        7       1215       62c
 iron               4       0  0%    0.79        4       1314       69c
 silver             2       1 50%    0.84        2        915       70c
-gold               2       0  0%    0.74        2        676       64c
+gold               2       0  0%    0.74        2        676       66c
 mithril            1       0  0%    0.87        1       2346       69c
 salt               9       3 33%    0.85        8       1473       54c
 furs               2       2 100%    0.98        0     renews       83c
-grapes             1       1 100%    0.91        0     renews       49c
+grapes             1       1 100%    0.91        0     renews       52c
 spices             2       2 100%    0.90        0     renews       20c
-dyes               3       3 100%    0.88        0     renews       58c
+dyes               3       3 100%    0.87        0     renews       62c
 clay               9       9 100%    0.90        0     renews       20c
-marble             2       1 50%    0.67        2       1984       71c
-gems               2       0  0%    0.89        2        656       69c
+marble             2       1 50%    0.67        2       1984       73c
+gems               2       0  0%    0.89        2        656       73c
 
-total deposits: 155 · 1.33 per 1000 land cells
+total deposits: 152 · 1.30 per 1000 land cells
 mineral seams hidden at dawn: 42 of 53 (79.2%)
 
 ore homes (M19): gold 2/2 · silver 2/2 · copper 7/7 · iron 4/4 · coal 20/20 · gems 2/2 · marble 2/2
 
 ---- checks ----------------------------------------------------------
-[PASS] deposits per 1000 land cells                   1.33   (sweet 1–6 · hard 0.5–12)
+[PASS] deposits per 1000 land cells                   1.30   (sweet 1–6 · hard 0.5–12)
 [PASS] mineral hidden share at dawn                  79.2%   (sweet 45–85% — leave an age of prospectors)
 [PASS] essential kinds all present               0 missing   (everything except mithril/bananas should place)
 [PASS] gold placed                                     yes   (a world without gold has a dull late game)

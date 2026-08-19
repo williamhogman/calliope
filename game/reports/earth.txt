@@ -8,19 +8,44 @@
   90210     36      5248      2336     111       0.98     6.05      8.5        3
 
    seed  cones eruptions erupt/cone-cy  mean VEI
-  12345     47        43         0.61      3.88
-    777     44        40         0.61      4.00
-  90210     21        13         0.41      4.04
+  12345     48        43         0.60      3.86
+    777     44        38         0.58      4.03
+  90210     23        11         0.32      3.87
 
    seed   ice %  margin lat  ela bins   dome m  mono %
-  12345    40.3        60.1        27     2285     100
-    777    39.2        60.8        27     2352     100
-  90210    41.1        60.8        21     2285     100
+  12345    40.3        59.7        27     2308      96
+    777    39.1        60.8        26     2352     100
+  90210    41.0        60.8        21     2263     100
+
+   seed    pf %   cont %  pattern %    mar °C   off °C   agree %
+  12345    26.0     12.6       74.1     -1.78     2.10      87.8
+    777    27.2     13.6       65.7     -1.86     2.24      90.1
+  90210    29.6     14.4       66.3     -1.87     2.32      89.0
+
+   seed  gcells  share %   elev m   Δsnow m  in-LGM %
+  12345   14222    12.41      482       137     100.0
+    777   15817    13.50      610       267     100.0
+  90210   17925    15.39      569       265     100.0
+
+   seed  fj/1kco  fj>=45%  lk/1kice    mor/1k   mor±6°%
+  12345      4.9    100.0      0.16      32.0      73.4
+    777     41.7    100.0      0.00      18.9      43.9
+  90210     56.4    100.0      0.14      22.8      49.8
+
+   seed  fj med°  fj IQR°    lk/Mkm²  curve%  polar m   glacier elev by belt (equator→pole)
+  12345     68.0      4.1      21.66     100      274   60-75°:518m · 75-90°:274m
+    777     67.6      3.4       6.81     100      169   45-60°:1721m · 60-75°:625m · 75-90°:169m
+  90210     68.5      5.3       9.16     100      276   45-60°:1008m · 60-75°:615m · 75-90°:276m
+
+   seed  basins   gyres earthly    sp p95   west ×
+  12345       1       2       2     0.947      2.9
+    777       1       2       2     0.928      2.6
+  90210       1       2       2     0.896      4.1
 
  replay: seed 12345 · 1800 mo · chunk 240 => 5aa7be864419f5d3 · chunk 12 => 5aa7be864419f5d3
  native seismic hash (seed 12345 · size 512 · 1800 mo): 5aa7be864419f5d3
 
- cadence by age tercile: young 0.72 · mid 0.67 · old 0.31 erupt/cone-cy
+ cadence by age tercile: young 0.62 · mid 0.65 · old 0.32 erupt/cone-cy
 
 ---- checks ----------------------------------------------------------
 [PASS] fault seams                                      46   (M22: a mapped world holds tens of named seams, not confetti)
@@ -30,15 +55,38 @@
 [PASS] mean quake magnitude                         M 6.04   (M22: renewal model centers on strong-but-survivable)
 [PASS] great quakes share (M>=7.5)                    3.2%   (M22: the tail exists — long-quiet seams break big)
 [PASS] seismic replay is byte-identical              agree   (M22 gate: same seed, different chunking, one ledger)
-[PASS] volcano cones                                    37   (M23: a mapped world keeps tens of living vents)
-[PASS] eruptions per cone-century                     0.57   (M23: cones blow on decade-to-century clocks)
-[PASS] young/old cadence ratio                       2.28×   (M23 gate: young tercile erupts oftener than the old)
-[PASS] mean eruption VEI                          VEI 3.95   (M23: most blows are survivable; the tail is not)
-[PASS] ash bonus at the cone                        +0.084   (M23: fertile aprons form where ash falls)
-[PASS] ash decays with distance             vent 0.084 > r3 0.019 > r6 0.003   (M23 gate: the fertile apron thins away from the vent)
-[PASS] ice share of land at LGM                     40.2 %   (sweet 30–48 · hard 20–60 (% of land under the LGM sheets; twin polar landmasses run this above Earth's ~25))
-[PASS] lowland ice margin lat                        60.5°   (sweet 55–65 · hard 50–72 (p5 |lat|° of glaciated lowland, h<0.10; the L0=62° law puts it near 60))
-[PASS] ELA poleward monotone                         100 %   (sweet 85–100 · hard 70–100 (% of 3° bins where the lowest glaciated cell drops))
+[PASS] volcano cones                                    38   (M23: a mapped world keeps tens of living vents)
+[PASS] eruptions per cone-century                     0.53   (M23: cones blow on decade-to-century clocks)
+[PASS] young/old cadence ratio                       1.90×   (M23 gate: young tercile erupts oftener than the old)
+[PASS] mean eruption VEI                          VEI 3.93   (M23: most blows are survivable; the tail is not)
+[PASS] ash bonus at the cone                        +0.087   (M23: fertile aprons form where ash falls)
+[PASS] ash decays with distance             vent 0.087 > r3 0.020 > r6 0.004   (M23 gate: the fertile apron thins away from the vent)
+[PASS] ice share of land at LGM                     40.1 %   (sweet 30–48 · hard 20–60 (% of land under the LGM sheets; twin polar landmasses run this above Earth's ~25))
+[PASS] lowland ice margin lat                        60.4°   (sweet 55–65 · hard 50–72 (p5 |lat|° of glaciated lowland, h<0.10; the L0=62° law puts it near 60))
+[PASS] ELA poleward monotone                          99 %   (sweet 85–100 · hard 70–100 (% of 3° bins where the lowest glaciated cell drops))
 [PASS] peak ice thickness m                         2352 m   (sweet 1200–4000 · hard 600–4000 (dome height; parabolic profile, Antarctic cap))
-[PASS] ice footprint regen byte-identical        identical   (M28 gate: pure function of seed + height; joins hash_state)
-CHECKS: 18 pass · 0 warn · 0 fail
+[PASS] ice ledger regen byte-identical           identical   (M28 gate: frozen prehistory replays; joins hash_state)
+[PASS] permafrost share of land                     27.6 %   (sweet 5–30% · hard 2–45% (M33: the cold rim, not the whole tundra; measured 25.9–29.5))
+[PASS] patterned share of permafrost                68.7 %   (sweet 10–80% · hard 3–95% (M33: polygons on flats + stripes on slopes; measured 65.6–74.1))
+[PASS] maritime frontier MAAT                     -1.84 °C   (sweet −2.75..−1.25 °C · hard −4..−0.5 (M33 gate: where the sea keeps the shift near zero the frontier tracks the −2° isotherm ±0.75))
+[PASS] continental frontier offset                +2.22 °C   (sweet +0.25..+3 °C · hard 0..+4 (M33: the interior frontier runs warmer than the maritime one by the continental reach))
+[PASS] isotherm agreement                           88.9 %   (sweet 70–100% · hard 55–100 (M33 gate: Jaccard of extent vs tmean ≤ −2 °C on land; measured 87.7–90.1))
+[PASS] modern glacier share of land %              13.77 %   (sweet 3–18 · hard 0.5–30 (M34: cells with positive annual mass balance — polar caps plus alpine ice; Earth runs ~10 with its sheets; measured 12.4–15.4 on three seeds))
+[PASS] glacier elev above snowline m                +223 m   (sweet 0–900 · hard −200–1600 (M34 gate: mean alpine-glacier elevation minus the belt snowline solved from belt-mean climate, cap belts excluded; measured +140–270))
+[PASS] modern ice inside LGM footprint %           100.0 %   (sweet 70–100 · hard 50–100 (M34: the LGM was colder everywhere — today's ice lives inside yesterday's; measured 100))
+[PASS] fjord cells per 1000 polar coast               34.3   (sweet 3–150 · hard 1–400 (M36: fjord cells per 1000 coast cells ≥55°|lat| — the Norway/Greenland analog coasts are riddled, not saturated; measured 4.9–56.4 ×3 seeds, mean 34.3))
+[PASS] fjord cells poleward of 45° %               100.0 %   (sweet 90–100 · hard 70–100 (M36: Earth's fjord coasts run 42–83°; the drowned carve stays poleward; measured 100 ×3 seeds))
+[PASS] proglacial lakes per 1000 iced, margin belt           0.10   (sweet 0.03–3 · hard 0.005–10 (M36: moraine-dammed giants per 1000 formerly iced land cells, 50–75°|lat| — the Laurentide fringe kept a handful of giants, not a lake district; measured 0–0.16 per seed, mean 0.10 — seed 777 keeps its giants poleward of the belt))
+[PASS] moraine cells per 1000 iced, margin belt           24.6   (sweet 10–120 · hard 2–300 (M36: margin ridge cells per 1000 formerly iced land cells in the 50–75° belt; measured 18.9–32.0, mean 24.6))
+[PASS] lowland moraine cells near the margin %         55.7 %   (sweet 40–100 · hard 25–100 (M36: share of lowland (h<0.30) moraine cells within ±6° of the measured lowland margin — alpine moraines follow their own snowlines; the lowland string hugs the line it records; measured 43.9–73.4, mean 55.7))
+[PASS] fjord median latitude                         68.0°   (sweet 52–72 · hard 45–83 (M39: median |lat|° of fjord cells; Earth's fjord coasts run 42–83° with the bulk 55–72 — Norway 58–71, Greenland 60–83, Chile 42–56; measured 67.6–68.5 ×3 seeds))
+[PASS] fjord latitude IQR                             4.3°   (sweet ≤20 · hard ≤30 (M39: interquartile |lat|° spread; Earth's fjords cluster on cold coasts in ~10–15° hemispheric bands, not smeared over the globe; measured 3.4–5.3))
+[PASS] proglacial lakes per Mkm² iced                12.54   (sweet 0.5–40 · hard 0.05–120 (M39: moraine-dammed giants per million km² formerly under ice; Earth's ~34 Mkm² of LGM sheets kept order 50–150 basins ≥64 km² ≈ 1.5–4.5 per Mkm²; measured 6.8–21.7 — a young world keeps its basins undrained))
+[PASS] glacier curve descends poleward               100 %   (sweet 85–100 · hard 60–100 (M39: % of adjacent 15°-belt pairs poleward of the crest where mean glacier elevation drops, 150 m slack; Earth's glaciation level falls ~5–6 km from the dry subtropics to the poles; measured 100 ×3 seeds))
+[PASS] polar-belt glacier elevation                  239 m   (sweet ≤1000 · hard ≤1800 (M39: mean elevation of glaciered cells in the 75–90° belt; Earth's polar glaciation level sits at 0–800 m — the caps ride down to the sea; measured 169–276))
+[PASS] gyre sense matches hemisphere                   6/6   (M40 gate: clockwise north · counterclockwise south, every basin in the sweep)
+[PASS] gyre basins per seed                            1.0   (sweet 1–6 · hard 1–8 (M40: labeled ocean basins ≥2500 cells carrying a qualifying subtropical gyre))
+[PASS] surface current speed p95                     0.924   (sweet 0.3–3 · hard 0.1–10 (M40: p95 of the current index over subtropical-band ocean; SPEED_SCALE pins a typical world near 1))
+[PASS] western boundary intensification               3.2×   (sweet 1.5–12 · hard 1.2–30 (M40: p95 speed in the 4-cell western strip over p95 in the interior — the Stommel signature, Gulf-Stream-side crowding))
+[PASS] current field replays identical               agree   (M40 gate: same seed, two chunkings, one circulation)
+CHECKS: 41 pass · 0 warn · 0 fail

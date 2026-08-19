@@ -14,29 +14,32 @@ pub fn fertility(
     rivers: &Array2<bool>,
     lakes: &Array2<bool>,
     discharge: &Array2<f64>,
+    till: &Array2<f32>,
+    loess: &Array2<f32>,
+    outwash: &Array2<f32>,
 ) -> Array2<f64> {
-    let size = height.dim().0;
+    let (rows, cols) = height.dim();
     let hpos = height.mapv(|v| v.max(0.0));
     let (gy, gx) = ndimage::gradient(&hpos);
 
     let px = [0.0, 150.0, 450.0, 900.0, 1600.0, 2600.0, 4000.0];
     let py = [0.0, 0.08, 0.55, 1.0, 0.9, 0.5, 0.3];
 
-    let mut fert = Array2::<f64>::zeros((size, size));
-    let mut tgrid = Array2::<f64>::zeros((size, size));
-    for y in 0..size {
-        for x in 0..size {
+    let mut fert = Array2::<f64>::zeros((rows, cols));
+    let mut tgrid = Array2::<f64>::zeros((rows, cols));
+    for y in 0..rows {
+        for x in 0..cols {
             let t = (-(((tmean[[y, x]] - 17.0) / 11.0).powi(2))).exp();
             tgrid[[y, x]] = t;
             let p = crate::util::interp(precip[[y, x]], &px, &py);
-            let slope = gy[[y, x]].hypot(gx[[y, x]]) * size as f64 / 8.0;
+            let slope = gy[[y, x]].hypot(gx[[y, x]]) * rows as f64 / 8.0;
             let sp = 1.0 / (1.0 + (slope * 2.2).powi(2));
             fert[[y, x]] = 0.9 * t * p * sp;
         }
     }
 
     // alluvial floodplains: big rivers lay down silt as they wander
-    let silt_src = Array2::from_shape_fn((size, size), |(y, x)| {
+    let silt_src = Array2::from_shape_fn((rows, cols), |(y, x)| {
         if rivers[[y, x]] {
             (1.0 + discharge[[y, x]]).ln()
         } else {
@@ -48,13 +51,22 @@ pub fn fertility(
     // lakeshores hold moisture
     let shore_wide = ndimage::binary_dilation(lakes, 2);
 
-    for y in 0..size {
-        for x in 0..size {
+    for y in 0..rows {
+        for x in 0..cols {
             let mut v = fert[[y, x]];
             v += (silt[[y, x]] * 0.08).clamp(0.0, 0.35) * tgrid[[y, x]];
             if shore_wide[[y, x]] && !lakes[[y, x]] {
                 v += 0.08;
             }
+            // M30 — the depositional legacy: what the ice ground and
+            // dropped feeds the farms that follow, where the climate can
+            // use it. Till under the old sheet; loess blown equatorward
+            // of it — the belt that actually reaches farm country.
+            v += till[[y, x]] as f64 * crate::ice::TILL_FERT * tgrid[[y, x]];
+            v += loess[[y, x]] as f64 * crate::ice::LOESS_FERT * tgrid[[y, x]];
+            // M32 — outwash plains: glacial silt over gravel, leaner
+            // than till or loess but real where the climate can farm.
+            v += outwash[[y, x]] as f64 * crate::ice::OUT_FERT * tgrid[[y, x]];
             if height[[y, x]] < 0.0 || lakes[[y, x]] {
                 v = 0.0;
             }
