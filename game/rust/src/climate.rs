@@ -41,6 +41,24 @@ pub const HEAT_COAST_DECAY: f64 = 0.55;
 /// How far inland the sea reaches, rings of cells (×4 km).
 pub const HEAT_COAST_RINGS: usize = 6;
 
+// ------------------------------------------------- current-aware rain
+
+/// M42 — marine-layer stability response per °C of SST anomaly: cold
+/// water caps the air (subsidence inversion — Atacama, Namib), warm
+/// water destabilizes it (Gulf-Stream storm coasts).
+pub const STAB_GAIN: f64 = 0.16;
+/// Stability floor: over the coldest rims rain falls at this share.
+pub const STAB_MIN: f64 = 0.45;
+/// Stability ceiling on warm rims — wetter, not monsoon-mad.
+pub const STAB_MAX: f64 = 1.30;
+/// Per-step relaxation of the parcel's stability over water.
+pub const STAB_SEA_RELAX: f64 = 0.30;
+/// Per-step decay of the marine memory over land — the inversion
+/// breaks a few hundred km inland and the interior forgets the sea.
+pub const STAB_LAND_RELAX: f64 = 0.12;
+/// Sea-evaporation response per °C of anomaly: cold seas breathe less.
+pub const EVAP_GAIN: f64 = 0.05;
+
 /// M41 — heat transport: the current-driven sea-surface anomaly and
 /// its coastal reach. Water remembers the latitude it came from: each
 /// ocean cell's meridional current displaces its origin `HEAT_RES`
