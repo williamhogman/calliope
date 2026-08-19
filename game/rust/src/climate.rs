@@ -63,13 +63,13 @@ pub const EVAP_GAIN: f64 = 0.05;
 /// Earth's warm-current east coasts humid even leeward of a continent.
 /// Asymmetric by design: cold rims dry through stability, they do not
 /// steal moisture twice.
-pub const WARM_INJECT: f64 = 0.020;
+pub const WARM_INJECT: f64 = 0.040;
 /// Over land the marine memory decays toward neutral — except where a
 /// warm rim keeps the boundary layer convective: the land target is
 /// pulled up by the local positive bias at this fraction of the sea
 /// gain. Cold bias never stabilizes land air (the inversion is a
 /// marine artifact that breaks on landfall heating).
-pub const STAB_LAND_WARM_PULL: f64 = 0.75;
+pub const STAB_LAND_WARM_PULL: f64 = 1.0;
 
 /// M41 — heat transport: the current-driven sea-surface anomaly and
 /// its coastal reach. Water remembers the latitude it came from: each
@@ -385,7 +385,10 @@ pub fn precipitation(
             };
             let cap = (1.0 + t / 22.0).clamp(0.15, 2.3); // warm air holds more
             let mut rain = w * rate;
-            rain += 0.5 * (w - cap).max(0.0);
+            // M42 — over land the inversion caps every rain mode: the
+            // spill dump obeys the marine memory too, or polar cold rims
+            // would grow wetter from their own lowered cap.
+            rain += 0.5 * (w - cap).max(0.0) * if wat { 1.0 } else { stab };
             w -= rain;
             if step >= (wraps - 1) * size {
                 // record only the settled final wrap
