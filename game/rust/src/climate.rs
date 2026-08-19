@@ -58,6 +58,12 @@ pub const STAB_SEA_RELAX: f64 = 0.30;
 pub const STAB_LAND_RELAX: f64 = 0.12;
 /// Sea-evaporation response per °C of anomaly: cold seas breathe less.
 pub const EVAP_GAIN: f64 = 0.05;
+/// Warm-rim onshore moisture feed, per °C of positive land bias: the
+/// storm-track transients a zonal march cannot carry — what keeps
+/// Earth's warm-current east coasts humid even leeward of a continent.
+/// Asymmetric by design: cold rims dry through stability, they do not
+/// steal moisture twice.
+pub const WARM_INJECT: f64 = 0.008;
 
 /// M41 — heat transport: the current-driven sea-surface anomaly and
 /// its coastal reach. Water remembers the latitude it came from: each
@@ -355,7 +361,9 @@ pub fn precipitation(
                 (0.018 + 0.030 * t.clamp(0.0, 30.0) / 30.0)
                     * (1.0 + EVAP_GAIN * heat[[y, xcur]]).clamp(0.75, 1.25)
             } else {
-                0.009 + 0.004 * t.clamp(0.0, 30.0) / 30.0
+                0.009
+                    + 0.004 * t.clamp(0.0, 30.0) / 30.0
+                    + WARM_INJECT * heat[[y, xcur]].max(0.0)
             };
             w += evap;
             let hcur = height[[y, xcur]].max(0.0);
