@@ -193,6 +193,10 @@ impl World {
             let near = near_i
                 .map(|i| self.peoples.settlements[i].name.clone())
                 .unwrap_or_else(|| "the wilds".to_string());
+            // M6.1 — name the town by its ground, not its name: the event
+            // anchors at the pit, so a same-tick rename would orphan it if
+            // we left the id for resolve_events' name lookup to find.
+            let near_ent = self.near_settlement_ent(near_i);
             self.economy.market.shock(kind, 1.22);
             // the pit's own market feels the silence first (M5.2)
             if let Some(i) = near_i {
@@ -213,6 +217,7 @@ impl World {
                 // settlement stands near
                 x: dx0,
                 y: dy0,
+                ids: near_ent,
                 ..Default::default()
             });
             self.refresh_goods_near(di);
