@@ -359,7 +359,10 @@ pub fn precipitation(
                 let target = (1.0 + STAB_GAIN * heat[[y, xcur]]).clamp(STAB_MIN, STAB_MAX);
                 stab += STAB_SEA_RELAX * (target - stab);
             } else {
-                stab += STAB_LAND_RELAX * (1.0 - stab);
+                let target = (1.0
+                    + STAB_GAIN * STAB_LAND_WARM_PULL * heat[[y, xcur]].max(0.0))
+                .clamp(1.0, STAB_MAX);
+                stab += STAB_LAND_RELAX * (target - stab);
             }
             // Land evapotranspiration recycles a real share of moisture —
             // without it every continental interior turns to bone-dry waste.
