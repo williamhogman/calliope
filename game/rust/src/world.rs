@@ -1045,6 +1045,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Disaster,
                     text: format!("The earth shakes beneath {} — walls fall, {} are lost.", s.name, loss),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
@@ -1062,6 +1064,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Disaster,
                     text: format!("Fire leaps the rooftops of {}; {} perish in the smoke.", s.name, loss),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
@@ -1074,6 +1078,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Disaster,
                     text: format!("The river bursts its banks at {} — {} swept away in the brown water.", s.name, loss),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
@@ -1086,6 +1092,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Disaster,
                     text: format!("A black storm off the open sea lashes {} — {} lost to the waves.", s.name, loss),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
@@ -1096,6 +1104,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Growth,
                     text: format!("The harvest overflows in {}; granaries groan.", s.name),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
                 growth *= 2.0;
@@ -1108,6 +1118,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Trade,
                     text: format!("Caravans crowd the gates of {}; {} flows out to every shore.", s.name, good),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
                 growth += pop as f64 * 0.004;
