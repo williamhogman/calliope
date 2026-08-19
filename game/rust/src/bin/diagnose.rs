@@ -2353,8 +2353,19 @@ fn cmd_climate(seed: i64, size: usize) {
             }
         }
     }
-    let (mut cold_p, mut cold_e, mut cold_n) = (0.0f64, 0.0f64, 0usize);
-    let (mut warm_p, mut warm_e, mut warm_n) = (0.0f64, 0.0f64, 0usize);
+    // aggregates: [all, trades <30°, westerlies 30–60°, polar >60°]
+    let belt_of = |y: usize| -> usize {
+        let l = latitude(y, rows).abs();
+        if l < 30.0 {
+            1
+        } else if l < 60.0 {
+            2
+        } else {
+            3
+        }
+    };
+    let (mut cold_p, mut cold_e, mut cold_n) = ([0.0f64; 4], [0.0f64; 4], [0usize; 4]);
+    let (mut warm_p, mut warm_e, mut warm_n) = ([0.0f64; 4], [0.0f64; 4], [0usize; 4]);
     for y in 0..rows {
         if zonal_n[y] < 8 {
             continue; // a lone island row proves nothing
@@ -2363,28 +2374,42 @@ fn cmd_climate(seed: i64, size: usize) {
         if zm < 1.0 {
             continue; // polar bone-dry rows divide to noise
         }
+        let belt = belt_of(y);
         for x in 0..cols {
             if !land[[y, x]] {
                 continue;
             }
             let b = heat[[y, x]];
             if b <= -0.5 {
-                cold_p += w.fields.precip[[y, x]] as f64;
-                cold_e += zm;
-                cold_n += 1;
+                for i in [0, belt] {
+                    cold_p[i] += w.fields.precip[[y, x]] as f64;
+                    cold_e[i] += zm;
+                    cold_n[i] += 1;
+                }
             } else if b >= 0.5 {
-                warm_p += w.fields.precip[[y, x]] as f64;
-                warm_e += zm;
-                warm_n += 1;
+                for i in [0, belt] {
+                    warm_p[i] += w.fields.precip[[y, x]] as f64;
+                    warm_e[i] += zm;
+                    warm_n[i] += 1;
+                }
             }
         }
     }
-    let cold_ratio = if cold_e > 0.0 { cold_p / cold_e } else { 1.0 };
-    let warm_ratio = if warm_e > 0.0 { warm_p / warm_e } else { 1.0 };
+    let ratio = |p: f64, e: f64| if e > 0.0 { p / e } else { 1.0 };
+    let cold_ratio = ratio(cold_p[0], cold_e[0]);
+    let warm_ratio = ratio(warm_p[0], warm_e[0]);
     println!();
     println!(
         "current-aware rain (M42): cold-rim land {} cells at {:.2}× the neutral coast · warm-rim {} cells at {:.2}×",
-        cold_n, cold_ratio, warm_n, warm_ratio
+        cold_n[0], cold_ratio, warm_n[0], warm_ratio
+    );
+    println!(
+        "  by wind belt: cold trades {:.2}× ({}) · westerlies {:.2}× ({}) · polar {:.2}× ({})",
+        ratio(cold_p[1], cold_e[1]), cold_n[1], ratio(cold_p[2], cold_e[2]), cold_n[2], ratio(cold_p[3], cold_e[3]), cold_n[3]
+    );
+    println!(
+        "  by wind belt: warm trades {:.2}× ({}) · westerlies {:.2}× ({}) · polar {:.2}× ({})",
+        ratio(warm_p[1], warm_e[1]), warm_n[1], ratio(warm_p[2], warm_e[2]), warm_n[2], ratio(warm_p[3], warm_e[3]), warm_n[3]
     );
 
     let mut c = Checks::default();
