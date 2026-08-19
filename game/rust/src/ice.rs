@@ -98,12 +98,16 @@ const CIRQUE_LO: f64 = -0.02;
 const CIRQUE_HI: f64 = 0.10;
 
 /// A cirque needs a back wall: some N8 neighbour at least this much
-/// higher than the scooped cell.
-const CIRQUE_WALL: f64 = 0.06;
+/// higher than the scooped cell. Calibrated post-erosion: the fluvial
+/// pass planes local relief, so per-cell rises top out near 0.05 —
+/// 0.03 keeps cirques to the genuinely steep-backed heads.
+const CIRQUE_WALL: f64 = 0.03;
 
-/// A tributary hangs when its trunk was carved at least this much
-/// deeper at the junction.
-const HANG_MIN: f64 = 0.02;
+/// A tributary hangs when the trunk's centerline was carved at least
+/// this much deeper at the junction. Measured on the report seeds: the
+/// trunk–tributary overdeepening differential runs 0.000–0.013, median
+/// ~0.005; 0.002 keeps the marked steps and drops the flat junctions.
+const HANG_MIN: f64 = 0.002;
 
 /// Overdeepening floor: no trough is carved below this height — fjords
 /// drown, the abyss stays tectonic.
@@ -298,6 +302,9 @@ pub fn carve(height: &mut Array2<f64>, ice: &mut Ice) {
     let acc = crate::hydrology::flow_accumulation(&filled, &dirs, &ones, &water);
 
     let mut cut: Array2<f64> = Array2::zeros((rows, cols));
+    // Centerline depths, unspread — the hang test compares what the ice
+    // did *along* each line, which the cross-valley kernel would blur.
+    let mut line_cut: Array2<f64> = Array2::zeros((rows, cols));
 
     // U-valleys: deepen under-ice drainage lines, spread the cut across
     // a cross-valley kernel — the quartic weight turns the V into a U.
@@ -313,6 +320,9 @@ pub fn carve(height: &mut Array2<f64>, ice: &mut Ice) {
             let tf = ice.thickness[[y, x]] as f64 / TH_CAP;
             let af = (a / ACC_REF).sqrt().min(1.0);
             let depth = K_C * tf * (0.35 + 0.65 * af);
+            if depth > line_cut[[y, x]] {
+                line_cut[[y, x]] = depth;
+            }
             let r = 1 + (af * 2.0) as isize; // 1..=3 cells half-width
             for dy in -r..=r {
                 for dx in -r..=r {
@@ -386,8 +396,8 @@ pub fn carve(height: &mut Array2<f64>, ice: &mut Ice) {
     // deeper hangs above it at the junction.
     for y in 0..rows {
         for x in 0..cols {
-            let ca = cut[[y, x]];
-            if ca <= 0.0 || acc[[y, x]] < ACC_MIN || acc[[y, x]] >= ACC_REF {
+            let ca = line_cut[[y, x]];
+            if ca <= 0.0 || acc[[y, x]] >= ACC_REF {
                 continue;
             }
             let d = dirs[[y, x]];
@@ -401,7 +411,7 @@ pub fn carve(height: &mut Array2<f64>, ice: &mut Ice) {
                 continue;
             }
             let (ny, nx) = (ny as usize, nx as usize);
-            if acc[[ny, nx]] >= 4.0 * acc[[y, x]] && cut[[ny, nx]] - ca >= HANG_MIN {
+            if acc[[ny, nx]] >= 4.0 * acc[[y, x]] && line_cut[[ny, nx]] - ca >= HANG_MIN {
                 ice.hangs.push((y as u16, x as u16));
             }
         }
