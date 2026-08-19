@@ -4,57 +4,57 @@
 expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
 
       seed   land  river   mntn  entrp   coast  lmbig  towns  spacing
-     12345  0.348  0.031  0.139  2.152    8.55  0.515     12   112.8km
-     20264  0.337  0.028  0.115  2.123    8.89  0.989     10   171.6km
-     28183  0.350  0.032  0.098  2.109    8.33  0.499     12   136.0km
-     36102  0.355  0.031  0.110  2.138    9.02  0.491     10   142.2km
-     44021  0.354  0.028  0.136  2.102    9.32  0.496     11   145.1km
-     51940  0.362  0.034  0.098  2.100    8.51  0.494     10   151.1km
-     59859  0.363  0.032  0.176  2.167    9.11  0.504     12   117.7km
-     67778  0.355  0.028  0.196  2.185    8.28  0.520     15   100.4km
-     75697  0.325  0.030  0.100  2.063    9.08  0.514     10   137.2km
-     83616  0.335  0.031  0.063  2.107    9.58  0.498      8   149.6km
-     91535  0.345  0.029  0.145  2.148    8.76  0.510     11   150.5km
-     99454  0.364  0.032  0.136  2.162    8.72  0.507     12   149.9km
-    107373  0.342  0.030  0.087  2.139    8.57  0.516     11   141.9km
-    115292  0.325  0.029  0.097  2.129    8.47  0.519     11   153.8km
-    123211  0.363  0.030  0.155  2.155    9.09  0.501     13   110.4km
-    131130  0.346  0.030  0.066  2.149    7.85  0.506      9   119.6km
+     12345  0.348  0.031  0.138  2.146    8.61  0.515     12   127.8km
+     20264  0.337  0.028  0.114  2.120    8.95  0.989     10   187.4km
+     28183  0.350  0.032  0.097  2.106    8.45  0.500     12   109.4km
+     36102  0.355  0.031  0.110  2.134    9.08  0.491      9   168.8km
+     44021  0.353  0.028  0.136  2.099    9.39  0.497     11   149.1km
+     51940  0.362  0.034  0.098  2.096    8.59  0.494      9   182.1km
+     59859  0.363  0.033  0.176  2.163    9.18  0.504     12   134.7km
+     67778  0.355  0.029  0.195  2.181    8.29  0.520     14   108.5km
+     75697  0.324  0.030  0.098  2.056    9.09  0.514     10   144.6km
+     83616  0.334  0.031  0.062  2.103    9.60  0.498      8   149.6km
+     91535  0.345  0.029  0.143  2.145    8.78  0.510     10   153.0km
+     99454  0.364  0.032  0.136  2.157    8.76  0.507     12   149.9km
+    107373  0.342  0.030  0.085  2.137    8.61  0.516      9   166.2km
+    115292  0.325  0.028  0.095  2.128    8.49  0.519     14   123.3km
+    123211  0.363  0.031  0.154  2.151    9.18  0.501     13   109.8km
+    131130  0.346  0.030  0.064  2.148    7.89  0.506     10   139.2km
 
-  ERA 1 · water on the land — x: land share [0.325 … 0.364] · y: river share [0.028 … 0.034]
+  ERA 1 · water on the land — x: land share [0.324 … 0.364] · y: river share [0.028 … 0.034]
     |                      · |
+    |                       ·|
+    |               ·       ·|
     |                        |
-    |               ·       :|
-    |                  ·     |
-    |      ·      ··        ·|
+    |      ·      ··   ·   · |
     |·         ·             |
-    |·           ·     ·     |
-    |       ·         ·      |
-    occupied cells: 15
+    |            ·     ·     |
+    |·      ·         ·      |
+    occupied cells: 16
 
-  ERA 2 · relief vs variety — x: mountain share [0.063 … 0.196] · y: biome entropy [2.063 … 2.185]
+  ERA 2 · relief vs variety — x: mountain share [0.062 … 0.195] · y: biome entropy [2.056 … 2.181]
     |                       ·|
     |             ·      ·   |
-    |·            ·· ·       |
-    |    · · ·               |
-    |·     ·  ·              |
+    |·   ·        ·· ·       |
+    |      · ··              |
+    |·     ·                 |
     |      ·      ·          |
     |                        |
     |      ·                 |
     occupied cells: 16
 
-  ERA 3 · the human layer — x: settlements [8.000 … 15.000] · y: NN spacing km [100.355 … 171.551]
-    |       ·                |
+  ERA 3 · the human layer — x: settlements [8.000 … 14.000] · y: NN spacing km [108.481 … 187.432]
+    |    ·   ·               |
     |                        |
-    |·      ·  :  ·          |
-    |       :  :  ·          |
-    |                        |
-    |   ·         ·          |
-    |             ·  ·       |
+    |    :                   |
+    |·       ·   ·  ·        |
+    |        :               |
+    |               :        |
     |                       ·|
+    |               ·   ·   ·|
     occupied cells: 13
 
-  ERA 4 · the shape of coasts — x: coast complexity [7.853 … 9.580] · y: largest landmass [0.491 … 0.989]
+  ERA 4 · the shape of coasts — x: coast complexity [7.891 … 9.601] · y: largest landmass [0.491 … 0.989]
     |              ·         |
     |                        |
     |                        |
@@ -62,17 +62,17 @@ expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
     |                        |
     |                        |
     |                        |
-    |·     : ·:· :   ▪·  ·  ·|
+    |·    ·  :·: :   ::  ·  ·|
     occupied cells: 11
 
-  oatmeal: min 0.0062 (seeds 91535 vs 107373) · mean 0.0826 · max 0.3178 · min/mean 0.075
+  oatmeal: min 0.0063 (seeds 91535 vs 107373) · mean 0.0841 · max 0.3178 · min/mean 0.074
 
 
 ---- checks ----------------------------------------------------------
 [PASS] land share varies                            Δ0.040   (M8.3: the range is a range)
 [PASS] relief varies                                Δ0.133   (M8.3: not one mountain recipe)
-[PASS] towns vary                                       Δ7   (M8.3: history diverges)
-[PASS] ERA occupancy / seed                           0.86   (M8.3: seeds spread across the plates)
-[PASS] oatmeal min/mean ratio                        0.075   (M8.4: no two worlds are the same bowl)
-[PASS] oatmeal mean distance                        0.0826   (M8.4: the family resembles, never repeats)
+[PASS] towns vary                                       Δ6   (M8.3: history diverges)
+[PASS] ERA occupancy / seed                           0.88   (M8.3: seeds spread across the plates)
+[PASS] oatmeal min/mean ratio                        0.074   (M8.4: no two worlds are the same bowl)
+[PASS] oatmeal mean distance                        0.0841   (M8.4: the family resembles, never repeats)
 CHECKS: 6 pass · 0 warn · 0 fail

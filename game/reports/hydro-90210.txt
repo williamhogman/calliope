@@ -1,26 +1,26 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · HYDROLOGY                    seed 90210 · 640x512
 ========================================================================
-river cells: 4965 (4.3% of land) · lake cells: 1892 (1.6% of land)
-river systems (≥12 cells): 124 · longest network 117 cells ≈ 468 km
-discharge on rivers: p50 143.5 · p90 640.3 · p99 1597.3 · max 3627.7
+river cells: 4956 (4.3% of land) · lake cells: 1726 (1.5% of land)
+river systems (≥12 cells): 123 · longest network 117 cells ≈ 468 km
+discharge on rivers: p50 140.8 · p90 639.4 · p99 1600.5 · max 3616.1
 named: 3 deltas · 4 marshes
-  delta: The Mouths of the Talion @(237,315)
+  delta: The Mouths of the Dorwyn @(237,315)
   delta: The Aurathas Delta @(124,419)
   delta: The Mouths of the Peldor @(516,217)
 river towns: 16 of 16
-strahler orders: 1:58 2:554 3:875 4:1710 5:1603 6:165 · top 6
-wadis: 692 cells · salt basins: 8 (224 cells) · river |flow amp| mean 0.18
+strahler orders: 1:58 2:550 3:900 4:1778 5:1475 6:195 · top 6
+wadis: 693 cells · salt basins: 8 (224 cells) · river |flow amp| mean 0.18
 
 ---- checks ----------------------------------------------------------
 [PASS] river share of land                            4.3%   (sweet 0.8–5% · hard 0.3–10%)
-[PASS] lake share of land                             1.6%   (sweet 0–3% · hard 0–8%)
-[PASS] river systems                                   124   (sweet 8–400 · hard 3–2000)
+[PASS] lake share of land                             1.5%   (sweet 0–3% · hard 0–8%)
+[PASS] river systems                                   123   (sweet 8–400 · hard 3–2000)
 [PASS] named deltas                                      3   (≥1 — great river mouths get names)
 [PASS] discharge finite                                yes   (no NaN/inf in flow accumulation)
 [PASS] dawn towns reach fresh water                 100.0%   (≥20% — rivers should pull the first peoples)
 [PASS] strahler top order                                6   (sweet 4–9 · hard 3–12)
 [PASS] river seasonal swing                           0.18   (mean |amp| · sweet .05–.50 · hard .01–.90)
 [PASS] endorheic salt basins                             8   (≥1 — the desert keeps its dead seas)
-[PASS] wadis                                           692   (≥1 — some rivers should run dry half the year)
+[PASS] wadis                                           693   (≥1 — some rivers should run dry half the year)
 CHECKS: 10 pass · 0 warn · 0 fail

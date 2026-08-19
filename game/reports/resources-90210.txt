@@ -6,22 +6,22 @@ bananas            2       2 100%    0.88        0     renews       58c
 blueberries       10      10 100%    0.87        0     renews       91c
 strawberries       9       9 100%    0.85        0     renews       53c
 blackberries       5       5 100%    0.88        0     renews       48c
-cattle             3       3 100%    0.89        0     renews       71c
-sheep             18      18 100%    0.89        0     renews       54c
+cattle             2       2 100%    0.92        0     renews       73c
+sheep             19      19 100%    0.89        0     renews       54c
 horse             11      11 100%    0.89        0     renews       49c
-pig                2       2 100%    0.88        0     renews       43c
+pig                3       3 100%    0.88        0     renews       43c
 deer               4       4 100%    0.85        0     renews       49c
 elk                7       7 100%    0.93        0     renews       83c
 fish               4       4 100%    0.90        0     renews       71c
-timber            10      10 100%    0.88        0     renews       26c
+timber             9       9 100%    0.88        0     renews       26c
 stone              4       2 50%    0.81        0     renews       72c
 coal              20       4 20%    0.91       20       1383       50c
-copper             7       0  0%    0.76        7       1215       58c
+copper             7       0  0%    0.76        7       1215       60c
 iron               4       0  0%    0.79        4       1314       69c
 silver             2       1 50%    0.84        2        915       70c
 gold               2       0  0%    0.74        2        676       64c
 mithril            1       0  0%    0.87        1       2346       69c
-salt              10       4 40%    0.85        9       1452       59c
+salt               9       3 33%    0.85        8       1473       54c
 furs               2       2 100%    0.98        0     renews       83c
 grapes             1       1 100%    0.91        0     renews       49c
 spices             2       2 100%    0.90        0     renews       20c
@@ -30,19 +30,19 @@ clay               9       9 100%    0.90        0     renews       20c
 marble             2       1 50%    0.67        2       1984       71c
 gems               2       0  0%    0.89        2        656       69c
 
-total deposits: 156 · 1.34 per 1000 land cells
-mineral seams hidden at dawn: 42 of 54 (77.8%)
+total deposits: 155 · 1.33 per 1000 land cells
+mineral seams hidden at dawn: 42 of 53 (79.2%)
 
 ore homes (M19): gold 2/2 · silver 2/2 · copper 7/7 · iron 4/4 · coal 20/20 · gems 2/2 · marble 2/2
 
 ---- checks ----------------------------------------------------------
-[PASS] deposits per 1000 land cells                   1.34   (sweet 1–6 · hard 0.5–12)
-[PASS] mineral hidden share at dawn                  77.8%   (sweet 45–85% — leave an age of prospectors)
+[PASS] deposits per 1000 land cells                   1.33   (sweet 1–6 · hard 0.5–12)
+[PASS] mineral hidden share at dawn                  79.2%   (sweet 45–85% — leave an age of prospectors)
 [PASS] essential kinds all present               0 missing   (everything except mithril/bananas should place)
 [PASS] gold placed                                     yes   (a world without gold has a dull late game)
 [PASS] mithril placed                                  yes   (the legendary seam should exist somewhere)
-[PASS] coastal salt pan exists              1 pans · 9 rock seams   (M14.2: every world gets at least one renewing pan on an arid shore)
-[PASS] salt sources ≥2                                  10   (M14.2 floor: one source is a monopoly, not an economy)
+[PASS] coastal salt pan exists              1 pans · 8 rock seams   (M14.2: every world gets at least one renewing pan on an arid shore)
+[PASS] salt sources ≥2                                   9   (M14.2 floor: one source is a monopoly, not an economy)
 [PASS] pans known at dawn                           1 of 1   (a salt pan is plain to see — never hidden, never exhausted)
 [PASS] goods table agrees with closure flags 38 rows consistent   (M14.1: one declaration point — flags derive-checked against GOODS)
 [PASS] ore seams in home province           39 of 39 (100.0%)   (M19 gate: geology says where ore sits — ≥90% pooled)

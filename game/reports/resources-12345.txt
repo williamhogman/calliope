@@ -4,41 +4,41 @@
 kind           count dawn-known    rich   finite reserve mo  min dist
 bananas            2       2 100%    0.91        0     renews       13c
 blueberries        7       7 100%    0.89        0     renews       47c
-strawberries      11      11 100%    0.89        0     renews       45c
+strawberries      11      11 100%    0.89        0     renews       35c
 blackberries       5       5 100%    0.86        0     renews       51c
 cattle             0          —       —        —          —         —
-sheep             25      25 100%    0.91        0     renews       64c
+sheep             26      26 100%    0.91        0     renews       73c
 horse              5       5 100%    0.90        0     renews       60c
 pig                5       5 100%    0.95        0     renews       52c
 deer               4       4 100%    0.88        0     renews       76c
-elk                9       9 100%    0.86        0     renews       66c
+elk               10      10 100%    0.85        0     renews       51c
 fish               6       6 100%    0.85        0     renews       60c
-timber            11      11 100%    0.89        0     renews       36c
+timber            11      11 100%    0.89        0     renews       37c
 stone              5       5 100%    0.87        0     renews       60c
-coal              25       3 12%    0.85       25       1282       45c
+coal              23       2  9%    0.85       23       1278       45c
 copper             8       3 38%    0.90        8       1352       54c
-iron               5       0  0%    0.84        5       1295       47c
+iron               4       0  0%    0.84        4       1304       57c
 silver             2       0  0%    0.89        2        918       55c
 gold               2       0  0%    0.85        2        702       48c
 mithril            1       0  0%    0.66        1       2077       74c
-salt               8       3 38%    0.90        7       1504       54c
-furs               5       5 100%    0.97        0     renews       50c
+salt               8       3 38%    0.90        7       1504       65c
+furs               5       5 100%    0.97        0     renews       47c
 grapes             2       2 100%    0.91        0     renews       32c
 spices             3       3 100%    0.87        0     renews       23c
 dyes               3       3 100%    0.88        0     renews       28c
-clay               9       9 100%    0.87        0     renews       55c
+clay               8       8 100%    0.85        0     renews       55c
 marble             4       1 25%    0.92        4       2194       51c
 gems               3       0  0%    0.89        3        776       50c
 
-total deposits: 175 · 1.53 per 1000 land cells
-mineral seams hidden at dawn: 48 of 63 (76.2%)
+total deposits: 173 · 1.51 per 1000 land cells
+mineral seams hidden at dawn: 46 of 60 (76.7%)
 kinds absent from this world: ["cattle"]
 
-ore homes (M19): gold 2/2 · silver 2/2 · copper 8/8 · iron 5/5 · coal 25/25 · gems 3/3 · marble 4/4
+ore homes (M19): gold 2/2 · silver 2/2 · copper 8/8 · iron 4/4 · coal 23/23 · gems 3/3 · marble 4/4
 
 ---- checks ----------------------------------------------------------
-[PASS] deposits per 1000 land cells                   1.53   (sweet 1–6 · hard 0.5–12)
-[PASS] mineral hidden share at dawn                  76.2%   (sweet 45–85% — leave an age of prospectors)
+[PASS] deposits per 1000 land cells                   1.51   (sweet 1–6 · hard 0.5–12)
+[PASS] mineral hidden share at dawn                  76.7%   (sweet 45–85% — leave an age of prospectors)
 [WARN] essential kinds all present               1 missing   (everything except mithril/bananas should place)
 [PASS] gold placed                                     yes   (a world without gold has a dull late game)
 [PASS] mithril placed                                  yes   (the legendary seam should exist somewhere)
@@ -46,5 +46,5 @@ ore homes (M19): gold 2/2 · silver 2/2 · copper 8/8 · iron 5/5 · coal 25/25 
 [PASS] salt sources ≥2                                   8   (M14.2 floor: one source is a monopoly, not an economy)
 [PASS] pans known at dawn                           1 of 1   (a salt pan is plain to see — never hidden, never exhausted)
 [PASS] goods table agrees with closure flags 38 rows consistent   (M14.1: one declaration point — flags derive-checked against GOODS)
-[PASS] ore seams in home province           49 of 49 (100.0%)   (M19 gate: geology says where ore sits — ≥90% pooled)
+[PASS] ore seams in home province           46 of 46 (100.0%)   (M19 gate: geology says where ore sits — ≥90% pooled)
 CHECKS: 9 pass · 1 warn · 0 fail

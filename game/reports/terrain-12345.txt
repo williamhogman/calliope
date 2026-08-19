@@ -1,43 +1,50 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 12345 · 640x512
 ========================================================================
-world: "Ithath" · generated in 1362 ms
-land: 114687 cells of 327680 (35.0%) · 1834992 km²
-hypsometry (land h): p5 0.019 · p25 0.086 · p50 0.199 · p75 0.373 · p95 0.548 · max 0.759
-bathymetry (sea h): p5 -0.592 · p50 -0.383 · p95 -0.034
-relief of land: hills(h>.35) 28.2% · mountains(h>.5) 8.9% · alpine(h>.65) 1.4%
+world: "Ithath" · generated in 1655 ms
+land: 114576 cells of 327680 (35.0%) · 1833216 km²
+hypsometry (land h): p5 0.018 · p25 0.085 · p50 0.197 · p75 0.372 · p95 0.548 · max 0.759
+bathymetry (sea h): p5 -0.592 · p50 -0.383 · p95 -0.033
+relief of land: hills(h>.35) 28.1% · mountains(h>.5) 8.8% · alpine(h>.65) 1.3%
 landmasses: 26 total · 2 continents(≥3000c) · 0 major isles(≥400c) · 14 islands(≥40c) · 10 islets
-largest landmass: 59000 cells = 51.4% of all land
-coastline: 3056 coastal cells · crenulation 0.027 (coast/land)
+largest landmass: 58955 cells = 51.5% of all land
+coastline: 3109 coastal cells · crenulation 0.027 (coast/land)
 land share by latitude band:
-    90°–  60°   13151  24.2%
+    90°–  60°   13075  24.0%
     60°–  30°   23069  42.4%
     30°–   0°   22875  41.6%
      0°–  30°   22115  40.7%
     30°–  60°   21801  40.1%
-    60°–  90°   11676  21.2%
+    60°–  90°   11641  21.2%
 sea level (M25): phase 0.467 · stand -0.471 · eustatic -0.0085 h · rebound +0.0033 · forebulge -0.0012
 named: 2 archipelagos · 3 islands · 7 mountain ranges
 plates: 10 polygons (7 continental) · mean drift-age 1182 Myr
 seams: 1594 convergent · 1719 divergent · 809 transform cells
 orogeny ages: mean belt relief re-aged  200 Myr 0.1987 · 900 Myr 0.1713 · 2000 Myr 0.1610  (72121 belt cells)
-rock provinces: shield 9.5% · basin 68.6% · fold belt 12.4% · volcanic 9.5%
+rock provinces: shield 9.5% · basin 68.7% · fold belt 12.4% · volcanic 9.5%
 legibility (M21): off-correlate shield 0.0% · basin 0.0% · fold belt 0.0%
-coastal landforms (M26): raised 2885 · ria 0 · skerry 0 · coast 3056 cells
+coastal landforms (M26): raised 3041 · ria 0 · skerry 0 · coast 3109 cells
+
+glacial relief: u-cells alpine 2272 / sheet 3720 · cirques 242 (146 alpine) · hangs 121 · fjord cells 6
 
 ---- checks ----------------------------------------------------------
 [PASS] land fraction                                 35.0%   (sweet 22–40% · hard 15–52%)
 [PASS] border land cells                                 0   (must be 0 — no clipped landmasses)
-[PASS] coastline holds the datum (M25)      2.6% drift at stand -0.47 (cap 7.1%)   (M25 gate: land area within ±5% of the pre-M25 baseline near mid-curve)
+[PASS] coastline holds the datum (M25)      2.5% drift at stand -0.47 (cap 7.1%)   (M25 gate: land area within ±5% of the pre-M25 baseline near mid-curve)
 [PASS] sea-level history regen byte-identical      identical   (M25: same seed ⇒ same waterline; joins hash_state)
-[PASS] raised coast per stand                       98.079   (sweet 70–150 · hard 40–250 (share of coast per mean emergence, ≈1/coastal slope))
+[PASS] raised coast per stand                      101.620   (sweet 70–150 · hard 40–250 (share of coast per mean emergence, ≈1/coastal slope))
 [PASS] landform signs read true             0 tags against the offset sign   (M26: raised only where the land rose, drowned only where the sea did)
 [PASS] landform grid regen byte-identical        identical   (M26 gate: pure function of height + sea level; joins hash_state)
-[PASS] raised beaches thicken with the rise rebound belt 131.3% vs collar 76.3%   (M26 gate: landform frequency follows the amplitude within one world)
-[PASS] largest landmass share of land                51.4%   (sweet 25–85% · hard 10–93%)
+[PASS] u-valley cells per 1000 iced, alpine            137   (sweet 20–200 · hard 5–400 (carved cells per 1000 glaciated, 40–62°|lat|))
+[PASS] u-valley cells per 1000 iced, sheet             171   (sweet 10–200 · hard 2–400 (carved cells per 1000 glaciated, >62°|lat|))
+[PASS] cirques per 1000 iced, alpine                   8.8   (sweet 1–40 · hard 0.2–100 (scooped bowls per 1000 glaciated alpine cells))
+[PASS] hanging valleys per world                       121   (sweet 10–600 · hard 2–2000 (tributaries left in the air at trunk junctions))
+[PASS] height field NaN-free after the carve         finite   (M29 gate: the carve is pure lowering arithmetic)
+[PASS] raised beaches thicken with the rise rebound belt 137.6% vs collar 76.3%   (M26 gate: landform frequency follows the amplitude within one world)
+[PASS] largest landmass share of land                51.5%   (sweet 25–85% · hard 10–93%)
 [PASS] landmass count                                   26   (sweet 15–400 · hard 6–2000)
 [PASS] small isles+islets                               24   (sweet 10–380 · hard 3–1900)
-[PASS] mountain share of land (h>0.5)                 8.9%   (sweet 2–14% · hard 0.5–22%)
+[PASS] mountain share of land (h>0.5)                 8.8%   (sweet 2–14% · hard 0.5–22%)
 [PASS] coastline crenulation                         0.027   (sweet 0.02–0.30 at 4 km cells)
 [PASS] archipelagos named                                2   (≥1 — island clusters should get names)
 [PASS] plate count                                      10   (M16: a coarse sketch — continents, not crazy paving)
@@ -47,8 +54,8 @@ coastal landforms (M26): raised 2885 · ria 0 · skerry 0 · coast 3056 cells
 [PASS] heightmap regen byte-identical            identical   (M16: same sketch ⇒ same land)
 [PASS] belt relief falls with seam age      0.1987 → 0.1713 → 0.1610   (M17: the same sketch re-aged 200/900/2000 Myr sinks monotonically)
 [PASS] shield share of land                           9.5%   (M18 gate: every province present at ≥2% of land)
-[PASS] basin share of land                           68.6%   (M18 gate: every province present at ≥2% of land)
+[PASS] basin share of land                           68.7%   (M18 gate: every province present at ≥2% of land)
 [PASS] fold-belt share of land                       12.4%   (M18 gate: every province present at ≥2% of land)
 [PASS] volcanic share of land                         9.5%   (M18 gate: every province present at ≥2% of land)
 [PASS] province map reads true              worst off-correlate 0.0% (shield 0.0% · basin 0.0% · fold 0.0%)   (M21 gate: ≤3% of each province off its landform correlate)
-CHECKS: 25 pass · 0 warn · 0 fail
+CHECKS: 30 pass · 0 warn · 0 fail
