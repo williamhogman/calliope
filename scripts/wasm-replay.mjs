@@ -38,6 +38,13 @@ while (left > 0) {
 }
 if (process.argv[5] === "debug" && typeof world.seismic_debug === "function") {
   console.log(world.seismic_debug());
+} else if (process.argv[5] === "earth") {
+  // M27 — the deep-earth identity line, labeled per layer.
+  if (typeof world.earth_hash !== "function") {
+    console.error("stale wasm: no earth_hash export — rebuild with scripts/build.sh");
+    process.exit(3);
+  }
+  console.log(world.earth_hash());
 } else {
   console.log(world.seismic_hash());
 }

@@ -166,6 +166,13 @@ impl WasmWorld {
         format!("{:016x}", self.inner.seismic.hash())
     }
 
+    /// M27 gate — the deep-earth identity line: every Year-1 layer's
+    /// hash, labeled. `scripts/wasm-replay.mjs earth` compares this
+    /// against the native `diagnose earth-hash` for the same arguments.
+    pub fn earth_hash(&self) -> String {
+        self.inner.earth_hash_line()
+    }
+
     /// M22 bisection instrument: plate-sketch and seismic sub-hashes so a
     /// cross-runtime divergence names the layer it lives in.
     pub fn seismic_debug(&self) -> String {

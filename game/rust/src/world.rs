@@ -2324,6 +2324,24 @@ impl World {
     }
 
 
+    /// M27 — the deep-earth identity line: every Year-1 layer's hash,
+    /// labeled, so a cross-runtime divergence names the layer it lives
+    /// in. The ADR-0025 replay family (plates, seismic, sealevel) is
+    /// IEEE-exact by construction; rock, volcanism and landform sit
+    /// downstream of transcendental terrain and are printed so the
+    /// wasm-replay leg can *measure* rather than assume their fate.
+    pub fn earth_hash_line(&self) -> String {
+        format!(
+            "plates={:016x} rock={:016x} seismic={:016x} volcanism={:016x} sealevel={:016x} landform={:016x}",
+            self.plates.hash(),
+            crate::util::fnv1a64(self.fields.rock.as_slice().expect("rock grid is contiguous")),
+            self.seismic.hash(),
+            self.volcanism.hash(),
+            self.sealevel.hash(),
+            crate::landform::hash(&self.landform),
+        )
+    }
+
     /// The second reading of the month's events (M6): any entry whose
     /// subject the registry knows gets its ids back-filled, any entry
     /// without a map anchor inherits its subject's, and the loudest

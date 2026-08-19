@@ -4250,6 +4250,22 @@ fn main() {
             }
             cmd_earth(size, years, seeds);
         }
+        "earth-hash" => {
+            // Labeled layer hashes on stdout — the native leg of the M27
+            // deep-earth replay check; `wasm-replay.mjs earth` prints the
+            // wasm leg in the same format.
+            let seed = num(2, 777);
+            let size = sized(3, 512);
+            let months = num(4, 240);
+            let mut w = World::generate(seed, size);
+            let mut left = months;
+            while left > 0 {
+                let step = left.min(240);
+                w.tick(step);
+                left -= step;
+            }
+            println!("{}", w.earth_hash_line());
+        }
         "seismic-hash" => {
             // Bare hex on stdout — the native leg of the M22 cross-runtime
             // replay check; scripts/wasm-replay.mjs prints the wasm leg.
