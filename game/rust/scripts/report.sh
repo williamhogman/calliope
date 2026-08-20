@@ -37,6 +37,7 @@ if [ "$MODE" = "quick" ]; then
   ERA="256 40 8 12345"
   PATINA="512 200 12345"
   PERF="512 12345 777"
+  OCEAN="12345 777 31337"
 else
   SEEDS=(12345 777 90210)
   CIV_YEARS=150
@@ -48,6 +49,7 @@ else
   ERA="256 60 16 12345"
   PATINA="512 300 12345 777 90210"
   PERF="512 12345 777 90210"
+  OCEAN="12345 777 31337 90210 555"
 fi
 
 run() { # run <outfile> <diagnose args...>
@@ -77,6 +79,7 @@ run "era.txt" era $ERA
 run "patina.txt" patina $PATINA
 run "systems.txt" systems "${SEEDS[0]}" "$SIZE" "$CIV_YEARS"
 run "earth.txt" earth "$SIZE" "$CIV_YEARS" "${SEEDS[@]}"
+run "ocean.txt" ocean "$SIZE" $OCEAN
 
 # ---- M22/M27 deep-earth replay across runtimes ------------------------------
 # The same seed and months must yield one seismic ledger (M22) and one

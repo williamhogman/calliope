@@ -1,12 +1,13 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-20 19:35 UTC
+mode: full · size: 512 · generated: 2026-08-20 20:30 UTC
 
-totals: 635 pass · 21 warn · 0 fail
+totals: 650 pass · 21 warn · 0 fail
 
 -- assay.txt
    all checks pass
 
 -- bench.txt
+[WARN] 512 generation time                         3278 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
 [WARN] pack bytes per cell                     23.0 B/cell   (sweet ≤23 · hard ≤26 (9×u16 + 5×u8 = 23 B/cell + header — M47 added the upwelling lane))
 [WARN] median tick payload                          7466 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
@@ -61,14 +62,16 @@ totals: 635 pass · 21 warn · 0 fail
 -- moddag.txt
    all checks pass
 
+-- ocean.txt
+   all checks pass
+
 -- patina.txt
 [WARN] ruins per century (after y100)                14.17   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-[WARN] stage naming ms                      123 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
-[WARN] stage settlements ms                 284 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2987 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 100                   229 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage naming ms                      142 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
+[WARN] gen total ms                         3139 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 100                   191 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
    all checks pass
@@ -86,7 +89,7 @@ totals: 635 pass · 21 warn · 0 fail
 [WARN] mean forest share                             21.2%   (sweet 25–60% · hard 15–75%)
 
 -- systems.txt
-[WARN] ECS parallel ceiling stays low               1.582×   (ADR-0022: re-open the bevy_ecs question if this rises)
+[WARN] ECS parallel ceiling stays low               1.541×   (ADR-0022: re-open the bevy_ecs question if this rises)
 
 -- telling-12345.txt
    all checks pass

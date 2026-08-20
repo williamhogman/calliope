@@ -18,6 +18,7 @@
 //!   diagnose bench                              generation + tick throughput
 //!   diagnose sweep       <size> <years> <seeds> cross-seed robustness table
 //!   diagnose earth       <size> <years> <seeds> fault seams + quake cadence (M22)
+//!   diagnose ocean       <size> <seeds>         gyres, coast heat, upwelling, sea seasons (M49)
 //!   diagnose seismic-hash <seed> <size> <months> bare ledger hash (wasm replay leg)
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -6642,6 +6643,426 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
     c.print();
 }
 
+// ============================================================ M49 ocean
+
+/// One seed's ocean measurements — the four families the M49 panel
+/// bands: gyre topology, current-coast temperature, upwelling
+/// coverage, sea-lane seasonality.
+struct OceanRow {
+    seed: i64,
+    basins: usize,
+    gyres: usize,
+    earthly: usize,
+    gyre_cells: f64,
+    sp95: f64,
+    westx: f64,
+    warm_d: f64,
+    cold_d: f64,
+    warm_n: usize,
+    cold_n: usize,
+    up_share: f64,
+    up_lat: f64,
+    sea_lanes: usize,
+    seasonal: usize,
+    seas_share: f64,
+    swing_spread: f64,
+    swing_p50: f64,
+}
+
+/// M49 — the ocean stack's own instrument panel. Everything the ocean
+/// phases (M40 gyres · M41 heat · M42 rain · M47 upwelling · M48
+/// seasonality) put into the world, measured on one page across the
+/// seed sweep, each family banded. Generation only: every field here
+/// is dawn state, so no century has to run for the ocean to be judged.
+fn cmd_ocean(size: usize, seeds: Vec<i64>) {
+    header(
+        "OCEAN",
+        &format!("{}x{} · {} seeds", size, size, seeds.len()),
+    );
+    println!("gyres · current-coast heat · upwelling · sea-lane seasonality  (M40–M48)");
+
+    let mut rows_out: Vec<OceanRow> = Vec::new();
+    let mut gyre_lines: Vec<String> = Vec::new();
+
+    for &seed in &seeds {
+        let w = World::generate(seed, size);
+        let (rows, cols) = w.fields.height.dim();
+        let water = w.fields.height.mapv(|h| h < 0.0);
+        let lat_s = |y: usize| -90.0 + y as f64 * 180.0 / (rows - 1) as f64;
+
+        // ---- gyre topology (M40) -------------------------------------
+        // Label the ocean into basins; within each basin and hemisphere
+        // read the subtropical band (10–40°). Positive ψ turns clockwise
+        // on screen, so the north wants ψ > 0 and the south ψ < 0 —
+        // anticyclonic both ways, Earth's sense. Cell counts per gyre
+        // are the topology the spec asks for: a gyre is a region, not a
+        // sign.
+        let lab = ndimage::label(&water, false);
+        let basins = ndimage::top_components(&lab, 2500.0, 8);
+        let (mut gy_n, mut gy_ok, mut gy_basins) = (0usize, 0usize, 0usize);
+        let mut gy_cells: Vec<f64> = Vec::new();
+        let mut band_sp: Vec<f64> = Vec::new();
+        let mut west_sp: Vec<f64> = Vec::new();
+        let mut int_sp: Vec<f64> = Vec::new();
+        for (bi_idx, &(bi, area)) in basins.iter().enumerate() {
+            let mut any = false;
+            let mut parts: Vec<String> = Vec::new();
+            for hemi in 0..2 {
+                let mut n = 0usize;
+                let mut psum = 0.0f64;
+                for y in 0..rows {
+                    let ls = lat_s(y);
+                    let north = ls < 0.0; // negative row-latitude = north (grid law)
+                    if (hemi == 0) != north {
+                        continue;
+                    }
+                    if !(10.0..=40.0).contains(&ls.abs()) {
+                        continue;
+                    }
+                    let mut x = 0usize;
+                    while x < cols {
+                        if lab.lab[[y, x]] != bi as i32 {
+                            x += 1;
+                            continue;
+                        }
+                        let x0 = x;
+                        while x < cols && lab.lab[[y, x]] == bi as i32 {
+                            x += 1;
+                        }
+                        for xi in x0..x {
+                            n += 1;
+                            psum += w.currents.psi[[y, xi]] as f64;
+                            let sp = (w.currents.u[[y, xi]] as f64)
+                                .hypot(w.currents.v[[y, xi]] as f64);
+                            band_sp.push(sp);
+                            if xi < x0 + 4 {
+                                west_sp.push(sp);
+                            } else {
+                                int_sp.push(sp);
+                            }
+                        }
+                    }
+                }
+                if n >= 250 {
+                    gy_n += 1;
+                    any = true;
+                    gy_cells.push(n as f64);
+                    let mp = psum / n as f64;
+                    let want_pos = hemi == 0;
+                    let ok = mp != 0.0 && (mp > 0.0) == want_pos;
+                    if ok {
+                        gy_ok += 1;
+                    }
+                    parts.push(format!(
+                        "{} {} {} cells ψ̄ {:+.2}",
+                        if hemi == 0 { "N" } else { "S" },
+                        if mp > 0.0 { "cw" } else { "ccw" },
+                        n,
+                        mp
+                    ));
+                }
+            }
+            if any {
+                gy_basins += 1;
+                gyre_lines.push(format!(
+                    "  seed {:>6} basin {} ({:.0} cells): {}",
+                    seed,
+                    bi_idx + 1,
+                    area,
+                    parts.join(" · ")
+                ));
+            }
+        }
+        let sp95 = quantile(&band_sp, 0.95);
+        let westx = {
+            let wi = quantile(&west_sp, 0.95);
+            let ii = quantile(&int_sp, 0.95);
+            if ii > 0.0 {
+                wi / ii
+            } else {
+                f64::NAN
+            }
+        };
+        let gy_cells_mean = if gy_cells.is_empty() {
+            0.0
+        } else {
+            gy_cells.iter().sum::<f64>() / gy_cells.len() as f64
+        };
+
+        // ---- current-coast temperature against the zonal mean (M41) ---
+        // The spec's yardstick verbatim: a coast the currents warm must
+        // run warmer than the coastal land of its own row, a coast they
+        // cool colder. Row-relative, because latitude is the stronger
+        // law by an order of magnitude; coastal-only, because interiors
+        // are a different climate entirely.
+        let heat = calliope::climate::current_bias(&water, &w.currents.v);
+        let mut coastal = vec![false; rows * cols];
+        let mut row_t = vec![0.0f64; rows];
+        let mut row_n = vec![0usize; rows];
+        for y in 0..rows {
+            for x in 0..cols {
+                if water[[y, x]] {
+                    continue;
+                }
+                let mut touches = false;
+                for dy in -1i64..=1 {
+                    for dx in -1i64..=1 {
+                        let yy = y as i64 + dy;
+                        let xx = x as i64 + dx;
+                        if yy < 0 || xx < 0 || yy >= rows as i64 || xx >= cols as i64 {
+                            continue;
+                        }
+                        if water[[yy as usize, xx as usize]] {
+                            touches = true;
+                        }
+                    }
+                }
+                if touches {
+                    coastal[y * cols + x] = true;
+                    row_t[y] += w.fields.tmean[[y, x]] as f64;
+                    row_n[y] += 1;
+                }
+            }
+        }
+        let (mut wsum, mut wn, mut csum, mut cn) = (0.0f64, 0usize, 0.0f64, 0usize);
+        for y in 0..rows {
+            if row_n[y] == 0 {
+                continue;
+            }
+            let rm = row_t[y] / row_n[y] as f64;
+            for x in 0..cols {
+                if !coastal[y * cols + x] {
+                    continue;
+                }
+                let d = w.fields.tmean[[y, x]] as f64 - rm;
+                let h = heat[[y, x]];
+                if h >= 0.5 {
+                    wsum += d;
+                    wn += 1;
+                } else if h <= -0.5 {
+                    csum += d;
+                    cn += 1;
+                }
+            }
+        }
+        let warm_d = if wn == 0 { f64::NAN } else { wsum / wn as f64 };
+        let cold_d = if cn == 0 { f64::NAN } else { csum / cn as f64 };
+
+        // ---- upwelling coverage (M47) ---------------------------------
+        let (mut coast_o, mut rich, mut stray) = (0usize, 0usize, 0usize);
+        let mut up_lats: Vec<f64> = Vec::new();
+        for y in 0..rows {
+            for x in 0..cols {
+                let u = w.fields.upwelling[[y, x]] as f64;
+                if !water[[y, x]] {
+                    if u > 0.0 {
+                        stray += 1;
+                    }
+                    continue;
+                }
+                let mut adj = false;
+                for dy in -1i64..=1 {
+                    for dx in -1i64..=1 {
+                        let yy = y as i64 + dy;
+                        let xx = x as i64 + dx;
+                        if yy < 0 || xx < 0 || yy >= rows as i64 || xx >= cols as i64 {
+                            continue;
+                        }
+                        if !water[[yy as usize, xx as usize]] {
+                            adj = true;
+                        }
+                    }
+                }
+                if !adj {
+                    if u > 0.0 {
+                        stray += 1;
+                    }
+                    continue;
+                }
+                coast_o += 1;
+                if w.fields.upwelling[[y, x]] >= calliope::climate::NUTRIENT_RICH {
+                    rich += 1;
+                    up_lats.push(lat_s(y).abs());
+                }
+            }
+        }
+        let up_share = rich as f64 / coast_o.max(1) as f64;
+        let up_lat = if up_lats.is_empty() {
+            f64::NAN
+        } else {
+            quantile(&up_lats, 0.5)
+        };
+
+        // ---- sea-lane seasonality spread (M37/M48) --------------------
+        // Every sea-touching lane's year, read through the very law the
+        // ledger applies: a shut month carries nothing, an open one
+        // carries `season_mult`. The spread (p90 − p10 of per-lane
+        // swing) is the spec's own metric — a world whose lanes all
+        // swing alike has no calendar worth sailing by.
+        let sea_lanes: Vec<&calliope::trade::Route> =
+            w.routes.iter().filter(|r| r.sea > 0.0).collect();
+        let mut swings: Vec<f64> = Vec::new();
+        let mut seasonal = 0usize;
+        for r in &sea_lanes {
+            let (mut lo, mut hi) = (f64::MAX, 0.0f64);
+            for m in 0..12i64 {
+                let mult = if r.closed >> (m as usize) & 1 == 1 {
+                    0.0
+                } else {
+                    calliope::trade::season_mult(r.season, m)
+                };
+                lo = lo.min(mult);
+                hi = hi.max(mult);
+            }
+            let sw = if hi > 0.0 { 100.0 * (1.0 - lo / hi) } else { 100.0 };
+            swings.push(sw);
+            if r.closed != 0 || r.season.abs() >= calliope::trade::MONSOON_LANE {
+                seasonal += 1;
+            }
+        }
+        let seas_share = 100.0 * seasonal as f64 / sea_lanes.len().max(1) as f64;
+        let swing_spread = if swings.is_empty() {
+            0.0
+        } else {
+            quantile(&swings, 0.9) - quantile(&swings, 0.1)
+        };
+        let swing_p50 = if swings.is_empty() { 0.0 } else { quantile(&swings, 0.5) };
+
+        println!();
+        println!(
+            " seed {} — {} basins · {} gyres ({} earthly) · mean {:.0} cells/gyre · speed p95 {:.2} · west {:.1}×",
+            seed, gy_basins, gy_n, gy_ok, gy_cells_mean, sp95, westx
+        );
+        println!(
+            "   coasts: warm rims {:+.2}°C ({} cells) · cold rims {:+.2}°C ({}) against their own row's coast",
+            warm_d, wn, cold_d, cn
+        );
+        println!(
+            "   upwelling: {} of {} coastal-ocean cells nutrient-rich ({}) · median |lat| {:.0}° · {} stray off-coast",
+            rich, coast_o, pct(up_share), up_lat, stray
+        );
+        println!(
+            "   lanes: {} sea-touching · {} seasonal ({:.0}%) · swing p50 {:.0}% · spread p90−p10 {:.0}pp",
+            sea_lanes.len(), seasonal, seas_share, swing_p50, swing_spread
+        );
+
+        rows_out.push(OceanRow {
+            seed,
+            basins: gy_basins,
+            gyres: gy_n,
+            earthly: gy_ok,
+            gyre_cells: gy_cells_mean,
+            sp95,
+            westx,
+            warm_d,
+            cold_d,
+            warm_n: wn,
+            cold_n: cn,
+            up_share,
+            up_lat,
+            sea_lanes: sea_lanes.len(),
+            seasonal,
+            seas_share,
+            swing_spread,
+            swing_p50,
+        });
+    }
+
+    println!();
+    println!("gyre roll (subtropical band 10–40°, ≥250 cells):");
+    for l in &gyre_lines {
+        println!("{}", l);
+    }
+
+    println!();
+    println!(
+        " {:>6} {:>7} {:>6} {:>8} {:>8} {:>7} {:>8} {:>8} {:>7} {:>8} {:>7} {:>8} {:>8}",
+        "seed", "basins", "gyres", "cells/g", "sp p95", "west×", "warm ΔT", "cold ΔT", "upwell", "seasonal", "seas%", "swing50", "spread"
+    );
+    for r in &rows_out {
+        println!(
+            " {:>6} {:>7} {:>6} {:>8.0} {:>8.2} {:>6.1}× {:>7.2}C {:>7.2}C {:>7} {:>8} {:>6.0}% {:>7.0}% {:>6.0}pp",
+            r.seed, r.basins, r.gyres, r.gyre_cells, r.sp95, r.westx,
+            r.warm_d, r.cold_d, pct(r.up_share), r.seasonal, r.seas_share, r.swing_p50, r.swing_spread
+        );
+    }
+
+    let mean = |f: &dyn Fn(&OceanRow) -> f64| -> f64 {
+        let v: Vec<f64> = rows_out.iter().map(f).filter(|x| x.is_finite()).collect();
+        if v.is_empty() {
+            f64::NAN
+        } else {
+            v.iter().sum::<f64>() / v.len() as f64
+        }
+    };
+    let m_basins = mean(&|r: &OceanRow| r.basins as f64);
+    let m_cells = mean(&|r: &OceanRow| r.gyre_cells);
+    let m_sp95 = mean(&|r: &OceanRow| r.sp95);
+    let m_west = mean(&|r: &OceanRow| r.westx);
+    let m_warm = mean(&|r: &OceanRow| r.warm_d);
+    let m_cold = mean(&|r: &OceanRow| r.cold_d);
+    let m_up = mean(&|r: &OceanRow| r.up_share);
+    let m_uplat = mean(&|r: &OceanRow| r.up_lat);
+    let m_seas = mean(&|r: &OceanRow| r.seas_share);
+    let m_spread = mean(&|r: &OceanRow| r.swing_spread);
+
+    let gy_total: usize = rows_out.iter().map(|r| r.gyres).sum();
+    let gy_earthly: usize = rows_out.iter().map(|r| r.earthly).sum();
+    let no_gyre = rows_out.iter().filter(|r| r.gyres == 0).count();
+    let no_lanes = rows_out.iter().filter(|r| r.sea_lanes == 0).count();
+    let sign_ok = rows_out
+        .iter()
+        .all(|r| !(r.warm_d.is_finite() && r.cold_d.is_finite()) || r.warm_d > r.cold_d);
+    let sampled = rows_out
+        .iter()
+        .all(|r| r.warm_n >= 50 && r.cold_n >= 50);
+
+    let mut c = Checks::default();
+    c.must(
+        "every seed carries a gyre",
+        no_gyre == 0,
+        format!("{} seeds without", no_gyre),
+        "M49 gate: an ocean with no circulation is an unsolved basin, not a calm world",
+    );
+    c.must(
+        "gyre sense matches hemisphere",
+        gy_total > 0 && gy_earthly == gy_total,
+        format!("{}/{}", gy_earthly, gy_total),
+        "M49/M40 gate: clockwise north · counterclockwise south, every basin in the sweep",
+    );
+    c.band("gyre basins per seed", m_basins, format!("{:.1}", m_basins));
+    c.band("gyre cells per gyre", m_cells, format!("{:.0}", m_cells));
+    c.band("surface current speed p95", m_sp95, format!("{:.3}", m_sp95));
+    c.band("western boundary intensification", m_west, format!("{:.1}×", m_west));
+    c.band("current-coast warm anomaly", m_warm, format!("{:+.2}°C", m_warm));
+    c.band("current-coast cold anomaly", m_cold, format!("{:+.2}°C", m_cold));
+    c.must(
+        "warm coasts outrun cold coasts",
+        sign_ok,
+        format!("{:+.2} vs {:+.2}", m_warm, m_cold),
+        "M49 gate: the two rims must sit on opposite sides of their own latitude's coast, every seed",
+    );
+    c.want(
+        "both rims are sampled everywhere",
+        sampled,
+        format!("min warm {} · min cold {}",
+            rows_out.iter().map(|r| r.warm_n).min().unwrap_or(0),
+            rows_out.iter().map(|r| r.cold_n).min().unwrap_or(0)),
+        "≥50 coastal cells per rim per seed, else the anomaly is one bay's opinion",
+    );
+    c.band_as("upwelling coverage (ocean lane)", "upwelling share of coastline", m_up, pct(m_up));
+    c.band("upwelling median latitude", m_uplat, format!("{:.0}°", m_uplat));
+    c.must(
+        "every seed sails a sea lane",
+        no_lanes == 0,
+        format!("{} seeds without", no_lanes),
+        "M49 gate: the seasonality bands need water traffic to measure",
+    );
+    c.band("seasonal sea-lane share", m_seas, format!("{:.0}%", m_seas));
+    c.band("sea-lane seasonality spread", m_spread, format!("{:.0}pp", m_spread));
+    c.print();
+}
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     let cmd = a.get(1).map(|s| s.as_str()).unwrap_or("help");
@@ -6675,6 +7096,14 @@ fn main() {
         "telling" => cmd_telling(num(2, 12345), sized(3, 512), num(4, 150) as usize),
         "determinism" => cmd_determinism(num(2, 12345), sized(3, 512), num(4, 120)),
         "bench" => cmd_bench(),
+        "ocean" => {
+            let size = sized(2, 512);
+            let mut seeds: Vec<i64> = a.get(3..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 31337, 90210, 555];
+            }
+            cmd_ocean(size, seeds);
+        }
         "systems" => cmd_systems(num(2, 12345), sized(3, 512), num(4, 150) as usize),
         "perf" => {
             let size = sized(2, 512);
@@ -6783,7 +7212,7 @@ fn main() {
             cmd_patina(size, years, seeds);
         }
         _ => {
-            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems> [args]");
+            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean> [args]");
             println!("  terrain|climate|hydro|resources  <seed=12345> <size=512>");
             println!("  civ <seed> <size> <years=120> · economy <seed> <size> <years=80> · telling <seed> <size> <years=150>");
             println!("  determinism <seed> <size> <months=120> · bench · perf <size=512> <seeds…> · sweep <size> <years> <seeds…>");
