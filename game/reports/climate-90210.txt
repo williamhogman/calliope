@@ -2,41 +2,43 @@
  CALLIOPE DIAGNOSTIC · CLIMATE                      seed 90210 · 640x512
 ========================================================================
 biome shares of land:
-  Desert                     20340  17.5%
-  Savanna                    22025  18.9%
-  Tropical Rainforest        12194  10.5%
-  Grasslands                 14487  12.4%
-  Woodlands                   7862  6.7%
-  Seasonal Rainforest         1163  1.0%
-  Temperate Rainforest        1704  1.5%
+  Desert                     20338  17.4%
+  Savanna                    22030  18.9%
+  Tropical Rainforest        12241  10.5%
+  Grasslands                 14509  12.4%
+  Woodlands                   7876  6.8%
+  Seasonal Rainforest         1181  1.0%
+  Temperate Rainforest        1697  1.5%
   Boreal Forest                580  0.5%
-  Tundra                     20019  17.2%
-  Ice                        11185  9.6%
-  Wet Tundra                  3291  2.8%
+  Tundra                     20011  17.2%
+  Ice                        11187  9.6%
+  Wet Tundra                  3301  2.8%
 land temperature °C: mean 6.6 · p10 -9.8 · p50 7.2 · p90 20.9
-land precipitation mm/yr: mean 790 · p10 163 · p50 381 · p90 2020
+land precipitation mm/yr: mean 790 · p10 163 · p50 382 · p90 2022
 seasonal swing |amp| °C: mean 5.8 · p90 9.5
-land freezing in deep winter: 47.9%
+land freezing in deep winter: 47.8%
 latitude bands (land only):
   band          cells   T mean    P mean  dominant biome
   90°–60°       13332    -8.8C     288mm  Tundra
-  60°–30°       23416     4.6C     679mm  Grasslands
-  30°–0°        21812    18.0C    1238mm  Savanna
-  0°–30°        20917    17.7C    1229mm  Savanna
-  30°–60°       21875     6.4C     710mm  Desert
-  60°–90°       15147    -8.2C     271mm  Tundra
+  60°–30°       23420     4.6C     679mm  Grasslands
+  30°–0°        21819    18.0C    1239mm  Savanna
+  0°–30°        20954    17.7C    1228mm  Savanna
+  30°–60°       21902     6.4C     710mm  Desert
+  60°–90°       15173    -8.2C     271mm  Tundra
 monsoon |amp| of annual rain: tropics 0.30 · extratropics 0.00
 
-sea ice (M37): 14.7% of ocean area ever frozen (39.4% of cells) · perennial 63742 cells · seasonal fringe 19456 cells · pack reaches 52°
+sea ice (M37): 14.7% of ocean area ever frozen (39.4% of cells) · perennial 63734 cells · seasonal fringe 19460 cells · pack reaches 52°
 
-crop packages of the land: wheat 18.6% · rice 4.8% · maize 12.3% · pastoral 35.2% · wildland 29.1%
+crop packages of the land: wheat 18.7% · rice 4.8% · maize 12.3% · pastoral 35.2% · wildland 29.1%
 
-current-aware rain (M42): sub-polar cold-rim land 676 cells at 0.52× its aspect-matched coast · warm-rim 813 cells at 1.09×
-  by wind belt: cold trades 1.00× (0) · westerlies 0.52× (676) · polar 1.30× (744)
-  by wind belt: warm trades 1.11× (256) · westerlies 1.06× (557) · polar 1.00× (0)
+current-aware rain (M42): sub-polar cold-rim land 678 cells at 0.53× its aspect-matched coast · warm-rim 814 cells at 1.09×
+  by wind belt: cold trades 1.00× (0) · westerlies 0.53× (678) · polar 1.30× (720)
+  by wind belt: warm trades 1.11× (257) · westerlies 1.06× (557) · polar 1.00× (0)
+
+upwelling (M47): 280 of 4660 coastline cells nutrient-rich (6.0%) · index p50 0.00 · p90 0.18 · marked rims -0.14°C against their own latitude's coast
 
 ---- checks ----------------------------------------------------------
-[PASS] desert share of land                          17.5%   (sweet 12–28% · hard 6–38%)
+[PASS] desert share of land                          17.4%   (sweet 12–28% · hard 6–38%)
 [PASS] tundra+ice share of land                      29.6%   (sweet 5–30% · hard 1–45%)
 [WARN] forest share of land                          20.2%   (sweet 25–60% · hard 15–75%)
 [PASS] grass+savanna share of land                   31.3%   (sweet 10–45% · hard 4–60%)
@@ -45,12 +47,15 @@ current-aware rain (M42): sub-polar cold-rim land 676 cells at 0.52× its aspect
 [PASS] mean seasonal swing                           5.8°C   (sweet 4–14°C · hard 2–20°C)
 [PASS] tropical monsoon amplitude                     0.30   (sweet .12–.55 · hard .05–.85)
 [PASS] monsoon lives in the tropics           0.30 vs 0.00   (ITCZ march beats continental swing)
-[PASS] arable share of land                          35.7%   (M2.1: wheat+rice+maize belts cover the good land)
+[PASS] arable share of land                          35.8%   (M2.1: wheat+rice+maize belts cover the good land)
 [PASS] pastoral share of land                        35.2%   (M2.1: the dry steppe carries herds)
-[PASS] cold-rim rain suppression            0.52× (676 cells)   (sweet 0.25–0.80 · hard 0.10–0.95 (M42: sub-polar cold-rim coastal land against aspect-matched neutral coasts at its latitude — the Atacama law))
-[PASS] warm-rim rain boost                  1.09× (813 cells)   (sweet 1.02–2.20 · hard 0.98–3.50 (M42: sub-polar warm-rim coastal land against aspect-matched neutral coasts at its latitude — the Gulf-Stream law))
-[PASS] rice hugs the water                  rice 5557 vs wheat+maize 36075   (paddies are the exception, not the rule)
+[PASS] cold-rim rain suppression            0.53× (678 cells)   (sweet 0.25–0.80 · hard 0.10–0.95 (M42: sub-polar cold-rim coastal land against aspect-matched neutral coasts at its latitude — the Atacama law))
+[PASS] warm-rim rain boost                  1.09× (814 cells)   (sweet 1.02–2.20 · hard 0.98–3.50 (M42: sub-polar warm-rim coastal land against aspect-matched neutral coasts at its latitude — the Gulf-Stream law))
+[PASS] rice hugs the water                  rice 5593 vs wheat+maize 36104   (paddies are the exception, not the rule)
+[PASS] upwelling share of coastline                   6.0%   (sweet 3–10% · hard 1.5–15% (M47: nutrient-rich share of coastal ocean cells — Earth's eastern-boundary analogues))
+[PASS] upwelling keeps to the coast          0 stray cells   (M47: the scalar is a coastal reading — open ocean and land stay zero)
+[PASS] nutrient coasts run cold for their latitude -0.14°C vs own-row coast   (M47: marked rims sit below their row's coastal heat mean — the west-coast-desert analogue, latitude-controlled)
 [PASS] ever-frozen share of ocean area               14.7%   (M37 gate: pack ice real, but polar (Earth ~4–8%))
 [PASS] seasonal share of the pack                    23.4%   (M37 gate: a fringe that opens in summer)
 [PASS] pack ice keeps to the polar seas        reaches 52°   (M37: no icebound tropics — Earth's pack stays poleward of ~44°)
-CHECKS: 16 pass · 1 warn · 0 fail
+CHECKS: 19 pass · 1 warn · 0 fail

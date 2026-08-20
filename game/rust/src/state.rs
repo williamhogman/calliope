@@ -60,6 +60,11 @@ pub struct Fields {
     pub flow_amp: Array2<f32>,
     /// Strahler stream order, 0 off-river.
     pub strahler: Array2<u8>,
+    /// M47 — coastal upwelling index 0..1: offshore trades crossing the
+    /// coast seaward, amplified by cold-current adjacency. Nonzero only
+    /// on ocean cells touching land; solved at the dawn off the final
+    /// coastline. Era IV's fisheries will harvest it.
+    pub upwelling: Array2<f32>,
     /// Basement geology per cell (M18): 0 shield · 1 basin · 2 fold belt
     /// · 3 volcanic. Frozen at genesis, read by deposit placement (M19).
     pub rock: Array2<u8>,

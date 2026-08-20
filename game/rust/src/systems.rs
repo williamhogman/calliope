@@ -658,7 +658,7 @@ use crate::util::Band;
 pub const BANDS: &[Band] = &[
     Band { name: "512 generation time", sweet: (0.0, 3000.0), hard: (0.0, 8000.0), target: "sweet ≤3s · hard ≤8s (wasm ≈ 2× native)" },
     Band { name: "tick rate", sweet: (100.0, f64::INFINITY), hard: (25.0, f64::INFINITY), target: "sweet ≥100 mo/s · hard ≥25" },
-    Band { name: "pack bytes per cell", sweet: (0.0, 21.0), hard: (0.0, 24.0), target: "sweet ≤21 · hard ≤24 (8×u16 + 4×u8 = 20 B/cell + header)" },
+    Band { name: "pack bytes per cell", sweet: (0.0, 23.0), hard: (0.0, 26.0), target: "sweet ≤23 · hard ≤26 (9×u16 + 5×u8 = 23 B/cell + header — M47 added the upwelling lane)" },
     Band { name: "median tick payload", sweet: (0.0, 4096.0), hard: (0.0, 16384.0), target: "sweet ≤4 KB · hard ≤16 KB (E4: ship what changed)" },
     Band { name: "allocations per month", sweet: (0.0, 350.0), hard: (0.0, 1500.0), target: "sweet ≤350 · hard ≤1500 (baseline 183/mo — deterministic per seed, E5.10)" },
     // E10.1 — per-stage generation budgets at 512, native release ms,

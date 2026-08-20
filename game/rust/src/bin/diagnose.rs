@@ -146,6 +146,30 @@ fn land_mask(w: &World) -> Array2<bool> {
     w.fields.height.mapv(|h| h >= 0.0)
 }
 
+/// M48 split `Route::closed` into labeled closures; the censuses read
+/// their own label, so a monsoon burst never trips the winter law and
+/// the pack never trips the gale law.
+fn route_ice_mask(r: &calliope::trade::Route) -> u16 {
+    r.shut
+        .iter()
+        .find_map(|s| match s {
+            calliope::trade::SeasonalClosure::Ice(m) => Some(*m),
+            _ => None,
+        })
+        .unwrap_or(0)
+}
+
+/// M48 — the monsoon burst label, if any.
+fn route_monsoon_mask(r: &calliope::trade::Route) -> u16 {
+    r.shut
+        .iter()
+        .find_map(|s| match s {
+            calliope::trade::SeasonalClosure::Monsoon(m) => Some(*m),
+            _ => None,
+        })
+        .unwrap_or(0)
+}
+
 /// M37 — census the icebound lanes: (winter-closed, perennially shut,
 /// malformed masks). A well-formed closure is one contiguous winter arc,
 /// hemisphere-true for the water that actually froze along the way.
@@ -156,10 +180,11 @@ fn ice_route_stats(w: &World, frozen: &Array2<u16>) -> (usize, usize, usize) {
     let mut perennial = 0usize;
     let mut bad = 0usize;
     for r in &w.routes {
-        if r.closed == 0 {
+        let ice = route_ice_mask(r);
+        if ice == 0 {
             continue;
         }
-        if r.closed == seaice::MONTHS_MASK {
+        if ice == seaice::MONTHS_MASK {
             perennial += 1;
             continue;
         }
@@ -179,11 +204,30 @@ fn ice_route_stats(w: &World, frozen: &Array2<u16>) -> (usize, usize, usize) {
             }
         }
         let southern = n > 0 && sy / n as f64 >= rows as f64 / 2.0;
-        if n == 0 || !seaice::is_winter_arc(r.closed, southern) {
+        if n == 0 || !seaice::is_winter_arc(ice, southern) {
             bad += 1;
         }
     }
     (iced, perennial, bad)
+}
+
+/// M48 gate — the sailor's calendar as bytes: every seasonal lane's
+/// month-by-month state (shut flag + throughput multiplier) rendered
+/// and hashed, so a rerun that drifts anywhere in the year is caught
+/// by one number.
+fn calendar_hash(routes: &[calliope::trade::Route]) -> u64 {
+    let mut s = String::new();
+    for (ri, r) in routes.iter().enumerate() {
+        if r.closed == 0 && r.season == 0.0 {
+            continue;
+        }
+        for m in 0..12i64 {
+            let shut = r.closed >> (m as usize) & 1 == 1;
+            let mult = if shut { 0.0 } else { calliope::trade::season_mult(r.season, m) };
+            s.push_str(&format!("{ri}:{m}:{}:{:.6};", shut as u8, mult));
+        }
+    }
+    calliope::util::fnv1a64(s.as_bytes())
 }
 
 fn masked<T: Copy + Into<f64>>(a: &Array2<T>, m: &Array2<bool>) -> Vec<f64> {
@@ -281,6 +325,18 @@ fn hash_state(w: &World) -> u64 {
     s.push_str(&format!("G{:016x}\n", w.permafrost.hash()));
     // M40 — the circulation is state: the gyres hold still.
     s.push_str(&format!("C{:016x}\n", w.currents.hash()));
+    // M43 — the tide field is state: the shore's breath holds still.
+    s.push_str(&format!("T{:016x}\n", w.tides.hash()));
+    // M44 — the drift ledger is state: the grown shore holds still.
+    s.push_str(&format!("S{:016x}\n", w.coastform.hash()));
+    // M45 — the shelter field is state: the anchorage reading holds still.
+    {
+        let mut sb: Vec<u8> = Vec::with_capacity(w.shelter.len() * 4);
+        for v in w.shelter.iter() {
+            sb.extend_from_slice(&v.to_bits().to_le_bytes());
+        }
+        s.push_str(&format!("A{:016x}\n", calliope::util::fnv1a64(&sb)));
+    }
     s.push_str(&format!("t{}\n", w.month));
     bytes.extend_from_slice(s.as_bytes());
     fnv(&bytes)
@@ -378,6 +434,17 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
     let mut g40_basins: Vec<f64> = Vec::new();
     let mut g40_p95: Vec<f64> = Vec::new();
     let mut g40_wbx: Vec<f64> = Vec::new();
+    // M43 — tide aggregates: range by enclosure class, the flats'
+    // scaling laws, the estuary census.
+    let mut t_rows: Vec<String> = Vec::new();
+    let mut t_open: Vec<f64> = Vec::new();
+    let mut t_macro: Vec<f64> = Vec::new();
+    let mut t_enc: Vec<f64> = Vec::new();
+    let mut t_flats: Vec<f64> = Vec::new();
+    let mut t_est: Vec<f64> = Vec::new();
+    let mut t_amp: Vec<f64> = Vec::new();
+    let mut t_rel: Vec<f64> = Vec::new();
+
 
 
     println!();
@@ -960,6 +1027,140 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
             sp95,
             wbx
         ));
+
+        // M43 — the tide lane: range censused by enclosure class, the
+        // flats and estuaries counted, and the scaling laws read back:
+        // flats must sit on higher-range, lower-relief coast than the
+        // coast at large.
+        let td = &w.tides;
+        let (t_r, t_c) = td.range.dim();
+        let relief3 = |y: usize, x: usize| -> f64 {
+            let mut lo = f32::INFINITY;
+            let mut hi = f32::NEG_INFINITY;
+            for dy in -1isize..=1 {
+                for dx in -1isize..=1 {
+                    let ny = y as isize + dy;
+                    let nx = x as isize + dx;
+                    if ny < 0 || nx < 0 || ny >= t_r as isize || nx >= t_c as isize {
+                        continue;
+                    }
+                    let v = w.fields.height[[ny as usize, nx as usize]];
+                    lo = lo.min(v);
+                    hi = hi.max(v);
+                }
+            }
+            (hi - lo) as f64
+        };
+        let rng_near = |y: usize, x: usize| -> f64 {
+            let mut r = 0.0f64;
+            for dy in -1isize..=1 {
+                for dx in -1isize..=1 {
+                    let ny = y as isize + dy;
+                    let nx = x as isize + dx;
+                    if ny < 0 || nx < 0 || ny >= t_r as isize || nx >= t_c as isize {
+                        continue;
+                    }
+                    if td.class[[ny as usize, nx as usize]] == calliope::tides::OPEN {
+                        r = r.max(td.range[[ny as usize, nx as usize]] as f64);
+                    }
+                }
+            }
+            r
+        };
+        let mut coast_rng: Vec<f64> = Vec::new();
+        let mut coast_rel: Vec<f64> = Vec::new();
+        let mut enc_sum = 0.0f64;
+        let mut enc_n = 0usize;
+        let mut n_macro = 0usize;
+        for y in 0..t_r {
+            for x in 0..t_c {
+                match td.class[[y, x]] {
+                    calliope::tides::OPEN => {
+                        let mut coastal = false;
+                        for (ny, nx) in [
+                            (y.wrapping_sub(1), x),
+                            (y + 1, x),
+                            (y, x.wrapping_sub(1)),
+                            (y, x + 1),
+                        ] {
+                            if ny < t_r && nx < t_c && w.fields.height[[ny, nx]] >= 0.0 {
+                                coastal = true;
+                                break;
+                            }
+                        }
+                        if coastal {
+                            let r = td.range[[y, x]] as f64;
+                            coast_rng.push(r);
+                            coast_rel.push(relief3(y, x));
+                            if r >= 4.0 {
+                                n_macro += 1;
+                            }
+                        }
+                    }
+                    calliope::tides::ENCLOSED => {
+                        enc_sum += td.range[[y, x]] as f64;
+                        enc_n += 1;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut n_flats = 0usize;
+        let mut n_est = 0usize;
+        let mut fl_rng = 0.0f64;
+        let mut fl_rel = 0.0f64;
+        for y in 0..t_r {
+            for x in 0..t_c {
+                match w.landform[[y, x]] {
+                    calliope::landform::TIDEFLAT => {
+                        n_flats += 1;
+                        fl_rng += rng_near(y, x);
+                        fl_rel += relief3(y, x);
+                    }
+                    calliope::landform::ESTUARY => n_est += 1,
+                    _ => {}
+                }
+            }
+        }
+        let ncst = coast_rng.len().max(1) as f64;
+        let open_m = coast_rng.iter().sum::<f64>() / ncst;
+        let rel_m = (coast_rel.iter().sum::<f64>() / ncst).max(1e-9);
+        let mac = 100.0 * n_macro as f64 / ncst;
+        let flk = 1000.0 * n_flats as f64 / ncst;
+        let amp = if n_flats == 0 {
+            0.0
+        } else {
+            fl_rng / n_flats as f64 / open_m.max(1e-9)
+        };
+        let relf = if n_flats == 0 {
+            0.0
+        } else {
+            fl_rel / n_flats as f64 / rel_m
+        };
+        t_open.push(open_m);
+        t_macro.push(mac);
+        if enc_n > 0 {
+            t_enc.push(enc_sum / enc_n as f64);
+        }
+        t_flats.push(flk);
+        t_est.push(n_est as f64);
+        t_amp.push(amp);
+        t_rel.push(relf);
+        t_rows.push(format!(
+            " {:>6} {:>7.2} {:>7.1} {:>8} {:>7} {:>6} {:>7.2} {:>7.2}",
+            seed,
+            open_m,
+            mac,
+            if enc_n > 0 {
+                format!("{:.2}", enc_sum / enc_n as f64)
+            } else {
+                "-".into()
+            },
+            n_flats,
+            n_est,
+            amp,
+            relf
+        ));
     }
 
     println!();
@@ -1025,10 +1226,19 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
         println!("{r}");
     }
 
+    println!();
+    println!(
+        " {:>6} {:>7} {:>7} {:>8} {:>7} {:>6} {:>7} {:>7}",
+        "seed", "open m", "macro%", "encl m", "flats", "est", "amp x", "rel /"
+    );
+    for r in &t_rows {
+        println!("{r}");
+    }
+
     // Replay identity: the flagship seed run twice from scratch with
     // different chunkings must agree on the ledger byte-for-byte.
     let seed0 = seeds[0];
-    let hash_after = |chunk: i64| -> (u64, u64, u64) {
+    let hash_after = |chunk: i64| -> (u64, u64, u64, u64, u64) {
         let mut w = World::generate(seed0, size);
         let mut left = months;
         while left > 0 {
@@ -1036,9 +1246,9 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
             w.tick(step);
             left -= step;
         }
-        (w.seismic.hash(), w.ice.hash(), w.currents.hash())
+        (w.seismic.hash(), w.ice.hash(), w.currents.hash(), w.tides.hash(), w.coastform.hash())
     };
-    let ((ha, ia, ca), (hb, ib, cb)) = (hash_after(240), hash_after(12));
+    let ((ha, ia, ca, ta, oa), (hb, ib, cb, tb, ob)) = (hash_after(240), hash_after(12));
     println!();
     println!(" replay: seed {seed0} · {months} mo · chunk 240 => {ha:016x} · chunk 12 => {hb:016x}");
     println!(" native seismic hash (seed {seed0} · size {size} · {months} mo): {ha:016x}");
@@ -1161,6 +1371,40 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
         ca == cb,
         format!("{}", if ca == cb { "agree" } else { "DIVERGE" }),
         "M40 gate: same seed, two chunkings, one circulation",
+    );
+    // M43 — the tide checks: range banded by enclosure class, the
+    // flats' scaling laws (higher range, lower relief than the coast
+    // at large), and the replay identity.
+    c.band("open-coast tidal range m", mean(&t_open), format!("{:.2} m", mean(&t_open)));
+    c.band("macrotidal coast share %", mean(&t_macro), format!("{:.1} %", mean(&t_macro)));
+    if t_enc.is_empty() {
+        println!();
+        println!(" (no landlocked seas in this sweep — the enclosed-class band idles)");
+    } else {
+        c.band("enclosed-sea tidal range m", mean(&t_enc), format!("{:.2} m", mean(&t_enc)));
+        c.must(
+            "landlocked seas sit far below the open coast",
+            mean(&t_enc) < 0.5 * mean(&t_open),
+            format!("{:.2} m vs {:.2} m open", mean(&t_enc), mean(&t_open)),
+            "M43 gate: the Mediterranean law — no path in, no tide",
+        );
+    }
+    c.band("tidal flats per 1000 coast", mean(&t_flats), format!("{:.1}", mean(&t_flats)));
+    c.band("estuary mouths per seed", mean(&t_est), format!("{:.1}", mean(&t_est)));
+    c.band("flat-cell range amplification", mean(&t_amp), format!("{:.2}x", mean(&t_amp)));
+    c.band("flat-cell relief fraction", mean(&t_rel), format!("{:.2}", mean(&t_rel)));
+    c.must(
+        "tide field replays identical",
+        ta == tb,
+        format!("{}", if ta == tb { "agree" } else { "DIVERGE" }),
+        "M43 gate: same seed, two chunkings, one shore",
+    );
+    // M44 — the drift replay: the grown shore is one history.
+    c.must(
+        "drift ledger replays identical",
+        oa == ob,
+        format!("{}", if oa == ob { "agree" } else { "DIVERGE" }),
+        "M44 gate: same seed, two chunkings, one grown shore; joins hash_state",
     );
 
     c.print();
@@ -1620,18 +1864,98 @@ fn cmd_terrain(seed: i64, size: usize) {
             format!("{} tags against the offset sign", wrong_sign),
             "M26: raised only where the land rose, drowned only where the sea did",
         );
-        // M33 — the shipped grid carries the patterned-ground stamp,
-        // which runs after classify(); the regen leg must walk the
-        // same two steps or the compare reads its own omission.
+        // M33/M43 — the shipped grid carries the patterned-ground and
+        // tidal stamps, which run after classify(); the regen leg must
+        // walk the same three steps or the compare reads its own
+        // omission.
         let mut regen = calliope::landform::classify(hgt, sl, &w.ice);
         calliope::landform::stamp_patterned(&mut regen, &w.permafrost.pattern, hgt);
+        calliope::landform::stamp_tidal(&mut regen, &w.tides, hgt, &w.fields.flags);
         let purity = calliope::landform::hash(&regen) == calliope::landform::hash(lf);
         c.must(
             "landform grid regen byte-identical",
             purity,
             if purity { "identical".into() } else { "DIVERGED".into() },
-            "M26 gate: pure function of height + sea level (+ the M33 patterned stamp); joins hash_state",
+            "M26 gate: pure function of height + sea level (+ the M33 patterned and M43 tidal stamps); joins hash_state",
         );
+
+        // ---- longshore drift (M44) ----------------------------------
+        {
+            let cf = &w.coastform;
+            let mut n_spit = 0usize;
+            let mut n_bar = 0usize;
+            let mut n_lag = 0usize;
+            let mut misread = 0usize;
+            let mut coastal_water = 0usize;
+            for y in 0..gh {
+                for x in 0..gw {
+                    match cf.form[[y, x]] {
+                        calliope::coast::SPIT => {
+                            n_spit += 1;
+                            if hgt[[y, x]] < 0.0 { misread += 1; }
+                        }
+                        calliope::coast::BARRIER => {
+                            n_bar += 1;
+                            if hgt[[y, x]] < 0.0 { misread += 1; }
+                        }
+                        calliope::coast::LAGOON => {
+                            n_lag += 1;
+                            if hgt[[y, x]] >= 0.0 { misread += 1; }
+                        }
+                        _ => {}
+                    }
+                    if hgt[[y, x]] < 0.0 {
+                        let land_next = (y > 0 && hgt[[y - 1, x]] >= 0.0)
+                            || (y + 1 < gh && hgt[[y + 1, x]] >= 0.0)
+                            || (x > 0 && hgt[[y, x - 1]] >= 0.0)
+                            || (x + 1 < gw && hgt[[y, x + 1]] >= 0.0);
+                        if land_next {
+                            coastal_water += 1;
+                        }
+                    }
+                }
+            }
+            // chains per class: 8-connected components of the form grid
+            let chains = |class: u8| -> usize {
+                let mask = ndarray::Array2::from_shape_fn((gh, gw), |(y, x)| {
+                    cf.form[[y, x]] == class
+                });
+                calliope::ndimage::label(&mask, true).n
+            };
+            let spit_chains = chains(calliope::coast::SPIT);
+            let bar_chains = chains(calliope::coast::BARRIER);
+            println!(
+                "longshore drift (M44): spit cells {} in {} chains · barrier cells {} in {} chains · lagoon cells {} · deposits {}",
+                n_spit, spit_chains, n_bar, bar_chains, n_lag, cf.deposits.len()
+            );
+            let share = 100.0 * (n_spit + n_bar + n_lag) as f64 / coastal_water.max(1) as f64;
+            c.band("coastform share of coastal cells %", share, format!("{:.2} %", share));
+            c.band("spit chains per seed", spit_chains as f64, format!("{}", spit_chains));
+            c.band("barrier chains per seed", bar_chains as f64, format!("{}", bar_chains));
+            c.band("lagoon cells per seed", n_lag as f64, format!("{}", n_lag));
+            c.must(
+                "drift ground stands, lagoons drown (M44)",
+                misread == 0,
+                format!("{} cells against their class", misread),
+                "M44: spits and barriers are land, lagoons are water — the form grid never lies about the height field",
+            );
+            c.must(
+                "deposit ledger matches the grown ground (M44)",
+                cf.deposits.len() == n_spit + n_bar,
+                format!("{} deposits vs {} formed cells", cf.deposits.len(), n_spit + n_bar),
+                "M44: every deposited cell is a spit or barrier cell, and nothing else is",
+            );
+            let shallow = cf.deposits.iter().all(|&(_, _, b)| {
+                let d = f32::from_bits(b) as f64;
+                d < 0.0 && d > calliope::coast::BAR_FLOOR
+            });
+            c.must(
+                "deposits sit on the shelf (M44)",
+                shallow,
+                if shallow { "all shoreface".into() } else { "DEEP OR DRY".into() },
+                "M44: longshore sand only lands on shallow seabed (0 to −80 m — the bank the 4 km grid resolves)",
+            );
+        }
 
         // M29 — glacial relief: U-valleys, cirques and hangs by belt.
         {
@@ -2444,6 +2768,82 @@ fn cmd_climate(seed: i64, size: usize) {
         ratio(warm_p[1], warm_e[1]), warm_n[1], ratio(warm_p[2], warm_e[2]), warm_n[2], ratio(warm_p[3], warm_e[3]), warm_n[3]
     );
 
+    // ---- M47 upwelling: the nutrient coasts ------------------------------
+    // Coastline here = ocean cells with a land 8-neighbor — the exact
+    // census the field itself walks, so share is measured on the
+    // scalar's own domain. The analogue check rides the same heat field
+    // M42 judged, and controls the same way M42 did: raw marked-vs-
+    // unmarked means compare subtropical marks against sub-polar cold
+    // rims the latitude window rightly excluded — latitude is the
+    // confound. The law is row-relative: a marked coast must run cold
+    // *for its latitude* (heat below its own row's coastal mean —
+    // Humboldt against its zonal peers, not against Greenland).
+    let mut coast_n = 0usize;
+    let mut rich_n = 0usize;
+    let mut stray = 0usize;
+    let mut ups: Vec<f64> = Vec::new();
+    let mut row_heat = vec![0.0f64; rows];
+    let mut row_cn = vec![0usize; rows];
+    let mut coastal_g = vec![false; rows * cols];
+    for y in 0..rows {
+        for x in 0..cols {
+            let u = w.fields.upwelling[[y, x]] as f64;
+            let coastal = water_g[[y, x]] && {
+                let mut adj = false;
+                for dy in -1i64..=1 {
+                    for dx in -1i64..=1 {
+                        if dy == 0 && dx == 0 {
+                            continue;
+                        }
+                        let yy = y as i64 + dy;
+                        let xx = x as i64 + dx;
+                        if yy < 0 || xx < 0 || yy >= rows as i64 || xx >= cols as i64 {
+                            continue;
+                        }
+                        if !water_g[[yy as usize, xx as usize]] {
+                            adj = true;
+                        }
+                    }
+                }
+                adj
+            };
+            if !coastal {
+                if u > 0.0 {
+                    stray += 1;
+                }
+                continue;
+            }
+            coastal_g[y * cols + x] = true;
+            coast_n += 1;
+            ups.push(u);
+            row_heat[y] += heat[[y, x]];
+            row_cn[y] += 1;
+        }
+    }
+    // second pass: marked cells against their own row's coastal mean
+    let mut rel_sum = 0.0f64;
+    for y in 0..rows {
+        if row_cn[y] == 0 {
+            continue;
+        }
+        let rm = row_heat[y] / row_cn[y] as f64;
+        for x in 0..cols {
+            if coastal_g[y * cols + x]
+                && w.fields.upwelling[[y, x]] >= calliope::climate::NUTRIENT_RICH
+            {
+                rich_n += 1;
+                rel_sum += heat[[y, x]] - rm;
+            }
+        }
+    }
+    let up_share = rich_n as f64 / coast_n.max(1) as f64;
+    let rel = rel_sum / rich_n.max(1) as f64;
+    println!();
+    println!(
+        "upwelling (M47): {} of {} coastline cells nutrient-rich ({}) · index p50 {:.2} · p90 {:.2} · marked rims {:+.2}°C against their own latitude's coast",
+        rich_n, coast_n, pct(up_share), quantile(&ups, 0.5), quantile(&ups, 0.9), rel
+    );
+
     let mut c = Checks::default();
     c.band("desert share of land", desert, pct(desert));
     c.band("tundra+ice share of land", frozen, pct(frozen));
@@ -2459,6 +2859,21 @@ fn cmd_climate(seed: i64, size: usize) {
     c.band("cold-rim rain suppression", cold_ratio, format!("{:.2}× ({} cells)", cold_ratio, cold_n[0]));
     c.band("warm-rim rain boost", warm_ratio, format!("{:.2}× ({} cells)", warm_ratio, warm_n[0]));
     c.want("rice hugs the water", pk[2] == 0 || pk[2] < pk[1] + pk[3], format!("rice {} vs wheat+maize {}", pk[2], pk[1] + pk[3]), "paddies are the exception, not the rule");
+    c.band("upwelling share of coastline", up_share, pct(up_share));
+    c.must(
+        "upwelling keeps to the coast",
+        stray == 0,
+        format!("{} stray cells", stray),
+        "M47: the scalar is a coastal reading — open ocean and land stay zero",
+    );
+    if rich_n > 0 && rich_n < coast_n {
+        c.want(
+            "nutrient coasts run cold for their latitude",
+            rel < 0.0,
+            format!("{:+.2}°C vs own-row coast", rel),
+            "M47: marked rims sit below their row's coastal heat mean — the west-coast-desert analogue, latitude-controlled",
+        );
+    }
     c.band("ever-frozen share of ocean area", ice_area, pct(ice_area));
     if ice_ever > 0 {
         let fringe = ice_seasonal as f64 / ice_ever as f64;
@@ -2884,6 +3299,143 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     }
     c.must("routes exist", !w.routes.is_empty(), format!("{}", w.routes.len()), "a world without trade is broken");
     c.want("no unconnected towns", unconnected == 0, format!("{}", unconnected), "every town should reach the web of trade");
+    // ---- M45 harbour shelter: ports sit where the coast shelters ships
+    {
+        let mut shl: Vec<f64> = Vec::new();
+        let (rows, cols) = w.shelter.dim();
+        let mut inland_max = 0.0f32;
+        for y in 0..rows {
+            for x in 0..cols {
+                if w.coast[[y, x]] {
+                    shl.push(w.shelter[[y, x]] as f64);
+                } else if w.shelter[[y, x]] > inland_max {
+                    inland_max = w.shelter[[y, x]];
+                }
+            }
+        }
+        let q3 = calliope::util::quantile(&shl, 0.75);
+        let p90 = calliope::util::quantile(&shl, 0.90);
+        let coast_mean = shl.iter().sum::<f64>() / shl.len().max(1) as f64;
+        let harbours: Vec<_> = w.peoples.settlements.iter().filter(|s| s.port).collect();
+        let on_top = harbours
+            .iter()
+            .filter(|s| w.shelter[[s.y as usize, s.x as usize]] as f64 >= q3)
+            .count();
+        let conc = on_top as f64 / harbours.len().max(1) as f64;
+        let coastal_towns: Vec<f64> = w
+            .peoples
+            .settlements
+            .iter()
+            .filter(|s| s.coastal)
+            .map(|s| w.shelter[[s.y as usize, s.x as usize]] as f64)
+            .collect();
+        let town_mean =
+            coastal_towns.iter().sum::<f64>() / coastal_towns.len().max(1) as f64;
+        let lift = if coast_mean > 0.0 { town_mean / coast_mean } else { 0.0 };
+        println!();
+        println!(
+            "harbour shelter (M45): coastal band {} cells · mean {:.3} · q3 {:.3} · p90 {:.3}",
+            shl.len(),
+            coast_mean,
+            q3,
+            p90
+        );
+        println!(
+            "  ports on top-quartile shelter: {} of {} ({:.0}%) · coastal towns {} mean {:.3} ({:.2}× the band)",
+            on_top,
+            harbours.len(),
+            100.0 * conc,
+            coastal_towns.len(),
+            town_mean,
+            lift
+        );
+        // The gate measures SITING, not endowment (M45's intent is that
+        // "ports rise where geometry actually shelters ships"): a port is
+        // well-sited when it commands top-quartile water, or when it took
+        // the best water its own coast offers within 14 cells (56 km) —
+        // Kalantheia on the calmest cell of a smooth inland sea is
+        // perfectly sited; no sailor could have done better. The honest
+        // failure is the MISSED cohort: better water within reach, town
+        // on the bluff beside it. ε = 0.02 (wire precision of the score).
+        let mut took_best = 0usize;
+        let mut missed = 0usize;
+        let spacing2 = calliope::settlements::MIN_TOWN_SPACING_CELLS
+            * calliope::settlements::MIN_TOWN_SPACING_CELLS;
+        for s in &harbours {
+            let sh = w.shelter[[s.y as usize, s.x as usize]] as f64;
+            if sh >= q3 {
+                continue;
+            }
+            let (sy, sx) = (s.y as usize, s.x as usize);
+            let mut best = 0.0f64;
+            let r = 14i64;
+            for dy in -r..=r {
+                for dx in -r..=r {
+                    let (ny, nx) = (sy as i64 + dy, sx as i64 + dx);
+                    if ny < 0 || nx < 0 || ny >= rows as i64 || nx >= cols as i64 {
+                        continue;
+                    }
+                    // only TAKEABLE water counts against the siting: a
+                    // cell inside another town's spacing ring was never
+                    // this founder's to take — that water is commanded
+                    // by the neighbour's quay, not missed by this one.
+                    let taken = w.peoples.settlements.iter().any(|o| {
+                        o.id != s.id && {
+                            let ody = ny as f64 - o.y as f64;
+                            let odx = nx as f64 - o.x as f64;
+                            ody * ody + odx * odx < spacing2
+                        }
+                    });
+                    if taken {
+                        continue;
+                    }
+                    let v = w.shelter[[ny as usize, nx as usize]] as f64;
+                    if v > best {
+                        best = v;
+                    }
+                }
+            }
+            if sh + 0.02 >= best {
+                took_best += 1;
+            } else {
+                missed += 1;
+                println!(
+                    "    missed: {} sh={:.2} takeable-best={:.2} pop={:.0} at ({},{})",
+                    s.name, sh, best, s.pop, s.x, s.y
+                );
+            }
+        }
+        let well = on_top + took_best;
+        let sited = well as f64 / harbours.len().max(1) as f64;
+        println!(
+            "  siting: {} on top-quartile + {} took the best their coast offers = {} of {} well-sited ({:.0}%) · {} missed better water within 56 km",
+            on_top,
+            took_best,
+            well,
+            harbours.len(),
+            100.0 * sited,
+            missed
+        );
+        if !harbours.is_empty() {
+            c.band("port shelter concentration", sited, pct(sited));
+            c.must(
+                "ports favor sheltered water",
+                sited >= 0.70,
+                format!("{} of {} well-sited", well, harbours.len()),
+                "M45 gate: ≥70% of ports well-sited (top-quartile water, or the best their coast offers)",
+            );
+        }
+        c.band("coastal shelter p90", p90, format!("{:.3}", p90));
+        if !coastal_towns.is_empty() {
+            c.band("coastal town shelter lift", lift, format!("{:.2}×", lift));
+        }
+        c.must(
+            "shelter silent inland",
+            inland_max == 0.0,
+            format!("max off-coast {:.4}", inland_max),
+            "M45: exactly 0 off the coastal band — inland siting untouched",
+        );
+    }
     c.must("no template placeholders", log.placeholders == 0, format!("{}", log.placeholders), "no {P}/{S} may leak into chronicle text");
     c.must("no empty event texts", log.empties == 0, format!("{}", log.empties), "every event tells its story");
     c.must("settlement names unique", names.len() == w.peoples.settlements.len(), format!("{} names / {} towns", names.len(), w.peoples.settlements.len()), "the taken-set must hold");
@@ -3553,14 +4105,16 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     let mut w = World::generate(seed, size);
     header("ECONOMY", &format!("seed {} · {}x{} · {}y", seed, w.width, size, years));
 
-    // M37 gate — route costs stay deterministic across reruns: the
-    // founding web is snapshotted here and a second world, generated
-    // from the same seed after the run, must price it identically.
+    // M37/M48 gate — route costs and calendars stay deterministic
+    // across reruns: the founding web is snapshotted here and a second
+    // world, generated from the same seed after the run, must price
+    // and schedule it identically, month by month.
     let routes0: Vec<_> = w
         .routes
         .iter()
-        .map(|r| (r.a, r.b, r.cost, r.closed))
+        .map(|r| (r.a, r.b, r.cost, r.closed, r.season, r.shut.clone()))
         .collect();
+    let cal0 = calendar_hash(&w.routes);
 
     // M15.6 — conservation ledger baselines: what every seam and ground
     // held at the founding, so the books can be balanced at the end.
@@ -3693,10 +4247,11 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         );
     }
     // The reopening, shown on the books: twelve more months ticked
-    // through the market — flow must be zero exactly when the mask says
-    // shut, and alive the month the water opens.
+    // through the market — flow must be zero exactly when the union
+    // mask says shut — ice or gale — and alive the month the water
+    // opens (M37 + M48, one law on the ledger).
     let mut ice_mism = 0usize;
-    if iced + ice_perennial > 0 {
+    if w.routes.iter().any(|r| r.closed != 0) {
         let by_id = economy::sidx(&w.peoples.settlements);
         let mut prng = calliope::util::rng(seed + 3737);
         for m in 0..12i64 {
@@ -3716,14 +4271,163 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         }
     }
 
+    // ---- M46 the directed sea: every blue-water lane priced out and home ----
+    // Re-run the founding search on the coarse grid and price the same
+    // path in reverse: the difference is what the gyre and the trades
+    // are worth to a keel. Land lanes are excluded — carts feel no
+    // current — and the forward re-walk must equal the search's own
+    // cost exactly, or the edge law and the re-walk have diverged.
+    let sname = |id: calliope::ids::SettlementId| {
+        w.peoples
+            .settlements
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| "?".into())
+    };
+    let tf = w.trade.f;
+    let spos = |id: calliope::ids::SettlementId| {
+        w.peoples
+            .settlements
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| (s.y as usize / tf, s.x as usize / tf))
+    };
+    // The spec's own metric: the with-current passage is `adv`% faster
+    // than its seed-matched against-current mirror — adv = 1 − out/home.
+    let mut splits: Vec<(f64, f64, f64, calliope::ids::SettlementId, calliope::ids::SettlementId)> = Vec::new();
+    let mut rewalk_bad = 0usize;
+    for r in w.routes.iter().filter(|r| r.sea > 0.5) {
+        let (Some(start), Some(goal)) = (spos(r.a), spos(r.b)) else { continue };
+        if let Some((path, fwd)) = calliope::trade::astar(&w.trade, start, goal) {
+            let re_f = calliope::trade::path_cost(&w.trade, &path, false);
+            if (re_f - fwd).abs() > 1e-9 * fwd.max(1.0) {
+                rewalk_bad += 1;
+            }
+            let rev = calliope::trade::path_cost(&w.trade, &path, true);
+            let hi = fwd.max(rev);
+            if hi > 0.0 {
+                let adv = 100.0 * (1.0 - fwd.min(rev) / hi);
+                splits.push((adv, fwd, rev, r.a, r.b));
+            }
+        }
+    }
+    splits.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    let dir_alive = splits.iter().filter(|s| s.0 >= 2.0).count();
+    let dir_best = splits.first().map(|s| s.0).unwrap_or(0.0);
+    let dir_share = if splits.is_empty() { 0.0 } else { 100.0 * dir_alive as f64 / splits.len() as f64 };
+    println!();
+    println!(
+        "the directed sea (M46): {} blue-water lanes · {} sail ≥2% faster one way ({:.0}%) · best mirror advantage {:.1}%",
+        splits.len(), dir_alive, dir_share, dir_best
+    );
+    for (sp, fwd, rev, a, b) in splits.iter().take(3) {
+        println!(
+            "  {} — {} · out {:.1} · home {:.1} · with-current {:.1}% faster",
+            sname(*a), sname(*b), fwd.min(*rev), fwd.max(*rev), sp
+        );
+    }
+    // The field the lanes sail through: coarse current speeds over the
+    // open cells, and the becalmed rows. If the splits look thin, this
+    // line says whether the ocean or the gain is at fault.
+    {
+        let mut spd: Vec<f64> = Vec::new();
+        for ((y, x), &o) in w.trade.open.indexed_iter() {
+            if o {
+                spd.push(w.trade.cu[[y, x]].hypot(w.trade.cv[[y, x]]));
+            }
+        }
+        spd.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let q = |p: f64| spd[((spd.len() - 1) as f64 * p) as usize];
+        let becalmed_rows = w.trade.becalmed.iter().filter(|&&b| b).count();
+        if !spd.is_empty() {
+            println!(
+                "  the field: open cells {} · |current| p50 {:.3} · p90 {:.3} · max {:.3} · becalmed rows {} of {}",
+                spd.len(), q(0.5), q(0.9), spd[spd.len() - 1], becalmed_rows, w.trade.becalmed.len()
+            );
+        }
+    }
+
+    // ---- M48 the sailor's calendar: the monsoon lanes and their year ----
+    let m_lanes: Vec<&calliope::trade::Route> = w
+        .routes
+        .iter()
+        .filter(|r| r.season.abs() >= calliope::trade::MONSOON_LANE)
+        .collect();
+    let m_shut = w.routes.iter().filter(|r| route_monsoon_mask(r) != 0).count();
+    // A burst is well-formed when it sits inside the union of the two
+    // arcs the law can emit — three months around either monsoon height.
+    let arc_ok = calliope::trade::monsoon_burst_mask(1.0) | calliope::trade::monsoon_burst_mask(-1.0);
+    let m_bad = w
+        .routes
+        .iter()
+        .filter(|r| {
+            let m = route_monsoon_mask(r);
+            m != 0 && (m & !arc_ok) != 0
+        })
+        .count();
+    // The spec's own metric: throughput swing between the year's peak
+    // and its floor, through the same law the ledger applies (closure
+    // months carry exactly nothing).
+    let mut swings: Vec<f64> = Vec::new();
+    for r in &m_lanes {
+        let (mut lo, mut hi) = (f64::MAX, 0.0f64);
+        for m in 0..12i64 {
+            let mult = if r.closed >> (m as usize) & 1 == 1 {
+                0.0
+            } else {
+                calliope::trade::season_mult(r.season, m)
+            };
+            lo = lo.min(mult);
+            hi = hi.max(mult);
+        }
+        if hi > 0.0 {
+            swings.push(100.0 * (1.0 - lo / hi));
+        }
+    }
+    let swing_mean = if swings.is_empty() { 0.0 } else { swings.iter().sum::<f64>() / swings.len() as f64 };
+    let swing_best = swings.iter().cloned().fold(0.0f64, f64::max);
+    let m_share = if sea_touch == 0 { 0.0 } else { 100.0 * m_lanes.len() as f64 / sea_touch as f64 };
+    println!();
+    println!(
+        "the sailor's calendar (M48): {} monsoon lanes of {} sea-touching ({:.0}%) · {} shut in the burst · {} malformed arcs · swing mean {:.0}% best {:.0}%",
+        m_lanes.len(), sea_touch, m_share, m_shut, m_bad, swing_mean, swing_best
+    );
+    if let Some(r) = w
+        .routes
+        .iter()
+        .filter(|r| route_monsoon_mask(r) != 0)
+        .max_by_key(|r| (route_monsoon_mask(r).count_ones(), (r.season.abs() * 100.0) as i64))
+    {
+        let mm = route_monsoon_mask(r);
+        let cal: String = (0..12).map(|m| if mm >> m & 1 == 1 { '■' } else { '·' }).collect();
+        println!(
+            "  hardest gale lane: {} — {} · burst [{}] · season {:+.2}",
+            sname(r.a), sname(r.b), cal, r.season
+        );
+    }
+    // The sea the calendar reads: how much monsoon water the grid holds.
+    {
+        let mut mv: Vec<f64> = w.trade.mons.iter().map(|&v| (v as f64).abs()).filter(|&v| v > 0.0).collect();
+        mv.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        if !mv.is_empty() {
+            let q = |p: f64| mv[((mv.len() - 1) as f64 * p) as usize];
+            println!(
+                "  the field: monsoon sea cells {} · |lean| p50 {:.2} · p90 {:.2} · max {:.2} · gale threshold {:.2}",
+                mv.len(), q(0.5), q(0.9), mv[mv.len() - 1], calliope::trade::MONSOON_GALE
+            );
+        }
+    }
+
     // M37 — the rerun: same seed, second world, same founding web.
     let w2 = World::generate(seed, size);
     let routes1: Vec<_> = w2
         .routes
         .iter()
-        .map(|r| (r.a, r.b, r.cost, r.closed))
+        .map(|r| (r.a, r.b, r.cost, r.closed, r.season, r.shut.clone()))
         .collect();
     let det_ok = routes0 == routes1;
+    let cal1 = calendar_hash(&w2.routes);
     drop(w2);
 
     let finite_ok = w.economy.market.iter_some().all(|(_, p)| p.is_finite()) && wealth.iter().all(|v| v.is_finite());
@@ -3748,13 +4452,41 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         "M37 gate: closure is a single hemisphere-true season",
     );
     c.must(
-        "the ledger obeys the ice",
+        "the ledger obeys the calendar",
         ice_mism == 0,
         format!("{} mismatched route-months", ice_mism),
-        "M37 gate: flow zero when shut, alive when the water opens",
+        "M37/M48 gate: flow zero when shut — ice or gale — alive when the water opens",
+    );
+    if m_lanes.is_empty() {
+        println!(" (no monsoon lanes in this world — the calendar bands idle)");
+    } else {
+        c.band("monsoon lane share", m_share, format!("{:.0}%", m_share));
+        c.band("monsoon throughput swing", swing_mean, format!("{:.0}%", swing_mean));
+    }
+    c.must(
+        "monsoon closures are burst arcs",
+        m_bad == 0,
+        format!("{} malformed of {}", m_bad, m_shut),
+        "M48 gate: the gale season is the wet monsoon's height, nothing else",
+    );
+    c.must(
+        "the sailing calendar replays byte-identically",
+        cal0 == cal1,
+        format!("{:016x}", cal0),
+        "M48 gate: month-by-month route state is a pure function of the seed",
     );
     c.must("prices finite", finite_ok, if finite_ok { "yes".into() } else { "NO".into() }, "no NaN in the market");
     c.must("treasuries sane", treasuries_ok, if treasuries_ok { "yes".into() } else { "NO".into() }, "≥0 and finite");
+    c.must(
+        "search and re-walk agree",
+        rewalk_bad == 0,
+        format!("{} divergent lanes", rewalk_bad),
+        "M46 gate: one edge law prices the search and the ledger",
+    );
+    if !splits.is_empty() {
+        c.band("sea-lane mirror advantage (best)", dir_best, format!("{:.1}%", dir_best));
+        c.band("directional lanes alive", dir_share, format!("{:.0}%", dir_share));
+    }
     if years >= 60 {
         c.want("strikes moved markets", strikes >= 1, format!("{}", strikes), "discovery shocks should fire");
     }
@@ -4797,6 +5529,9 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         /// M37 — icebound lanes (winter-closed + perennial) and malformed masks
         iced: usize,
         ice_bad: usize,
+        /// M48 — lanes sailing the monsoon calendar, and malformed bursts
+        mons: usize,
+        mons_bad: usize,
     }
     let mut rows: Vec<Row> = Vec::new();
 
@@ -4836,6 +5571,18 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         let (ice_seasonal, ice_perennial, ice_bad) = ice_route_stats(&w, &fro);
         let iced = ice_seasonal + ice_perennial;
 
+        // M48 — the sailor's calendar on this seed's lanes
+        let arc_ok = calliope::trade::monsoon_burst_mask(1.0) | calliope::trade::monsoon_burst_mask(-1.0);
+        let mons_lanes = w.routes.iter().filter(|r| r.season.abs() >= calliope::trade::MONSOON_LANE).count();
+        let mons_bad = w
+            .routes
+            .iter()
+            .filter(|r| {
+                let m = route_monsoon_mask(r);
+                m != 0 && (m & !arc_ok) != 0
+            })
+            .count();
+
         // M2.3: per-seed rank-size slope (NaN when too few towns to judge)
         let mut pops: Vec<f64> = w.peoples.settlements.iter().map(|s| s.pop as f64).filter(|&p| p >= 120.0).collect();
         pops.sort_by(|a, b| b.partial_cmp(a).unwrap());
@@ -4874,13 +5621,16 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         if ice_bad > 0 {
             flags.push('I'); // malformed ice closure
         }
+        if mons_bad > 0 {
+            flags.push('M'); // malformed monsoon burst
+        }
         if flags.is_empty() {
             flags.push('·');
         }
 
         println!("{:>7} {:>6.1} {:>6.1} {:>6.1} {:>5.1} {:>5} {:>4} {:>2}→{:<2} {:>9} {:>6.2} {:>5} {:>4} {:>4} {:>4} {:>4} {:>4} {:>5.1} {:>6}  {}", seed, 100.0 * land_frac, 100.0 * desert, 100.0 * forest, 100.0 * mtn, li.n, w.deposits.len(), setts0, w.peoples.settlements.len(), pop1, growth, era, arts, log.strikes, log.camps, log.wars, w.routes.len(), evyr, gen_ms, flags);
 
-        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags, sundered: log.peoples_rose, iced, ice_bad });
+        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags, sundered: log.peoples_rose, iced, ice_bad, mons: mons_lanes, mons_bad });
     }
 
     let n = rows.len() as f64;
@@ -4893,10 +5643,14 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
     let m_evy = mean(&|r| r.evyr);
     println!("{:->7} {:>6.1} {:>6.1} {:>6.1} {:>5.1} {:>35} {:>6.2} {:>27.1}", "mean", 100.0 * m_land, 100.0 * m_des, 100.0 * m_for, 100.0 * m_mtn, "", m_grw, m_evy);
     println!();
-    println!("flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected · I malformed-ice");
+    println!("flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected · I malformed-ice · M malformed-monsoon");
     println!(
         "sea ice (M37): icebound lanes per seed: {}",
         rows.iter().map(|r| format!("{}:{}", r.seed, r.iced)).collect::<Vec<_>>().join(" · ")
+    );
+    println!(
+        "monsoon (M48): calendar lanes per seed: {}",
+        rows.iter().map(|r| format!("{}:{}", r.seed, r.mons)).collect::<Vec<_>>().join(" · ")
     );
 
     let camp_seeds = rows.iter().filter(|r| r.camps > 0).count();
@@ -4912,7 +5666,7 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
     c.band_as("mean mountain share", "mountain share of land (h>0.5)", m_mtn, pct(m_mtn));
     c.band_as("mean growth", "century growth", m_grw, format!("{:.2}×", m_grw));
     c.band_as("mean events/year", "events per year", m_evy, format!("{:.1}", m_evy));
-    c.must("all seeds clean of hard flags", clean == rows.len(), if worst_flags.is_empty() { "all clean".into() } else { worst_flags.join(" ") }, "no B/P/R/G/S/U flags on any seed");
+    c.must("all seeds clean of hard flags", clean == rows.len(), if worst_flags.is_empty() { "all clean".into() } else { worst_flags.join(" ") }, "no B/P/R/G/S/U/I/M flags on any seed");
     c.want("strikes on every seed", strike_seeds == rows.len(), format!("{}/{}", strike_seeds, rows.len()), "prospecting fires everywhere");
     let ice_bad_total: usize = rows.iter().map(|r| r.ice_bad).sum();
     let iced_seeds = rows.iter().filter(|r| r.iced > 0).count();
@@ -4927,6 +5681,20 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         iced_seeds >= 1,
         format!("{}/{} seeds", iced_seeds, rows.len()),
         "M37: some strait should freeze in a polar world",
+    );
+    let mons_bad_total: usize = rows.iter().map(|r| r.mons_bad).sum();
+    let mons_seeds = rows.iter().filter(|r| r.mons > 0).count();
+    c.must(
+        "monsoon closures well-formed on every seed",
+        mons_bad_total == 0,
+        format!("{} malformed", mons_bad_total),
+        "M48 gate: burst arcs only, hemisphere-true, across the sweep",
+    );
+    c.want(
+        "the monsoon calendar is sailed somewhere in the sweep",
+        mons_seeds >= 1,
+        format!("{}/{} seeds", mons_seeds, rows.len()),
+        "M48: some lane should ride the seasonal winds in a monsoon world",
     );
     if years >= 80 {
         c.want("mining camps emerge (≥60% of seeds)", camp_seeds * 10 >= rows.len() * 6, format!("{}/{}", camp_seeds, rows.len()), "ore pull creates colonies");
@@ -5162,6 +5930,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
                 "height" => &w.fields.height, "tmean" => &w.fields.tmean, "tamp" => &w.fields.tamp,
                 "precip" => &w.fields.precip, "pamp" => &w.fields.pamp, "discharge" => &w.fields.discharge,
                 "flow_amp" => &w.fields.flow_amp, "fertility" => &w.fields.fertility,
+                "upwelling" => &w.fields.upwelling,
                 other => unreachable!("unknown f32 field {other}"),
             }
         };
@@ -5992,6 +6761,16 @@ fn main() {
                 "table={:016x} cell={:016x} boundary={:016x} faults={:016x} since={:016x} log={:016x}",
                 pt, pc, pb, sf, ss, sl
             );
+        }
+        "coast-debug" => {
+            // M44 bisection line, native leg — same format as the wasm
+            // `coast_debug()` export. Coast is generation-time state, so
+            // months only matter for parity with the replay harness.
+            let seed = num(2, 777);
+            let size = sized(3, 512);
+            let w = World::generate(seed, size);
+            let (pos, bits, form) = w.coastform.debug_parts();
+            println!("pos={pos:016x} bits={bits:016x} form={form:016x}");
         }
         "era" => cmd_era(sized(2, 256), num(3, 60) as usize, num(4, 16) as usize, num(5, 12345)),
         "patina" => {

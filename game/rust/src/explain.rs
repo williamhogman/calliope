@@ -103,11 +103,38 @@ fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
         "l": format!("Crowding ({} / {} souls)", s.pop, k.round() as i64),
         "v": g5 - g4,
     }));
+    // M45 — the anchorage on the ledger: the shelter score the founding
+    // and the harbour dues both priced, read from the same field.
+    let shelter = world
+        .shelter
+        .get([y, x])
+        .copied()
+        .unwrap_or(0.0) as f64;
     if s.port {
-        terms.push(json!({ "l": "Harbour", "v": port }));
+        terms.push(json!({
+            "l": format!("Harbour (shelter {:.2})", shelter),
+            "v": port,
+        }));
     }
     if rebuild > 0.0 {
         terms.push(json!({ "l": "Rebuilding", "v": rebuild }));
+    }
+
+    // M47 — the nutrient shore on the ledger: the strongest upwelling
+    // within reach of the harbour, read from the same packed field the
+    // diagnostics band. Era IV's fisheries will price this line.
+    let mut upwell = 0.0f32;
+    for dy in -2i64..=2 {
+        for dx in -2i64..=2 {
+            let yy = y as i64 + dy;
+            let xx = x as i64 + dx;
+            if yy < 0 || xx < 0 {
+                continue;
+            }
+            if let Some(&u) = world.fields.upwelling.get([yy as usize, xx as usize]) {
+                upwell = upwell.max(u);
+            }
+        }
     }
 
     Some(json!({
@@ -117,6 +144,13 @@ fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
         "terms": terms,
         "total": total,
         "total_label": "Souls / month",
+        // M45 — site provenance: why the town stands where it stands.
+        "site": {
+            "shelter": crate::util::round2(shelter),
+            "upwelling": crate::util::round2(upwell as f64),
+            "coastal": s.coastal,
+            "river": s.river,
+        },
     }))
 }
 

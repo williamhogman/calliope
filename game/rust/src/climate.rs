@@ -163,6 +163,109 @@ pub fn current_bias(water: &Array2<bool>, cur_v: &Array2<f32>) -> Array2<f64> {
     a
 }
 
+// ------------------------------------------------------- M47 upwelling
+
+/// Weight of the offshore-wind term in the upwelling index.
+pub const UPWELL_WIND: f64 = 0.55;
+/// Weight of the cold-current-adjacency term (M41's heat anomaly).
+pub const UPWELL_COLD: f64 = 0.45;
+/// Latitude window: full credit equatorward of this |latitude| —
+/// Earth's eastern-boundary systems (Canary, Benguela, Humboldt,
+/// California) all live inside ~35°.
+pub const UPWELL_LAT_FULL: f64 = 35.0;
+/// …fading to nothing by here: polar offshore winds ride sea ice and
+/// light-starved water, not fisheries.
+pub const UPWELL_LAT_NONE: f64 = 60.0;
+/// The nutrient_rich mark: a coastal cell whose upwelling index clears
+/// this threshold is the honest ground Era IV's fisheries will harvest.
+/// Derived from the measured coastline share across the seed sweep so
+/// the marked fraction lands in the M47 gate band (3–10%).
+pub const NUTRIENT_RICH: f32 = 0.34;
+
+/// M47 — the upwelling index: 0..1 on ocean cells touching land, zero
+/// everywhere else. The wind field is zonal by construction
+/// (`currents::wind_stress`), so the honest Ekman proxy available is
+/// the wind component crossing the coast seaward — and only the
+/// **trades** mint it: Earth's eastern-boundary systems (Canary,
+/// Benguela, Humboldt, California) are all trade-driven subtropical
+/// west coasts. The westerlies' own offshore shores are the mid-latitude
+/// east coasts — Gulf-Stream country, the warm western-boundary rims —
+/// and marking those was measured to invert the analogue (marked rims
+/// ran +0.85°C over unmarked), so eastward stress contributes nothing.
+/// Cold-current adjacency (M41's anomaly, the same field that writes
+/// the Atacama rains) adds the Humboldt/Benguela signature, and a
+/// smoothstep latitude window keeps the polar easterlies from minting
+/// fisheries under the pack ice. Pure function of the ocean mask and
+/// the meridional current — raster order, no iteration-order hazards.
+pub fn upwelling(water: &Array2<bool>, cur_v: &Array2<f32>) -> Array2<f32> {
+    let (rows, cols) = water.dim();
+    let mut up = Array2::<f32>::zeros((rows, cols));
+    if rows < 8 || cols < 8 {
+        return up;
+    }
+    let nf = rows as f64;
+    let heat = current_bias(water, cur_v);
+    // the trades' own peak normalizes the wind term: they are the engine
+    let tau_max = crate::currents::TAU_TRADES;
+    for y in 0..rows {
+        let lat_abs = (-90.0 + y as f64 * 180.0 / (nf - 1.0)).abs();
+        let tau = crate::currents::wind_stress(lat_abs);
+        // algebraic smoothstep window — no transcendentals
+        let t = ((lat_abs - UPWELL_LAT_FULL) / (UPWELL_LAT_NONE - UPWELL_LAT_FULL))
+            .clamp(0.0, 1.0);
+        let lat_favor = 1.0 - t * t * (3.0 - 2.0 * t);
+        if lat_favor <= 0.0 {
+            continue;
+        }
+        for x in 0..cols {
+            if !water[[y, x]] {
+                continue;
+            }
+            // offshore normal from the 8-neighborhood land census
+            let (mut nx, mut ny) = (0.0f64, 0.0f64);
+            let mut nland = 0usize;
+            for dy in -1i64..=1 {
+                for dx in -1i64..=1 {
+                    if dy == 0 && dx == 0 {
+                        continue;
+                    }
+                    let yy = y as i64 + dy;
+                    let xx = x as i64 + dx;
+                    if yy < 0 || xx < 0 || yy >= rows as i64 || xx >= cols as i64 {
+                        continue;
+                    }
+                    if !water[[yy as usize, xx as usize]] {
+                        let len = (((dy * dy + dx * dx) as f64)).sqrt();
+                        nx -= dx as f64 / len;
+                        ny -= dy as f64 / len;
+                        nland += 1;
+                    }
+                }
+            }
+            if nland == 0 {
+                continue; // open ocean — the scalar is a coastal reading
+            }
+            let nl = (nx * nx + ny * ny).sqrt();
+            if nl < 1e-9 {
+                continue; // land on all sides cancels: no defined offshore
+            }
+            let nxu = nx / nl;
+            // wind crossing the coast seaward (zonal wind ⇒ dot with n̂x);
+            // easterly stress only — the westerlies mint no upwelling
+            let wind_off = if tau < 0.0 {
+                (tau * nxu / tau_max).max(0.0)
+            } else {
+                0.0
+            };
+            // cold rim adjacency, 0..1 (Humboldt over Gulf Stream)
+            let cold = (-heat[[y, x]]).max(0.0) / HEAT_ANOM_CAP;
+            let v = (UPWELL_WIND * wind_off + UPWELL_COLD * cold) * lat_favor;
+            up[[y, x]] = v as f32;
+        }
+    }
+    up
+}
+
 /// 0.35 (maritime) .. 1.0 (deep continental interior).
 /// E5.11 — computed once per generation in world.rs and shared by
 /// `temperature_amplitude` and `precipitation`; the EDT is the expensive
@@ -481,4 +584,5 @@ pub const BANDS: &[Band] = &[
     Band { name: "heat transport net bias", sweet: (0.0, 0.3), hard: (0.0, 0.6), target: "sweet ≤0.3 °C · hard ≤0.6 (M41: |world-mean bias| — advection redistributes heat, it must not mint it)" },
     Band { name: "cold-rim rain suppression", sweet: (0.25, 0.80), hard: (0.10, 0.95), target: "sweet 0.25–0.80 · hard 0.10–0.95 (M42: sub-polar cold-rim coastal land against aspect-matched neutral coasts at its latitude — the Atacama law)" },
     Band { name: "warm-rim rain boost", sweet: (1.02, 2.20), hard: (0.98, 3.50), target: "sweet 1.02–2.20 · hard 0.98–3.50 (M42: sub-polar warm-rim coastal land against aspect-matched neutral coasts at its latitude — the Gulf-Stream law)" },
+    Band { name: "upwelling share of coastline", sweet: (0.03, 0.10), hard: (0.015, 0.15), target: "sweet 3–10% · hard 1.5–15% (M47: nutrient-rich share of coastal ocean cells — Earth's eastern-boundary analogues)" },
 ];

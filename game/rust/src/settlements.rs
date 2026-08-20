@@ -222,6 +222,7 @@ pub fn found_settlements(
     discharge: &Array2<f32>,
     deposits: &[Deposit],
     fert: &Array2<f32>,
+    shelter: &Array2<f32>,
     rng: &mut Pcg64Mcg,
     taken: &mut HashSet<String>,
 ) -> Founded {
@@ -307,9 +308,29 @@ pub fn found_settlements(
             let b = biomes[[y, x]];
             // fresh water pulls hard but no longer vetoes: a sheltered
             // coast with good soil can found on wells and cisterns.
+            // M45 — the coast is no longer one flat bonus: mere adjacency
+            // pays a keep-alive 0.3 (was 1.8) and the sailor's reading of
+            // the anchorage pays on top — and the term is CONVEX
+            // (4.5·sh + 4.5·sh³), because the sailor's eye is: a great
+            // harbour (0.8) is worth far more than twice a passable
+            // roadstead (0.4). Measured, not guessed: with a linear term
+            // (tried at 4.5 and 6.5) the soil terms kept outbidding the
+            // cove and towns founded on the bluff beside 0.7+ water (the
+            // "missed" cohort of the M45 dump); the cubic tail is what
+            // makes Genoa take the rocky cove over the fertile strand.
+            //
+            // The delta's draw splits in two (Alexandria's law): half is
+            // soil — silt feeds a town wherever it stands — and half is
+            // gateway, worth carrying only where ships can actually lie,
+            // so the gateway half scales with the anchorage under it.
+            let sh = shelter[[y, x]] as f64;
+            let dv = delta[[y, x]];
             score[[y, x]] = 1.5 * (near_fresh[[y, x]] as u8 as f64)
-                + 1.8 * (coast[[y, x]] as u8 as f64)
-                + 2.8 * delta[[y, x]]
+                + 0.3 * (coast[[y, x]] as u8 as f64)
+                + 4.5 * sh
+                + 4.5 * sh * sh * sh
+                + 1.4 * dv
+                + 1.4 * dv * (0.2 + 1.6 * sh).min(1.6)
                 + food[[y, x]]
                 + 2.0 * comfort
                 + 2.6 * fert[[y, x]] as f64
@@ -455,6 +476,149 @@ pub fn colony_site(
     found
 }
 
+// --------------------------------------------------------------- shelter
+
+/// M45 — enclosure disc radius around the anchorage: 6 cells = 24 km,
+/// the water a harbor actually answers to.
+pub const SHELTER_R: i64 = 6;
+/// M45 — a working roadstead: the absolute shelter a town needs before
+/// it founds a blue-water shipping line (seed-independent — the bar is
+/// physics, not a quantile of this world's coast). Below it a coastal
+/// town is a fishing village: it feeds the coastal web by cart and
+/// lighters the odd cargo, but the far sea lanes are not its trade.
+pub const SHELTER_ROADSTEAD: f32 = 0.5;
+/// M45 — fetch ray cap: 48 cells = 192 km. Wave height grows with the
+/// wind's runway far past 96 km (a gale over open ocean builds seas no
+/// 40-km basin ever sees), so the cap must sit high enough that an
+/// inland sea reads calm *relative to* the strand facing true ocean —
+/// at 24 the two were nearly alike and the field flattened. Measured on
+/// the seed sweep: 48 spreads basin coasts cleanly above the open coast
+/// while pocket bays stay on top.
+pub const SHELTER_FETCH_CAP: i64 = 48;
+/// M45 — a lagoon anchorage is a harbor the coast built itself (M44).
+pub const SHELTER_LAGOON: f32 = 0.35;
+/// M45 — the classic hook: a spit at the shoulder breaks the swell.
+pub const SHELTER_SPIT: f32 = 0.15;
+
+/// M45 — harbor shelter: the coast read the way sailors read it.
+///
+/// Three voices, all pure arithmetic on the f32 height grid — no libm,
+/// because the score joins `hash_state` and must replay bit-identically
+/// across runtimes (the coast ledger's f32 law, M44):
+///
+///   · **enclosure** — land fraction in the R-disc around the anchorage:
+///     a straight shore reads ~0.5, a bay-head ~0.7, a headland ~0.3;
+///   · **fetch** — the *mean* open-water ray over 8 bearings (capped):
+///     the sea a storm can cross before it lands, averaged the way a
+///     sailor weighs an anchorage — one open bearing is a manageable
+///     risk, exposure on most bearings is a roadstead in name only
+///     (the max-ray form proved near-binary: any single open bearing
+///     zeroed the calm, and the field collapsed onto enclosure alone);
+///   · **the drift's own forms** — a LAGOON anchorage scores the bonus
+///     of a coast-built harbor, a SPIT shoulder the classic hook.
+///
+/// Every land cell in the coastal band gets a score in [0, 1]; open sea
+/// and inland cells are exactly 0.0, so inland site scoring is untouched
+/// to the bit (the M45 determinism leg). The anchorage is the *best* sea
+/// cell of the 5×5 — a harbor is built on the sheltered side of its
+/// headland, so a town reads the best water within reach of its quay,
+/// not the first cell a row-major scan happens upon. The reach stays
+/// tight (±2, 8 km): widening it smears the field, and a smeared field
+/// prices every beach like a harbour — the toll stops diverting cargo
+/// and the port flag stops meaning anything. The max over pure f32
+/// values is order-independent, so determinism holds.
+pub fn shelter_score(height: &Array2<f32>, form: &Array2<u8>) -> Array2<f32> {
+    let (rows, cols) = height.dim();
+    let sea = height.mapv(|h| h < 0.0);
+    let sea_adj = ndimage::binary_dilation(&sea, 2);
+    let mut out = Array2::<f32>::zeros((rows, cols));
+    let dirs: [(i64, i64); 8] =
+        [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)];
+    for y in 0..rows {
+        for x in 0..cols {
+            if sea[[y, x]] || !sea_adj[[y, x]] {
+                continue; // coastal-band land only
+            }
+            // every sea cell in the 5×5 is a candidate anchorage; the
+            // quay goes where the water is calmest
+            let mut water = 0.0f32;
+            for ady in -2i64..=2 {
+                for adx in -2i64..=2 {
+                    let (ay, ax) = (y as i64 + ady, x as i64 + adx);
+                    if ay < 0 || ax < 0 || ay >= rows as i64 || ax >= cols as i64 {
+                        continue;
+                    }
+                    let (ay, ax) = (ay as usize, ax as usize);
+                    if !sea[[ay, ax]] {
+                        continue;
+                    }
+                    // enclosure: land fraction in the disc at the anchorage —
+                    // off-map counts as open sea (the map edge shelters no one)
+                    let (mut land_n, mut tot) = (0i64, 0i64);
+                    for dy in -SHELTER_R..=SHELTER_R {
+                        for dx in -SHELTER_R..=SHELTER_R {
+                            if dy * dy + dx * dx > SHELTER_R * SHELTER_R {
+                                continue;
+                            }
+                            tot += 1;
+                            let (ny, nx) = (ay as i64 + dy, ax as i64 + dx);
+                            if ny >= 0
+                                && nx >= 0
+                                && ny < rows as i64
+                                && nx < cols as i64
+                                && !sea[[ny as usize, nx as usize]]
+                            {
+                                land_n += 1;
+                            }
+                        }
+                    }
+                    let landfrac = land_n as f32 / tot as f32;
+                    let enclose = ((landfrac - 0.35) / 0.40).clamp(0.0, 1.0);
+                    // fetch: mean open-water ray from the anchorage, 8 bearings
+                    let mut fetch_sum = 0i64;
+                    for (dy, dx) in dirs {
+                        let (mut cy, mut cx) = (ay as i64, ax as i64);
+                        let mut d = 0i64;
+                        while d < SHELTER_FETCH_CAP {
+                            cy += dy;
+                            cx += dx;
+                            if cy < 0 || cx < 0 || cy >= rows as i64 || cx >= cols as i64 {
+                                d = SHELTER_FETCH_CAP; // the edge is open ocean
+                                break;
+                            }
+                            if !sea[[cy as usize, cx as usize]] {
+                                break;
+                            }
+                            d += 1;
+                        }
+                        fetch_sum += d;
+                    }
+                    let calm = 1.0 - fetch_sum as f32 / (8.0 * SHELTER_FETCH_CAP as f32);
+                    water = water.max(0.45 * enclose + 0.45 * calm);
+                }
+            }
+            // the drift's forms within reach of the quay
+            let mut bonus = 0.0f32;
+            for dy in -2i64..=2 {
+                for dx in -2i64..=2 {
+                    let (ny, nx) = (y as i64 + dy, x as i64 + dx);
+                    if ny < 0 || nx < 0 || ny >= rows as i64 || nx >= cols as i64 {
+                        continue;
+                    }
+                    let f = form[[ny as usize, nx as usize]];
+                    if f == crate::coast::LAGOON {
+                        bonus = bonus.max(SHELTER_LAGOON);
+                    } else if f == crate::coast::SPIT {
+                        bonus = bonus.max(SHELTER_SPIT);
+                    }
+                }
+            }
+            out[[y, x]] = (water + bonus).clamp(0.0, 1.0);
+        }
+    }
+    out
+}
+
 // ---------------------------------------------------------------- bands
 
 use crate::util::Band;
@@ -465,4 +629,7 @@ pub const BANDS: &[Band] = &[
     Band { name: "rank-size slope (Zipf)", sweet: (-1.3, -0.8), hard: (-1.75, -0.5), target: "M2.3 gate: −1.3…−0.8" },
     Band { name: "median town spacing", sweet: (14.0, 48.0), hard: (8.0, 120.0), target: "M2.5: market-town band ~15–30 km in settled cores" },
     Band { name: "mean rank-size slope", sweet: (-1.3, -0.8), hard: (-1.9, -0.45), target: "M2.3 gate: Zipf holds across the sweep" },
+    Band { name: "port shelter concentration", sweet: (0.70, 1.0), hard: (0.55, 1.0), target: "M45 gate: ≥70% of ports well-sited — top-quartile water, or the best their coast offers" },
+    Band { name: "coastal shelter p90", sweet: (0.30, 0.95), hard: (0.15, 1.0), target: "M45: the field discriminates — bays and lagoons stand above the open strand" },
+    Band { name: "coastal town shelter lift", sweet: (1.2, 10.0), hard: (1.0, 25.0), target: "M45: founded coastal towns sit on better-than-average anchorages" },
 ];

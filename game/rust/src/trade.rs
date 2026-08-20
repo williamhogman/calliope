@@ -42,6 +42,93 @@ pub const RIVER_BARGE_COST: f64 = 1.1; // a navigable river is a highway
 pub const EMBARK_COST: f64 = 10.0; // cranes, porters and harbour dues
 pub const NAVIGABLE: f64 = 90.0; // discharge above which barges swim
 
+// M46 — the priced sea: blue water is not one price. A leg that rides
+// the gyre or runs downwind sails cheap; the same water fought the
+// other way is dear; and the becalmed convergence rows — where the
+// zonal wind profile crosses zero and the gyres meet — are slow on
+// every heading. Cabotage stays neutral: small craft row, tack and
+// anchor at dusk. Only open water feels the ocean move.
+/// The per-step cost A*'s straight-line heuristic plans with. No cell
+/// may ever price below it, or the search stops being optimal.
+pub const PLAN_COST: f64 = 0.3;
+/// Cost swing per unit of current alignment (the current index is
+/// calibrated so a typical world's p95 open-ocean speed ≈ 1.0; gyre
+/// limbs run well past it and saturate the admissibility clamp).
+pub const SAIL_CURRENT_GAIN: f64 = 0.55;
+/// Cost swing per unit of zonal wind-stress alignment (|τ| ≤ 1.0).
+pub const SAIL_WIND_GAIN: f64 = 0.25;
+/// The physics floor on the discount side — a following sea can at
+/// most double a ship's effective speed. Admissibility is enforced
+/// separately and exactly: each cell's multiplier is also clamped to
+/// `PLAN_COST / cost`, so the fastest water in the world never prices
+/// a step under what the heuristic planned (mixed coast/open blocks
+/// can sit near 0.45, where a fixed global floor would undercut it).
+pub const SAIL_MULT_FLOOR: f64 = 0.5;
+/// The ceiling on the dear side: beating dead upwind against a gyre
+/// limb — historically the passage nobody sailed; they waited for the
+/// season or went the long way round, which is exactly what a high
+/// ceiling makes A* do.
+pub const SAIL_MULT_CEIL: f64 = 2.6;
+/// |wind stress| below this marks a becalmed row — the doldrum band
+/// where the Sverdrup source flips sign and the gyres converge.
+pub const DOLDRUM_TAU: f64 = 0.12;
+/// Additive surcharge on becalmed open water, both directions: ships
+/// drift, whistle for wind, and pay for the waiting days.
+pub const DOLDRUM_PENALTY: f64 = 0.3;
+
+// M48 — the sailor's calendar: where the land's rain leans hard into
+// one half of the year (the monsoon lands, |pamp| high), the seas they
+// breathe over reverse their winds with the season. A lane on such
+// water carries a double-frequency year — both monsoon heights move
+// cargo, the turns of the wind becalm it — and the wet monsoon's burst
+// months shut the water outright, the way pack ice already shuts a
+// winter strait: nobody sails into the gale; they wait for the season.
+/// Along-coast smoothing of the land's monsoon lean before it walks
+/// out to sea (grid cells).
+pub const MONSOON_SIGMA: f64 = 4.0;
+/// The monsoon wind carries full strength this far offshore (cells)...
+pub const MONSOON_NEAR: f64 = 8.0;
+/// ...and has died entirely by here: far blue water answers to the
+/// gyres and the zonal bands, not to any coast's seasons (cells).
+pub const MONSOON_REACH: f64 = 24.0;
+/// |sea monsoon| above which the wet season's height is a gale season:
+/// the burst months close the water under it.
+pub const MONSOON_GALE: f64 = 0.40;
+/// COS12 alignment with the wet peak marking a burst month — 0.8 keeps
+/// the arc at three months around the height, hemisphere-true.
+pub const MONSOON_BURST: f64 = 0.8;
+/// Pro-rata annualized surcharge on gale-season water — the ice law's
+/// gentler sibling: a burst season is waited out, never iced in.
+pub const MONSOON_GALE_SURCHARGE: f64 = 0.5;
+/// Throughput swing per unit of lane exposure, double frequency: the
+/// two monsoon heights carry, the two turns of the wind lull.
+pub const MONSOON_TRADE_GAIN: f64 = 0.55;
+/// |route season| above which a lane sails the monsoon calendar.
+pub const MONSOON_LANE: f64 = 0.12;
+
+/// M48 — why a lane's water shuts, unified: the ice's winter arc and
+/// the monsoon's burst arc are one kind of fact — a month mask with a
+/// name — and any future season (storm coasts, flood closures) joins
+/// this enum instead of growing another ad-hoc field on `Route`.
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SeasonalClosure {
+    /// M37 — pack ice: bit m set = frozen shut in calendar month m.
+    #[serde(rename = "ice")]
+    Ice(u16),
+    /// M48 — the wet monsoon's burst months: the gale season.
+    #[serde(rename = "monsoon")]
+    Monsoon(u16),
+}
+
+impl SeasonalClosure {
+    pub fn months(&self) -> u16 {
+        match self {
+            SeasonalClosure::Ice(m) | SeasonalClosure::Monsoon(m) => *m,
+        }
+    }
+}
+
+
 #[derive(Serialize, Clone)]
 pub struct Route {
     pub a: SettlementId,
@@ -61,15 +148,29 @@ pub struct Route {
     /// the road stays on the map, drawn faded, a mark history left.
     #[serde(skip_serializing_if = "std::ops::Not::not", default)]
     pub old: bool,
-    /// M37 — the icebound season: bit m set = sea ice shuts this lane
-    /// in calendar month m. 0 for routes whose water never freezes.
+    /// The union of every seasonal closure below — the one mask the
+    /// ledger reads (M37 ice ∪ M48 monsoon burst): bit m set = no
+    /// cargo moves in calendar month m.
     #[serde(skip_serializing_if = "u16_is_zero", default)]
     pub closed: u16,
+    /// M48 — the closures by name: which season shuts the water, and
+    /// when. Empty for lanes that sail all year.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub shut: Vec<SeasonalClosure>,
+    /// M48 — signed monsoon exposure of the sailed legs (round2): the
+    /// double-frequency throughput season. 0 off the monsoon seas.
+    #[serde(skip_serializing_if = "f64_is_zero", default)]
+    pub season: f64,
 }
 
 fn u16_is_zero(v: &u16) -> bool {
     *v == 0
 }
+
+fn f64_is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
 
 /// Work out what a settlement produces from its hinterland. Also stamps
 /// the M20 quarry tag — the stone its province cuts — so every path that
@@ -159,10 +260,32 @@ pub struct TradeGrid {
     /// M37 — full-resolution sea-ice month mask (`seaice::frozen_months`):
     /// routes read their icebound season off the same grid A* priced.
     pub frozen: Array2<u16>,
+    /// M48 — full-resolution signed sea-monsoon lean: the coastal
+    /// land's `pamp`, smoothed along the shore and carried offshore on
+    /// a window that dies by `MONSOON_REACH`. Routes read their
+    /// sailing calendar off the same grid A* priced.
+    pub mons: Array2<f32>,
+    /// M45 — best harbor shelter per coarse cell (block max of the
+    /// settlements::shelter_score field): a harbor is a point asset, so
+    /// the mean would wash it out. Discounts the embarkation toll.
+    pub shelter: Array2<f64>,
+    /// M46 — mean surface current per coarse cell (u grid-eastward,
+    /// v grid-southward), solved by `currents::compute` on this grid's
+    /// own sea mask: the routes sail the very ocean that was priced.
+    pub cu: Array2<f64>,
+    pub cv: Array2<f64>,
+    /// M46 — coarse blue-water mask (majority of the block is open sea
+    /// beyond cabotage's sight of land): only these feel the sail law.
+    pub open: Array2<bool>,
+    /// M46 — signed zonal wind stress per coarse row (+ = eastward).
+    pub wind: Vec<f64>,
+    /// M46 — becalmed convergence rows: |wind| under `DOLDRUM_TAU`.
+    pub becalmed: Vec<bool>,
     pub f: usize,
 }
 
 impl TradeGrid {
+    #[allow(clippy::too_many_arguments)]
     pub fn build(
         height: &Array2<f32>,
         flags: &Array2<u8>,
@@ -170,6 +293,8 @@ impl TradeGrid {
         discharge: &Array2<f32>,
         tmean: &Array2<f32>,
         tamp: &Array2<f32>,
+        shelter: &Array2<f32>,
+        pamp: &Array2<f32>,
         f: usize,
     ) -> TradeGrid {
         let (rows, cols) = height.dim();
@@ -180,6 +305,32 @@ impl TradeGrid {
         let (gy, gx) = ndimage::gradient(&hpos);
         // M37 — where and when the sea freezes over
         let frozen = crate::seaice::frozen_months(height, tmean, tamp);
+
+        // M48 — the sea the monsoon land breathes over: the land's
+        // signed rain-lean, smoothed along the coast, walked offshore
+        // on a window that dies by MONSOON_REACH. Normalizing by the
+        // smoothed land mask keeps coastal amplitude the land's own;
+        // the window keeps far blue water out of a calendar it never
+        // feels.
+        let mut pw = Array2::<f64>::zeros((rows, cols));
+        let mut lw = Array2::<f64>::zeros((rows, cols));
+        for y in 0..rows {
+            for x in 0..cols {
+                if !sea_mask[[y, x]] {
+                    pw[[y, x]] = pamp[[y, x]] as f64;
+                    lw[[y, x]] = 1.0;
+                }
+            }
+        }
+        let num = ndimage::gaussian_filter(&pw, MONSOON_SIGMA);
+        let den = ndimage::gaussian_filter(&lw, MONSOON_SIGMA);
+        let mons = Array2::from_shape_fn((rows, cols), |(y, x)| {
+            if !sea_mask[[y, x]] || den[[y, x]] < 1e-6 {
+                return 0.0f32;
+            }
+            let fade = 1.0 - smoothstep(shore_d[[y, x]], MONSOON_NEAR, MONSOON_REACH);
+            ((num[[y, x]] / den[[y, x]]) * fade) as f32
+        });
 
         let full = Array2::from_shape_fn((rows, cols), |(y, x)| {
             let h = height[[y, x]] as f64;
@@ -196,8 +347,13 @@ impl TradeGrid {
                 } else {
                     OPEN_SEA_COST
                 };
+                // M48 — gale-season water charges its burst months the
+                // same pro-rata way, at a gentler rate: the season is
+                // waited out in harbour, never iced in.
+                let burst = monsoon_burst_mask(mons[[y, x]]).count_ones();
                 return base
-                    * (1.0 + crate::seaice::ICE_LANE_SURCHARGE * iced as f64 / 12.0);
+                    * (1.0 + crate::seaice::ICE_LANE_SURCHARGE * iced as f64 / 12.0)
+                    * (1.0 + MONSOON_GALE_SURCHARGE * burst as f64 / 12.0);
             }
             if flags[[y, x]] & CellFlags::LAKE.bits() != 0 {
                 return LAKE_COST;
@@ -242,7 +398,47 @@ impl TradeGrid {
             }
             2 * n > f * f
         });
-        TradeGrid { cost, sea, frozen, f }
+        // M45 — the block's best anchorage, not its average shore
+        let shel = Array2::from_shape_fn((s, sc), |(y, x)| {
+            let mut m = 0.0f64;
+            for dy in 0..f {
+                for dx in 0..f {
+                    let v = shelter[[y * f + dy, x * f + dx]] as f64;
+                    if v > m {
+                        m = v;
+                    }
+                }
+            }
+            m
+        });
+        // M46 — the ocean that carries the ships: gyres solved on the
+        // same sea mask the costs were priced from, then read per
+        // coarse cell as the block-mean surface current (land cells
+        // hold zero current, so shore blocks dilute honestly).
+        let cur = crate::currents::Currents::compute(&sea_mask);
+        let cu = downsample(&cur.u.mapv(|v| v as f64), f);
+        let cv = downsample(&cur.v.mapv(|v| v as f64), f);
+        let open = Array2::from_shape_fn((s, sc), |(y, x)| {
+            let mut n = 0usize;
+            for dy in 0..f {
+                for dx in 0..f {
+                    let (yy, xx) = (y * f + dy, x * f + dx);
+                    if sea_mask[[yy, xx]] && shore_d[[yy, xx]] > 6.0 {
+                        n += 1;
+                    }
+                }
+            }
+            2 * n > f * f
+        });
+        let mut wind = Vec::with_capacity(s);
+        let mut becalmed = Vec::with_capacity(s);
+        for y in 0..s {
+            let lat = -90.0 + (y * f + f / 2) as f64 * 180.0 / (rows as f64 - 1.0);
+            let w = crate::currents::wind_stress(lat.abs());
+            wind.push(w);
+            becalmed.push(w.abs() < DOLDRUM_TAU);
+        }
+        TradeGrid { cost, sea, frozen, mons, shelter: shel, cu, cv, open, wind, becalmed, f }
     }
 }
 
@@ -259,6 +455,122 @@ pub fn downsample(a: &Array2<f64>, f: usize) -> Array2<f64> {
         }
         sum / (f * f) as f64
     })
+}
+
+// ------------------------------------------------ the directed sea (M46)
+
+/// M48 — the burst months of one sea cell: the wet monsoon's height,
+/// three months around the peak through the exact COS12 table,
+/// hemisphere-true via the sign of the lean; 0 below the gale
+/// threshold.
+pub fn monsoon_burst_mask(mons: f32) -> u16 {
+    if (mons as f64).abs() < MONSOON_GALE {
+        return 0;
+    }
+    let mut m = 0u16;
+    for (i, c) in crate::climate::COS12.iter().enumerate() {
+        let aligned = if mons > 0.0 { *c } else { -*c };
+        if aligned >= MONSOON_BURST {
+            m |= 1 << i;
+        }
+    }
+    m
+}
+
+/// M48 — a monsoon lane's monthly throughput multiplier: double
+/// frequency through the exact COS12 table — both monsoon heights
+/// carry cargo, the two turns of the wind becalm it. One law, two
+/// readers: the economy's ledger and the diagnostics that grade it.
+pub fn season_mult(season: f64, month: i64) -> f64 {
+    if season == 0.0 {
+        return 1.0;
+    }
+    let m2 = (2 * month.rem_euclid(12)) as usize % 12;
+    (1.0 + MONSOON_TRADE_GAIN * season.abs() * crate::climate::COS12[m2]).max(0.4)
+}
+
+
+
+/// The directional price of one coarse cell for a step in unit
+/// direction (dxu, dyu): 1.0 everywhere except open water, where the
+/// current's alignment and the zonal wind buy or cost passage, the
+/// becalmed convergence rows surcharge every heading, and the clamp
+/// keeps the heuristic admissible and the routing graph conditioned.
+pub fn sail_mult(grid: &TradeGrid, y: usize, x: usize, dxu: f64, dyu: f64) -> f64 {
+    if !grid.open[[y, x]] {
+        return 1.0;
+    }
+    let align_c = grid.cu[[y, x]] * dxu + grid.cv[[y, x]] * dyu;
+    let align_w = grid.wind[y] * dxu;
+    let mut m = 1.0 - SAIL_CURRENT_GAIN * align_c - SAIL_WIND_GAIN * align_w;
+    if grid.becalmed[y] {
+        // becalmed water never discounts: drift days come off no ledger
+        m = m.max(1.0) + DOLDRUM_PENALTY;
+    }
+    // The exact admissibility clamp: this cell, under this multiplier,
+    // must never price a step below the heuristic's plan.
+    let floor = SAIL_MULT_FLOOR.max(PLAN_COST / grid.cost[[y, x]]);
+    m.clamp(floor, SAIL_MULT_CEIL)
+}
+
+/// Price one directed step between neighbouring coarse cells — the one
+/// law A* searches with and `path_cost` re-walks: half of each cell's
+/// terrain cost under its own sail multiplier, plus the harbour toll
+/// where cargo changes from wheel to keel.
+pub fn edge_cost(
+    grid: &TradeGrid,
+    (y, x): (usize, usize),
+    (ny, nx): (usize, usize),
+    dist: f64,
+) -> f64 {
+    let dxu = (nx as f64 - x as f64) / dist;
+    let dyu = (ny as f64 - y as f64) / dist;
+    let mut c = dist
+        * 0.5
+        * (grid.cost[[y, x]] * sail_mult(grid, y, x, dxu, dyu)
+            + grid.cost[[ny, nx]] * sail_mult(grid, ny, nx, dxu, dyu));
+    if grid.sea[[y, x]] != grid.sea[[ny, nx]] {
+        // cargo changes from wheel to keel — and the toll answers
+        // the anchorage (M45): a sheltered harbour pays half dues;
+        // an open beach has no quay at all — cargo lighters out
+        // through the surf on weather windows, and historically
+        // that cost as much as hundreds of kilometres of sea
+        // carriage, so the toll grows quadratically with exposure
+        // until a long cart road to a real harbour is the cheaper
+        // voyage and mid-range beach-to-beach hauls go overland.
+        let (ly, lx) = if grid.sea[[y, x]] { (ny, nx) } else { (y, x) };
+        let open = 1.0 - grid.shelter[[ly, lx]];
+        c += EMBARK_COST * (0.5 + 12.0 * open * open);
+    }
+    c
+}
+
+/// Walk a finished path and price it in one direction (M46). `rev`
+/// prices the homeward passage — the same water, the currents now
+/// against the keel. Forward equals the cost A* returned, exactly.
+pub fn path_cost(grid: &TradeGrid, path: &[(usize, usize)], rev: bool) -> f64 {
+    let n = path.len();
+    let mut total = 0.0;
+    for i in 1..n {
+        let (a, b) = if rev {
+            (path[n - i], path[n - 1 - i])
+        } else {
+            (path[i - 1], path[i])
+        };
+        let diag = a.0 != b.0 && a.1 != b.1;
+        let dist = if diag { 1.4142135 } else { 1.0 };
+        total += edge_cost(grid, a, b, dist);
+    }
+    total
+}
+
+/// A route is priced at the round trip (M46): the ship that rides the
+/// gyre out fights it home, so the ledger charges the mean of the two
+/// passages. Land routes are unchanged to the bit — carts feel no
+/// current — while a lane through the doldrums pays its waiting days
+/// on both legs.
+pub fn round_trip(grid: &TradeGrid, path: &[(usize, usize)], fwd: f64) -> f64 {
+    0.5 * (fwd + path_cost(grid, path, true))
 }
 
 /// Min-heap item ordered like Python's heapq tuples (f, g, y, x).
@@ -361,7 +673,7 @@ fn astar_with(
     let (hh, ww) = cost.dim();
     let (sy, sx) = start;
     let (gy, gx) = goal;
-    let min_cost = 0.3;
+    let min_cost = PLAN_COST;
     let max_expand = 200_000usize;
     sc.reset(hh * ww);
     sc.relax(sy * ww + sx, 0.0, u32::MAX);
@@ -394,10 +706,9 @@ fn astar_with(
                 continue;
             }
             let (ny, nx) = (ny as usize, nx as usize);
-            let mut ng = g + dist * 0.5 * (cost[[y, x]] + cost[[ny, nx]]);
-            if grid.sea[[y, x]] != grid.sea[[ny, nx]] {
-                ng += EMBARK_COST; // cargo changes from wheel to keel
-            }
+            // one law for search and re-walk alike (M46): terrain cost
+            // under the sail multiplier, plus the M45 harbour toll.
+            let ng = g + edge_cost(grid, (y, x), (ny, nx), dist);
             let ni = ny * ww + nx;
             if ng < sc.best(ni) {
                 sc.relax(ni, ng, (y * ww + x) as u32);
@@ -451,6 +762,7 @@ pub fn route_entry(
     discharge: &Array2<f32>,
     flow_amp: &Array2<f32>,
     frozen: &Array2<u16>,
+    mons: &Array2<f32>,
 ) -> Route {
     let mut pts: Vec<[i64; 2]> = path
         .iter()
@@ -502,7 +814,7 @@ pub fn route_entry(
 
     // M37 — the ice writes the schedule: any frozen water on the sailed
     // leg closes the whole journey for those months.
-    let mut closed: u16 = 0;
+    let mut ice: u16 = 0;
     for (p, &m) in pts.iter().zip(modes.iter()) {
         if m == MODE_SEA
             && p[0] >= 0
@@ -510,10 +822,45 @@ pub fn route_entry(
             && (p[0] as usize) < ww
             && (p[1] as usize) < hh
         {
-            closed |= frozen[[p[1] as usize, p[0] as usize]];
+            ice |= frozen[[p[1] as usize, p[0] as usize]];
         }
     }
-    closed &= crate::seaice::MONTHS_MASK;
+    ice &= crate::seaice::MONTHS_MASK;
+
+    // M48 — the monsoon writes the rest: the sailed legs' mean lean
+    // sets the lane's double-frequency season (diluted by the share of
+    // the journey under sail, exactly the barge ramp's law), and any
+    // gale-season water on the way closes the whole journey for its
+    // burst months, exactly the ice's law.
+    let mut mn_sum = 0.0f64;
+    let mut nsea = 0usize;
+    let mut monsoon: u16 = 0;
+    for (p, &m) in pts.iter().zip(modes.iter()) {
+        if m == MODE_SEA
+            && p[0] >= 0
+            && p[1] >= 0
+            && (p[0] as usize) < ww
+            && (p[1] as usize) < hh
+        {
+            let v = mons[[p[1] as usize, p[0] as usize]];
+            mn_sum += v as f64;
+            nsea += 1;
+            monsoon |= monsoon_burst_mask(v);
+        }
+    }
+    monsoon &= crate::seaice::MONTHS_MASK;
+    let season = if nsea > 0 {
+        crate::util::round2(mn_sum / nsea as f64 * (nsea as f64 / n as f64))
+    } else {
+        0.0
+    };
+    let mut shut = Vec::new();
+    if ice != 0 {
+        shut.push(SeasonalClosure::Ice(ice));
+    }
+    if monsoon != 0 {
+        shut.push(SeasonalClosure::Monsoon(monsoon));
+    }
 
     let base_w = (0.5 + (((sa.pop + sb.pop) as f64).log10() - 2.0) * 0.6).clamp(0.5, 2.0);
     // the sea multiplies what a route can carry
@@ -529,7 +876,9 @@ pub fn route_entry(
         ramp,
         goods: vec![sa.exports.clone(), sb.exports.clone()],
         old: false,
-        closed,
+        closed: ice | monsoon,
+        shut,
+        season,
     }
 }
 
@@ -545,25 +894,29 @@ pub fn recount_connections(settlements: &mut [Settlement], routes: &[Route]) {
 }
 
 /// A harbour is where a settlement's trade takes to the water: coastal,
-/// with at least one route that goes under sail close to its gates.
+/// with at least one route whose *first or last step* goes under sail —
+/// embarkation inside the town's own coarse cell, its literal gates
+/// (M45). A town whose cargo carts up the coast to someone else's quay
+/// is a customer, not a port; the old blanket "a mostly-sea route makes
+/// harbours of both ends" was adjacency-alone in disguise — it flagged
+/// beach towns whose lighters worked someone else's roadstead — and the
+/// pathfinder's lighterage pricing now decides where sail begins.
 pub fn mark_ports(settlements: &mut [Settlement], routes: &[Route]) {
     let mut ports: BTreeSet<SettlementId> = BTreeSet::new();
     for r in routes {
         if r.sea < 0.05 {
             continue;
         }
+        // m[0] and m[n-1] are pinned to LAND (the gate itself), so the
+        // first honest reading is m[1]: the first coarse step out.
         let n = r.m.len();
-        let head = r.m.iter().take(4.min(n)).any(|&m| m == MODE_SEA);
-        let tail = r.m.iter().rev().take(4.min(n)).any(|&m| m == MODE_SEA);
-        if head {
+        if n < 3 {
+            continue;
+        }
+        if r.m[1] == MODE_SEA {
             ports.insert(r.a);
         }
-        if tail {
-            ports.insert(r.b);
-        }
-        // a mostly-sea route makes harbours of both ends
-        if r.sea > 0.5 {
-            ports.insert(r.a);
+        if r.m[n - 2] == MODE_SEA {
             ports.insert(r.b);
         }
     }
@@ -579,7 +932,12 @@ fn viable(total_cost: f64, start: (usize, usize), goal: (usize, usize)) -> bool 
 }
 
 /// Candidate pairs: each settlement courts its 2 nearest neighbours, and
-/// every coastal town also seeks a far harbour to trade with under sail.
+/// every *harbour* town also seeks a far harbour to trade with under
+/// sail (M45): a shipping line runs roadstead to roadstead. A coastal
+/// town below `SHELTER_ROADSTEAD` is a fishing village — it keeps its
+/// two neighbour routes (which may still cross a strait and earn the
+/// port flag honestly), but it does not found a blue-water line from an
+/// open beach, and no far line terminates on one.
 pub fn build_routes(
     grid: &TradeGrid,
     settlements: &mut [Settlement],
@@ -587,10 +945,16 @@ pub fn build_routes(
     flags: &Array2<u8>,
     discharge: &Array2<f32>,
     flow_amp: &Array2<f32>,
+    shelter: &Array2<f32>,
 ) -> Vec<Route> {
     let f = grid.f;
     let rows = grid.cost.dim().0 * f;
     let far2 = ((rows as f64) / 5.0).powi(2);
+    let roadstead = |s: &Settlement| {
+        s.coastal
+            && shelter[[s.y as usize, s.x as usize]]
+                >= crate::settlements::SHELTER_ROADSTEAD
+    };
     let mut pairs: BTreeSet<(SettlementId, SettlementId)> = BTreeSet::new();
     for s in settlements.iter() {
         let mut others: Vec<&Settlement> =
@@ -604,9 +968,9 @@ pub fn build_routes(
             pairs.insert((s.id.min(o.id), s.id.max(o.id)));
         }
         // the sea link: the nearest fellow harbour town beyond the horizon
-        if s.coastal {
+        if roadstead(s) {
             if let Some(o) = others.iter().find(|o| {
-                o.coastal
+                roadstead(o)
                     && ((o.x - s.x).pow(2) + (o.y - s.y).pow(2)) as f64 > far2
             }) {
                 pairs.insert((s.id.min(o.id), s.id.max(o.id)));
@@ -626,8 +990,9 @@ pub fn build_routes(
         let start = (sa.y as usize / f, sa.x as usize / f);
         let goal = (sb.y as usize / f, sb.x as usize / f);
         if let Some((path, cost)) = astar(grid, start, goal) {
+            let cost = round_trip(grid, &path, cost);
             if viable(cost, start, goal) {
-                routes.push(route_entry(sa, sb, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen));
+                routes.push(route_entry(sa, sb, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen, &grid.mons));
             }
         }
     }
@@ -673,9 +1038,10 @@ pub fn rescue_unconnected(
             let start = (s.y as usize / f, s.x as usize / f);
             let goal = (o.y as usize / f, o.x as usize / f);
             if let Some((path, cost)) = astar(grid, start, goal) {
+                let cost = round_trip(grid, &path, cost);
                 if best.as_ref().map_or(true, |(_, c)| cost < *c) {
                     best = Some((
-                        route_entry(&s, o, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen),
+                        route_entry(&s, o, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen, &grid.mons),
                         cost,
                     ));
                 }
@@ -713,8 +1079,9 @@ pub fn connect_settlement(
         let start = (s.y as usize / f, s.x as usize / f);
         let goal = (o.y as usize / f, o.x as usize / f);
         if let Some((path, cost)) = astar(grid, start, goal) {
+            let cost = round_trip(grid, &path, cost);
             if viable(cost, start, goal) {
-                new_routes.push(route_entry(&s, o, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen));
+                new_routes.push(route_entry(&s, o, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen, &grid.mons));
             }
         }
     }
@@ -823,9 +1190,10 @@ pub fn bridge_components(
             let start = (s.y as usize / f, s.x as usize / f);
             let goal = (o.y as usize / f, o.x as usize / f);
             if let Some((path, cost)) = astar(grid, start, goal) {
+                let cost = round_trip(grid, &path, cost);
                 if best.as_ref().map_or(true, |(_, c)| cost < *c) {
                     best = Some((
-                        route_entry(s, o, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen),
+                        route_entry(s, o, &path, f, cost, height, flags, discharge, flow_amp, &grid.frozen, &grid.mons),
                         cost,
                     ));
                 }
@@ -848,7 +1216,27 @@ pub fn bridge_components(
 
 // ---------------------------------------------------------------- bands
 
-/// Diagnostics bands (E11.6): the gravity of big close pairs.
+/// Diagnostics bands (E11.6): the gravity of big close pairs, and the
+/// directed sea (M46).
 pub const BANDS: &[crate::util::Band] = &[
     crate::util::Band { name: "gravity-model correlation", sweet: (0.30, 1.0), hard: (0.10, 1.0), target: "M5.4 gate: big close pairs carry the trade" },
+    // M46 edges are measured, not guessed: at gains 0.55/0.25 the three
+    // probe seeds ran best mirror advantage 23.0/12.4/10.1% and alive
+    // share 33/19/7% (12345/90210/777). Sweet's floor is the spec's own
+    // 15% and the gate seed (12345) clears it with slack; hard admits an
+    // honestly symmetric sea (777 has one far-sea hub and crossings
+    // near-perpendicular to the gyres) at WARN, never FAIL — the open-
+    // water fraction of a lane bounds its achievable asymmetry, and
+    // cabotage plus harbour tolls are symmetric by design.
+    crate::util::Band { name: "sea-lane mirror advantage (best)", sweet: (15.0, 60.0), hard: (8.0, 100.0), target: "M46 gate: the with-current passage sails ≥15% faster than its against-current mirror" },
+    crate::util::Band { name: "directional lanes alive", sweet: (15.0, 100.0), hard: (5.0, 100.0), target: "M46: share of blue-water lanes (%) sailing ≥2% faster one way than the other" },
+    // M48 bands are measured, not guessed: at gale 0.40 / gain 0.55 the
+    // five probe seeds ran lane share 34/28/24/30/39% and swing mean
+    // 74/82/92/81/89% (12345/777/90210/31337/555). Sweet brackets that
+    // envelope with slack both ways; the swing floor stays the spec's
+    // own 30% — closures dominate the mean (a shut lane swings 100%),
+    // and a world whose monsoon lanes all stayed open would honestly
+    // WARN here at gain 0.55 (open-water swing tops out near 20%).
+    crate::util::Band { name: "monsoon lane share", sweet: (15.0, 55.0), hard: (5.0, 80.0), target: "M48: share of sea-touching lanes (%) sailing the monsoon calendar" },
+    crate::util::Band { name: "monsoon throughput swing", sweet: (30.0, 100.0), hard: (15.0, 100.0), target: "M48 gate: monsoon-lane throughput swings ≥30% between the year's peak and its floor" },
 ];
