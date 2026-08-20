@@ -1158,6 +1158,12 @@ pub fn monthly(
                 .cos();
             flow *= (1.0 + 0.5 * r.ramp * phase).max(0.4);
         }
+        // M48 — the monsoon trades sail a double-frequency year: both
+        // monsoon heights carry cargo, the turns of the wind becalm it.
+        // (Burst months never reach here — they sit in `closed` above.)
+        if r.season != 0.0 {
+            flow *= crate::trade::season_mult(r.season, month_abs);
+        }
         let ta = mods.get(sa.people.idx()).map(|m| m.trade).unwrap_or(1.0);
         let tb = mods.get(sb.people.idx()).map(|m| m.trade).unwrap_or(1.0);
         // a harbour works the cranes: more cargo through, more dues taken

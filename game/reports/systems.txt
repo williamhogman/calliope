@@ -1,42 +1,42 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · SYSTEM LATTICE               seed 12345 · 512² · 150y
 ========================================================================
- 150y ticked in 2931 ms · 101 towns · 8262 events
+ 150y ticked in 3482 ms · 104 towns · 7946 events
 
  system            cadence  calls   total ms   share   writes     serial
- towns             monthly   1800       45.3    1.5%   P·R        yes
- famine            monthly   1800        2.4    0.1%   P·R        yes
- quakes            monthly   1800        0.9    0.0%   Q·P·C      yes
- volcanoes         monthly   1800        0.9    0.0%   V·P·G·C    yes
- colonize          monthly   1800      732.9   25.1%   P·R        yes
- prospect          monthly   1800      412.6   14.1%   D·R        yes
- rush-camps        monthly   1800       63.4    2.2%   P·D·R      yes
- goods              1/12mo    150        5.2    0.2%   P          yes
- exonyms           1/120mo     15        0.5    0.0%   N·R        yes
- society           monthly   1800       59.5    2.0%   P·R        yes
- census            monthly   1800        4.5    0.2%   –          -
- market-areas      monthly   1800        4.0    0.1%   E          -
- crafts            monthly   1800       47.7    1.6%   P·R        yes
- economy           monthly   1800       88.9    3.0%   E·P·R      yes
- merchants         monthly   1800       19.4    0.7%   E·P·C·R    yes
- statecraft        monthly   1800      196.0    6.7%   P·C·G·R    yes
- kindred            1/12mo    150        2.3    0.1%   P·N·R      yes
- union              1/12mo    150        0.4    0.0%   P·R        yes
- civ                1/12mo    150        1.4    0.0%   P·C·R      yes
- patina            monthly   1800        0.7    0.0%   P·C·N·R    yes
- territory         monthly   1800     1227.3   42.0%   G          -
- chronicle         monthly   1800        1.9    0.1%   C·P·R      yes
- relics            monthly   1800        0.9    0.0%   C·R        yes
- second-reading    monthly   1800        5.6    0.2%   C          -
- veil              monthly   1800        0.5    0.0%   C          -
+ towns             monthly   1800       72.9    2.1%   P·R        yes
+ famine            monthly   1800        4.8    0.1%   P·R        yes
+ quakes            monthly   1800        1.3    0.0%   Q·P·C      yes
+ volcanoes         monthly   1800        1.2    0.0%   V·P·G·C    yes
+ colonize          monthly   1800      975.7   28.1%   P·R        yes
+ prospect          monthly   1800      407.5   11.7%   D·R        yes
+ rush-camps        monthly   1800      171.9    4.9%   P·D·R      yes
+ goods              1/12mo    150        9.9    0.3%   P          yes
+ exonyms           1/120mo     15        0.6    0.0%   N·R        yes
+ society           monthly   1800       90.6    2.6%   P·R        yes
+ census            monthly   1800        8.1    0.2%   –          -
+ market-areas      monthly   1800        5.9    0.2%   E          -
+ crafts            monthly   1800       66.5    1.9%   P·R        yes
+ economy           monthly   1800      119.0    3.4%   E·P·R      yes
+ merchants         monthly   1800       24.6    0.7%   E·P·C·R    yes
+ statecraft        monthly   1800      223.9    6.4%   P·C·G·R    yes
+ kindred            1/12mo    150        3.9    0.1%   P·N·R      yes
+ union              1/12mo    150        0.3    0.0%   P·R        yes
+ civ                1/12mo    150        2.8    0.1%   P·C·R      yes
+ patina            monthly   1800       14.3    0.4%   P·C·N·R    yes
+ territory         monthly   1800     1257.4   36.2%   G          -
+ chronicle         monthly   1800        2.4    0.1%   C·P·R      yes
+ relics            monthly   1800        1.4    0.0%   C·R        yes
+ second-reading    monthly   1800        6.2    0.2%   C          -
+ veil              monthly   1800        0.7    0.0%   C          -
  heat              monthly   1800        0.2    0.0%   –          -
- driver                                  5.3    0.2%   (dispatch + clock)
+ driver                                  7.7    0.2%   (dispatch + clock)
 
- serial fraction (writes Peoples or draws rng): 57.5% of in-system time
- ⇒ ECS parallel-scheduling ceiling (Amdahl): 1.738× — before scheduler cost
+ serial fraction (writes Peoples or draws rng): 63.2% of in-system time
+ ⇒ ECS parallel-scheduling ceiling (Amdahl): 1.582× — before scheduler cost
 
 ---- checks ----------------------------------------------------------
 [PASS] access table covers the lattice               26/26   (E11.7: the analysis names every system)
-[PASS] driver overhead is noise                      0.18%   (the hand-rolled lattice costs <5% dispatch)
-[WARN] ECS parallel ceiling stays low               1.738×   (ADR-0022: re-open the bevy_ecs question if this rises)
+[PASS] driver overhead is noise                      0.22%   (the hand-rolled lattice costs <5% dispatch)
+[WARN] ECS parallel ceiling stays low               1.582×   (ADR-0022: re-open the bevy_ecs question if this rises)
 CHECKS: 2 pass · 1 warn · 0 fail

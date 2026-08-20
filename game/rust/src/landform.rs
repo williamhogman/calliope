@@ -46,6 +46,11 @@ pub const OUTWASH: u8 = 9;
 /// M33 — patterned ground: frost-sorted polygon nets and solifluction
 /// stripes where real permafrost meets the surface.
 pub const PATTERNED: u8 = 10;
+/// M43 — an intertidal flat: ground the tide uncovers and re-covers
+/// daily, where a real range meets a low-slope shore.
+pub const TIDEFLAT: u8 = 11;
+/// M43 — an estuary mouth: a river meeting tidal water.
+pub const ESTUARY: u8 = 12;
 
 /// A drowned cell counts as a ria when land at least this tall stands
 /// within `WALL_R` cells — valley walls, not open flats.
@@ -159,6 +164,142 @@ pub fn stamp_patterned(out: &mut Array2<u8>, pattern: &Array2<u8>, height: &Arra
         }
     }
 }
+
+/// M43 — the tide must reach mesotidal before it can build a flat or
+/// mark a mouth as an estuary.
+pub const FLAT_MIN_RANGE: f64 = 2.0;
+pub const EST_MIN_RANGE: f64 = 2.0;
+/// M43 — a flat forms where the intertidal outcrop spans real ground:
+/// range (m) divided by the local slope must stretch at least this
+/// many metres of shore. A quarter map cell — a flat you could draw
+/// (at 2000 m the fjord-coast seed 777 kept just 2 flat cells; the
+/// law's scaling held but the shore read barren).
+pub const FLAT_WIDTH_M: f64 = 1000.0;
+/// M43 — vertical proximity to the waterline, metres: a candidate
+/// cell's mean elevation magnitude must sit within reach of the tide.
+pub const FLAT_VERT_M: f64 = 16.0;
+
+/// M43 — the tides join the vocabulary after the tide field is solved
+/// (post-widen, like everything coastal). Estuaries first — the mouth
+/// outranks the flat on the same cell — then the formation law: the
+/// tide builds a flat where its vertical range, spread over the local
+/// slope, spans at least `FLAT_WIDTH_M` of shore near the waterline.
+/// (Flats are depositional — the tide manufactures them — so the rule
+/// reads formation capacity, not pre-existing bathymetry: the strict
+/// intertidal-band criterion left 0–6 cells per world at 4 km
+/// resolution.) The earlier stories (coastal history, glacial
+/// registries, patterned ground) win where they already spoke.
+pub fn stamp_tidal(
+    out: &mut Array2<u8>,
+    tides: &crate::tides::Tides,
+    height: &Array2<f32>,
+    flags: &Array2<u8>,
+) {
+    let (h, w) = out.dim();
+    if tides.range.dim() != (h, w) || height.dim() != (h, w) || flags.dim() != (h, w) {
+        return;
+    }
+    let river = crate::state::CellFlags::RIVER.bits();
+    // Estuary mouths: a river cell on land, touching open tidal water.
+    for y in 0..h {
+        for x in 0..w {
+            if out[[y, x]] != NONE || height[[y, x]] < 0.0 || flags[[y, x]] & river == 0 {
+                continue;
+            }
+            let mut tidal = false;
+            for (ny, nx) in [
+                (y.wrapping_sub(1), x),
+                (y + 1, x),
+                (y, x.wrapping_sub(1)),
+                (y, x + 1),
+            ] {
+                if ny < h
+                    && nx < w
+                    && tides.class[[ny, nx]] == crate::tides::OPEN
+                    && tides.range[[ny, nx]] as f64 >= EST_MIN_RANGE
+                {
+                    tidal = true;
+                    break;
+                }
+            }
+            if tidal {
+                out[[y, x]] = ESTUARY;
+            }
+        }
+    }
+    // Intertidal flats: a waterline cell (open water touching land, or
+    // land touching open water) near sea level, where range over slope
+    // spans at least FLAT_WIDTH_M of shore.
+    let cell_m = crate::constants::KM_PER_CELL * 1000.0;
+    for y in 0..h {
+        for x in 0..w {
+            if out[[y, x]] != NONE {
+                continue;
+            }
+            // Waterline test and the governing range: own range for an
+            // open-water cell with a land neighbor, the wettest open
+            // neighbor's range for a land cell on the shore.
+            let is_open = tides.class[[y, x]] == crate::tides::OPEN;
+            let mut r = 0.0f64;
+            let mut waterline = false;
+            for (ny, nx) in [
+                (y.wrapping_sub(1), x),
+                (y + 1, x),
+                (y, x.wrapping_sub(1)),
+                (y, x + 1),
+            ] {
+                if ny >= h || nx >= w {
+                    continue;
+                }
+                if is_open {
+                    if height[[ny, nx]] >= 0.0 {
+                        waterline = true;
+                    }
+                } else if tides.class[[ny, nx]] == crate::tides::OPEN {
+                    waterline = true;
+                    r = r.max(tides.range[[ny, nx]] as f64);
+                }
+            }
+            if is_open {
+                r = tides.range[[y, x]] as f64;
+            } else if height[[y, x]] < 0.0 {
+                // enclosed water is never a tidal flat
+                continue;
+            }
+            if !waterline || r < FLAT_MIN_RANGE {
+                continue;
+            }
+            // Near the waterline vertically...
+            let hv_m = height[[y, x]] as f64 * crate::constants::METRES_PER_UNIT;
+            if hv_m.abs() > FLAT_VERT_M {
+                continue;
+            }
+            // ...and gentle enough that the intertidal band spans real
+            // ground: slope from the 3×3 relief over 2 cells.
+            let mut lo = f32::INFINITY;
+            let mut hi = f32::NEG_INFINITY;
+            for dy in -1isize..=1 {
+                for dx in -1isize..=1 {
+                    let ny = y as isize + dy;
+                    let nx = x as isize + dx;
+                    if ny < 0 || nx < 0 || ny >= h as isize || nx >= w as isize {
+                        continue;
+                    }
+                    let v = height[[ny as usize, nx as usize]];
+                    lo = lo.min(v);
+                    hi = hi.max(v);
+                }
+            }
+            let slope = ((hi - lo) as f64 * crate::constants::METRES_PER_UNIT / (2.0 * cell_m))
+                .max(1e-6);
+            if r / slope >= FLAT_WIDTH_M {
+                out[[y, x]] = TIDEFLAT;
+            }
+        }
+    }
+}
+
+
 
 /// FNV-1a over the tag grid — joins `hash_state` so the classifier
 /// cannot drift silently between generations or runtimes.

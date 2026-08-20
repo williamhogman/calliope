@@ -45,6 +45,13 @@ if (process.argv[5] === "debug" && typeof world.seismic_debug === "function") {
     process.exit(3);
   }
   console.log(world.earth_hash());
+} else if (process.argv[5] === "coast") {
+  // M44 — the coast hash split into constituents (bisection instrument).
+  if (typeof world.coast_debug !== "function") {
+    console.error("stale wasm: no coast_debug export — rebuild with scripts/build.sh");
+    process.exit(3);
+  }
+  console.log(world.coast_debug());
 } else {
   console.log(world.seismic_hash());
 }

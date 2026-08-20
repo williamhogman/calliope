@@ -11,6 +11,7 @@ pub mod biomes;
 pub mod chronicle;
 pub mod civ;
 pub mod climate;
+pub mod coast;
 pub mod constants;
 pub mod culture;
 pub mod currents;
@@ -48,6 +49,7 @@ pub mod society;
 pub mod state;
 pub mod systems;
 pub mod telling;
+pub mod tides;
 pub mod trade;
 pub mod util;
 pub mod world;
@@ -186,6 +188,14 @@ impl WasmWorld {
             "table={:016x} cell={:016x} boundary={:016x} faults={:016x} since={:016x} log={:016x}",
             pt, pc, pb, sf, ss, sl
         )
+    }
+
+    /// M44 bisection instrument: the coast hash split into deposit
+    /// positions, pre-height bits and the form grid, so a cross-runtime
+    /// divergence names the constituent it lives in.
+    pub fn coast_debug(&self) -> String {
+        let (pos, bits, form) = self.inner.coastform.debug_parts();
+        format!("pos={pos:016x} bits={bits:016x} form={form:016x}")
     }
 
     /// Term ledger for a derived quantity ("why is this so?") as JSON.

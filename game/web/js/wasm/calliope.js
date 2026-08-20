@@ -180,6 +180,24 @@ export class WasmWorld {
         }
     }
     /**
+     * M44 bisection instrument: the coast hash split into deposit
+     * positions, pre-height bits and the form grid, so a cross-runtime
+     * divergence names the constituent it lives in.
+     * @returns {string}
+     */
+    coast_debug() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmworld_coast_debug(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * M27 gate — the deep-earth identity line: every Year-1 layer's
      * hash, labeled. `scripts/wasm-replay.mjs earth` compares this
      * against the native `diagnose earth-hash` for the same arguments.

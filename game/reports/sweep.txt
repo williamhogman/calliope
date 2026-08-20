@@ -2,32 +2,35 @@
  CALLIOPE DIAGNOSTIC · SWEEP                        size 512 · 100y · 5 seeds
 ========================================================================
    seed  land%   des%   for%  mtn%   isl  dep towns       pop   grw×   era arts strk camp  war   rt  ev/y  genms  flags
-  12345   35.0   19.7   23.3   8.8    26  173 16→99    839150 624.83     3   86   47    3  311  169  45.6   1527  ·
-    777   35.8   20.1   22.3   7.6    20  166 16→100    803386 623.75     3   85   47    1  365  169  47.1   1481  ·
-  31337   32.7   18.1   18.4   3.7    24  156 16→98    843130 602.24     3   61   53    4  489  178  42.3   1490  ·
-  90210   35.6   17.5   20.2   2.6    17  152 16→100    741245 496.48     3   58   47    2  425  179  41.1   1504  ·
-    555   34.6   20.2   21.8   3.5    23  136 16→101    840326 508.06     3   66   44    7  490  176  46.3   1480  ·
----mean   34.7   19.1   21.2   5.3                                     571.07                        44.5
+  12345   35.0   19.7   23.3   8.8    28  174 16→103    546504 406.93     3  101   55    2  274  171  38.7   2392  ·
+    777   35.8   20.1   22.4   7.6    23  165 16→98    844058 655.32     3   82   49    2  369  161  48.4   2950  ·
+  31337   32.8   18.1   18.5   3.7    27  156 16→100    536274 383.05     3   79   49    1  444  160  45.4   2981  ·
+  90210   35.6   17.4   20.2   2.6    21  152 16→99    782437 524.07     3   75   49    0  282  170  39.7   2858  ·
+    555   34.6   20.2   21.9   3.5    25  137 16→98    787039 475.84     3   79   46    5  413  168  42.8   2847  ·
+---mean   34.8   19.1   21.2   5.2                                     489.04                        43.0
 
-flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected · I malformed-ice
-sea ice (M37): icebound lanes per seed: 12345:8 · 777:6 · 31337:7 · 90210:4 · 555:0
+flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected · I malformed-ice · M malformed-monsoon
+sea ice (M37): icebound lanes per seed: 12345:18 · 777:15 · 31337:14 · 90210:15 · 555:10
+monsoon (M48): calendar lanes per seed: 12345:32 · 777:29 · 31337:31 · 90210:20 · 555:39
 
 ---- checks ----------------------------------------------------------
-[PASS] mean land fraction                            34.7%   (sweet 22–40% · hard 15–52%)
+[PASS] mean land fraction                            34.8%   (sweet 22–40% · hard 15–52%)
 [PASS] mean desert share                             19.1%   (sweet 12–28% · hard 6–38%)
 [WARN] mean forest share                             21.2%   (sweet 25–60% · hard 15–75%)
-[PASS] mean mountain share                            5.3%   (sweet 2–14% · hard 0.5–22%)
-[PASS] mean growth                                 571.07×   (M2 crop-package K: sweet 2–1200×)
-[PASS] mean events/year                               44.5   (sweet 2–48 · hard 0.5–100)
-[PASS] all seeds clean of hard flags             all clean   (no B/P/R/G/S/U flags on any seed)
+[PASS] mean mountain share                            5.2%   (sweet 2–14% · hard 0.5–22%)
+[PASS] mean growth                                 489.04×   (M2 crop-package K: sweet 2–1200×)
+[PASS] mean events/year                               43.0   (sweet 2–48 · hard 0.5–100)
+[PASS] all seeds clean of hard flags             all clean   (no B/P/R/G/S/U/I/M flags on any seed)
 [PASS] strikes on every seed                           5/5   (prospecting fires everywhere)
 [PASS] icebound closures well-formed on every seed    0 malformed   (M37 gate: winter arcs only, hemisphere-true, across the sweep)
-[PASS] the winter sea closes somewhere in the sweep      4/5 seeds   (M37: some strait should freeze in a polar world)
-[PASS] mining camps emerge (≥60% of seeds)             5/5   (ore pull creates colonies)
+[PASS] the winter sea closes somewhere in the sweep      5/5 seeds   (M37: some strait should freeze in a polar world)
+[PASS] monsoon closures well-formed on every seed    0 malformed   (M48 gate: burst arcs only, hemisphere-true, across the sweep)
+[PASS] the monsoon calendar is sailed somewhere in the sweep      5/5 seeds   (M48: some lane should ride the seasonal winds in a monsoon world)
+[PASS] mining camps emerge (≥60% of seeds)             4/5   (ore pull creates colonies)
 [PASS] Iron Age reached (≥50% of seeds)                5/5   (history should not stall in bronze)
 [PASS] worlds still growing at half-run (≥60%)            5/5   (no century-long plateaus)
-[PASS] daughter peoples sunder (≥60% of seeds)            3/5   (M12.1: far branches become peoples of their own)
+[PASS] daughter peoples sunder (≥60% of seeds)            5/5   (M12.1: far branches become peoples of their own)
 [PASS] famine strikes somewhere (≥60% of seeds)            5/5   (M2.6: failed rains have a price)
-[PASS] famine bounded (<150/century worst seed)     13/century   (M2.6: hunger is a visitation, not the weather)
-[PASS] mean rank-size slope                 -1.05 over 5 seeds   (M2.3 gate: Zipf holds across the sweep)
-CHECKS: 16 pass · 1 warn · 0 fail
+[PASS] famine bounded (<150/century worst seed)     32/century   (M2.6: hunger is a visitation, not the weather)
+[PASS] mean rank-size slope                 -1.14 over 5 seeds   (M2.3 gate: Zipf holds across the sweep)
+CHECKS: 18 pass · 1 warn · 0 fail

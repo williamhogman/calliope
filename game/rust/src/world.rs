@@ -114,6 +114,24 @@ pub struct World {
     /// Pure derived state (like `landform`/`permafrost`): recomputed
     /// at the dawn, folded into `hash_state`, never ticked.
     pub currents: crate::currents::Currents,
+    /// M43 — the tides: per-cell range and basin-enclosure class
+    /// solved from the final coastline geometry (Green's-law shoaling,
+    /// quarter-wave funnel resonance, landlocked seas near-still).
+    /// Pure derived state (like `currents`): recomputed at the dawn,
+    /// folded into `hash_state`, never ticked.
+    pub tides: crate::tides::Tides,
+    /// M44 — longshore drift: CoastForm per cell (spit / barrier /
+    /// lagoon) and the deposit ledger, written at the glacial stage's
+    /// close — the deposits ARE the height field, so climate, rivers,
+    /// tides and settlements all read the grown coast. Widened at the
+    /// dawn, folded into `hash_state`, never ticked.
+    pub coastform: crate::coast::Coast,
+    /// M45 — harbor shelter per cell: enclosure + fetch + the drift's
+    /// forms, the coast read as sailors read it (settlements::
+    /// shelter_score). Computed pre-widen at the dawn so founding and
+    /// colony siting price the anchorage; exactly 0.0 off the coastal
+    /// band. Widened at the dawn, folded into `hash_state`, never ticked.
+    pub shelter: ndarray::Array2<f32>,
     pub features: Vec<Feature>,
     pub routes: Vec<Route>,
     pub world_name: String,
@@ -151,9 +169,12 @@ pub struct World {
     site_score: Array2<f64>,
     food_grid: Array2<f64>,
     near_fresh: Array2<bool>,
-    coast: Array2<bool>,
+    /// The coastal band (land within 2 cells of sea) — the ground the
+    /// shelter field scores; pub so diagnostics read the same mask.
+    pub coast: Array2<bool>,
     max_settlements: usize,
-    trade: trade::TradeGrid,
+    /// pub since M46: diagnose re-walks route legs against the current.
+    pub trade: trade::TradeGrid,
     pub timings: Vec<(&'static str, f64)>,
 }
 
@@ -174,6 +195,7 @@ pub struct GenBuilder {
     plates: Option<crate::plates::Plates>,
     sealevel: Option<crate::sealevel::SeaLevel>,
     ice: Option<crate::ice::Ice>,
+    coastform: Option<crate::coast::Coast>,
     height64: Option<Array2<f64>>,
     water: Option<Array2<bool>>,
     tmean64: Option<Array2<f64>>,
@@ -229,6 +251,7 @@ impl GenBuilder {
             plates: None,
             sealevel: None,
             ice: None,
+            coastform: None,
             height64: None,
             water: None,
             tmean64: None,
@@ -335,10 +358,18 @@ impl GenBuilder {
         // M30 — the loess mantle: glacial silt blown equatorward off the
         // aprons, the warm end of the depositional footprint (soil only)
         crate::ice::loess_mantle(h, &mut ice);
-        // the carve moves the waterline: fjords drown, floors drop
+        let tg = now_ms();
+        self.timings.push(("glacial", tg - t));
+        // M44 — longshore drift: the last hand on the land before the
+        // climate reads it. Waves walk sand along the windward shores;
+        // spits hook off the headlands, offshore bars daylight into
+        // barriers, and lagoons close behind them.
+        self.coastform = Some(crate::coast::drift(h));
+        self.timings.push(("coast", now_ms() - tg));
+        // the carve moves the waterline: fjords drown, floors drop —
+        // and the drift's new ground stands above it
         self.water = Some(h.mapv(|v| v < 0.0));
         self.ice = Some(ice);
-        self.timings.push(("glacial", now_ms() - t));
     }
 
     fn stage_climate(&mut self) {
@@ -548,6 +579,14 @@ impl GenBuilder {
         let t7 = now_ms();
         let mut taken: HashSet<String> = HashSet::new();
         let mut rng9000 = crate::util::rng(seed + 9000);
+        // M45 — the sailor's reading of the shore: harbor shelter solved
+        // on the same pre-widen grid the drift just shaped, before any
+        // site is chosen. Founding, colony siting and harbour dues all
+        // price the anchorage from this one field.
+        let shelter = settlements::shelter_score(
+            &height,
+            &self.coastform.as_ref().expect("glacial stage ran").form,
+        );
         let founded = settlements::found_settlements(
             &height,
             &biome_map,
@@ -557,6 +596,7 @@ impl GenBuilder {
             &discharge,
             &deposits,
             &fertility,
+            &shelter,
             &mut rng9000,
             &mut taken,
         );
@@ -623,6 +663,8 @@ impl GenBuilder {
             &discharge,
             &tmean,
             &tamp,
+            &shelter,
+            &pamp,
             (size / 128).max(1),
         );
         let routes = trade::build_routes(
@@ -632,6 +674,7 @@ impl GenBuilder {
             &flags,
             &discharge,
             &flow_amp,
+            &shelter,
         );
         trade::mark_ports(&mut setts, &routes);
         // The roads themselves name the land: passes where they climb,
@@ -760,6 +803,9 @@ impl GenBuilder {
                 flow_amp,
                 strahler: hydro.strahler,
                 rock,
+                // M47 — placeholder like territory: the upwelling shore is
+                // solved at the dawn, off the final post-widen coastline.
+                upwelling: Array2::from_elem((1, 1), 0.0f32),
                 territory: Array2::from_elem((1, 1), -1),
                 peoples_map: Array2::from_elem((1, 1), -1),
             },
@@ -791,6 +837,8 @@ impl GenBuilder {
             ice: self.ice.take().expect("glacial stage ran"),
             permafrost: crate::permafrost::Permafrost::empty(),
             currents: crate::currents::Currents::empty(),
+            tides: crate::tides::Tides::empty(),
+            coastform: self.coastform.take().expect("glacial stage ran"),
             seismic: crate::seismic::Seismic::empty(),
             volcanism: crate::seismic::Volcanism::empty(),
             features,
@@ -813,6 +861,7 @@ impl GenBuilder {
             food_grid: founded.food_grid,
             near_fresh: founded.near_fresh,
             coast: founded.coast,
+            shelter,
             max_settlements: founded.max_settlements,
             trade: trade_grid,
             timings,
@@ -869,6 +918,21 @@ impl GenBuilder {
         // Post-widen, like the coasts: the margins widen the basins.
         let water_now = world.fields.height.mapv(|h| h < 0.0);
         world.currents = crate::currents::Currents::compute(&water_now);
+        // M47 — the nutrient coasts: offshore trades and cold rims mark
+        // the upwelling shore off the same final coastline, packed for
+        // the inspector and banked for Era IV's fisheries.
+        world.fields.upwelling = crate::climate::upwelling(&water_now, &world.currents.v);
+        // M43 — the shore breathes daily: tidal range solved off the
+        // final basin geometry, then the landform vocabulary learns
+        // the flats and the estuary mouths. Post-widen, like every
+        // coastal reading; the earlier stories keep precedence.
+        world.tides = crate::tides::Tides::compute(&world.fields.height);
+        crate::landform::stamp_tidal(
+            &mut world.landform,
+            &world.tides,
+            &world.fields.height,
+            &world.fields.flags,
+        );
         // M34 — the ice that remains: modern mountain glaciers wherever
         // today's climate keeps the annual mass balance positive. Since
         // M35 the balance is computed at the climate stage (hydrology
@@ -994,6 +1058,8 @@ impl World {
         self.fields.fertility = grow(&self.fields.fertility, pad, |_, _| 0.0);
         self.site_score = grow(&self.site_score, pad, |_, _| 0.0);
         self.food_grid = grow(&self.food_grid, pad, |_, _| 0.0);
+        // M45 — the margins are open ocean: no anchorage, no shelter.
+        self.shelter = grow(&self.shelter, pad, |_, _| 0.0f32);
         // M28/M29/M30 — the ice ledger rides along: margins are open water.
         self.ice.thickness = grow(&self.ice.thickness, pad, |_, _| 0.0f32);
         self.ice.carved = grow(&self.ice.carved, pad, |_, _| 0.0f32);
@@ -1005,6 +1071,8 @@ impl World {
         self.ice.modern = grow(&self.ice.modern, pad, |_, _| 0.0f32);
         self.ice.melt = grow(&self.ice.melt, pad, |_, _| 0.0f32);
         self.ice.melt_amp = grow(&self.ice.melt_amp, pad, |_, _| 0.0f32);
+        // M44 — the drift ledger rides along: margins are open sea.
+        self.coastform.widen(pad);
         for p in self
             .ice
             .cirques
@@ -1099,6 +1167,46 @@ impl World {
                 true
             }
         });
+        // M45 — no land in the margins, so no anchorage to discount.
+        let tsh = self.trade.shelter.clone();
+        self.trade.shelter = Array2::from_shape_fn((dh, dw + 2 * dpad), |(y, x)| {
+            let xi = x as isize - dp;
+            if xi >= 0 && (xi as usize) < dw {
+                tsh[[y, xi as usize]]
+            } else {
+                0.0
+            }
+        });
+        // M46 — the margins are open blue water with no solved gyre:
+        // zero current there (wind and the doldrum rows are latitude
+        // laws and ride each row unchanged into the margins).
+        let tcu = self.trade.cu.clone();
+        self.trade.cu = Array2::from_shape_fn((dh, dw + 2 * dpad), |(y, x)| {
+            let xi = x as isize - dp;
+            if xi >= 0 && (xi as usize) < dw {
+                tcu[[y, xi as usize]]
+            } else {
+                0.0
+            }
+        });
+        let tcv = self.trade.cv.clone();
+        self.trade.cv = Array2::from_shape_fn((dh, dw + 2 * dpad), |(y, x)| {
+            let xi = x as isize - dp;
+            if xi >= 0 && (xi as usize) < dw {
+                tcv[[y, xi as usize]]
+            } else {
+                0.0
+            }
+        });
+        let top = self.trade.open.clone();
+        self.trade.open = Array2::from_shape_fn((dh, dw + 2 * dpad), |(y, x)| {
+            let xi = x as isize - dp;
+            if xi >= 0 && (xi as usize) < dw {
+                top[[y, xi as usize]]
+            } else {
+                true
+            }
+        });
         // M37 — the freeze rides along: the margins are open ocean at the
         // same latitude with edge-extended climate, so the edge column's
         // ice calendar extends west and east unchanged.
@@ -1107,6 +1215,15 @@ impl World {
         self.trade.frozen = Array2::from_shape_fn((fh, fw + 2 * pad), |(y, x)| {
             let xi = (x as isize - p).clamp(0, fw as isize - 1) as usize;
             fz[[y, xi]]
+        });
+        // M48 — the monsoon lean rides the same law: the edge column's
+        // sailing calendar extends unchanged (and the frame's coasts sit
+        // far enough in that the margins read near zero anyway).
+        let mn = self.trade.mons.clone();
+        let (mh, mw) = mn.dim();
+        self.trade.mons = Array2::from_shape_fn((mh, mw + 2 * pad), |(y, x)| {
+            let xi = (x as isize - p).clamp(0, mw as isize - 1) as usize;
+            mn[[y, xi]]
         });
 
         // Everything with an x slides east.
@@ -2523,7 +2640,7 @@ impl World {
     /// wasm-replay leg can *measure* rather than assume their fate.
     pub fn earth_hash_line(&self) -> String {
         format!(
-            "plates={:016x} rock={:016x} seismic={:016x} volcanism={:016x} sealevel={:016x} landform={:016x} ice={:016x} permafrost={:016x}",
+            "plates={:016x} rock={:016x} seismic={:016x} volcanism={:016x} sealevel={:016x} landform={:016x} ice={:016x} permafrost={:016x} tides={:016x} coast={:016x}",
             self.plates.hash(),
             crate::util::fnv1a64(self.fields.rock.as_slice().expect("rock grid is contiguous")),
             self.seismic.hash(),
@@ -2532,6 +2649,8 @@ impl World {
             crate::landform::hash(&self.landform),
             self.ice.hash(),
             self.permafrost.hash(),
+            self.tides.hash(),
+            self.coastform.hash(),
         )
     }
 
