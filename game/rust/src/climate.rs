@@ -41,6 +41,25 @@ pub const HEAT_COAST_DECAY: f64 = 0.55;
 /// How far inland the sea reaches, rings of cells (×4 km).
 pub const HEAT_COAST_RINGS: usize = 6;
 
+// ------------------------------------------- M50 metamorphic harness
+
+/// M50 — the synthetic warm current the metamorphic harness injects:
+/// a poleward ribbon hugging every shore in the subtropical/temperate
+/// band. Not a world field — a probe, built to be switched off again,
+/// so the climate's *response* is what gets measured rather than the
+/// happenstance strength of any one seed's real gyre.
+pub const META_WARM_V: f64 = 3.0;
+/// How far offshore the ribbon runs, cells (×4 km).
+pub const META_STRIP: f64 = 16.0;
+/// Latitude window the ribbon occupies, degrees |lat|.
+pub const META_LAT: (f64, f64) = (10.0, 70.0);
+/// M50 gate: killing the ribbon must cool the coast it touched by at
+/// least this much, mean over the touched land, every seed.
+pub const META_COOL_MIN: f64 = 2.0;
+/// M50 gate: share of the touched coast whose rain must fall with the
+/// current — the direction has to be the rule, not the average.
+pub const META_RAIN_SHARE_MIN: f64 = 0.70;
+
 // ------------------------------------------------- current-aware rain
 
 /// M42 — marine-layer stability response per °C of SST anomaly: cold
