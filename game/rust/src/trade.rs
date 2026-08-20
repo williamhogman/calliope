@@ -57,6 +57,14 @@ pub const PLAN_COST: f64 = 0.3;
 pub const SAIL_CURRENT_GAIN: f64 = 0.55;
 /// Cost swing per unit of zonal wind-stress alignment (|τ| ≤ 1.0).
 pub const SAIL_WIND_GAIN: f64 = 0.25;
+
+/// M50 — the current-strength ladder the metamorphic harness prices a
+/// fixed lane against: 0 = a dead ocean, 1 = this world's own gyres,
+/// 2 = twice the flow. A lane's favourable passage must fall and its
+/// adverse passage rise, strictly, all the way up the ladder.
+pub const META_CURRENT_LADDER: [f64; 5] = [0.0, 0.5, 1.0, 1.5, 2.0];
+/// How many sea lanes the harness prices per seed (the longest ones).
+pub const META_LANES: usize = 24;
 /// The physics floor on the discount side — a following sea can at
 /// most double a ship's effective speed. Admissibility is enforced
 /// separately and exactly: each cell's multiplier is also clamped to
@@ -254,6 +262,11 @@ fn smoothstep(x: f64, lo: f64, hi: f64) -> f64 {
 /// The downsampled world the caravans plan over: what each step costs,
 /// which cells are open water (so embarking can be charged), and the
 /// months that water is icebound (M37).
+///
+/// Clone so the M50 metamorphic harness can price the same lane over a
+/// grid whose currents have been scaled — the perturbation never
+/// touches the world's own grid.
+#[derive(Clone)]
 pub struct TradeGrid {
     pub cost: Array2<f64>,
     pub sea: Array2<bool>,

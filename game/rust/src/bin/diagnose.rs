@@ -19,6 +19,7 @@
 //!   diagnose sweep       <size> <years> <seeds> cross-seed robustness table
 //!   diagnose earth       <size> <years> <seeds> fault seams + quake cadence (M22)
 //!   diagnose ocean       <size> <seeds>         gyres, coast heat, upwelling, sea seasons (M49)
+//!   diagnose ocean       <size> <seeds> --metamorphic  kill/scale the currents, assert response (M50)
 //!   diagnose seismic-hash <seed> <size> <months> bare ledger hash (wasm replay leg)
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -7063,6 +7064,395 @@ fn cmd_ocean(size: usize, seeds: Vec<i64>) {
     c.print();
 }
 
+
+// ================================================== M50 metamorphic ocean
+
+/// One seed's metamorphic reading: what the injected warm current did
+/// to its coast, and how a fixed sea lane's passage answers the
+/// current-strength ladder.
+struct MetaRow {
+    seed: i64,
+    strip: usize,
+    coast: usize,
+    dt: f64,
+    dt_min: f64,
+    dp: f64,
+    rain_share: f64,
+    far_touched: usize,
+    lanes: usize,
+    fav: Vec<f64>,
+    adv: Vec<f64>,
+    fav_mono: bool,
+    adv_mono: bool,
+    gap_mono: bool,
+}
+
+/// M50 — the ocean stack proves it *responds*, not merely that it once
+/// looked plausible. Two metamorphic relations, both hard:
+///
+/// 1. **Kill the warm current.** A synthetic poleward ribbon is laid
+///    along every shore in the subtropical/temperate band, the climate
+///    leg (heat transport → annual mean → the rain march) is solved
+///    with it and again with it zeroed, and the coast the ribbon
+///    touched must cool by at least `META_COOL_MIN` and dry with it.
+///    The current is synthetic on purpose: the relation under test is
+///    the pipeline's response law, which must not depend on whether a
+///    given seed happened to grow a strong western boundary.
+/// 2. **Scale the currents.** Each sailed lane's own path is priced
+///    over grids whose currents are multiplied by the M50 ladder. The
+///    favourable passage must fall monotonically and the adverse
+///    passage rise monotonically — the sail law is affine in the
+///    current under a monotone clamp, so anything else is a bug.
+fn cmd_ocean_metamorphic(size: usize, seeds: Vec<i64>) {
+    header(
+        "OCEAN · METAMORPHIC",
+        &format!("{}x{} · {} seeds", size, size, seeds.len()),
+    );
+    println!("kill the warm current · scale the currents  (M50)");
+
+    let ladder = calliope::trade::META_CURRENT_LADDER;
+    let mut rows_out: Vec<MetaRow> = Vec::new();
+
+    for &seed in &seeds {
+        let w = World::generate(seed, size);
+        let (rows, cols) = w.fields.height.dim();
+        // The dawn widens the world with ocean margins (ADR-0014), so the
+        // shipped grid is wider than it is tall while the climate march
+        // is written for the square domain it was solved on. Crop back to
+        // the centred square: the same land, the margins the widening
+        // added set aside.
+        if cols < rows {
+            println!(" seed {} — grid {}x{} is narrower than tall, no square domain to read", seed, rows, cols);
+            continue;
+        }
+        let x0 = (cols - rows) / 2;
+        let cols = rows;
+        let height = w
+            .fields
+            .height
+            .slice(ndarray::s![.., x0..x0 + rows])
+            .mapv(|h| h as f64);
+        let water = height.mapv(|h| h < 0.0);
+        let lat = calliope::climate::latitude_deg(rows);
+        let cont = calliope::climate::continentality(&water);
+        let tbase = calliope::climate::temperature_mean(&height, &lat);
+
+        // ---- 1. the synthetic warm ribbon -----------------------------
+        // Poleward flow on both hemispheres (grid v is southward-positive,
+        // so the north wants v < 0): water that remembers a warmer origin
+        // latitude, which is exactly what current_bias reads.
+        let shore_d = ndimage::distance_transform_edt(&water);
+        let mid = (rows - 1) as f64 / 2.0;
+        let vs = calliope::climate::META_WARM_V as f32;
+        let (lat_lo, lat_hi) = calliope::climate::META_LAT;
+        let mut v_on = ndarray::Array2::<f32>::zeros((rows, cols));
+        let mut strip = ndarray::Array2::<bool>::from_elem((rows, cols), false);
+        let mut n_strip = 0usize;
+        for y in 0..rows {
+            let la = (-90.0 + y as f64 * 180.0 / (rows - 1) as f64).abs();
+            if !(lat_lo..=lat_hi).contains(&la) {
+                continue;
+            }
+            for x in 0..cols {
+                if !water[[y, x]] || shore_d[[y, x]] > calliope::climate::META_STRIP {
+                    continue;
+                }
+                v_on[[y, x]] = if (y as f64) < mid { -vs } else { vs };
+                strip[[y, x]] = true;
+                n_strip += 1;
+            }
+        }
+        let v_off = ndarray::Array2::<f32>::zeros((rows, cols));
+        let heat_on = calliope::climate::current_bias(&water, &v_on);
+        let heat_off = calliope::climate::current_bias(&water, &v_off);
+        let t_on = &tbase + &heat_on;
+        let t_off = &tbase + &heat_off;
+        let (p_on, _) =
+            calliope::climate::precipitation(&height, &water, &t_on, &lat, &cont, &heat_on);
+        let (p_off, _) =
+            calliope::climate::precipitation(&height, &water, &t_off, &lat, &cont, &heat_off);
+
+        // The coast under test: land 8-adjacent to the ribbon.
+        let mut n_coast = 0usize;
+        let (mut dt_sum, mut dp_sum, mut rain_up) = (0.0f64, 0.0f64, 0usize);
+        let mut dt_min = f64::MAX;
+        let mut far_touched = 0usize;
+        for y in 0..rows {
+            for x in 0..cols {
+                if water[[y, x]] {
+                    continue;
+                }
+                let mut touches = false;
+                for dy in -1i64..=1 {
+                    for dx in -1i64..=1 {
+                        let yy = y as i64 + dy;
+                        let xx = x as i64 + dx;
+                        if yy < 0 || xx < 0 || yy >= rows as i64 || xx >= cols as i64 {
+                            continue;
+                        }
+                        if strip[[yy as usize, xx as usize]] {
+                            touches = true;
+                        }
+                    }
+                }
+                // control: the reach is bounded — deep interior land,
+                // beyond the coastal rings, must not move one bit.
+                if shore_d[[y, x]] == 0.0
+                    && !touches
+                    && heat_on[[y, x]] != 0.0
+                    && dist_from_sea(&water, y, x, cols, rows)
+                        > calliope::climate::HEAT_COAST_RINGS
+                {
+                    far_touched += 1;
+                }
+                if !touches {
+                    continue;
+                }
+                n_coast += 1;
+                let dt = t_on[[y, x]] - t_off[[y, x]];
+                dt_sum += dt;
+                dt_min = dt_min.min(dt);
+                let base = p_off[[y, x]].max(1e-6);
+                let dp = (p_on[[y, x]] - p_off[[y, x]]) / base;
+                dp_sum += dp;
+                if p_on[[y, x]] > p_off[[y, x]] {
+                    rain_up += 1;
+                }
+            }
+        }
+        let dt = dt_sum / n_coast.max(1) as f64;
+        let dp = dp_sum / n_coast.max(1) as f64;
+        let rain_share = rain_up as f64 / n_coast.max(1) as f64;
+        if n_coast == 0 {
+            dt_min = f64::NAN;
+        }
+
+        // ---- 2. the current-strength ladder ---------------------------
+        // Each lane keeps its own path; only the water under it changes.
+        let g = &w.trade;
+        let f = g.f;
+        let (gh, gw) = g.cost.dim();
+        let mut lanes: Vec<&calliope::trade::Route> =
+            w.routes.iter().filter(|r| r.sea > 0.0).collect();
+        lanes.sort_by(|a, b| {
+            b.cost
+                .partial_cmp(&a.cost)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.a.cmp(&b.a))
+                .then(a.b.cmp(&b.b))
+        });
+        let grids: Vec<calliope::trade::TradeGrid> = ladder
+            .iter()
+            .map(|&k| {
+                let mut gk = g.clone();
+                gk.cu.mapv_inplace(|c| c * k);
+                gk.cv.mapv_inplace(|c| c * k);
+                gk
+            })
+            .collect();
+        let mut fav = vec![0.0f64; ladder.len()];
+        let mut adv = vec![0.0f64; ladder.len()];
+        let mut n_lane = 0usize;
+        for r in lanes.iter() {
+            if n_lane >= calliope::trade::META_LANES {
+                break;
+            }
+            let p0 = r.path.first().copied().unwrap_or([0, 0]);
+            let p1 = r.path.last().copied().unwrap_or([0, 0]);
+            let start = ((p0[1].max(0) as usize / f).min(gh - 1), (p0[0].max(0) as usize / f).min(gw - 1));
+            let goal = ((p1[1].max(0) as usize / f).min(gh - 1), (p1[0].max(0) as usize / f).min(gw - 1));
+            let Some((path, _)) = calliope::trade::astar(g, start, goal) else {
+                continue;
+            };
+            // only lanes that actually cross open water can answer
+            let open_cells = path.iter().filter(|&&(y, x)| g.open[[y, x]]).count();
+            if open_cells < 3 {
+                continue;
+            }
+            for (i, gk) in grids.iter().enumerate() {
+                let out = calliope::trade::path_cost(gk, &path, false);
+                let home = calliope::trade::path_cost(gk, &path, true);
+                fav[i] += out.min(home);
+                adv[i] += out.max(home);
+            }
+            n_lane += 1;
+        }
+        if n_lane > 0 {
+            for i in 0..ladder.len() {
+                fav[i] /= n_lane as f64;
+                adv[i] /= n_lane as f64;
+            }
+        }
+        
+        let strict_up = |v: &[f64]| v.windows(2).all(|w| w[1] > w[0] + 1e-9);
+        let gap: Vec<f64> = adv.iter().zip(fav.iter()).map(|(a, f)| a - f).collect();
+        // The favourable passage is affine in the current only up to the
+        // admissibility clamp (SAIL_MULT_FLOOR / PLAN_COST): once a lane's
+        // fastest water saturates the floor, extra current buys nothing
+        // there while a neighbouring rung still moves, so a rung can sit
+        // flat by a fraction of a percent. The relation under test is
+        // therefore "never dearer, and cheaper end to end" — with the
+        // strictness carried by the adverse passage and the gap, which no
+        // clamp bounds from below.
+        let tol = 0.01;
+        let fav_mono = n_lane > 0
+            && fav.windows(2).all(|w| w[1] <= w[0] * (1.0 + tol))
+            && fav[ladder.len() - 1] < fav[0] - 1e-9;
+        let adv_mono = n_lane > 0 && strict_up(&adv);
+        let gap_mono = n_lane > 0 && strict_up(&gap);
+
+        println!();
+        println!(
+            " seed {} — ribbon {} ocean cells · coast under test {} land cells",
+            seed, n_strip, n_coast
+        );
+        println!(
+            "   kill the current: coast cools {:.2}°C mean (weakest cell {:.2}) · rain falls {:.1}% mean · {:.0}% of cells drier without it · far interior touched {}",
+            dt, dt_min, 100.0 * dp, 100.0 * rain_share, far_touched
+        );
+        print!("   ladder (×current):");
+        for (i, k) in ladder.iter().enumerate() {
+            print!(" {:.1}→{:.1}/{:.1}", k, fav[i], adv[i]);
+        }
+        println!(
+            "   [{} lanes · favourable{} · adverse{}]",
+            n_lane,
+            if fav_mono { " falls" } else { " NOT monotone" },
+            if adv_mono { " rises" } else { " NOT monotone" }
+        );
+
+        rows_out.push(MetaRow {
+            seed,
+            strip: n_strip,
+            coast: n_coast,
+            dt,
+            dt_min,
+            dp,
+            rain_share,
+            far_touched,
+            lanes: n_lane,
+            fav,
+            adv,
+            fav_mono,
+            adv_mono,
+            gap_mono,
+        });
+    }
+
+    println!();
+    println!(
+        " {:>6} {:>8} {:>8} {:>9} {:>9} {:>9} {:>8} {:>6} {:>9} {:>9}",
+        "seed", "ribbon", "coast", "cool ΔT", "min ΔT", "rain Δ", "drier%", "lanes", "fav 0→2", "adv 0→2"
+    );
+    for r in &rows_out {
+        let n = r.fav.len();
+        println!(
+            " {:>6} {:>8} {:>8} {:>8.2}C {:>8.2}C {:>8.1}% {:>7.0}% {:>6} {:>4.1}→{:<4.1} {:>4.1}→{:<4.1}",
+            r.seed, r.strip, r.coast, r.dt, r.dt_min, 100.0 * r.dp,
+            100.0 * r.rain_share, r.lanes,
+            r.fav.first().copied().unwrap_or(0.0), r.fav.get(n - 1).copied().unwrap_or(0.0),
+            r.adv.first().copied().unwrap_or(0.0), r.adv.get(n - 1).copied().unwrap_or(0.0),
+        );
+    }
+
+    let n = rows_out.len().max(1) as f64;
+    let mean_dt: f64 = rows_out.iter().map(|r| r.dt).sum::<f64>() / n;
+    let worst_dt = rows_out.iter().map(|r| r.dt).fold(f64::MAX, f64::min);
+    let mean_dp = rows_out.iter().map(|r| 100.0 * r.dp).sum::<f64>() / n;
+    let worst_share = rows_out.iter().map(|r| r.rain_share).fold(f64::MAX, f64::min);
+    let far = rows_out.iter().map(|r| r.far_touched).sum::<usize>();
+    let lanes_min = rows_out.iter().map(|r| r.lanes).min().unwrap_or(0);
+    let fav_all = !rows_out.is_empty() && rows_out.iter().all(|r| r.fav_mono);
+    let adv_all = !rows_out.is_empty() && rows_out.iter().all(|r| r.adv_mono);
+    let gap_all = !rows_out.is_empty() && rows_out.iter().all(|r| r.gap_mono);
+    let gap_gain = {
+        let g: Vec<f64> = rows_out
+            .iter()
+            .filter(|r| r.lanes > 0)
+            .map(|r| {
+                let n = r.fav.len();
+                (r.adv[n - 1] - r.fav[n - 1]) - (r.adv[0] - r.fav[0])
+            })
+            .collect();
+        if g.is_empty() { f64::NAN } else { g.iter().sum::<f64>() / g.len() as f64 }
+    };
+
+    let mut c = Checks::default();
+    c.must(
+        "the harness ran every seed",
+        rows_out.len() == seeds.len() && rows_out.iter().all(|r| r.coast >= 200),
+        format!("{}/{} seeds · min coast {}", rows_out.len(), seeds.len(),
+            rows_out.iter().map(|r| r.coast).min().unwrap_or(0)),
+        "M50: a relation measured on a handful of cells is an anecdote",
+    );
+    c.must(
+        "killing the warm current cools its coast",
+        worst_dt >= calliope::climate::META_COOL_MIN,
+        format!("{:.2}°C worst seed · {:.2}°C mean", worst_dt, mean_dt),
+        "M50 gate: ≥2.0 °C mean cooling over the touched coast, every seed",
+    );
+    c.must(
+        "killing the warm current dries its coast",
+        mean_dp > 0.0 && worst_share >= calliope::climate::META_RAIN_SHARE_MIN,
+        format!("{:.1}% mean · {:.0}% of cells worst seed", mean_dp, 100.0 * worst_share),
+        "M50: the marine layer falls with the water that fed it (STAB_GAIN), as a rule not an average",
+    );
+    c.must(
+        "the reach stays coastal",
+        far == 0,
+        format!("{} interior cells moved", far),
+        "M50 control: beyond HEAT_COAST_RINGS the land must not feel a current at all",
+    );
+    c.must(
+        "every seed prices open-water lanes",
+        lanes_min > 0,
+        format!("min {} lanes", lanes_min),
+        "M50 gate: the ladder needs blue-water passages to answer it",
+    );
+    c.must(
+        "favourable passage falls with the current",
+        fav_all,
+        format!("{}/{} seeds strict", rows_out.iter().filter(|r| r.fav_mono).count(), rows_out.len()),
+        "M50 gate: never dearer rung to rung (1% clamp tolerance) and cheaper at ×2 than ×0, every seed",
+    );
+    c.must(
+        "adverse passage rises with the current",
+        adv_all,
+        format!("{}/{} seeds strict", rows_out.iter().filter(|r| r.adv_mono).count(), rows_out.len()),
+        "M50 gate: beating up-current must cost more, every rung",
+    );
+    c.must(
+        "the passage gap widens monotonically",
+        gap_all,
+        format!("{:+.2} cost gained ×0→×2", gap_gain),
+        "M50 gate: the travel-time delta between out and home answers current strength, strictly",
+    );
+    c.print();
+}
+
+/// Chebyshev distance from `(y, x)` to the nearest water cell, capped —
+/// the control leg only needs to know "further inland than the reach".
+fn dist_from_sea(water: &ndarray::Array2<bool>, y: usize, x: usize, cols: usize, rows: usize) -> usize {
+    let cap = calliope::climate::HEAT_COAST_RINGS + 1;
+    for r in 1..=cap {
+        let y0 = y.saturating_sub(r);
+        let y1 = (y + r).min(rows - 1);
+        let x0 = x.saturating_sub(r);
+        let x1 = (x + r).min(cols - 1);
+        for yy in y0..=y1 {
+            for xx in x0..=x1 {
+                if yy != y0 && yy != y1 && xx != x0 && xx != x1 {
+                    continue;
+                }
+                if water[[yy, xx]] {
+                    return r;
+                }
+            }
+        }
+    }
+    cap
+}
+
 fn main() {
     let a: Vec<String> = std::env::args().collect();
     let cmd = a.get(1).map(|s| s.as_str()).unwrap_or("help");
@@ -7098,11 +7488,16 @@ fn main() {
         "bench" => cmd_bench(),
         "ocean" => {
             let size = sized(2, 512);
+            let meta = a.iter().any(|s| s == "--metamorphic");
             let mut seeds: Vec<i64> = a.get(3..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
             if seeds.is_empty() {
                 seeds = vec![12345, 777, 31337, 90210, 555];
             }
-            cmd_ocean(size, seeds);
+            if meta {
+                cmd_ocean_metamorphic(size, seeds);
+            } else {
+                cmd_ocean(size, seeds);
+            }
         }
         "systems" => cmd_systems(num(2, 12345), sized(3, 512), num(4, 150) as usize),
         "perf" => {
