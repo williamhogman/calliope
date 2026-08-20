@@ -584,5 +584,8 @@ pub const BANDS: &[Band] = &[
     Band { name: "heat transport net bias", sweet: (0.0, 0.3), hard: (0.0, 0.6), target: "sweet ≤0.3 °C · hard ≤0.6 (M41: |world-mean bias| — advection redistributes heat, it must not mint it)" },
     Band { name: "cold-rim rain suppression", sweet: (0.25, 0.80), hard: (0.10, 0.95), target: "sweet 0.25–0.80 · hard 0.10–0.95 (M42: sub-polar cold-rim coastal land against aspect-matched neutral coasts at its latitude — the Atacama law)" },
     Band { name: "warm-rim rain boost", sweet: (1.02, 2.20), hard: (0.98, 3.50), target: "sweet 1.02–2.20 · hard 0.98–3.50 (M42: sub-polar warm-rim coastal land against aspect-matched neutral coasts at its latitude — the Gulf-Stream law)" },
+    Band { name: "current-coast warm anomaly", sweet: (0.1, 6.0), hard: (0.0, 12.0), target: "sweet +0.1..+6 °C · hard 0..+12 (M49: mean tmean of warm-rim coastal land against its own row's coastal mean)" },
+    Band { name: "current-coast cold anomaly", sweet: (-6.0, -0.1), hard: (-12.0, 0.0), target: "sweet −6..−0.1 °C · hard −12..0 (M49: mean tmean of cold-rim coastal land against its own row's coastal mean)" },
+    Band { name: "upwelling median latitude", sweet: (5.0, 60.0), hard: (0.0, 75.0), target: "sweet 5–60° · hard 0–75° (M49: median |latitude| of nutrient-rich coast — Earth's eastern-boundary systems run 5–45°)" },
     Band { name: "upwelling share of coastline", sweet: (0.03, 0.10), hard: (0.015, 0.15), target: "sweet 3–10% · hard 1.5–15% (M47: nutrient-rich share of coastal ocean cells — Earth's eastern-boundary analogues)" },
 ];

@@ -212,5 +212,11 @@ impl Currents {
 pub const BANDS: &[Band] = &[
     Band { name: "gyre basins per seed", sweet: (1.0, 6.0), hard: (1.0, 8.0), target: "sweet 1–6 · hard 1–8 (M40: labeled ocean basins ≥2500 cells carrying a qualifying subtropical gyre)" },
     Band { name: "surface current speed p95", sweet: (0.3, 3.0), hard: (0.1, 10.0), target: "sweet 0.3–3 · hard 0.1–10 (M40: p95 of the current index over subtropical-band ocean; SPEED_SCALE pins a typical world near 1)" },
+    // Measured, not guessed: the five probe seeds run 30.7k–34.1k cells
+    // per qualifying gyre at 512² — one ocean basin wide enough that each
+    // hemisphere's subtropical band is a third of a grid. Sweet brackets
+    // that envelope with room for a world whose land splits the basin;
+    // hard only insists the region is a gyre and not a puddle.
+    Band { name: "gyre cells per gyre", sweet: (2000.0, 60000.0), hard: (250.0, 120000.0), target: "sweet 2000–60000 · hard 250–120000 (M49: mean subtropical-band cell count of a qualifying gyre — topology, not sign: a gyre is a region)" },
     Band { name: "western boundary intensification", sweet: (1.5, 12.0), hard: (1.2, 30.0), target: "sweet 1.5–12 · hard 1.2–30 (M40: p95 speed in the 4-cell western strip over p95 in the interior — the Stommel signature, Gulf-Stream-side crowding)" },
 ];

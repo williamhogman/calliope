@@ -1237,6 +1237,8 @@ pub const BANDS: &[crate::util::Band] = &[
     // own 30% — closures dominate the mean (a shut lane swings 100%),
     // and a world whose monsoon lanes all stayed open would honestly
     // WARN here at gain 0.55 (open-water swing tops out near 20%).
+    crate::util::Band { name: "seasonal sea-lane share", sweet: (10.0, 80.0), hard: (2.0, 100.0), target: "M49: share of sea-touching lanes (%) whose year is not flat — ice-shut, gale-shut or monsoon-leaning" },
+    crate::util::Band { name: "sea-lane seasonality spread", sweet: (5.0, 100.0), hard: (1.0, 100.0), target: "M49: p90−p10 of per-lane throughput swing (pp) — the fleet's calendar must differ lane to lane, not move as one" },
     crate::util::Band { name: "monsoon lane share", sweet: (15.0, 55.0), hard: (5.0, 80.0), target: "M48: share of sea-touching lanes (%) sailing the monsoon calendar" },
     crate::util::Band { name: "monsoon throughput swing", sweet: (30.0, 100.0), hard: (15.0, 100.0), target: "M48 gate: monsoon-lane throughput swings ≥30% between the year's peak and its floor" },
 ];
