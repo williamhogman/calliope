@@ -1,27 +1,30 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-21 12:32 UTC
+mode: full · size: 512 · generated: 2026-08-21 13:17 UTC
 
-totals: 759 pass · 21 warn · 0 fail
+totals: 762 pass · 21 warn · 3 fail
 
 -- assay.txt
    all checks pass
 
 -- bench.txt
+[WARN] 512 generation time                         3114 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
 [WARN] median tick payload                          6450 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
-[WARN] worst long task                                    863 ms   (E10.7: single worst main-thread stall (ms); headless baseline 220)
+   all checks pass
 
 -- build.txt
 [WARN] wasm binary size                              3445645 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
 
 -- civ-12345.txt
 [WARN] events per year                                54.2   (sweet 2–48 · hard 0.5–100)
+[FAIL] the dry-frontier veto is load-bearing 0 dry towns without the veto · 0 with it   (M55 gate: lifting the well requirement must let colonists take waterless ground the real run refused — otherwise the gate is untested by this world)
 
 -- civ-777.txt
 [WARN] coastal town shelter lift                     1.19×   (M45: founded coastal towns sit on better-than-average anchorages)
 [WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
 [WARN] events per year                                64.2   (sweet 2–48 · hard 0.5–100)
+[FAIL] the dry-frontier veto is load-bearing 0 dry towns without the veto · 0 with it   (M55 gate: lifting the well requirement must let colonists take waterless ground the real run refused — otherwise the gate is untested by this world)
 
 -- climate-12345.txt
 [WARN] forest share of land                          23.3%   (sweet 25–60% · hard 15–75%)
@@ -69,10 +72,11 @@ totals: 759 pass · 21 warn · 0 fail
 [WARN] ruins per century (after y100)                15.00   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-[WARN] stage fertility ms                   187 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage settlements ms                 260 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2657 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 100                   164 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[FAIL] stage fertility ms                   268 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage naming ms                      134 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
+[WARN] stage settlements ms                 332 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         3300 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 100                   176 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
    all checks pass
