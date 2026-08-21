@@ -650,6 +650,106 @@ fn sor_sweep(
     }
 }
 
+// --------------------------------------------- M55 springs and oases
+
+/// M55 — where the buried water reaches the day.
+///
+/// Two ways the table becomes drinkable without a shaft. A **spring**
+/// is the head surface cutting the ground: on a hillside the table is a
+/// subdued replica of the terrain, so where the slope suddenly steepens
+/// the ground falls away faster than the water does and the water comes
+/// out. That is a break in slope, and it is measured as one — the drop
+/// below the cell steeper than the rise above it, with the table already
+/// within a couple of metres of the surface. An **oasis** is the arid
+/// case with no break at all: desert ground where the table sits inside
+/// the reach of phreatophyte roots, so the vegetation itself tells you
+/// the water is there.
+///
+/// Both are derived from the frozen `aquifer` grid and the frozen
+/// relief, so they inherit its determinism; neither rides the wire.
+pub struct DryWater {
+    /// The table daylights here — a running spring.
+    pub springs: Array2<bool>,
+    /// Arid ground standing over water shallow enough to root in.
+    pub oases: Array2<bool>,
+}
+
+/// A spring only counts where the table is this close to the surface.
+pub const SPRING_DAYLIGHT_M: f64 = 2.0;
+/// Minimum steepening across the cell (m of fall per km, downslope
+/// minus upslope) for the ground to outrun the water table.
+pub const SPRING_BREAK_M_PER_KM: f64 = 6.0;
+/// Below this downslope gradient the hillside is too gentle to open a
+/// seep however the curvature reads.
+pub const SPRING_MIN_SLOPE_M_PER_KM: f64 = 4.0;
+/// Phreatophytes (date palm, tamarisk, mesquite) root about this deep;
+/// past it the desert stays desert.
+pub const OASIS_DEPTH_M: f64 = 8.0;
+/// Arid by rainfall: below this the year cannot carry a farm on rain.
+pub const ARID_PRECIP_MM: f64 = 300.0;
+
+/// True where the year is too dry to settle on rainfall alone — the
+/// desert biome, or any ground under `ARID_PRECIP_MM`. One definition,
+/// shared by the siting veto and the diagnostics gate so the check and
+/// the world cannot drift apart.
+pub fn arid(biome: u8, precip_mm: f64) -> bool {
+    biome == crate::constants::DESERT || precip_mm < ARID_PRECIP_MM
+}
+
+/// Mark springs and oases over the solved table.
+pub fn springs_and_oases(
+    height: &Array2<f32>,
+    water: &Array2<bool>,
+    rivers: &Array2<bool>,
+    lakes: &Array2<bool>,
+    aquifer: &Array2<f32>,
+    biomes: &Array2<u8>,
+    precip: &Array2<f32>,
+) -> DryWater {
+    let (rows, cols) = height.dim();
+    let m_per_unit = crate::constants::METRES_PER_UNIT;
+    let km = crate::constants::KM_PER_CELL;
+    let mut springs = Array2::from_elem((rows, cols), false);
+    let mut oases = Array2::from_elem((rows, cols), false);
+    for y in 0..rows {
+        for x in 0..cols {
+            if water[[y, x]] || rivers[[y, x]] || lakes[[y, x]] {
+                continue;
+            }
+            let d = aquifer[[y, x]] as f64;
+            let s = height[[y, x]] as f64 * m_per_unit;
+            // Steepest fall below and steepest rise above, in m/km.
+            let mut down = 0.0f64;
+            let mut up = 0.0f64;
+            for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                let ny = y as isize + dy;
+                let nx = x as isize + dx;
+                if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
+                    continue;
+                }
+                let n = height[[ny as usize, nx as usize]] as f64 * m_per_unit;
+                let g = (s - n) / km;
+                if g > down {
+                    down = g;
+                }
+                if -g > up {
+                    up = -g;
+                }
+            }
+            if d <= SPRING_DAYLIGHT_M
+                && down >= SPRING_MIN_SLOPE_M_PER_KM
+                && down - up >= SPRING_BREAK_M_PER_KM
+            {
+                springs[[y, x]] = true;
+            }
+            if d <= OASIS_DEPTH_M && arid(biomes[[y, x]], precip[[y, x]] as f64) {
+                oases[[y, x]] = true;
+            }
+        }
+    }
+    DryWater { springs, oases }
+}
+
 // ---------------------------------------------------------------- bands
 
 use crate::util::Band;
@@ -662,5 +762,7 @@ pub const BANDS: &[Band] = &[
     Band { name: "strahler top order", sweet: (4.0, 9.0), hard: (3.0, 12.0), target: "sweet 4–9 · hard 3–12" },
     Band { name: "river seasonal swing", sweet: (0.05, 0.50), hard: (0.01, 0.90), target: "mean |amp| · sweet .05–.50 · hard .01–.90" },
     Band { name: "aquifer median depth m", sweet: (4.0, 60.0), hard: (1.0, 120.0), target: "M54: median depth to water on unpinned land · sweet 4–60 m · hard 1–120" },
+    Band { name: "spring share of land %", sweet: (0.05, 4.0), hard: (0.005, 12.0), target: "M55: land cells where the table daylights at a break in slope · sweet 0.05–4% · hard 0.005–12%" },
+    Band { name: "oasis share of arid land %", sweet: (0.2, 25.0), hard: (0.0, 60.0), target: "M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%" },
     Band { name: "glacier-fed river share %", sweet: (0.5, 15.0), hard: (0.05, 40.0), target: "sweet 0.5–15 · hard 0.05–40 (M35: % of river cells carrying ≥25% accumulated melt — the ice keeps its rivers; measured 1.3–1.5 on three seeds)" },
 ];

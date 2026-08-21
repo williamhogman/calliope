@@ -3260,6 +3260,72 @@ fn cmd_hydro(seed: i64, size: usize) {
         format!("arid {:.1} m vs humid {:.1} m", m_dry, m_wet),
         "M54: less recharge, lower mound — a well in the desert is a longer rope",
     );
+    // ------------------------------------------------- M55 springs & oases
+    let flags = &w.fields.flags;
+    let rivers = flags.mapv(|f| f & 1 != 0);
+    let lakes = flags.mapv(|f| f & 2 != 0);
+    let water = w.fields.height.mapv(|h| h < 0.0);
+    let dw = calliope::hydrology::springs_and_oases(
+        &w.fields.height,
+        &water,
+        &rivers,
+        &lakes,
+        &w.fields.aquifer,
+        &w.fields.biomes,
+        &w.fields.precip,
+    );
+    let land_n = land.iter().filter(|&&b| b).count().max(1) as f64;
+    let n_spring = dw.springs.iter().filter(|&&b| b).count();
+    let n_oasis = dw.oases.iter().filter(|&&b| b).count();
+    let mut arid_n = 0usize;
+    let mut arid_watered = 0usize;
+    let mut spring_shallow = 0usize;
+    for y in 0..w.size {
+        for x in 0..w.width {
+            if !land[[y, x]] {
+                continue;
+            }
+            if dw.springs[[y, x]] && (w.fields.aquifer[[y, x]] as f64) <= 2.0 {
+                spring_shallow += 1;
+            }
+            if calliope::hydrology::arid(
+                w.fields.biomes[[y, x]],
+                w.fields.precip[[y, x]] as f64,
+            ) {
+                arid_n += 1;
+                if dw.oases[[y, x]] || dw.springs[[y, x]] || rivers[[y, x]] || lakes[[y, x]] {
+                    arid_watered += 1;
+                }
+            }
+        }
+    }
+    let spring_pct = 100.0 * n_spring as f64 / land_n;
+    let oasis_pct = if arid_n == 0 { 0.0 } else { 100.0 * n_oasis as f64 / arid_n as f64 };
+    println!();
+    println!(
+        "springs & oases (M55): {} springs ({:.2}% of land) · {} oases ({:.1}% of arid land) · arid land with any water {:.1}%",
+        n_spring, spring_pct, n_oasis, oasis_pct,
+        100.0 * arid_watered as f64 / arid_n.max(1) as f64
+    );
+    c.band("spring share of land %", spring_pct, format!("{:.2}%", spring_pct));
+    c.band("oasis share of arid land %", oasis_pct, format!("{:.1}%", oasis_pct));
+    c.must(
+        "every spring stands on a shallow table",
+        spring_shallow == n_spring,
+        format!("{}/{}", spring_shallow, n_spring),
+        "M55 gate: a spring is the table daylighting — depth to water ≤2 m at every marked cell, by construction and by audit",
+    );
+    c.must(
+        "no oasis outside the dry country",
+        dw.oases.indexed_iter().all(|((y, x), &o)| {
+            !o || calliope::hydrology::arid(
+                w.fields.biomes[[y, x]],
+                w.fields.precip[[y, x]] as f64,
+            )
+        }),
+        format!("{} oases", n_oasis),
+        "M55 gate: oases exist only where the year is arid (desert biome or <300 mm)",
+    );
     c.must(
         "aquifer joins the state hash",
         hashed,
