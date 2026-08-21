@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 90210 · 640x512
 ========================================================================
-world: "Galum" · generated in 2475 ms
+world: "Galum" · generated in 2424 ms
 land: 116600 cells of 327680 (35.6%) · 1865600 km²
 hypsometry (land h): p5 0.015 · p25 0.085 · p50 0.206 · p75 0.328 · p95 0.466 · max 0.743
 bathymetry (sea h): p5 -0.593 · p50 -0.400 · p95 -0.030
