@@ -29,7 +29,7 @@ monsoon |amp| of annual rain: tropics 0.30 · extratropics 0.01
 
 sea ice (M37): 15.9% of ocean area ever frozen (40.9% of cells) · perennial 65154 cells · seasonal fringe 21863 cells · pack reaches 52°
 
-crop packages of the land: wheat 22.1% · rice 4.4% · maize 8.5% · pastoral 36.3% · wildland 28.7%
+crop packages of the land: wheat 17.2% · rice 1.8% · maize 8.1% · pastoral 35.8% · wildland 37.2%
 
 current-aware rain (M42): sub-polar cold-rim land 524 cells at 0.39× its aspect-matched coast · warm-rim 727 cells at 1.09×
   by wind belt: cold trades 1.00× (0) · westerlies 0.39× (524) · polar 1.08× (721)
@@ -47,11 +47,11 @@ upwelling (M47): 300 of 4467 coastline cells nutrient-rich (6.7%) · index p50 0
 [PASS] mean seasonal swing                           5.8°C   (sweet 4–14°C · hard 2–20°C)
 [PASS] tropical monsoon amplitude                     0.30   (sweet .12–.55 · hard .05–.85)
 [PASS] monsoon lives in the tropics           0.30 vs 0.01   (ITCZ march beats continental swing)
-[PASS] arable share of land                          34.9%   (M2.1: wheat+rice+maize belts cover the good land)
-[PASS] pastoral share of land                        36.3%   (M2.1: the dry steppe carries herds)
+[PASS] arable share of land                          27.0%   (M2.1: wheat+rice+maize belts cover the good land)
+[PASS] pastoral share of land                        35.8%   (M2.1: the dry steppe carries herds)
 [PASS] cold-rim rain suppression            0.39× (524 cells)   (sweet 0.25–0.80 · hard 0.10–0.95 (M42: sub-polar cold-rim coastal land against aspect-matched neutral coasts at its latitude — the Atacama law))
 [PASS] warm-rim rain boost                  1.09× (727 cells)   (sweet 1.02–2.20 · hard 0.98–3.50 (M42: sub-polar warm-rim coastal land against aspect-matched neutral coasts at its latitude — the Gulf-Stream law))
-[PASS] rice hugs the water                  rice 5030 vs wheat+maize 35048   (paddies are the exception, not the rule)
+[PASS] rice hugs the water                  rice 2042 vs wheat+maize 28952   (paddies are the exception, not the rule)
 [PASS] upwelling share of coastline                   6.7%   (sweet 3–10% · hard 1.5–15% (M47: nutrient-rich share of coastal ocean cells — Earth's eastern-boundary analogues))
 [PASS] upwelling keeps to the coast          0 stray cells   (M47: the scalar is a coastal reading — open ocean and land stay zero)
 [PASS] nutrient coasts run cold for their latitude -0.10°C vs own-row coast   (M47: marked rims sit below their row's coastal heat mean — the west-coast-desert analogue, latitude-controlled)
