@@ -139,6 +139,9 @@ harbour shelter (M45): coastal band 5795 cells · mean 0.458 · q3 0.505 · p90 
  arc events: 3 minted · 0 golden dawns · 2 falls · 2 interregna closed
 
 the dry frontier (M55): 0 towns on waterless arid ground · 0 of them within well reach
+the well ladder (M55): 90 arid-dry cells score above the founding bar · opened no craft (0 m) 0 · hand-dug (12 m) 10 · masonry (30 m) 47 · aqueduct (60 m) 82 · engineering (90 m) 88
+counterfactual (M55): with wells of unlimited reach, 0 towns stand on waterless arid ground (real run: 0)
+the desert's offer (M55): best arid-dry site 9.13 vs best watered site 18.18
 
 ---- checks ----------------------------------------------------------
 [PASS] population growth ×                         949.07×   (M2 crop-package K: sweet 2–1200×)
@@ -204,4 +207,7 @@ the dry frontier (M55): 0 towns on waterless arid ground · 0 of them within wel
 [PASS] merchants take the roads                    33 ever   (M5.5: coin-wise realms send out traders)
 [PASS] gravity-model correlation            r=0.50 over 159 routes   (M5.4 gate: big close pairs carry the trade)
 [PASS] no town drinks where it cannot          0/0 watered   (M55 gate: every settlement on arid ground with no river, lake, spring or oasis is held by a people whose well craft reaches its water table)
-CHECKS: 60 pass · 3 warn · 0 fail
+[PASS] the dry frontier is real ground      90 foundable arid-dry cells   (M55: the veto must hold back ground a people would otherwise want — otherwise the gate proves nothing)
+[PASS] well craft opens the dry frontier    0 → 88 cells across the ladder   (M55 gate: craftless peoples open no dry ground, and every deeper shaft opens at least as much as the shallower one, ending above zero)
+[FAIL] the dry-frontier veto is load-bearing 0 dry towns without the veto · 0 with it   (M55 gate: lifting the well requirement must let colonists take waterless ground the real run refused — otherwise the gate is untested by this world)
+CHECKS: 62 pass · 3 warn · 1 fail

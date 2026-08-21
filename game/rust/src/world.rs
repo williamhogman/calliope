@@ -166,7 +166,8 @@ pub struct World {
     pub(crate) drought: Perlin3,
     /// Last year grain was shock-priced by famine, to spike at most once a year.
     pub(crate) grain_shock_year: i64,
-    site_score: Array2<f64>,
+    /// pub since M55: diagnostics weigh dry ground against watered ground.
+    pub site_score: Array2<f64>,
     food_grid: Array2<f64>,
     near_fresh: Array2<bool>,
     /// M55 — arid ground with no reachable surface water; pub so
@@ -175,6 +176,13 @@ pub struct World {
     /// M55 — the site score that dry ground would carry once a well
     /// reaches its table.
     pub dry_site_score: Array2<f64>,
+    /// M55 — diagnostics-only counterfactual: when set, every people is
+    /// treated as if its wells reached this deep. `None` in every shipped
+    /// path (the wire and the wasm never set it), so the simulation stays
+    /// a pure function of the seed; the harness uses it to run the same
+    /// world with the dry-frontier veto lifted and see what changes.
+    pub dry_reach_override: Option<f64>,
+
     /// The coastal band (land within 2 cells of sea) — the ground the
     /// shelter field scores; pub so diagnostics read the same mask.
     pub coast: Array2<bool>,
@@ -936,6 +944,7 @@ impl GenBuilder {
             near_fresh: founded.near_fresh,
             arid_dry: founded.arid_dry,
             dry_site_score: founded.dry_site_score,
+            dry_reach_override: None,
             coast: founded.coast,
             shelter,
             max_settlements: founded.max_settlements,
@@ -1628,7 +1637,9 @@ impl World {
     /// The pull of unworked riches: known seams nobody yet mines project a
     /// price-weighted attraction for colonists. When the market runs hot a
     /// vein can outweigh thin soil, and the mining camps follow.
-    fn resource_pull(&self) -> Array2<f64> {
+    /// pub since M55: diagnostics weigh the desert against the pull that
+    /// would draw a colony into it.
+    pub fn resource_pull(&self) -> Array2<f64> {
         let (h, w) = self.site_score.dim();
         let mut pull = Array2::<f64>::zeros((h, w));
         const R: i64 = 5;
@@ -1725,11 +1736,13 @@ impl World {
                     .get(parent.people.idx())
                     .map(|so| society::mods_for(so).colony_range)
                     .unwrap_or(1.0);
-                let reach = self
-                    .peoples.societies
-                    .get(parent.people.idx())
-                    .map(settlements::well_reach_m)
-                    .unwrap_or(0.0);
+                let reach = self.dry_reach_override.unwrap_or_else(|| {
+                    self.peoples
+                        .societies
+                        .get(parent.people.idx())
+                        .map(settlements::well_reach_m)
+                        .unwrap_or(0.0)
+                });
                 let dry = settlements::DryFrontier {
                     arid_dry: &self.arid_dry,
                     aquifer: &self.fields.aquifer,
