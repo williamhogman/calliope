@@ -5025,11 +5025,14 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             let mut h_max = 0.0f64;
             let mut seams = 0usize;
             for d in w.deposits.iter() {
-                if d.r != good || !w.flows.known(d) {
+                if d.r != good || !d.live() {
                     continue;
                 }
-                seams += 1;
                 let (y, x) = (d.y as usize, d.x as usize);
+                if base[[y, x]] <= 0.0 {
+                    continue; // inside a town's work radius: it calls nobody
+                }
+                seams += 1;
                 b_max = b_max.max(base[[y, x]]);
                 h_max = h_max.max(heard[[y, x]]);
             }
