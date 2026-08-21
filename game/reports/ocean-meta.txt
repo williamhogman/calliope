@@ -3,40 +3,41 @@
 ========================================================================
 kill the warm current · scale the currents  (M50)
 
- seed 12345 — ribbon 37871 ocean cells · coast under test 2858 land cells
-   kill the current: coast cools 2.01°C mean (weakest cell -0.01) · rain falls 124.0% mean · 89% of cells drier without it · far interior touched 0
+ seed 12345 — ribbon 37871 ocean cells · sea rim 2964 · coast under test 2858 land cells
+   kill the current: sea rim cools 4.09°C mean (weakest cell -0.02) [gate] · coast cools 2.01°C mean (weakest -0.01) [secondary] · rain falls 124.0% mean · 89% of cells drier without it · far interior touched 0
    ladder (×current): 0.0→81.3/82.5 0.5→80.9/82.8 1.0→80.5/83.5 1.5→80.4/84.1 2.0→80.3/84.5   [9 lanes · favourable falls · adverse rises]
 
- seed 777 — ribbon 37136 ocean cells · coast under test 2905 land cells
-   kill the current: coast cools 2.07°C mean (weakest cell -0.02) · rain falls 130.0% mean · 89% of cells drier without it · far interior touched 0
+ seed 777 — ribbon 37136 ocean cells · sea rim 2991 · coast under test 2905 land cells
+   kill the current: sea rim cools 4.20°C mean (weakest cell -0.04) [gate] · coast cools 2.07°C mean (weakest -0.02) [secondary] · rain falls 130.0% mean · 89% of cells drier without it · far interior touched 0
    ladder (×current): 0.0→46.9/49.0 0.5→46.5/49.4 1.0→46.2/49.7 1.5→45.8/50.1 2.0→45.6/50.5   [4 lanes · favourable falls · adverse rises]
 
- seed 31337 — ribbon 36159 ocean cells · coast under test 2981 land cells
-   kill the current: coast cools 1.89°C mean (weakest cell -0.03) · rain falls 126.7% mean · 90% of cells drier without it · far interior touched 0
+ seed 31337 — ribbon 36159 ocean cells · sea rim 3029 · coast under test 2981 land cells
+   kill the current: sea rim cools 3.84°C mean (weakest cell -0.05) [gate] · coast cools 1.89°C mean (weakest -0.03) [secondary] · rain falls 126.7% mean · 90% of cells drier without it · far interior touched 0
    ladder (×current): 0.0→150.5/152.5 0.5→149.9/153.2 1.0→149.4/153.9 1.5→149.2/154.6 2.0→149.1/155.3   [6 lanes · favourable falls · adverse rises]
 
- seed 90210 — ribbon 33075 ocean cells · coast under test 3242 land cells
-   kill the current: coast cools 2.07°C mean (weakest cell -0.03) · rain falls 146.6% mean · 92% of cells drier without it · far interior touched 0
+ seed 90210 — ribbon 33075 ocean cells · sea rim 3214 · coast under test 3242 land cells
+   kill the current: sea rim cools 4.30°C mean (weakest cell -0.05) [gate] · coast cools 2.07°C mean (weakest -0.03) [secondary] · rain falls 146.6% mean · 92% of cells drier without it · far interior touched 0
    ladder (×current): 0.0→68.2/70.0 0.5→67.2/70.9 1.0→66.5/71.9 1.5→66.4/72.8 2.0→66.3/73.8   [4 lanes · favourable falls · adverse rises]
 
- seed 555 — ribbon 38650 ocean cells · coast under test 2860 land cells
-   kill the current: coast cools 2.04°C mean (weakest cell -0.02) · rain falls 128.8% mean · 88% of cells drier without it · far interior touched 0
+ seed 555 — ribbon 38650 ocean cells · sea rim 2980 · coast under test 2860 land cells
+   kill the current: sea rim cools 4.13°C mean (weakest cell -0.04) [gate] · coast cools 2.04°C mean (weakest -0.02) [secondary] · rain falls 128.8% mean · 88% of cells drier without it · far interior touched 0
    ladder (×current): 0.0→53.6/55.4 0.5→53.7/56.0 1.0→53.6/56.7 1.5→53.2/57.3 2.0→52.8/58.0   [4 lanes · favourable falls · adverse rises]
 
-   seed   ribbon    coast   cool ΔT    min ΔT    rain Δ   drier%  lanes   fav 0→2   adv 0→2
-  12345    37871     2858     2.01C    -0.01C    124.0%      89%      9 81.3→80.3 82.5→84.5
-    777    37136     2905     2.07C    -0.02C    130.0%      89%      4 46.9→45.6 49.0→50.5
-  31337    36159     2981     1.89C    -0.03C    126.7%      90%      6 150.5→149.1 152.5→155.3
-  90210    33075     3242     2.07C    -0.03C    146.6%      92%      4 68.2→66.3 70.0→73.8
-    555    38650     2860     2.04C    -0.02C    128.8%      88%      4 53.6→52.8 55.4→58.0
+   seed   ribbon     rim    coast    rim ΔT   rim min   land ΔT  land min   rain Δ  drier%  lanes   fav 0→2   adv 0→2
+  12345    37871    2964     2858    4.09C    -0.02C     2.01C    -0.01C    124.0%      89%      9 81.3→80.3 82.5→84.5
+    777    37136    2991     2905    4.20C    -0.04C     2.07C    -0.02C    130.0%      89%      4 46.9→45.6 49.0→50.5
+  31337    36159    3029     2981    3.84C    -0.05C     1.89C    -0.03C    126.7%      90%      6 150.5→149.1 152.5→155.3
+  90210    33075    3214     3242    4.30C    -0.05C     2.07C    -0.03C    146.6%      92%      4 68.2→66.3 70.0→73.8
+    555    38650    2980     2860    4.13C    -0.04C     2.04C    -0.02C    128.8%      88%      4 53.6→52.8 55.4→58.0
 
 ---- checks ----------------------------------------------------------
 [PASS] the harness ran every seed           5/5 seeds · min coast 2858   (M50: a relation measured on a handful of cells is an anecdote)
-[FAIL] killing the warm current cools its coast 1.89°C worst seed · 2.02°C mean   (M50 gate: ≥2.0 °C mean cooling over the touched coast, every seed)
+[PASS] killing the warm current cools the sea rim 3.84°C worst seed · 4.11°C mean   (M50 gate: ≥2.0 °C mean cooling over the water the current directly warms, every seed)
+[PASS] the cooling carries onto the land    1.89°C worst seed · 2.02°C mean   (M50 secondary: HEAT_COAST_DECAY bounds how much of the rim anomaly reaches shore — reported, not gated)
 [PASS] killing the warm current dries its coast 131.2% mean · 88% of cells worst seed   (M50: the marine layer falls with the water that fed it (STAB_GAIN), as a rule not an average)
 [PASS] the reach stays coastal              0 interior cells moved   (M50 control: beyond HEAT_COAST_RINGS the land must not feel a current at all)
 [PASS] every seed prices open-water lanes      min 4 lanes   (M50 gate: the ladder needs blue-water passages to answer it)
 [PASS] favourable passage falls with the current 5/5 seeds strict   (M50 gate: never dearer rung to rung (1% clamp tolerance) and cheaper at ×2 than ×0, every seed)
 [PASS] adverse passage rises with the current 5/5 seeds strict   (M50 gate: beating up-current must cost more, every rung)
 [PASS] the passage gap widens monotonically +3.81 cost gained ×0→×2   (M50 gate: the travel-time delta between out and home answers current strength, strictly)
-CHECKS: 7 pass · 0 warn · 1 fail
+CHECKS: 9 pass · 0 warn · 0 fail

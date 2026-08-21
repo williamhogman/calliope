@@ -80,6 +80,8 @@ run "patina.txt" patina $PATINA
 run "systems.txt" systems "${SEEDS[0]}" "$SIZE" "$CIV_YEARS"
 run "earth.txt" earth "$SIZE" "$CIV_YEARS" "${SEEDS[@]}"
 run "ocean.txt" ocean "$SIZE" $OCEAN
+# M50: the ocean stack answers a perturbation, not just a snapshot.
+run "ocean-meta.txt" ocean "$SIZE" $OCEAN --metamorphic
 
 # ---- M22/M27 deep-earth replay across runtimes ------------------------------
 # The same seed and months must yield one seismic ledger (M22) and one
