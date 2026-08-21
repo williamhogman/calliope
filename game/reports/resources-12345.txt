@@ -36,6 +36,18 @@ kinds absent from this world: ["cattle"]
 
 ore homes (M19): gold 2/2 · silver 2/2 · copper 8/8 · iron 4/4 · coal 23/23 · gems 3/3 · marble 4/4
 
+soil orders (M51 · clorpt):
+order           cells    share mean fert     curve depth m
+lithosol        28850    25.7%     0.020      0.35    0.15
+podzol          11050     9.8%     0.037      0.70    0.60
+cambisol        19171    17.1%     0.245      1.00    1.00
+chernozem        3219     2.9%     0.415      1.35    1.60
+laterite         5284     4.7%     0.108      0.60    2.40
+andosol          5543     4.9%     0.246      1.20    0.90
+gley             4686     4.2%     0.217      0.85    1.10
+aridisol        34597    30.8%     0.049      0.45    0.35
+curve-vs-measured rank correlation over 8 orders: ρ = 0.93
+
 ---- checks ----------------------------------------------------------
 [PASS] deposits per 1000 land cells                   1.52   (sweet 1–6 · hard 0.5–12)
 [PASS] mineral hidden share at dawn                  76.7%   (sweet 45–85% — leave an age of prospectors)
@@ -47,4 +59,16 @@ ore homes (M19): gold 2/2 · silver 2/2 · copper 8/8 · iron 4/4 · coal 23/23 
 [PASS] pans known at dawn                           1 of 1   (a salt pan is plain to see — never hidden, never exhausted)
 [PASS] goods table agrees with closure flags 38 rows consistent   (M14.1: one declaration point — flags derive-checked against GOODS)
 [PASS] ore seams in home province           46 of 46 (100.0%)   (M19 gate: geology says where ore sits — ≥90% pooled)
-CHECKS: 9 pass · 1 warn · 0 fail
+[PASS] lithosol share                       28850 of 112400 (25.7%)   (M51: the steep and the frozen carry no profile)
+[PASS] podzol share                         11050 of 112400 (9.8%)   (M51: cool conifer country leaches acid)
+[PASS] cambisol share                       19171 of 112400 (17.1%)   (M51: the temperate brown earth is the ordinary case)
+[PASS] chernozem share                      3219 of 112400 (2.9%)   (M51: black earth is rare and continental)
+[PASS] laterite share                       5284 of 112400 (4.7%)   (M51: the hot wet tropics weather deep and poor)
+[PASS] andosol share                        5543 of 112400 (4.9%)   (M51: ash country tracks the volcanic province)
+[PASS] gley share                           4686 of 112400 (4.2%)   (M51: valley floors and cold flats pond)
+[PASS] aridisol share                       34597 of 112400 (30.8%)   (M51: the dry share tracks the desert share)
+[PASS] soil fertility rank correlation      ρ 0.93 over 8 orders   (M51: the order's curve must order the farms)
+[PASS] every land cell carries a soil order 0 bare of 112400 land cells   (M51: the classifier is total over land — no cell falls through the ladder)
+[PASS] chernozem confined to its climate window 3219 of 3219 in window · 3219 under grass/woodland (100.0%)   (M51 gate: black earth only where humus outlasts the summer and rain never flushes the profile)
+[PASS] andosol sits on volcanic parent rock 5543 of 5543 on volcanic province   (M51: ash soils cannot exist off the ash)
+CHECKS: 21 pass · 1 warn · 0 fail

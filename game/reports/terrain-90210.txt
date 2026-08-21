@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 90210 · 640x512
 ========================================================================
-world: "Galum" · generated in 2034 ms
+world: "Galum" · generated in 1821 ms
 land: 116600 cells of 327680 (35.6%) · 1865600 km²
 hypsometry (land h): p5 0.015 · p25 0.085 · p50 0.206 · p75 0.328 · p95 0.466 · max 0.743
 bathymetry (sea h): p5 -0.593 · p50 -0.400 · p95 -0.030
@@ -29,7 +29,7 @@ longshore drift (M44): spit cells 92 in 22 chains · barrier cells 9 in 4 chains
 
 glacial relief: u-cells alpine 3250 / sheet 3897 · cirques 129 (86 alpine) · hangs 131 · fjord cells 97
 glacial legacy: till 24531 cells (71.4% of iced lowland) · moraine 1878 · drumlins 87 · esker cells 172 · loess 30111 cells (25.8% of land)
-till dividend (observational): -0.0408 fertility over 13 matched lat×h bins
+till dividend (observational): -0.0327 fertility over 13 matched lat×h bins
 legacy counterfactual: 22456 of 54642 till+loess cells farmable · mean uplift +0.0443 there
 proglacial (M31): 7 lakes (5 refilled today) · 0 chains · 54 spillway cells · widths 6/1/0 · 0 of 47 steps ascend
 outwash (M32): 368 corridor + 1162 apron cells · 209 of 4250 below-margin river cells braided (4.9%)
