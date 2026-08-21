@@ -633,7 +633,7 @@ pub const BANDS: &[Band] = &[
     // the wet profiles the drainage curve marks out (the gap is signed —
     // wheat country must drain better than rice country), and the
     // edaphic score of an order must predict how much of it is farmed.
-    Band { name: "paddy drainage gap", sweet: (0.05, 0.50), hard: (0.01, 0.70), target: "M53: rice takes the wet ground wheat refuses" },
+    Band { name: "paddy wet-soil enrichment", sweet: (1.30, 8.0), hard: (1.05, 15.0), target: "M53: rice takes the wet ground wheat refuses" },
     Band { name: "crop soil suitability correlation", sweet: (0.30, 1.0), hard: (0.10, 1.0), target: "M53: the edaphic table must predict what gets farmed" },
 
 ];
