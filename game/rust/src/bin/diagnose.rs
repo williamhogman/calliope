@@ -4815,6 +4815,114 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         "M55 gate: every settlement on arid ground with no river, lake, spring or oasis is held by a people whose well craft reaches its water table",
     );
 
+    // The law above is silent in a world whose colonists never walked into
+    // the desert. So measure the mechanism itself: how much arid-dry ground
+    // is worth founding on at all, and how much of it each rung of the well
+    // ladder opens. A gate with no ground behind it is not a gate.
+    const REACH_LADDER: [(f64, &str); 5] = [
+        (0.0, "no craft"),
+        (12.0, "hand-dug"),
+        (30.0, "masonry"),
+        (60.0, "aqueduct"),
+        (90.0, "engineering"),
+    ];
+    let mut worth = 0usize;
+    let mut opened = [0usize; 5];
+    let (rows, cols) = w.arid_dry.dim();
+    for y in 0..rows {
+        for x in 0..cols {
+            if !w.arid_dry[[y, x]] || w.dry_site_score[[y, x]] <= 2.2 {
+                continue;
+            }
+            worth += 1;
+            let depth = w.fields.aquifer[[y, x]] as f64;
+            for (i, (r, _)) in REACH_LADDER.iter().enumerate() {
+                if *r > 0.0 && depth <= *r {
+                    opened[i] += 1;
+                }
+            }
+        }
+    }
+    println!(
+        "the well ladder (M55): {} arid-dry cells score above the founding bar · opened {}",
+        worth,
+        REACH_LADDER
+            .iter()
+            .enumerate()
+            .map(|(i, (r, n))| format!("{} ({:.0} m) {}", n, r, opened[i]))
+            .collect::<Vec<_>>()
+            .join(" · ")
+    );
+    c.must(
+        "the dry frontier is real ground",
+        worth > 0,
+        format!("{} foundable arid-dry cells", worth),
+        "M55: the veto must hold back ground a people would otherwise want — otherwise the gate proves nothing",
+    );
+    let monotone = opened.windows(2).all(|p| p[1] >= p[0]);
+    c.must(
+        "well craft opens the dry frontier",
+        opened[0] == 0 && monotone && opened[4] > 0,
+        format!(
+            "{} → {} cells across the ladder",
+            opened[0], opened[4]
+        ),
+        "M55 gate: craftless peoples open no dry ground, and every deeper shaft opens at least as much as the shallower one, ending above zero",
+    );
+
+    // M55 counterfactual: the same world, run again with the dry-frontier
+    // veto lifted (every people's well reaches any table). If colonists
+    // then settle waterless arid ground that the real run left empty, the
+    // veto is load-bearing on the actual colonisation path — not merely on
+    // a score function nobody exercised. If the counterfactual settles no
+    // dry ground either, the veto changed nothing here and we say so.
+    {
+        let mut cf = World::generate(seed, size);
+        cf.dry_reach_override = Some(f64::INFINITY);
+        let _ = run_years(&mut cf, years);
+        let cf_dry = cf
+            .peoples
+            .settlements
+            .iter()
+            .filter(|s| cf.arid_dry[[s.y as usize, s.x as usize]])
+            .count();
+        println!(
+            "counterfactual (M55): with wells of unlimited reach, {} towns stand on waterless arid ground (real run: {})",
+            cf_dry, dry_towns
+        );
+        // Why the desert wins or loses: the best offer arid-dry ground can
+        // make a colonist (held score + the market's pull) against the best
+        // offer anywhere else.
+        {
+            let pull = cf.resource_pull();
+            let (rows, cols) = cf.arid_dry.dim();
+            let mut best_dry = f64::NEG_INFINITY;
+            let mut best_wet = f64::NEG_INFINITY;
+            for y in 0..rows {
+                for x in 0..cols {
+                    let p = pull[[y, x]];
+                    if cf.arid_dry[[y, x]] {
+                        best_dry = best_dry.max(cf.dry_site_score[[y, x]] + p);
+                    } else {
+                        best_wet = best_wet.max(cf.site_score[[y, x]] + p);
+                    }
+                }
+            }
+            println!(
+                "the desert's offer (M55): best arid-dry site {:.2} vs best watered site {:.2}",
+                best_dry, best_wet
+            );
+        }
+        c.must(
+            "the dry-frontier veto is load-bearing",
+            cf_dry > dry_towns,
+            format!("{} dry towns without the veto · {} with it", cf_dry, dry_towns),
+            "M55 gate: lifting the well requirement must let colonists take waterless ground the real run refused — otherwise the gate is untested by this world",
+        );
+
+    }
+
+
     c.print();
 }
 

@@ -637,3 +637,121 @@ proptest! {
         }
     }
 }
+
+// ---------------------------------------------------- M55 the well gate
+//
+// The dry-frontier law must hold as a law, not as an accident of where
+// this world's colonists happened to walk. These proofs exercise the
+// gate directly: the ladder of well craft, and the site-score veto it
+// governs.
+
+fn soc_with(techs: &[society::TechId]) -> society::Society {
+    let mut known = society::TechSet::EMPTY;
+    for t in techs {
+        known.insert(*t);
+    }
+    society::Society {
+        people: 0,
+        era: 0,
+        polity: 0,
+        techs: techs.to_vec(),
+        known,
+        knowledge: 0.0,
+        boon: 1.0,
+    }
+}
+
+#[test]
+fn well_reach_climbs_with_the_craft() {
+    use calliope::settlements::well_reach_m;
+    use society::TechId as T;
+    let ladder = [
+        (vec![], 0.0),
+        (vec![T::Pottery], 12.0),
+        (vec![T::Stonecraft], 12.0),
+        (vec![T::Masonry], 30.0),
+        (vec![T::Aqueduct], 60.0),
+        (vec![T::Engineering], 90.0),
+    ];
+    let mut last = -1.0;
+    for (techs, want) in ladder {
+        let got = well_reach_m(&soc_with(&techs));
+        assert_eq!(got, want, "reach for {:?}", techs);
+        assert!(got >= last, "well reach must never fall as craft grows");
+        last = got;
+    }
+    // A deeper art never un-teaches a shallower one.
+    assert_eq!(
+        well_reach_m(&soc_with(&[T::Pottery, T::Masonry, T::Engineering])),
+        90.0
+    );
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 512, ..ProptestConfig::default() })]
+
+    /// The dry-frontier veto: on ordinary ground the site score passes
+    /// through untouched; on arid-dry ground it is refused outright
+    /// unless the people's shaft reaches the table beneath.
+    #[test]
+    fn the_dry_frontier_opens_exactly_at_well_reach(
+        dry in any::<bool>(),
+        depth in 0.0f32..400.0,
+        reach in prop::sample::select(vec![0.0f64, 12.0, 30.0, 60.0, 90.0]),
+        open in 2.5f64..40.0,
+        held in 2.5f64..40.0,
+    ) {
+        use ndarray::Array2;
+        let arid_dry = Array2::from_elem((1, 1), dry);
+        let aquifer = Array2::from_elem((1, 1), depth);
+        let dry_site_score = Array2::from_elem((1, 1), held);
+        let site_score = Array2::from_elem((1, 1), open);
+        let f = calliope::settlements::DryFrontier {
+            arid_dry: &arid_dry,
+            aquifer: &aquifer,
+            dry_site_score: &dry_site_score,
+            well_reach_m: reach,
+        };
+        let got = f.score_at(&site_score, 0, 0);
+        let ok = calliope::settlements::dry_site_ok(&arid_dry, &aquifer, 0, 0, reach);
+        if !dry {
+            prop_assert_eq!(got, open);
+            prop_assert!(ok);
+        } else if reach > 0.0 && depth as f64 <= reach {
+            prop_assert_eq!(got, held);
+            prop_assert!(ok);
+        } else {
+            prop_assert!(got < -1e8, "unwatered dry ground must be unfoundable");
+            prop_assert!(!ok);
+        }
+    }
+
+    /// Monotone in craft: ground a shallow well opens is never closed by
+    /// a deeper one, and no reach ever opens ground deeper than itself.
+    #[test]
+    fn deeper_wells_never_close_ground(
+        depth in 0.0f32..200.0,
+        held in 2.5f64..40.0,
+    ) {
+        use ndarray::Array2;
+        let arid_dry = Array2::from_elem((1, 1), true);
+        let aquifer = Array2::from_elem((1, 1), depth);
+        let held_a = Array2::from_elem((1, 1), held);
+        let site = Array2::from_elem((1, 1), 0.0f64);
+        let mut opened_before = false;
+        for reach in [0.0f64, 12.0, 30.0, 60.0, 90.0] {
+            let f = calliope::settlements::DryFrontier {
+                arid_dry: &arid_dry,
+                aquifer: &aquifer,
+                dry_site_score: &held_a,
+                well_reach_m: reach,
+            };
+            let open = f.score_at(&site, 0, 0) > -1e8;
+            if open {
+                prop_assert!(depth as f64 <= reach, "a well reached past its own depth");
+            }
+            prop_assert!(!(opened_before && !open), "a deeper well closed open ground");
+            opened_before |= open;
+        }
+    }
+}

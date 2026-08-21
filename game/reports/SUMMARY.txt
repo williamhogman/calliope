@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-21 11:14 UTC
+mode: full · size: 512 · generated: 2026-08-21 12:32 UTC
 
-totals: 746 pass · 20 warn · 0 fail
+totals: 759 pass · 21 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -16,12 +16,12 @@ totals: 746 pass · 20 warn · 0 fail
 [WARN] wasm binary size                              3445645 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
 
 -- civ-12345.txt
-[WARN] assimilation cadence                 0.7 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                57.5   (sweet 2–48 · hard 0.5–100)
+[WARN] events per year                                54.2   (sweet 2–48 · hard 0.5–100)
 
 -- civ-777.txt
+[WARN] coastal town shelter lift                     1.19×   (M45: founded coastal towns sit on better-than-average anchorages)
 [WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                60.3   (sweet 2–48 · hard 0.5–100)
+[WARN] events per year                                64.2   (sweet 2–48 · hard 0.5–100)
 
 -- climate-12345.txt
 [WARN] forest share of land                          23.3%   (sweet 25–60% · hard 15–75%)
@@ -42,7 +42,7 @@ totals: 746 pass · 20 warn · 0 fail
    all checks pass
 
 -- economy-12345.txt
-[WARN] directional lanes alive                         12%   (M46: share of blue-water lanes (%) sailing ≥2% faster one way than the other)
+[WARN] directional lanes alive                         13%   (M46: share of blue-water lanes (%) sailing ≥2% faster one way than the other)
 
 -- era.txt
    all checks pass
@@ -51,7 +51,7 @@ totals: 746 pass · 20 warn · 0 fail
    all checks pass
 
 -- hydro-777.txt
-   all checks pass
+[WARN] oasis share of arid land %                    27.4%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
 
 -- hydro-90210.txt
    all checks pass
@@ -66,13 +66,13 @@ totals: 746 pass · 20 warn · 0 fail
    all checks pass
 
 -- patina.txt
-[WARN] ruins per century (after y100)                14.67   (M9.1 gate: mature worlds carry ruins)
+[WARN] ruins per century (after y100)                15.00   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-[WARN] stage fertility ms                   192 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage settlements ms                 264 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2833 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 100                   224 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   187 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage settlements ms                 260 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         2657 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 100                   164 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
    all checks pass
@@ -88,9 +88,10 @@ totals: 746 pass · 20 warn · 0 fail
 
 -- sweep.txt
 [WARN] mean forest share                             21.2%   (sweet 25–60% · hard 15–75%)
+[WARN] daughter peoples sunder (≥60% of seeds)            2/5   (M12.1: far branches become peoples of their own)
 
 -- systems.txt
-[WARN] ECS parallel ceiling stays low               1.661×   (ADR-0022: re-open the bevy_ecs question if this rises)
+   all checks pass
 
 -- telling-12345.txt
    all checks pass
