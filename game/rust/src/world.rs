@@ -529,7 +529,7 @@ impl GenBuilder {
         // drop to their resting f32 width here, and every human stage
         // below (naming, resources, settlements, trade, economy) reads
         // the same f32 the ticks will read.
-        self.height = Some(self.height64.take().unwrap().mapv(|x| x as f32));
+        self.height64 = None; // the f32 relief was taken above (M51)
         self.tmean = Some(self.tmean64.take().unwrap().mapv(|x| x as f32));
         self.tamp = Some(self.tamp64.take().unwrap().mapv(|x| x as f32));
         self.precip = Some(self.precip64.take().unwrap().mapv(|x| x as f32));
