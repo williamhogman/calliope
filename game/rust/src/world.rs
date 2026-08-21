@@ -515,7 +515,7 @@ impl GenBuilder {
                 &soil,
             );
             let crops =
-                agriculture::crop_packages(height, tmean, precip, &hydro.rivers, &hydro.lakes);
+                agriculture::crop_packages(height, tmean, precip, &hydro.rivers, &hydro.lakes, &soil);
             self.fertility = Some(fert.mapv(|x| x as f32));
             self.crops = Some(crops);
             self.soil = Some(soil);
