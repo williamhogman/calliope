@@ -513,12 +513,17 @@ pub fn soil_suitability(order: SoilOrder, crop: CropPackage) -> f64 {
         return 0.0;
     }
     let nutrient = (0.45 + 0.55 * order.fertility()).min(1.35);
-    let depth = (order.depth() / root_need(crop)).clamp(0.0, 1.0);
     let (mu, sig) = drain_pref(crop);
     let drain = gauss(order.drainage(), mu, sig);
-    let raw = nutrient * depth * drain;
-    (1.0 - EDAPHIC_GAIN) + EDAPHIC_GAIN * raw
+    // Nutrients and drainage *bend* the climatic score — a hungry or
+    // badly drained field still yields something. Depth does not: GAEZ's
+    // multiplicative logic is literal here, a profile too thin to root
+    // in is not a poor field but no field at all, so the depth term sits
+    // outside the blend and can take the score to zero on rock.
+    let depth = (order.depth() / root_need(crop)).clamp(0.0, 1.0);
+    depth * ((1.0 - EDAPHIC_GAIN) + EDAPHIC_GAIN * nutrient * drain)
 }
+
 
 /// Classify every cell into the crop package that wins it. Deterministic,
 /// pure function of climate, water adjacency and the soil order beneath
