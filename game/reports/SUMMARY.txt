@@ -1,14 +1,13 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-21 13:17 UTC
+mode: full · size: 512 · generated: 2026-08-21 18:22 UTC
 
-totals: 762 pass · 21 warn · 3 fail
+totals: 762 pass · 21 warn · 2 fail
 
 -- assay.txt
    all checks pass
 
 -- bench.txt
-[WARN] 512 generation time                         3114 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
-[WARN] median tick payload                          6450 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
+[WARN] median tick payload                          7873 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
    all checks pass
@@ -17,13 +16,16 @@ totals: 762 pass · 21 warn · 3 fail
 [WARN] wasm binary size                              3445645 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
 
 -- civ-12345.txt
-[WARN] events per year                                54.2   (sweet 2–48 · hard 0.5–100)
-[FAIL] the dry-frontier veto is load-bearing 0 dry towns without the veto · 0 with it   (M55 gate: lifting the well requirement must let colonists take waterless ground the real run refused — otherwise the gate is untested by this world)
+[WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
+[WARN] events per year                                57.1   (sweet 2–48 · hard 0.5–100)
+[WARN] median town spacing                           59 km   (M2.5: market-town band ~15–30 km in settled cores)
+[WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
 
 -- civ-777.txt
-[WARN] coastal town shelter lift                     1.19×   (M45: founded coastal towns sit on better-than-average anchorages)
 [WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                64.2   (sweet 2–48 · hard 0.5–100)
+[WARN] living civilizations                    0 of 0 ever   (M13.1: the tier exists without swallowing the world)
+[WARN] events per year                                56.9   (sweet 2–48 · hard 0.5–100)
+[WARN] median town spacing                           48 km   (M2.5: market-town band ~15–30 km in settled cores)
 [FAIL] the dry-frontier veto is load-bearing 0 dry towns without the veto · 0 with it   (M55 gate: lifting the well requirement must let colonists take waterless ground the real run refused — otherwise the gate is untested by this world)
 
 -- climate-12345.txt
@@ -45,7 +47,7 @@ totals: 762 pass · 21 warn · 3 fail
    all checks pass
 
 -- economy-12345.txt
-[WARN] directional lanes alive                         13%   (M46: share of blue-water lanes (%) sailing ≥2% faster one way than the other)
+[WARN] directional lanes alive                         11%   (M46: share of blue-water lanes (%) sailing ≥2% faster one way than the other)
 
 -- era.txt
    all checks pass
@@ -69,14 +71,13 @@ totals: 762 pass · 21 warn · 3 fail
    all checks pass
 
 -- patina.txt
-[WARN] ruins per century (after y100)                15.00   (M9.1 gate: mature worlds carry ruins)
+   all checks pass
 
 -- perf.txt
-[FAIL] stage fertility ms                   268 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage naming ms                      134 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
-[WARN] stage settlements ms                 332 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         3300 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 100                   176 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   158 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage settlements ms                 256 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         2472 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[FAIL] tick rate year 100                   98 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
    all checks pass
@@ -92,7 +93,6 @@ totals: 762 pass · 21 warn · 3 fail
 
 -- sweep.txt
 [WARN] mean forest share                             21.2%   (sweet 25–60% · hard 15–75%)
-[WARN] daughter peoples sunder (≥60% of seeds)            2/5   (M12.1: far branches become peoples of their own)
 
 -- systems.txt
    all checks pass
