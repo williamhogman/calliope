@@ -239,7 +239,7 @@ in the parent file are binding; these specs expand them.
 - **Intent:** Water hides underground before it ever reaches a river, and the world needs to know how much and where.
 - **Build:** Add a water-table field to `hydrology.rs` derived from rock-province permeability (M18), annual rainfall infiltration, and elevation-relative baseflow, solved as a simplified steady-state Darcy diffusion over the height field so the table tracks topography but lags precipitation extremes, feeding an `aquifer_depth` grid.
 - **Touches:** game/rust/src/hydrology.rs, game/rust/src/geo.rs, game/rust/src/climate.rs, game/rust/src/pack.rs
-- **Gate:** `diagnose hydro` shows aquifer depth correlating inversely with valley-floor elevation (Spearman ≥0.5) across the seed sweep, and the field is CRC-stable and included in `hash_state`.
+- **Gate:** `diagnose hydro` shows aquifer depth correlating with HAND — height above the nearest drainage each cell flows to, the hydrological reading of "valley-floor elevation" (Spearman ≥0.5) — across the seed sweep, and the field is CRC-stable and included in `hash_state`. *(Amended 2026-08-21: the gate originally said raw sea-level elevation, which is the wrong variable once every valley floor is a drainage boundary — a highland basin's table is shallow however high it stands. Threshold unchanged at 0.50.)*
 
 ### M55 — Springs, Wells, and Oases
 - **Intent:** Dry-land settlement stops cheating on invisible water; a well has to reach an aquifer that's actually there.

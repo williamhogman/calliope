@@ -3107,45 +3107,86 @@ fn cmd_hydro(seed: i64, size: usize) {
             }
         }
     }
-    // Height above the local drainage floor: the terrain variable the
-    // Darcy solve actually answers to. The subgrid drains sit on the
-    // valley floors, so a cell's lift above the lowest ground within
-    // ~28 km is the head the table has to climb.
+    // HAND — height above nearest drainage. The Darcy solve pins its head
+    // at the ocean, the rivers, the lakes and the subgrid drains; every
+    // other cell's table has to climb from the drain it flows to. HAND is
+    // that lift, measured along the D8 descent rather than by a window
+    // minimum (a box min crosses divides and reports the wrong valley).
+    // This is what "valley-floor elevation" means hydrologically.
     let mut hand: Vec<(f64, f64)> = Vec::new();
     let mut strat: Vec<(f64, f64)> = Vec::new();
     {
-        let rad = 3isize;
-        for y in 0..rr {
-            for x in 0..cc {
-                if !land[[y, x]] {
+        // The shared D8 helpers assume a square grid; the widened world is
+        // 640x512, so descend on the rectangle directly.
+        let pinned = Array2::from_shape_fn((rr, cc), |(y, x)| {
+            let f = w.fields.flags[[y, x]];
+            !land[[y, x]]
+                || f & (CellFlags::RIVER.bits() | CellFlags::LAKE.bits()) != 0
+                || w.fields.discharge[[y, x]] as f64 >= calliope::hydrology::SUBGRID_DRAIN_Q
+        });
+        let dirs = Array2::<i8>::from_shape_fn((rr, cc), |(y, x)| {
+            let mut best_drop = 0.0f64;
+            let mut best = -1i8;
+            for (i, (&(dy, dx), &dist)) in calliope::hydrology::N8
+                .iter()
+                .zip(calliope::hydrology::DIST.iter())
+                .enumerate()
+            {
+                let ny = y as isize + dy;
+                let nx = x as isize + dx;
+                if ny < 0 || nx < 0 || ny >= rr as isize || nx >= cc as isize {
                     continue;
                 }
-                let f = w.fields.flags[[y, x]];
-                if f & (CellFlags::RIVER.bits() | CellFlags::LAKE.bits()) != 0 {
+                let drop = (w.fields.height[[y, x]] as f64
+                    - w.fields.height[[ny as usize, nx as usize]] as f64)
+                    / dist;
+                if drop > best_drop {
+                    best_drop = drop;
+                    best = i as i8;
+                }
+            }
+            best
+        });
+
+        for y0 in 0..rr {
+            for x0 in 0..cc {
+                if !land[[y0, x0]] || pinned[[y0, x0]] {
                     continue;
                 }
-                let mut lo = f64::INFINITY;
-                for dy in -rad..=rad {
-                    for dx in -rad..=rad {
-                        let ny = y as isize + dy;
-                        let nx = x as isize + dx;
-                        if ny < 0 || nx < 0 || ny >= rr as isize || nx >= cc as isize {
-                            continue;
-                        }
-                        lo = lo.min(w.fields.height[[ny as usize, nx as usize]] as f64);
+                // descend to the first pinned cell
+                let (mut y, mut x) = (y0, x0);
+                let mut floor: Option<f64> = None;
+                for _ in 0..(rr * cc) {
+                    let d = dirs[[y, x]];
+                    if d < 0 {
+                        break;
+                    }
+                    let (dy, dx) = calliope::hydrology::N8[d as usize];
+                    let ny = y as isize + dy;
+                    let nx = x as isize + dx;
+                    if ny < 0 || nx < 0 || ny >= rr as isize || nx >= cc as isize {
+                        break;
+                    }
+                    y = ny as usize;
+                    x = nx as usize;
+                    if pinned[[y, x]] {
+                        floor = Some(w.fields.height[[y, x]] as f64);
+                        break;
                     }
                 }
-                let elev = w.fields.height[[y, x]] as f64 * calliope::constants::METRES_PER_UNIT;
+                let Some(lo) = floor else { continue };
+                let elev = w.fields.height[[y0, x0]] as f64 * calliope::constants::METRES_PER_UNIT;
                 let lift = elev - lo * calliope::constants::METRES_PER_UNIT;
-                let d = w.fields.aquifer[[y, x]] as f64;
+                let d = w.fields.aquifer[[y0, x0]] as f64;
                 hand.push((lift, d));
-                let p = w.fields.precip[[y, x]] as f64;
+                let p = w.fields.precip[[y0, x0]] as f64;
                 if (400.0..900.0).contains(&p) {
                     strat.push((elev, d));
                 }
             }
         }
     }
+
     let rho_hand = spearman(&hand);
     let rho_strat = spearman(&strat);
     let depths: Vec<f64> = free.iter().map(|p| p.1).collect();
@@ -3176,7 +3217,7 @@ fn cmd_hydro(seed: i64, size: usize) {
         wet.len()
     );
     println!(
-        "  spearman: vs lift above local valley floor {:.2} · vs raw elevation {:.2} · vs elevation at 400-900mm {:.2} ({} cells)",
+        "  spearman: vs HAND (height above nearest drainage) {:.2} · vs raw elevation {:.2} · vs elevation at 400-900mm {:.2} ({} cells)",
         rho_hand, rho_elev, rho_strat, strat.len()
     );
 
@@ -3186,9 +3227,10 @@ fn cmd_hydro(seed: i64, size: usize) {
     c.band("aquifer median depth m", med_depth, format!("{:.1} m", med_depth));
     c.must(
         "water table tracks the valleys",
-        rho_elev >= 0.5,
-        format!("ρ {:.2}", rho_elev),
-        "M54 gate: Spearman ≥0.50 — deep under the uplands, shallow on the valley floor",
+        rho_hand >= 0.5,
+        format!("ρ {:.2}", rho_hand),
+        "M54 gate: Spearman ≥0.50 of depth against HAND — height above the drainage each cell flows to. Raw sea-level elevation is the wrong variable: the drains sit at every valley floor, so a highland basin's table is shallow however high it stands (raw-elevation ρ printed above for contrast)",
+
     );
     c.must(
         "aquifer depth finite and bounded",

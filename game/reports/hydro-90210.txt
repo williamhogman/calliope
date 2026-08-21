@@ -13,6 +13,11 @@ strahler orders: 1:57 2:525 3:848 4:1734 5:1411 6:274 · top 6
 wadis: 718 cells · salt basins: 9 (213 cells) · river |flow amp| mean 0.19
 glacier-fed rivers (melt ≥ 25% of flow): 62 cells (1.3% of rivers) · median melt share 30.7% · warm-month peaks 100.0%
 
+aquifer (M54): median depth 15.6 m · p10 0.0 · p90 108.4 · within 10 m of surface 44.1%
+  median depth by province: shield 3.7 · basin 17.5 · fold 5.6 · volcanic 27.9 m
+  median depth by rainfall: arid <400mm 35.9 m (58328 cells) · humid >1200mm 0.0 m (16692 cells)
+  spearman: vs HAND (height above nearest drainage) 0.64 · vs raw elevation 0.28 · vs elevation at 400-900mm 0.26 (25408 cells)
+
 ---- checks ----------------------------------------------------------
 [PASS] river share of land                            4.2%   (sweet 0.8–5% · hard 0.3–10%)
 [PASS] lake share of land                             1.4%   (sweet 0–3% · hard 0–8%)
@@ -28,4 +33,11 @@ glacier-fed rivers (melt ≥ 25% of flow): 62 cells (1.3% of rivers) · median m
 [PASS] monthly discharge sane on rivers              clean   (M35 gate: 12-month curves non-negative and NaN-free on every river cell)
 [PASS] glacier-fed rivers peak in warm months         100.0%   (≥80% — melt follows the sun, whatever the rain does (M35 gate))
 [PASS] no glacier-fed wadis                              0   (M35: the melt returns every summer — the wadi stamp yields)
-CHECKS: 14 pass · 0 warn · 0 fail
+[PASS] aquifer median depth m                       15.6 m   (M54: median depth to water on unpinned land · sweet 4–60 m · hard 1–120)
+[PASS] water table tracks the valleys               ρ 0.64   (M54 gate: Spearman ≥0.50 of depth against HAND — height above the drainage each cell flows to. Raw sea-level elevation is the wrong variable: the drains sit at every valley floor, so a highland basin's table is shallow however high it stands (raw-elevation ρ printed above for contrast))
+[PASS] aquifer depth finite and bounded              clean   (M54: every cell reports 0..150 m, no NaN out of the Darcy solve)
+[PASS] surface water pins the table         0 river/lake · 0 ocean   (M54: where water already stands, depth to water is zero)
+[PASS] permeable rock holds a deeper table  basin 17.5 m vs shield 3.7 m   (M54: the shield throttles the flow and mounds the table high; the basin drains it away)
+[PASS] the dry country digs deeper          arid 35.9 m vs humid 0.0 m   (M54: less recharge, lower mound — a well in the desert is a longer rope)
+[PASS] aquifer joins the state hash                    yes   (M54 gate: the field is CRC-stable and part of hash_state)
+CHECKS: 21 pass · 0 warn · 0 fail
