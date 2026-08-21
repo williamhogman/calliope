@@ -2154,6 +2154,9 @@ fn cmd_terrain(seed: i64, size: usize) {
             let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
             let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
             let none: ndarray::Array2<f32> = ndarray::Array2::zeros((tr, tc));
+            // M51 — a neutral soil plane on both legs: the counterfactual
+            // must isolate the deposit, not the soil order under it.
+            let nsoil: ndarray::Array2<u8> = ndarray::Array2::from_elem((tr, tc), calliope::agriculture::SoilOrder::Cambisol.code());
             let f_with = calliope::agriculture::fertility(
                 &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash, &nsoil,
             );
@@ -2314,6 +2317,9 @@ fn cmd_terrain(seed: i64, size: usize) {
             let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
             let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
             let none: ndarray::Array2<f32> = ndarray::Array2::zeros((ir, icn));
+            // M51 — a neutral soil plane on both legs: the counterfactual
+            // must isolate the deposit, not the soil order under it.
+            let nsoil: ndarray::Array2<u8> = ndarray::Array2::from_elem((ir, icn), calliope::agriculture::SoilOrder::Cambisol.code());
             let f_with = calliope::agriculture::fertility(
                 &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash, &nsoil,
             );
@@ -3264,6 +3270,9 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
         let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
         let none: ndarray::Array2<f32> = ndarray::Array2::zeros((ir, ic));
+            // M51 — a neutral soil plane on both legs: the counterfactual
+            // must isolate the deposit, not the soil order under it.
+            let nsoil: ndarray::Array2<u8> = ndarray::Array2::from_elem((ir, ic), calliope::agriculture::SoilOrder::Cambisol.code());
         let f_with = calliope::agriculture::fertility(
             &h64, &t64, &p64, &rivers, &lakes, &q64, &w.ice.till, &w.ice.loess, &w.ice.outwash, &nsoil,
         );
