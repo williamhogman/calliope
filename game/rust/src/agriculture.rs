@@ -624,4 +624,11 @@ pub const BANDS: &[Band] = &[
     Band { name: "alluvium soil upgrade", sweet: (1.15, 3.0), hard: (1.05, 4.0), target: "M52: silt must out-farm the profile the river buried" },
     Band { name: "loess soil upgrade", sweet: (1.15, 3.0), hard: (1.05, 4.0), target: "M52: the dust must out-farm the profile it blanketed" },
     Band { name: "soil fertility rank correlation", sweet: (0.30, 1.0), hard: (0.10, 1.0), target: "M51: the order's curve must order the farms" },
+    // M53 — the crop tables read the ground. Two claims: paddies pick
+    // the wet profiles the drainage curve marks out (the gap is signed —
+    // wheat country must drain better than rice country), and the
+    // edaphic score of an order must predict how much of it is farmed.
+    Band { name: "paddy drainage gap", sweet: (0.05, 0.50), hard: (0.01, 0.70), target: "M53: rice takes the wet ground wheat refuses" },
+    Band { name: "crop soil suitability correlation", sweet: (0.30, 1.0), hard: (0.10, 1.0), target: "M53: the edaphic table must predict what gets farmed" },
+
 ];
