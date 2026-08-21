@@ -4890,28 +4890,74 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             "counterfactual (M55): with wells of unlimited reach, {} towns stand on waterless arid ground (real run: {})",
             cf_dry, dry_towns
         );
-        // Why the desert wins or loses: the best offer arid-dry ground can
-        // make a colonist (held score + the market's pull) against the best
+        // Why the desert wins or loses (M56): the best offer arid-dry
+        // ground can make a colonist — the extractive price, caravan
+        // provisioning and well upkeep included — against the best
         // offer anywhere else.
         {
             let pull = cf.resource_pull();
+            let prov = cf.caravan_provision();
+            let dry = calliope::settlements::DryFrontier {
+                arid_dry: &cf.arid_dry,
+                aquifer: &cf.fields.aquifer,
+                dry_site_score: &cf.dry_site_score,
+                well_reach_m: f64::INFINITY,
+                provision: &prov,
+            };
             let (rows, cols) = cf.arid_dry.dim();
             let mut best_dry = f64::NEG_INFINITY;
             let mut best_wet = f64::NEG_INFINITY;
+            let mut best_pull = 0.0f64;
+            let mut best_prov = 0.0f64;
+            let mut provisioned = 0usize;
+            let mut arid_cells = 0usize;
             for y in 0..rows {
                 for x in 0..cols {
-                    let p = pull[[y, x]];
                     if cf.arid_dry[[y, x]] {
-                        best_dry = best_dry.max(cf.dry_site_score[[y, x]] + p);
+                        arid_cells += 1;
+                        if prov[[y, x]] > 0.0 {
+                            provisioned += 1;
+                        }
+                        best_pull = best_pull.max(pull[[y, x]]);
+                        best_prov = best_prov.max(prov[[y, x]] as f64);
+                        best_dry = best_dry.max(dry.offer(&cf.site_score, &pull, y, x));
                     } else {
-                        best_wet = best_wet.max(cf.site_score[[y, x]] + p);
+                        best_wet = best_wet.max(cf.site_score[[y, x]] + pull[[y, x]]);
                     }
                 }
             }
             println!(
-                "the desert's offer (M55): best arid-dry site {:.2} vs best watered site {:.2}",
-                best_dry, best_wet
+                "the desert's offer (M56): best arid-dry site {:.2} vs best watered site {:.2} · best ore pull {:.2} · caravan-provisioned {}/{} arid-dry cells (best {:.2})",
+                best_dry, best_wet, best_pull, provisioned, arid_cells, best_prov
             );
+            // Break the winner down so a weak desert is diagnosable:
+            // which term is short — the seam, the lane, or the shaft?
+            {
+                let (rows, cols) = cf.arid_dry.dim();
+                let mut bo = f64::NEG_INFINITY;
+                let mut at = (0usize, 0usize);
+                let mut bp = f64::NEG_INFINITY;
+                let mut pat = (0usize, 0usize);
+                for y in 0..rows {
+                    for x in 0..cols {
+                        if !cf.arid_dry[[y, x]] { continue; }
+                        let o = dry.offer(&cf.site_score, &pull, y, x);
+                        if o > bo { bo = o; at = (y, x); }
+                        if pull[[y, x]] > bp { bp = pull[[y, x]]; pat = (y, x); }
+                    }
+                }
+                for (tag, (y, x)) in [("best offer", at), ("best pull", pat)] {
+                    println!(
+                        "  {tag} cell ({y},{x}): held {:.2} · pull {:.2} · provision {:.2} · table {:.0} m · upkeep {:.2} · offer {:.2}",
+                        cf.dry_site_score[[y, x]],
+                        pull[[y, x]],
+                        prov[[y, x]],
+                        cf.fields.aquifer[[y, x]],
+                        calliope::settlements::well_upkeep(cf.fields.aquifer[[y, x]] as f64),
+                        dry.offer(&cf.site_score, &pull, y, x),
+                    );
+                }
+            }
         }
         c.must(
             "the dry-frontier veto is load-bearing",

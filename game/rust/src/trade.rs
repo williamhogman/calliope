@@ -1255,3 +1255,77 @@ pub const BANDS: &[crate::util::Band] = &[
     crate::util::Band { name: "monsoon lane share", sweet: (15.0, 55.0), hard: (5.0, 80.0), target: "M48: share of sea-touching lanes (%) sailing the monsoon calendar" },
     crate::util::Band { name: "monsoon throughput swing", sweet: (30.0, 100.0), hard: (15.0, 100.0), target: "M48 gate: monsoon-lane throughput swings ≥30% between the year's peak and its floor" },
 ];
+
+// ------------------------------------------------------- M56 the caravan
+
+/// M56 — how far a caravan can be victualled from a watered market, in
+/// the same cost units A* prices land travel with. A desert crossing is
+/// bounded by water and fodder, not by will: at `LAND_BASE` 3.0 plus the
+/// desert's own 3.0 surcharge, 120 cost units buy roughly twenty coarse
+/// cells of sand — about 320 km at 16 km per coarse cell, the working
+/// range of a caravan that must reach a well or a market before its
+/// water runs out. Beyond it the deep interior stays empty, which is why
+/// the Sahara has a rim of oasis towns and a hollow middle.
+pub const CARAVAN_BUDGET: f64 = 120.0;
+
+/// M56 — the provisioning field: for every land cell, how well a caravan
+/// out of the nearest watered market can supply it, 1.0 at the market's
+/// own ground falling linearly to 0.0 at `CARAVAN_BUDGET` of land travel.
+///
+/// Dijkstra over the coarse trade cost grid, land only — a caravan does
+/// not sail, and a dry site on the far side of a strait is not reachable
+/// by camel. `markets` are fine-grid coordinates; the field is returned
+/// at fine resolution so siting reads it per cell.
+pub fn caravan_provision(
+    grid: &TradeGrid,
+    markets: &[(usize, usize)],
+    fine: (usize, usize),
+) -> Array2<f32> {
+    let (hh, ww) = grid.cost.dim();
+    let mut dist = vec![f64::INFINITY; hh * ww];
+    let mut heap: BinaryHeap<AItem> = BinaryHeap::new();
+    for &(fy, fx) in markets {
+        let (y, x) = (fy / grid.f, fx / grid.f);
+        if y >= hh || x >= ww || grid.sea[[y, x]] {
+            continue;
+        }
+        if dist[y * ww + x] > 0.0 {
+            dist[y * ww + x] = 0.0;
+            heap.push(AItem(0.0, 0.0, y, x));
+        }
+    }
+    while let Some(AItem(g, _, y, x)) = heap.pop() {
+        if g > dist[y * ww + x] {
+            continue;
+        }
+        if g >= CARAVAN_BUDGET {
+            continue;
+        }
+        for (k, &(dy, dx)) in N8.iter().enumerate() {
+            let (ny, nx) = (y as isize + dy, x as isize + dx);
+            if ny < 0 || nx < 0 || ny >= hh as isize || nx >= ww as isize {
+                continue;
+            }
+            let (ny, nx) = (ny as usize, nx as usize);
+            if grid.sea[[ny, nx]] {
+                continue; // the caravan walks; it does not swim
+            }
+            let step = DIST[k] * 0.5 * (grid.cost[[y, x]] + grid.cost[[ny, nx]]);
+            let ng = g + step;
+            if ng < dist[ny * ww + nx] && ng < CARAVAN_BUDGET {
+                dist[ny * ww + nx] = ng;
+                heap.push(AItem(ng, 0.0, ny, nx));
+            }
+        }
+    }
+    let (frows, fcols) = fine;
+    Array2::from_shape_fn((frows, fcols), |(y, x)| {
+        let (cy, cx) = ((y / grid.f).min(hh - 1), (x / grid.f).min(ww - 1));
+        let d = dist[cy * ww + cx];
+        if !d.is_finite() {
+            0.0
+        } else {
+            (1.0 - d / CARAVAN_BUDGET).clamp(0.0, 1.0) as f32
+        }
+    })
+}
