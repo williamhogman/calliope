@@ -563,16 +563,12 @@ impl GenBuilder {
 
     fn stage_resources(&mut self) {
         let t6 = now_ms();
-        // M18 — the basement is read once off the sketch and the relief:
-        // shield, basin, fold belt, volcanic. Frozen from here on. It is
-        // classified *before* the ore roll because M19 re-seats deposits
-        // on it: geology decides where ore belongs.
-        let rock = crate::rock::classify(
-            self.seed,
-            self.size,
-            self.plates.as_ref().unwrap(),
-            self.height.as_ref().unwrap(),
-        );
+        // M18 — the basement: shield, basin, fold belt, volcanic, read
+        // once off the sketch and the relief. Classified in the
+        // fertility stage since M51 (the soil orders need their parent
+        // material) and frozen from there; M19 re-seats deposits on it,
+        // so geology still decides where ore belongs.
+        let rock = self.rock.take().expect("rock classified in stage_fertility");
         let deposits = resources::place_resources(
             self.biome_map.as_ref().unwrap(),
             self.height.as_ref().unwrap(),
