@@ -2,6 +2,16 @@
 //! M2: every land cell gets the agriculture its temperature, rainfall
 //! and irrigation actually support (research/08: GAEZ multiplicative
 //! suitability, USDA climate profiles, the <300 mm pastoral boundary).
+//!
+//! **M51 — soil genesis.** Fertility is no longer one climate scalar
+//! with deposits bolted on: the ground itself is classified into soil
+//! orders by Jenny's *clorpt* factors — parent material (M18's rock
+//! province), climate (warmth and the leaching balance), organisms (the
+//! biome standing on it), relief (slope) and a time proxy (how long the
+//! surface has stood: young volcanic ash and glacial till versus the
+//! deeply weathered tropical shield). Each order carries its own
+//! fertility, drainage and depth curves, and that curve — not a guess —
+//! modulates the arable index the farms read.
 
 use ndarray::Array2;
 
@@ -18,6 +28,7 @@ pub fn fertility(
     till: &Array2<f32>,
     loess: &Array2<f32>,
     outwash: &Array2<f32>,
+    soil: &Array2<u8>,
 ) -> Array2<f64> {
     let (rows, cols) = height.dim();
     let hpos = height.mapv(|v| v.max(0.0));
