@@ -68,6 +68,11 @@ pub struct Fields {
     /// Basement geology per cell (M18): 0 shield · 1 basin · 2 fold belt
     /// · 3 volcanic. Frozen at genesis, read by deposit placement (M19).
     pub rock: Array2<u8>,
+    /// M51 — soil order per cell (Jenny clorpt classification): 0 none
+    /// (water) · 1 lithosol · 2 podzol · 3 cambisol · 4 chernozem ·
+    /// 5 laterite · 6 andosol · 7 gley · 8 aridisol. Frozen at genesis;
+    /// the arable index is modulated by its fertility curve.
+    pub soil: Array2<u8>,
     /// Influence-map territory: owner REALM per cell, −1 wilderness
     /// (M4.1, realm axis per ADR-0018).
     pub territory: Array2<i16>,

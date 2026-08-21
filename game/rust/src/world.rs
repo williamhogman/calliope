@@ -222,6 +222,7 @@ pub struct GenBuilder {
     world_name: Option<String>,
     deposits: Option<Vec<Deposit>>,
     rock: Option<Array2<u8>>,
+    soil: Option<Array2<u8>>,
     world: Option<World>,
 }
 
@@ -274,6 +275,7 @@ impl GenBuilder {
             world_name: None,
             deposits: None,
             rock: None,
+            soil: None,
             world: None,
         }
     }
@@ -575,6 +577,8 @@ impl GenBuilder {
         // M18 — the basement, classified back in stage_resources (M19
         // reads it for ore placement). It rides into the fields here.
         let rock = self.rock.take().unwrap();
+        // M51 — the soil orders, classified in the fertility stage.
+        let soil = self.soil.take().unwrap();
 
         let t7 = now_ms();
         let mut taken: HashSet<String> = HashSet::new();
@@ -803,6 +807,7 @@ impl GenBuilder {
                 flow_amp,
                 strahler: hydro.strahler,
                 rock,
+                soil,
                 // M47 — placeholder like territory: the upwelling shore is
                 // solved at the dawn, off the final post-widen coastline.
                 upwelling: Array2::from_elem((1, 1), 0.0f32),
@@ -1133,6 +1138,10 @@ impl World {
         // The basement rides along (M18): the open-ocean margins are
         // young sea floor under sediment — basin, never shield.
         self.fields.rock = grow(&self.fields.rock, pad, |_, _| crate::rock::BASIN);
+        // M51 — the margins are open ocean: no profile, no soil order.
+        self.fields.soil = grow(&self.fields.soil, pad, |_, _| {
+            crate::agriculture::SoilOrder::None.code()
+        });
         self.fields.strahler = {
             let a = &self.fields.strahler;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {

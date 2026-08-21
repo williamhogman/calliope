@@ -325,6 +325,7 @@ field_registry! {
     flags:     U8,  units "CellFlags bits",                  hash true,  gpu true,  wire raw;
     territory: I16, units "owner realm, −1 wild",            hash false, gpu false, wire raw;
     rock:      U8,  units "rock province id (M18)",          hash true,  gpu false, wire raw;
+    soil:      U8,  units "soil order id (M51)",              hash true,  gpu false, wire raw;
     upwelling: F32, units "0..1 coastal upwelling (M47)",    hash true,  gpu false, wire u16;
 }
 
