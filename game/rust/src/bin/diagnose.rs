@@ -4969,10 +4969,14 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             if lines.is_empty() { "" } else { " — " },
             lines.join(" · ")
         );
-        // Audit: a claim may only name an ore the crown's towns cannot
-        // already put on a forge floor. If a claimed good is available
-        // inside a claiming realm's own market area, the signal is a bug.
-        let mut wrong = 0usize;
+        // Audit: every claim must be backed by a town that is genuinely
+        // without the ore — one whose own market area holds no seam of
+        // it. Deprivation is per market area, not per realm: a crown
+        // straddling two unconnected markets can be iron-fed in one and
+        // iron-dark in the other, and the dark half is the half that
+        // presses. What may never happen is a claim no deprived town
+        // stands behind.
+        let mut unbacked = 0usize;
         {
             use calliope::resources::GoodSet;
             let areas = &w.economy.areas;
@@ -4985,25 +4989,26 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 }
             }
             for (&(r, g), _) in claims.iter() {
-                let fed = w.peoples.settlements.iter().enumerate().any(|(i, st)| {
+                let backed = w.peoples.settlements.iter().enumerate().any(|(i, st)| {
                     st.realm == r
-                        && areas
+                        && !st.goods.contains(&g)
+                        && !areas
                             .area
                             .get(i)
                             .and_then(|&k| area_goods.get(k))
                             .map(|set| set.contains(g))
                             .unwrap_or(false)
                 });
-                if fed {
-                    wrong += 1;
+                if !backed {
+                    unbacked += 1;
                 }
             }
         }
         c.must(
-            "claims name only ore the crown lacks",
-            wrong == 0,
-            format!("{} of {} claims mis-signalled", wrong, claims.len()),
-            "M58 gate: claim pressure is unmet demand — a realm with the feedstock in its own market area presses no claim for it",
+            "every claim stands on a dark forge",
+            unbacked == 0,
+            format!("{} of {} claims unbacked", unbacked, claims.len()),
+            "M58 gate: claim pressure is unmet demand — each claim must be backed by a town of that realm whose market area holds no seam of the ore",
         );
         // The lever itself: a claimed seam must call louder to the crown
         // that lacks it than to one that does not. Measured on the same
@@ -5012,24 +5017,31 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             let base = w.resource_pull_for(&Default::default());
             let (per, top) = calliope::world::World::realm_claim(&claims, realm);
             let heard = w.resource_pull_for(&per);
+            // Measure the lever where it acts: on the ground over known
+            // seams of the very ore the crown lacks. A world-max reading
+            // says nothing — the loudest cell overall may be a good
+            // nobody is short of, and the cap hides the difference.
             let mut b_max = 0.0f64;
             let mut h_max = 0.0f64;
-            let (rr, cc) = base.dim();
-            for y in 0..rr {
-                for x in 0..cc {
-                    b_max = b_max.max(base[[y, x]]);
-                    h_max = h_max.max(heard[[y, x]]);
+            let mut seams = 0usize;
+            for d in w.deposits.iter() {
+                if d.r != good || !w.flows.known(d) {
+                    continue;
                 }
+                seams += 1;
+                let (y, x) = (d.y as usize, d.x as usize);
+                b_max = b_max.max(base[[y, x]]);
+                h_max = h_max.max(heard[[y, x]]);
             }
             let reach_gain = 1.0 + calliope::economy::CLAIM_REACH_GAIN * top;
             println!(
-                "the loudest claim (M58): {} wants {:?} at pressure {:.2} — best seam call {:.2} unclaimed vs {:.2} heard by the crown · lane purse ×{:.2}",
-                realm, good, press, b_max, h_max, reach_gain
+                "the loudest claim (M58): {} wants {:?} at pressure {:.2} over {} known seams — call over the seam {:.2} unclaimed vs {:.2} heard by the crown · lane purse ×{:.2}",
+                realm, good, press, seams, b_max, h_max, reach_gain
             );
             c.must(
                 "a claim makes its seam call louder",
-                h_max > b_max && reach_gain > 1.0,
-                format!("{:.2} → {:.2} · purse ×{:.2}", b_max, h_max, reach_gain),
+                seams > 0 && h_max > b_max && reach_gain > 1.0,
+                format!("{} seams · {:.2} → {:.2} · purse ×{:.2}", seams, b_max, h_max, reach_gain),
                 "M58 gate: the deprived crown must hear the known seams of the ore it lacks above the market's ordinary voice, and pay for a longer lane",
             );
         } else {
