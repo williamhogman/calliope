@@ -1,33 +1,33 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TELLING                      seed 12345 · size 512 · 150y
 ========================================================================
-chronicle: 8427 entries over 150y (56.2/y)
-  ids on 100.0% · coords on 97.7% · legend layer on 2205/2205 loud entries
-cast: artifact 17+0† · civilization 1+2† · culture 12+0† · feature 94+0† · good 36+0† · person 18+191† · realm 13+15† · ruin 2+0† · settlement 99+2† · war 1+39† · world 1+0†
-epithets earned: 168  (Thalwydell "the Young", Orene "the Young", Khargol "the Unlucky", Skjalvik "the Old")
-artifacts: 17 wrought · 15 held · 2 lost
+chronicle: 8579 entries over 150y (57.2/y)
+  ids on 100.0% · coords on 97.5% · legend layer on 2444/2444 loud entries
+cast: artifact 17+0† · civilization 2+2† · culture 12+0† · feature 104+0† · good 36+0† · person 19+212† · realm 18+24† · ruin 1+0† · settlement 100+1† · war 3+49† · world 1+0†
+epithets earned: 176  (Thalwydell "the Young", Orene "the Young", Khargol "the Unlucky", Skjalvik "the Old")
+artifacts: 17 wrought · 16 held · 1 lost
 
-stories sifted: 48 (bloody-circlet ×10 · empire-arc ×2 · high-noon ×1 · mine-curse ×7 · rise-fall ×2 · rivalry ×6 · roads-of ×7 · tide-turned ×1 · trials ×10 · usurpation ×2)
-  420.0  The Trials of Altaabek  (y0–149, 12 beats)
-  365.0  The Trials of Oros  (y0–149, 12 beats)
-  333.5  The Trials of Kalaia  (y22–150, 12 beats)
-  316.0  The Trials of Briordel  (y0–150, 12 beats)
-  311.5  The Trials of Aeldell  (y0–149, 12 beats)
-  303.0  The Trials of Norstad  (y43–150, 12 beats)
-  297.0  The Trials of Thorurheim  (y0–148, 12 beats)
-  288.0  The Trials of Kaldgard  (y36–146, 12 beats)
+stories sifted: 48 (bloody-circlet ×8 · empire-arc ×2 · high-noon ×2 · mine-curse ×10 · rise-fall ×1 · rivalry ×5 · roads-of ×5 · trials ×10 · usurpation ×5)
+  380.0  The Trials of Fenglade  (y70–147, 12 beats)
+  356.5  The Trials of Kharakum  (y0–145, 12 beats)
+  340.0  The Trials of Skjalastrand  (y0–149, 12 beats)
+  325.1  The Trials of Heldoos  (y70–150, 12 beats)
+  316.0  The Trials of Keshabek  (y0–149, 12 beats)
+  304.0  The Trials of Pelossa  (y50–148, 12 beats)
+  299.0  The Trials of Kalddal  (y0–148, 12 beats)
+  290.8  The Trials of Ordaagol  (y57–148, 12 beats)
 
 ---- checks ----------------------------------------------------------
 [PASS] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
 [PASS] every carried id is valid                     0 bad   (ids index the registry)
-[PASS] events mappable (coords)                      97.7%   (most entries can fly the camera)
-[PASS] loud events carry a legend                2205/2205   (M6.9: two-layer telling on weight ≥ 3)
+[PASS] events mappable (coords)                      97.5%   (most entries can fly the camera)
+[PASS] loud events carry a legend                2444/2444   (M6.9: two-layer telling on weight ≥ 3)
 [PASS] closed entities carry a fate              0 unfated   (every ending is written)
 [PASS] stories per century                            32.0   (M6.5 gate: the sifter yields)
 [PASS] sifter deterministic                      identical   (same log ⇒ same stories)
 [PASS] no duplicate stories                         0 dups   (dedup bounds hold)
 [PASS] a reversal story found                          yes   (M6.7: fortunes turn on the record)
 [PASS] relics wrought                                   17   (M6.3: artifacts enter the world)
-[PASS] epithets earned                                 168   (M6.8: names are coined in the field)
-[PASS] chronicle unbounded                            8427   (no truncation: the full log persists)
+[PASS] epithets earned                                 176   (M6.8: names are coined in the field)
+[PASS] chronicle unbounded                            8579   (no truncation: the full log persists)
 CHECKS: 12 pass · 0 warn · 0 fail

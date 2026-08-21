@@ -72,7 +72,16 @@ fn main() {
     println!("biomes     {:>6} ms", t.elapsed().as_millis());
 
     let t = Instant::now();
-    let _fert = agriculture::fertility(&height, &tmean, &precip, &hydro.rivers, &hydro.lakes, &hydro.discharge, &ice.till, &ice.loess, &ice.outwash);
+    // M51/M52 — fertility reads the soil order, so the stage rehearsal
+    // classifies the basement and the profile first, exactly as the
+    // generator does.
+    let height32_pre = height.mapv(|x| x as f32);
+    let rock_pre = calliope::rock::classify(seed, size, &plates, &height32_pre);
+    let soil_pre = agriculture::soil_genesis(
+        &height, &tmean, &precip, &biome_map, &rock_pre,
+        &hydro.rivers, &hydro.lakes, &hydro.discharge, &ice.till, &ice.loess,
+    );
+    let _fert = agriculture::fertility(&height, &tmean, &precip, &hydro.rivers, &hydro.lakes, &hydro.discharge, &ice.till, &ice.loess, &ice.outwash, &soil_pre);
     println!("fertility  {:>6} ms", t.elapsed().as_millis());
 
     // E3.2 — the human stages read the world's resting f32 grids.

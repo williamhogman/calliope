@@ -39,14 +39,24 @@ ore homes (M19): gold 2/2 · silver 2/2 · copper 8/8 · iron 4/4 · coal 23/23 
 soil orders (M51 · clorpt):
 order           cells    share mean fert     curve depth m
 lithosol        28850    25.7%     0.020      0.35    0.15
-podzol          11050     9.8%     0.037      0.70    0.60
-cambisol        19171    17.1%     0.245      1.00    1.00
-chernozem        3219     2.9%     0.415      1.35    1.60
-laterite         5284     4.7%     0.108      0.60    2.40
-andosol          5543     4.9%     0.246      1.20    0.90
-gley             4686     4.2%     0.217      0.85    1.10
-aridisol        34597    30.8%     0.049      0.45    0.35
-curve-vs-measured rank correlation over 8 orders: ρ = 0.93
+podzol           8857     7.9%     0.025      0.70    0.60
+cambisol        17356    15.4%     0.228      1.00    1.00
+chernozem        2257     2.0%     0.409      1.35    1.60
+laterite         4593     4.1%     0.100      0.60    2.40
+andosol          4537     4.0%     0.218      1.20    0.90
+gley             2354     2.1%     0.110      0.85    1.10
+aridisol        28016    24.9%     0.039      0.45    0.35
+fluvisol         6070     5.4%     0.362      1.30    1.80
+loess            9510     8.5%     0.227      1.45    2.20
+curve-vs-measured rank correlation over 10 orders: ρ = 0.87
+
+M52 delivered soils · top-decile cut fert 0.316 (baseline 10.0%)
+fluvisol         6070 cells ·   2826 in top decile (46.6%) · x4.66
+loess            9510 cells ·   1886 in top decile (19.8%) · x1.98
+
+M52 delivery upgrade · shipped soil vs the profile it buried:
+fluvisol       5332 farmable cells · x1.24 · buried: podzol 488 · cambisol 1892 · chernozem 304 · laterite 738 · andosol 332 · gley 400 · aridisol 1178
+loess          9221 farmable cells · x1.48 · buried: podzol 1696 · cambisol 951 · chernozem 340 · andosol 674 · gley 141 · aridisol 5419
 
 ---- checks ----------------------------------------------------------
 [PASS] deposits per 1000 land cells                   1.52   (sweet 1–6 · hard 0.5–12)
@@ -60,15 +70,22 @@ curve-vs-measured rank correlation over 8 orders: ρ = 0.93
 [PASS] goods table agrees with closure flags 38 rows consistent   (M14.1: one declaration point — flags derive-checked against GOODS)
 [PASS] ore seams in home province           46 of 46 (100.0%)   (M19 gate: geology says where ore sits — ≥90% pooled)
 [PASS] lithosol share                       28850 of 112400 (25.7%)   (M51: the steep and the frozen carry no profile)
-[PASS] podzol share                         11050 of 112400 (9.8%)   (M51: cool conifer country leaches acid)
-[PASS] cambisol share                       19171 of 112400 (17.1%)   (M51: the temperate brown earth is the ordinary case)
-[PASS] chernozem share                      3219 of 112400 (2.9%)   (M51: black earth is rare and continental)
-[PASS] laterite share                       5284 of 112400 (4.7%)   (M51: the hot wet tropics weather deep and poor)
-[PASS] andosol share                        5543 of 112400 (4.9%)   (M51: ash country tracks the volcanic province)
-[PASS] gley share                           4686 of 112400 (4.2%)   (M51: valley floors and cold flats pond)
-[PASS] aridisol share                       34597 of 112400 (30.8%)   (M51: the dry share tracks the desert share)
-[PASS] soil fertility rank correlation      ρ 0.93 over 8 orders   (M51: the order's curve must order the farms)
+[PASS] podzol share                         8857 of 112400 (7.9%)   (M51: cool conifer country leaches acid)
+[PASS] cambisol share                       17356 of 112400 (15.4%)   (M51: the temperate brown earth is the ordinary case)
+[PASS] chernozem share                      2257 of 112400 (2.0%)   (M51: black earth is rare and continental)
+[PASS] laterite share                       4593 of 112400 (4.1%)   (M51: the hot wet tropics weather deep and poor)
+[PASS] andosol share                        4537 of 112400 (4.0%)   (M51: ash country tracks the volcanic province)
+[PASS] gley share                           2354 of 112400 (2.1%)   (M51: valley floors and cold flats pond)
+[PASS] aridisol share                       28016 of 112400 (24.9%)   (M51: the dry share tracks the desert share)
+[PASS] fluvisol share                       6070 of 112400 (5.4%)   (M52: the alluvial belt is a ribbon, not a region)
+[PASS] loess share                          9510 of 112400 (8.5%)   (M52: the dust apron reaches far but not everywhere)
+[PASS] soil fertility rank correlation      ρ 0.87 over 10 orders   (M51: the order's curve must order the farms)
+[PASS] alluvium enrichment                  2826 of 6070 in top decile (46.6%) — x4.66 chance   (M52: floodplain soil must land in the best tenth of the map)
+[PASS] alluvium order present                   6070 cells   (M52: every world has a floodplain and a dust belt)
+[PASS] loess order present                      9510 cells   (M52: every world has a floodplain and a dust belt)
+[PASS] alluvium upgrade                     x1.24 over the buried profile on 5332 farmable cells   (M52: silt must out-farm the profile the river buried)
+[PASS] loess upgrade                        x1.48 over the buried profile on 9221 farmable cells   (M52: the dust must out-farm the profile it blanketed)
 [PASS] every land cell carries a soil order 0 bare of 112400 land cells   (M51: the classifier is total over land — no cell falls through the ladder)
-[PASS] chernozem confined to its climate window 3219 of 3219 in window · 3219 under grass/woodland (100.0%)   (M51 gate: black earth only where humus outlasts the summer and rain never flushes the profile)
-[PASS] andosol sits on volcanic parent rock 5543 of 5543 on volcanic province   (M51: ash soils cannot exist off the ash)
-CHECKS: 21 pass · 1 warn · 0 fail
+[PASS] chernozem confined to its climate window 2257 of 2257 in window · 2257 under grass/woodland (100.0%)   (M51 gate: black earth only where humus outlasts the summer and rain never flushes the profile)
+[PASS] andosol sits on volcanic parent rock 4537 of 4537 on volcanic province   (M51: ash soils cannot exist off the ash)
+CHECKS: 28 pass · 1 warn · 0 fail

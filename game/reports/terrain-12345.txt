@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 12345 · 640x512
 ========================================================================
-world: "Talomar" · generated in 1574 ms
+world: "Talomar" · generated in 1950 ms
 land: 114677 cells of 327680 (35.0%) · 1834832 km²
 hypsometry (land h): p5 0.018 · p25 0.084 · p50 0.197 · p75 0.372 · p95 0.548 · max 0.759
 bathymetry (sea h): p5 -0.592 · p50 -0.383 · p95 -0.034
@@ -29,7 +29,7 @@ longshore drift (M44): spit cells 96 in 25 chains · barrier cells 5 in 3 chains
 
 glacial relief: u-cells alpine 2272 / sheet 3720 · cirques 242 (146 alpine) · hangs 121 · fjord cells 6
 glacial legacy: till 24265 cells (78.8% of iced lowland) · moraine 2493 · drumlins 103 · esker cells 173 · loess 30412 cells (26.5% of land)
-till dividend (observational): -0.0297 fertility over 14 matched lat×h bins
+till dividend (observational): -0.0539 fertility over 14 matched lat×h bins
 legacy counterfactual: 20033 of 54677 till+loess cells farmable · mean uplift +0.0510 there
 proglacial (M31): 16 lakes (12 refilled today) · 3 chains · 76 spillway cells · widths 15/1/0 · 0 of 61 steps ascend
 outwash (M32): 444 corridor + 1387 apron cells · 223 of 4043 below-margin river cells braided (5.5%)
