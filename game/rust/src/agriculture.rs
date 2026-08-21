@@ -310,7 +310,7 @@ pub fn soil_genesis(
             || b == gc::SAVANNA
             || loess[[y, x]] > 0.15
             || (till[[y, x]] > 0.20 && b == gc::WOODLAND);
-        if grassy && chernozem_climate(t, p) && slope < 0.30 {
+        if grassy && chernozem_climate(t, p) && slope < 0.60 {
             return SoilOrder::Chernozem.code();
         }
         SoilOrder::Cambisol.code()
