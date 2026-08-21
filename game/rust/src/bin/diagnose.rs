@@ -5024,7 +5024,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 d.r == g && d.live() && base_all[[d.y as usize, d.x as usize]] > 0.0
             })
         };
-        let mut ranked: Vec<(&(RealmId, Good), &f64)> = claims.iter().collect();
+        let mut ranked: Vec<(&(calliope::ids::RealmId, calliope::resources::Good), &f64)> = claims.iter().collect();
         ranked.sort_by(|a, b| b.1.total_cmp(a.1));
         let pick = ranked.into_iter().find(|(&(_, g), _)| free_seam(g));
         if let Some((&(realm, good), &press)) = pick {
