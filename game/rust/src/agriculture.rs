@@ -114,7 +114,7 @@ pub const SOIL_GAIN: f64 = 0.6;
 
 /// Slope (in `fertility`'s scaled units) above which no profile holds:
 /// the regolith walks downhill as fast as it forms.
-const LITHO_SLOPE: f64 = 0.55;
+const LITHO_SLOPE: f64 = 1.10;
 /// Slope below which water can pond rather than run — the gley gate.
 const FLAT_SLOPE: f64 = 0.10;
 

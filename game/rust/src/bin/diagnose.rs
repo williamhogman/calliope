@@ -3289,7 +3289,7 @@ fn cmd_resources(seed: i64, size: usize) {
             if count[i] >= 200 {
                 ranks.push((o.fertility(), mean_f));
             }
-            c.band_as(&format!("{} share of land", o.name()), &format!("{} share", o.name()), share, format!("{} of {} ({})", count[i], soil_n, pct(share)));
+            c.band_as(&format!("{} share", o.name()), &format!("{} share of land", o.name()), share, format!("{} of {} ({})", count[i], soil_n, pct(share)));
         }
 
         // The curve must actually order the farms: Spearman between each
