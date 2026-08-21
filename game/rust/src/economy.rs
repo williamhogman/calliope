@@ -24,7 +24,7 @@ use rand_pcg::Pcg64Mcg;
 use serde::Serialize;
 use serde_json::{json, Value};
 
-use crate::ids::{PeopleId, EntityId, SettlementId};
+use crate::ids::{PeopleId, EntityId, RealmId, SettlementId};
 use crate::entity::Registry;
 use crate::naming;
 use crate::resources::{Abundance, Good, GoodSet};
@@ -805,6 +805,108 @@ pub fn craft_pass(
         }
     }
     events
+}
+
+
+// ------------------------------------------------------- M58 claim pressure
+
+/// M58 — how much unmet craft it takes before a crown treats a metal as
+/// something it must *have* rather than merely buy. One idle workshop's
+/// worth of demand (a town exactly at a recipe's `min_pop`) counts 1.0;
+/// the pressure is that weight, capped, so a realm with a single dark
+/// forge presses gently and an industrial heartland starved of iron
+/// presses hard.
+pub const CLAIM_SATIATE: f64 = 1.0;
+
+/// M58 — how much louder a deprived crown hears a seam of the ore it
+/// lacks, per unit of claim pressure. At 1.0 a realm with one idle forge
+/// values that seam twice over, and a realm at the cap four times. The
+/// gain multiplies the *seam's* worth (and its local ceiling), never the
+/// suitability of the ground it lies under.
+pub const CLAIM_GAIN: f64 = 1.0;
+
+/// M58 — how much further a claim-driven crown will victual a lane, per
+/// unit of pressure, as a fraction of `trade::CARAVAN_BUDGET`. At 0.25 a
+/// realm at the cap pays for a lane ~75% longer than the ordinary trade
+/// would carry: the state subsidises the water and fodder that private
+/// caravans would not. Reach is bought, never granted — the Dijkstra
+/// budget still has to reach the ground across real terrain cost.
+pub const CLAIM_REACH_GAIN: f64 = 0.25;
+
+/// M58 — the ceiling on claim pressure per good and realm. A crown can
+/// want a metal very badly; it cannot want it infinitely, and without a
+/// cap one enormous smelting realm would drown every other signal.
+pub const CLAIM_PRESSURE_CAP: f64 = 3.0;
+
+/// M58 — the deprived crafts of a realm: for every (realm, feedstock)
+/// pair, the weight of workshops that realm's towns could run — they
+/// have the art, the hands and the fuel — but cannot, because no seam of
+/// that ore lies inside their market area.
+///
+/// This is *demand*, not price. A market price says a good is dear; a
+/// dark forge says a crown is structurally without it, which is the
+/// thing that historically sent states to claim distant, unlivable
+/// ground (Potosí, the Rio Tinto concessions, the Kalgoorlie fields).
+/// It touches no site score: it re-weights how loudly a *known* seam
+/// calls, and how far a state will pay to victual the lane to it.
+///
+/// Deterministic by construction: `BTreeMap` keys, `Copy` enums, no
+/// wall-clock, no hash iteration into output (ADR-0003).
+pub fn claim_pressure(
+    settlements: &[Settlement],
+    societies: &[society::Society],
+    areas: &MarketAreas,
+) -> BTreeMap<(RealmId, Good), f64> {
+    // what each market area can put on a forge floor
+    let mut area_goods: Vec<GoodSet> = vec![GoodSet::EMPTY; areas.markets.len()];
+    for (i, s) in settlements.iter().enumerate() {
+        if let Some(&k) = areas.area.get(i) {
+            if let Some(set) = area_goods.get_mut(k) {
+                set.extend(s.goods.iter().copied());
+            }
+        }
+    }
+    let mut out: BTreeMap<(RealmId, Good), f64> = BTreeMap::new();
+    for (si, s) in settlements.iter().enumerate() {
+        let Some(soc) = societies.get(s.people.idx()) else { continue };
+        let nearby: GoodSet = areas
+            .area
+            .get(si)
+            .and_then(|&k| area_goods.get(k))
+            .copied()
+            .unwrap_or_default();
+        let own: GoodSet = s.goods.iter().copied().collect();
+        let has_good = |g: Good| -> bool { own.contains(g) || nearby.contains(g) };
+        let fuel = has_good(Good::Coal) || has_good(Good::Timber);
+        for rc in RECIPES.iter() {
+            // only mineral feedstocks: a realm short of wool shears more
+            // sheep, it does not colonize a desert for them.
+            if !rc.ore_any.iter().any(|g| g.is_mineral()) {
+                continue;
+            }
+            let capable = s.pop >= rc.min_pop
+                && rc.tech_any.iter().any(|&t| soc.knows(t))
+                && (!rc.needs_fuel || fuel);
+            if !capable {
+                continue;
+            }
+            if rc.ore_any.iter().any(|&o| has_good(o)) {
+                continue; // the forge is fed; no claim to press
+            }
+            // the weight of the idle craft: a town at the recipe's bar
+            // counts one workshop, a city several — but no more than
+            // the cap, since a crown's reach is not linear in its size.
+            let w = ((s.pop as f64) / (rc.min_pop as f64)).min(CLAIM_PRESSURE_CAP);
+            for &o in rc.ore_any.iter().filter(|g| g.is_mineral()) {
+                let e = out.entry((s.realm, o)).or_insert(0.0);
+                *e = (*e + w).min(CLAIM_PRESSURE_CAP * CLAIM_SATIATE);
+            }
+        }
+    }
+    for v in out.values_mut() {
+        *v /= CLAIM_SATIATE;
+    }
+    out
 }
 
 // -------------------------------------------------------------- merchants

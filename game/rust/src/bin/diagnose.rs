@@ -4951,6 +4951,97 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         );
     }
 
+    // --------------------------------------------------- M58 claim pressure
+    // Demand, not price: a crown that has the art, the hands and the fuel
+    // for a craft but owns no seam of its feedstock is structurally
+    // without the metal, and that is the pressure that historically sent
+    // states to claim ground nobody would farm.
+    {
+        let claims = w.claim_pressure();
+        let mut lines: Vec<String> = Vec::new();
+        for (&(r, g), &v) in claims.iter().take(6) {
+            lines.push(format!("{}:{:?} {:.2}", r, g, v));
+        }
+        println!(
+            "claim pressure (M58): {} standing claims over {} crowns{}{}",
+            claims.len(),
+            claims.iter().map(|(&(r, _), _)| r).collect::<std::collections::BTreeSet<_>>().len(),
+            if lines.is_empty() { "" } else { " — " },
+            lines.join(" · ")
+        );
+        // Audit: a claim may only name an ore the crown's towns cannot
+        // already put on a forge floor. If a claimed good is available
+        // inside a claiming realm's own market area, the signal is a bug.
+        let mut wrong = 0usize;
+        {
+            use calliope::resources::GoodSet;
+            let areas = &w.economy.areas;
+            let mut area_goods: Vec<GoodSet> = vec![GoodSet::EMPTY; areas.markets.len()];
+            for (i, st) in w.peoples.settlements.iter().enumerate() {
+                if let Some(&k) = areas.area.get(i) {
+                    if let Some(set) = area_goods.get_mut(k) {
+                        set.extend(st.goods.iter().copied());
+                    }
+                }
+            }
+            for (&(r, g), _) in claims.iter() {
+                let fed = w.peoples.settlements.iter().enumerate().any(|(i, st)| {
+                    st.realm == r
+                        && areas
+                            .area
+                            .get(i)
+                            .and_then(|&k| area_goods.get(k))
+                            .map(|set| set.contains(g))
+                            .unwrap_or(false)
+                });
+                if fed {
+                    wrong += 1;
+                }
+            }
+        }
+        c.must(
+            "claims name only ore the crown lacks",
+            wrong == 0,
+            format!("{} of {} claims mis-signalled", wrong, claims.len()),
+            "M58 gate: claim pressure is unmet demand — a realm with the feedstock in its own market area presses no claim for it",
+        );
+        // The lever itself: a claimed seam must call louder to the crown
+        // that lacks it than to one that does not. Measured on the same
+        // pull field colonisation reads.
+        if let Some((&(realm, good), &press)) = claims.iter().max_by(|a, b| a.1.total_cmp(b.1)) {
+            let base = w.resource_pull_for(&Default::default());
+            let (per, top) = calliope::world::World::realm_claim(&claims, realm);
+            let heard = w.resource_pull_for(&per);
+            let mut b_max = 0.0f64;
+            let mut h_max = 0.0f64;
+            let (rr, cc) = base.dim();
+            for y in 0..rr {
+                for x in 0..cc {
+                    b_max = b_max.max(base[[y, x]]);
+                    h_max = h_max.max(heard[[y, x]]);
+                }
+            }
+            let reach_gain = 1.0 + calliope::economy::CLAIM_REACH_GAIN * top;
+            println!(
+                "the loudest claim (M58): {} wants {:?} at pressure {:.2} — best seam call {:.2} unclaimed vs {:.2} heard by the crown · lane purse ×{:.2}",
+                realm, good, press, b_max, h_max, reach_gain
+            );
+            c.must(
+                "a claim makes its seam call louder",
+                h_max > b_max && reach_gain > 1.0,
+                format!("{:.2} → {:.2} · purse ×{:.2}", b_max, h_max, reach_gain),
+                "M58 gate: the deprived crown must hear the known seams of the ore it lacks above the market's ordinary voice, and pay for a longer lane",
+            );
+        } else {
+            c.want(
+                "a claim makes its seam call louder",
+                false,
+                "no standing claims".into(),
+                "M58: no crown in this world is short of a feedstock it can smelt — the lever is unexercised here",
+            );
+        }
+    }
+
     // M55 counterfactual: the same world, run again with the dry-frontier
     // veto lifted (every people's well reaches any table). If colonists
     // then settle waterless arid ground that the real run left empty, the
@@ -4974,8 +5065,19 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             let chunk = step.min(years - done);
             let _ = run_years(&mut cf, chunk);
             done += chunk;
-            let pull_s = cf.resource_pull();
-            let prov_s = cf.caravan_provision();
+            // M58 — judge the desert at the price the hungriest crown
+            // would pay for it, not at the market's neutral voice.
+            let claims_s = cf.claim_pressure();
+            let realm_s = claims_s
+                .iter()
+                .max_by(|a, b| a.1.total_cmp(b.1))
+                .map(|(&(r, _), _)| r);
+            let (per_s, top_s) = match realm_s {
+                Some(r) => calliope::world::World::realm_claim(&claims_s, r),
+                None => (Default::default(), 0.0),
+            };
+            let pull_s = cf.resource_pull_for(&per_s);
+            let prov_s = cf.caravan_provision_claim(top_s);
             let dry_s = calliope::settlements::DryFrontier {
                 arid_dry: &cf.arid_dry,
                 aquifer: &cf.fields.aquifer,
@@ -5017,8 +5119,17 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // provisioning and well upkeep included — against the best
         // offer anywhere else.
         {
-            let pull = cf.resource_pull();
-            let prov = cf.caravan_provision();
+            let claims_e = cf.claim_pressure();
+            let realm_e = claims_e
+                .iter()
+                .max_by(|a, b| a.1.total_cmp(b.1))
+                .map(|(&(r, _), _)| r);
+            let (per_e, top_e) = match realm_e {
+                Some(r) => calliope::world::World::realm_claim(&claims_e, r),
+                None => (Default::default(), 0.0),
+            };
+            let pull = cf.resource_pull_for(&per_e);
+            let prov = cf.caravan_provision_claim(top_e);
             let dry = calliope::settlements::DryFrontier {
                 arid_dry: &cf.arid_dry,
                 aquifer: &cf.fields.aquifer,
