@@ -4776,6 +4776,45 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             }
         }
     }
+
+    // ----------------------------------------------- M55 the dry frontier
+    // No town may stand on arid ground with no surface water, spring or
+    // oasis unless its people can sink a well to the table beneath it.
+    let mut dry_towns = 0usize;
+    let mut dry_welled = 0usize;
+    let mut dry_illegal: Vec<String> = Vec::new();
+    for st in &w.peoples.settlements {
+        let (y, x) = (st.y as usize, st.x as usize);
+        if !w.arid_dry[[y, x]] {
+            continue;
+        }
+        dry_towns += 1;
+        let reach = w
+            .peoples.societies
+            .get(st.people.idx())
+            .map(calliope::settlements::well_reach_m)
+            .unwrap_or(0.0);
+        let depth = w.fields.aquifer[[y, x]] as f64;
+        if reach > 0.0 && depth <= reach {
+            dry_welled += 1;
+        } else if dry_illegal.len() < 6 {
+            dry_illegal.push(format!("{} (depth {:.0} m, reach {:.0} m)", st.name, depth, reach));
+        }
+    }
+    println!();
+    println!(
+        "the dry frontier (M55): {} towns on waterless arid ground · {} of them within well reach{}",
+        dry_towns,
+        dry_welled,
+        if dry_illegal.is_empty() { String::new() } else { format!(" · unwatered: {}", dry_illegal.join(", ")) }
+    );
+    c.must(
+        "no town drinks where it cannot",
+        dry_towns == dry_welled,
+        format!("{}/{} watered", dry_welled, dry_towns),
+        "M55 gate: every settlement on arid ground with no river, lake, spring or oasis is held by a people whose well craft reaches its water table",
+    );
+
     c.print();
 }
 
