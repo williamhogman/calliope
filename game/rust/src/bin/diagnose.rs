@@ -2155,10 +2155,10 @@ fn cmd_terrain(seed: i64, size: usize) {
             let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
             let none: ndarray::Array2<f32> = ndarray::Array2::zeros((tr, tc));
             let f_with = calliope::agriculture::fertility(
-                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash,
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash, &nsoil,
             );
             let f_bare = calliope::agriculture::fertility(
-                &h64, &t64, &p64, &rivers, &lakes, &q64, &none, &none, &ice.outwash,
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &none, &none, &ice.outwash, &nsoil,
             );
             // Measured on the farmable footprint only (bare fertility
             // ≥ 0.05): the sheet interior is tundra where the temperature
@@ -2315,10 +2315,10 @@ fn cmd_terrain(seed: i64, size: usize) {
             let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
             let none: ndarray::Array2<f32> = ndarray::Array2::zeros((ir, icn));
             let f_with = calliope::agriculture::fertility(
-                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash,
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash, &nsoil,
             );
             let f_bare = calliope::agriculture::fertility(
-                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &none,
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &none, &nsoil,
             );
             let (mut up, mut un) = (0.0f64, 0usize);
             for y in 0..ir {
@@ -3265,10 +3265,10 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
         let none: ndarray::Array2<f32> = ndarray::Array2::zeros((ir, ic));
         let f_with = calliope::agriculture::fertility(
-            &h64, &t64, &p64, &rivers, &lakes, &q64, &w.ice.till, &w.ice.loess, &w.ice.outwash,
+            &h64, &t64, &p64, &rivers, &lakes, &q64, &w.ice.till, &w.ice.loess, &w.ice.outwash, &nsoil,
         );
         let f_bare = calliope::agriculture::fertility(
-            &h64, &t64, &p64, &rivers, &lakes, &q64, &none, &none, &w.ice.outwash,
+            &h64, &t64, &p64, &rivers, &lakes, &q64, &none, &none, &w.ice.outwash, &nsoil,
         );
         let (mut up, mut n) = (0.0f64, 0usize);
         for s in &w.peoples.settlements {
