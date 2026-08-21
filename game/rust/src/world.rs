@@ -169,6 +169,12 @@ pub struct World {
     site_score: Array2<f64>,
     food_grid: Array2<f64>,
     near_fresh: Array2<bool>,
+    /// M55 — arid ground with no reachable surface water; pub so
+    /// diagnostics gate founding against the same mask the world uses.
+    pub arid_dry: Array2<bool>,
+    /// M55 — the site score that dry ground would carry once a well
+    /// reaches its table.
+    pub dry_site_score: Array2<f64>,
     /// The coastal band (land within 2 cells of sea) — the ground the
     /// shelter field scores; pub so diagnostics read the same mask.
     pub coast: Array2<bool>,
@@ -636,6 +642,20 @@ impl GenBuilder {
             &height,
             &self.coastform.as_ref().expect("glacial stage ran").form,
         );
+        // M55 — springs and oases: where the solved table daylights at a
+        // break in slope, and where arid ground stands over water within
+        // root reach. Both derive from the frozen aquifer grid, so they
+        // are as deterministic as it is, and neither rides the wire.
+        let sea_mask = height.mapv(|h| h < 0.0);
+        let dry_water = crate::hydrology::springs_and_oases(
+            &height,
+            &sea_mask,
+            &hydro.rivers,
+            &hydro.lakes,
+            &aquifer,
+            &biome_map,
+            &precip,
+        );
         let founded = settlements::found_settlements(
             &height,
             &biome_map,
@@ -646,6 +666,9 @@ impl GenBuilder {
             &deposits,
             &fertility,
             &shelter,
+            &dry_water.springs,
+            &dry_water.oases,
+            &precip,
             &mut rng9000,
             &mut taken,
         );
@@ -911,6 +934,8 @@ impl GenBuilder {
             site_score: founded.site_score,
             food_grid: founded.food_grid,
             near_fresh: founded.near_fresh,
+            arid_dry: founded.arid_dry,
+            dry_site_score: founded.dry_site_score,
             coast: founded.coast,
             shelter,
             max_settlements: founded.max_settlements,
@@ -1171,6 +1196,8 @@ impl World {
             })
         };
         self.near_fresh = grow_bool(&self.near_fresh, pad);
+        self.arid_dry = grow_bool(&self.arid_dry, pad);
+        self.dry_site_score = grow(&self.dry_site_score, pad, |_, _| -1e9);
         self.coast = grow_bool(&self.coast, pad);
         self.fields.pamp = grow(&self.fields.pamp, pad, |e, _| e);
         self.fields.flow_amp = grow(&self.fields.flow_amp, pad, |_, _| 0.0);
@@ -1698,12 +1725,24 @@ impl World {
                     .get(parent.people.idx())
                     .map(|so| society::mods_for(so).colony_range)
                     .unwrap_or(1.0);
+                let reach = self
+                    .peoples.societies
+                    .get(parent.people.idx())
+                    .map(settlements::well_reach_m)
+                    .unwrap_or(0.0);
+                let dry = settlements::DryFrontier {
+                    arid_dry: &self.arid_dry,
+                    aquifer: &self.fields.aquifer,
+                    dry_site_score: &self.dry_site_score,
+                    well_reach_m: reach,
+                };
                 settlements::colony_site(
                     &self.site_score,
                     pull.as_ref().unwrap(),
                     &self.peoples.settlements,
                     &parent,
                     3600.0 * range * range,
+                    &dry,
                 )
             };
             let Some((y, x)) = site else { continue };

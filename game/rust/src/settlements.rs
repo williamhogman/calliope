@@ -208,8 +208,59 @@ pub struct Founded {
     pub food_grid: Array2<f64>,
     pub near_fresh: Array2<bool>,
     pub coast: Array2<bool>,
+    /// M55 — arid ground with no water a people can reach without a
+    /// shaft: no surface water, no spring, no oasis. Siting refuses
+    /// these cells until the well tech reaches the table beneath.
+    pub arid_dry: Array2<bool>,
+    /// M55 — the site score those arid-dry cells would carry if their
+    /// water were reachable; -1e9 everywhere else.
+    pub dry_site_score: Array2<f64>,
     pub max_settlements: usize,
 }
+
+// ------------------------------------------------------ M55 dry-land water
+
+/// M55 — how deep a people can sink a well, in metres of table.
+///
+/// A dry site is only habitable if someone can reach the water under it,
+/// and reach is a matter of craft. Hand-dug pits in loose ground go a
+/// few metres; a lined and cased shaft (masonry) holds open far deeper;
+/// the qanat, the horizontal gallery that made the Persian desert
+/// habitable, comes with the same water-engineering that raises the
+/// aqueduct; and full engineering drives shafts to the regional table.
+/// With no craft at all there are no wells — only springs, oases and
+/// running water.
+pub fn well_reach_m(soc: &crate::society::Society) -> f64 {
+    use crate::society::TechId as T;
+    if soc.knows(T::Engineering) {
+        90.0
+    } else if soc.knows(T::Aqueduct) {
+        60.0
+    } else if soc.knows(T::Masonry) {
+        30.0
+    } else if soc.knows(T::Pottery) || soc.knows(T::Stonecraft) {
+        12.0
+    } else {
+        0.0
+    }
+}
+
+/// Can this people put a town on that cell? Everything not arid-dry is
+/// open; arid-dry ground opens only when the well reach clears the depth
+/// to water there (M55 gate).
+pub fn dry_site_ok(
+    arid_dry: &Array2<bool>,
+    aquifer: &Array2<f32>,
+    y: usize,
+    x: usize,
+    well_reach: f64,
+) -> bool {
+    if !arid_dry[[y, x]] {
+        return true;
+    }
+    well_reach > 0.0 && (aquifer[[y, x]] as f64) <= well_reach
+}
+
 
 /// Score cells and greedily found settlements with min spacing.
 #[allow(clippy::too_many_arguments)]
@@ -223,9 +274,15 @@ pub fn found_settlements(
     deposits: &[Deposit],
     fert: &Array2<f32>,
     shelter: &Array2<f32>,
+    // M55 — the dry-land water: the day-lit table and the desert's own
+    // shallow reserves, plus the rainfall the ground actually gets.
+    springs: &Array2<bool>,
+    oases: &Array2<bool>,
+    precip: &Array2<f32>,
     rng: &mut Pcg64Mcg,
     taken: &mut HashSet<String>,
 ) -> Founded {
+
     let size = height.dim().0;
     let land = height.mapv(|h| h >= 0.0);
     let sea = height.mapv(|h| h < 0.0);
@@ -239,6 +296,22 @@ pub fn found_settlements(
     let near_fresh = Array2::from_shape_fn((size, size), |(y, x)| {
         land[[y, x]] && (riv_adj[[y, x]] || lake_adj[[y, x]])
     });
+
+    // M55 — arid ground with no drinkable water at the surface. The sea
+    // is not water access: a desert harbour drinks from a well or a
+    // spring or it does not drink. Springs and oases count within one
+    // cell, the same 4 km claim fresh water gets — a town stands beside
+    // its water, it does not commute to it.
+    let spring_adj = ndimage::binary_dilation(springs, 1);
+    let oasis_adj = ndimage::binary_dilation(oases, 1);
+    let arid_dry = Array2::from_shape_fn((size, size), |(y, x)| {
+        land[[y, x]]
+            && crate::hydrology::arid(biomes[[y, x]], precip[[y, x]] as f64)
+            && !near_fresh[[y, x]]
+            && !spring_adj[[y, x]]
+            && !oasis_adj[[y, x]]
+    });
+
 
     // River deltas: where a great river meets the tide, the silt piles
     // deep and every keel and cart must meet. The bigger the river, the
@@ -298,12 +371,19 @@ pub fn found_settlements(
     food.zip_mut_with(&delta, |f, &d| *f += 0.9 * d);
 
     let mut score = Array2::<f64>::zeros((size, size));
+    // M55 — what an arid-dry cell would be worth if its water could be
+    // reached. Held aside so the dawn cannot found there, while a later
+    // people with wells can bid for the same ground.
+    let mut dry_score = Array2::<f64>::from_elem((size, size), -1e9);
     for y in 0..size {
         for x in 0..size {
             if !land[[y, x]] {
                 score[[y, x]] = -1e9;
                 continue;
             }
+            // M55 — the dawn peoples have no shafts. Arid ground with no
+            // surface water, spring or oasis is unfoundable until the
+            // well craft arrives; colonisation re-tests it against reach.
             let comfort = (-(((tmean[[y, x]] as f64 - 12.0) / 14.0).powi(2))).exp();
             let b = biomes[[y, x]];
             // fresh water pulls hard but no longer vetoes: a sheltered
@@ -338,6 +418,14 @@ pub fn found_settlements(
                 - 3.5 * ((b == gc::ICE) as u8 as f64)
                 - 1.5 * ((b == gc::TUNDRA || b == gc::WET_TUNDRA) as u8 as f64)
                 - 2.0 * (height[[y, x]] as f64 - 0.5).clamp(0.0, 1.0) * 4.0;
+
+            // M55 — the dawn peoples have no shafts. Arid ground with no
+            // surface water, spring or oasis is unfoundable; its score is
+            // set aside for colonists who can sink a well to the table.
+            if arid_dry[[y, x]] {
+                dry_score[[y, x]] = score[[y, x]];
+                score[[y, x]] = -1e9;
+            }
         }
     }
 
@@ -417,6 +505,9 @@ pub fn found_settlements(
         food_grid: food,
         near_fresh,
         coast,
+        arid_dry,
+        dry_site_score: dry_score,
+
         // 6× the dawn towns: with market-town spacing (M2.5) the land can
         // hold a dense web of villages between the regional capitals.
         max_settlements: n_target * 6,
@@ -428,6 +519,32 @@ pub fn found_settlements(
 /// so settled cores tighten toward real market-shed distances while the
 /// frontier stays sparse.
 pub const MIN_TOWN_SPACING_CELLS: f64 = 6.0;
+
+/// M55 — a founding party's reach into dry country: the arid-dry mask,
+/// the table depth under it, the score that ground would carry, and how
+/// deep this people can sink a shaft.
+pub struct DryFrontier<'a> {
+    pub arid_dry: &'a Array2<bool>,
+    pub aquifer: &'a Array2<f32>,
+    pub dry_site_score: &'a Array2<f64>,
+    pub well_reach_m: f64,
+}
+
+impl DryFrontier<'_> {
+    /// The site's worth to *this* people: the ordinary score, unless the
+    /// cell is arid-dry, in which case the held-aside score is unlocked
+    /// exactly when the well reaches the water.
+    pub fn score_at(&self, site_score: &Array2<f64>, y: usize, x: usize) -> f64 {
+        if !self.arid_dry[[y, x]] {
+            return site_score[[y, x]];
+        }
+        if self.well_reach_m > 0.0 && (self.aquifer[[y, x]] as f64) <= self.well_reach_m {
+            self.dry_site_score[[y, x]]
+        } else {
+            -1e9
+        }
+    }
+}
 
 /// Best colony site in the ring around a parent, clear of others. The outer
 /// edge of the ring widens as a people masters sail and star-charts.
@@ -441,6 +558,9 @@ pub fn colony_site(
     settlements: &[Settlement],
     parent: &Settlement,
     max_d2: f64,
+    // M55 — the dry frontier: arid ground held back from the dawn, its
+    // score restored for a people whose wells reach the table beneath.
+    dry: &DryFrontier<'_>,
 ) -> Option<(usize, usize)> {
     let (rows, cols) = site_score.dim();
     let min_d2 = MIN_TOWN_SPACING_CELLS * MIN_TOWN_SPACING_CELLS;
@@ -448,7 +568,7 @@ pub fn colony_site(
     let mut found: Option<(usize, usize)> = None;
     for y in 0..rows {
         for x in 0..cols {
-            let s = site_score[[y, x]] + pull[[y, x]];
+            let s = dry.score_at(site_score, y, x) + pull[[y, x]];
             if s <= 2.2 || s <= best {
                 continue;
             }

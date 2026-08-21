@@ -18,6 +18,8 @@ aquifer (M54): median depth 11.7 m · p10 0.0 · p90 97.6 · within 10 m of surf
   median depth by rainfall: arid <400mm 30.2 m (57242 cells) · humid >1200mm 0.0 m (17646 cells)
   spearman: vs HAND (height above nearest drainage) 0.59 · vs raw elevation 0.28 · vs elevation at 400-900mm 0.15 (26064 cells)
 
+springs & oases (M55): 1104 springs (0.94% of land) · 15332 oases (27.4% of arid land) · arid land with any water 30.6%
+
 ---- checks ----------------------------------------------------------
 [PASS] river share of land                            4.1%   (sweet 0.8–5% · hard 0.3–10%)
 [PASS] lake share of land                             1.6%   (sweet 0–3% · hard 0–8%)
@@ -39,5 +41,9 @@ aquifer (M54): median depth 11.7 m · p10 0.0 · p90 97.6 · within 10 m of surf
 [PASS] surface water pins the table         0 river/lake · 0 ocean   (M54: where water already stands, depth to water is zero)
 [PASS] permeable rock holds a deeper table  basin 13.7 m vs shield 5.9 m   (M54: the shield throttles the flow and mounds the table high; the basin drains it away)
 [PASS] the dry country digs deeper          arid 30.2 m vs humid 0.0 m   (M54: less recharge, lower mound — a well in the desert is a longer rope)
+[PASS] spring share of land %                        0.94%   (M55: land cells where the table daylights at a break in slope · sweet 0.05–4% · hard 0.005–12%)
+[WARN] oasis share of arid land %                    27.4%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
+[PASS] every spring stands on a shallow table      1104/1104   (M55 gate: a spring is the table daylighting — depth to water ≤2 m at every marked cell, by construction and by audit)
+[PASS] no oasis outside the dry country        15332 oases   (M55 gate: oases exist only where the year is arid (desert biome or <300 mm))
 [PASS] aquifer joins the state hash                    yes   (M54 gate: the field is CRC-stable and part of hash_state)
-CHECKS: 21 pass · 0 warn · 0 fail
+CHECKS: 24 pass · 1 warn · 0 fail
