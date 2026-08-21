@@ -223,6 +223,7 @@ pub struct GenBuilder {
     deposits: Option<Vec<Deposit>>,
     rock: Option<Array2<u8>>,
     soil: Option<Array2<u8>>,
+    aquifer: Option<Array2<f32>>,
     world: Option<World>,
 }
 
@@ -276,6 +277,7 @@ impl GenBuilder {
             deposits: None,
             rock: None,
             soil: None,
+            aquifer: None,
             world: None,
         }
     }
@@ -518,6 +520,19 @@ impl GenBuilder {
                 agriculture::crop_packages(height, tmean, precip, &hydro.rivers, &hydro.lakes, &soil);
             self.fertility = Some(fert.mapv(|x| x as f32));
             self.crops = Some(crops);
+            // M54 — the water beneath: a steady-state Darcy head over
+            // the basement's conductivity, drained by every river,
+            // lake and shore the hydrology pass already carved.
+            let aquifer = crate::hydrology::water_table(
+                height,
+                self.water.as_ref().unwrap(),
+                &hydro.rivers,
+                &hydro.lakes,
+                &hydro.discharge,
+                precip,
+                &rock,
+            );
+            self.aquifer = Some(aquifer);
             self.soil = Some(soil);
         }
         self.rock = Some(rock);
@@ -607,6 +622,8 @@ impl GenBuilder {
         let rock = self.rock.take().unwrap();
         // M51 — the soil orders, classified in the fertility stage.
         let soil = self.soil.take().unwrap();
+        // M54 — the water table, solved in the same stage off the rock.
+        let aquifer = self.aquifer.take().unwrap();
 
         let t7 = now_ms();
         let mut taken: HashSet<String> = HashSet::new();
@@ -836,6 +853,7 @@ impl GenBuilder {
                 strahler: hydro.strahler,
                 rock,
                 soil,
+                aquifer,
                 // M47 — placeholder like territory: the upwelling shore is
                 // solved at the dawn, off the final post-widen coastline.
                 upwelling: Array2::from_elem((1, 1), 0.0f32),
@@ -1170,6 +1188,8 @@ impl World {
         self.fields.soil = grow(&self.fields.soil, pad, |_, _| {
             crate::agriculture::SoilOrder::None.code()
         });
+        // M54 — the margins are open ocean: the table is the sea.
+        self.fields.aquifer = grow(&self.fields.aquifer, pad, |_, _| 0.0);
         self.fields.strahler = {
             let a = &self.fields.strahler;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {

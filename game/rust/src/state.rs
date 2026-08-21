@@ -73,6 +73,11 @@ pub struct Fields {
     /// 5 laterite · 6 andosol · 7 gley · 8 aridisol. Frozen at genesis;
     /// the arable index is modulated by its fertility curve.
     pub soil: Array2<u8>,
+    /// M54 — depth to the water table in metres below the surface, 0 on
+    /// open water and wherever the table daylights. Solved once at
+    /// genesis as a steady-state Darcy head over rock-province
+    /// conductivity (M18) and infiltrated rainfall; frozen thereafter.
+    pub aquifer: Array2<f32>,
     /// Influence-map territory: owner REALM per cell, −1 wilderness
     /// (M4.1, realm axis per ADR-0018).
     pub territory: Array2<i16>,

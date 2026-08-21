@@ -3059,6 +3059,171 @@ fn cmd_hydro(seed: i64, size: usize) {
         format!("{}", glacial_wadis),
         "M35: the melt returns every summer — the wadi stamp yields",
     );
+
+    // --- M54: the water table. Depth to water on the ground a well
+    // would actually be sunk into — land that is not itself a river,
+    // lake or shore cell (those are pinned to their own water and would
+    // only flatter the numbers).
+    let aq = &w.fields.aquifer;
+    let mut free: Vec<(f64, f64)> = Vec::new(); // (surface m, depth m)
+    let mut by_rock: [Vec<f64>; 4] = Default::default();
+    let mut dry: Vec<f64> = Vec::new();
+    let mut wet: Vec<f64> = Vec::new();
+    let mut nonfinite = 0usize;
+    let mut out_of_range = 0usize;
+    let mut pinned_nonzero = 0usize;
+    let mut ocean_nonzero = 0usize;
+    for y in 0..rr {
+        for x in 0..cc {
+            let d = aq[[y, x]] as f64;
+            if !d.is_finite() {
+                nonfinite += 1;
+                continue;
+            }
+            if d < 0.0 || d > calliope::hydrology::AQUIFER_FLOOR_M {
+                out_of_range += 1;
+            }
+            if !land[[y, x]] {
+                if d != 0.0 {
+                    ocean_nonzero += 1;
+                }
+                continue;
+            }
+            let f = w.fields.flags[[y, x]];
+            if f & (CellFlags::RIVER.bits() | CellFlags::LAKE.bits()) != 0 {
+                if d > 0.5 {
+                    pinned_nonzero += 1;
+                }
+                continue;
+            }
+            let elev = w.fields.height[[y, x]] as f64 * calliope::constants::METRES_PER_UNIT;
+            free.push((elev, d));
+            by_rock[(w.fields.rock[[y, x]] as usize).min(3)].push(d);
+            let p = w.fields.precip[[y, x]] as f64;
+            if p < 400.0 {
+                dry.push(d);
+            } else if p > 1200.0 {
+                wet.push(d);
+            }
+        }
+    }
+    // Height above the local drainage floor: the terrain variable the
+    // Darcy solve actually answers to. The subgrid drains sit on the
+    // valley floors, so a cell's lift above the lowest ground within
+    // ~28 km is the head the table has to climb.
+    let mut hand: Vec<(f64, f64)> = Vec::new();
+    let mut strat: Vec<(f64, f64)> = Vec::new();
+    {
+        let rad = 3isize;
+        for y in 0..rr {
+            for x in 0..cc {
+                if !land[[y, x]] {
+                    continue;
+                }
+                let f = w.fields.flags[[y, x]];
+                if f & (CellFlags::RIVER.bits() | CellFlags::LAKE.bits()) != 0 {
+                    continue;
+                }
+                let mut lo = f64::INFINITY;
+                for dy in -rad..=rad {
+                    for dx in -rad..=rad {
+                        let ny = y as isize + dy;
+                        let nx = x as isize + dx;
+                        if ny < 0 || nx < 0 || ny >= rr as isize || nx >= cc as isize {
+                            continue;
+                        }
+                        lo = lo.min(w.fields.height[[ny as usize, nx as usize]] as f64);
+                    }
+                }
+                let elev = w.fields.height[[y, x]] as f64 * calliope::constants::METRES_PER_UNIT;
+                let lift = elev - lo * calliope::constants::METRES_PER_UNIT;
+                let d = w.fields.aquifer[[y, x]] as f64;
+                hand.push((lift, d));
+                let p = w.fields.precip[[y, x]] as f64;
+                if (400.0..900.0).contains(&p) {
+                    strat.push((elev, d));
+                }
+            }
+        }
+    }
+    let rho_hand = spearman(&hand);
+    let rho_strat = spearman(&strat);
+    let depths: Vec<f64> = free.iter().map(|p| p.1).collect();
+    let med_depth = if depths.is_empty() { 0.0 } else { quantile(&depths, 0.5) };
+    let rho_elev = spearman(&free);
+    let shallow = depths.iter().filter(|&&d| d <= 10.0).count() as f64 / depths.len().max(1) as f64;
+    let med = |v: &Vec<f64>| if v.is_empty() { f64::NAN } else { quantile(v, 0.5) };
+    let (m_shield, m_basin) = (med(&by_rock[0]), med(&by_rock[1]));
+    let (m_fold, m_volc) = (med(&by_rock[2]), med(&by_rock[3]));
+    let (m_dry, m_wet) = (med(&dry), med(&wet));
+    println!();
+    println!(
+        "aquifer (M54): median depth {:.1} m · p10 {:.1} · p90 {:.1} · within 10 m of surface {}",
+        med_depth,
+        if depths.is_empty() { 0.0 } else { quantile(&depths, 0.1) },
+        if depths.is_empty() { 0.0 } else { quantile(&depths, 0.9) },
+        pct(shallow)
+    );
+    println!(
+        "  median depth by province: shield {:.1} · basin {:.1} · fold {:.1} · volcanic {:.1} m",
+        m_shield, m_basin, m_fold, m_volc
+    );
+    println!(
+        "  median depth by rainfall: arid <400mm {:.1} m ({} cells) · humid >1200mm {:.1} m ({} cells)",
+        m_dry,
+        dry.len(),
+        m_wet,
+        wet.len()
+    );
+    println!(
+        "  spearman: vs lift above local valley floor {:.2} · vs raw elevation {:.2} · vs elevation at 400-900mm {:.2} ({} cells)",
+        rho_hand, rho_elev, rho_strat, strat.len()
+    );
+
+    let hashed = calliope::pack::FIELD_SPECS
+        .iter()
+        .any(|f| f.name == "aquifer" && f.in_hash);
+    c.band("aquifer median depth m", med_depth, format!("{:.1} m", med_depth));
+    c.must(
+        "water table tracks the valleys",
+        rho_elev >= 0.5,
+        format!("ρ {:.2}", rho_elev),
+        "M54 gate: Spearman ≥0.50 — deep under the uplands, shallow on the valley floor",
+    );
+    c.must(
+        "aquifer depth finite and bounded",
+        nonfinite == 0 && out_of_range == 0,
+        if nonfinite == 0 && out_of_range == 0 {
+            "clean".into()
+        } else {
+            format!("{} nan · {} out of range", nonfinite, out_of_range)
+        },
+        "M54: every cell reports 0..150 m, no NaN out of the Darcy solve",
+    );
+    c.must(
+        "surface water pins the table",
+        pinned_nonzero == 0 && ocean_nonzero == 0,
+        format!("{} river/lake · {} ocean", pinned_nonzero, ocean_nonzero),
+        "M54: where water already stands, depth to water is zero",
+    );
+    c.want(
+        "permeable rock holds a deeper table",
+        m_basin > m_shield,
+        format!("basin {:.1} m vs shield {:.1} m", m_basin, m_shield),
+        "M54: the shield throttles the flow and mounds the table high; the basin drains it away",
+    );
+    c.want(
+        "the dry country digs deeper",
+        m_dry > m_wet,
+        format!("arid {:.1} m vs humid {:.1} m", m_dry, m_wet),
+        "M54: less recharge, lower mound — a well in the desert is a longer rope",
+    );
+    c.must(
+        "aquifer joins the state hash",
+        hashed,
+        if hashed { "yes".into() } else { "NO".into() },
+        "M54 gate: the field is CRC-stable and part of hash_state",
+    );
     c.print();
 }
 

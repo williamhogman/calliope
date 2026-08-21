@@ -327,6 +327,7 @@ field_registry! {
     rock:      U8,  units "rock province id (M18)",          hash true,  gpu false, wire raw;
     soil:      U8,  units "soil order id (M51)",              hash true,  gpu false, wire raw;
     upwelling: F32, units "0..1 coastal upwelling (M47)",    hash true,  gpu false, wire u16;
+    aquifer:   F32, units "m depth to water table (M54)",    hash true,  gpu false, wire u16;
 }
 
 /// Wire quantization mode for a registry field (E3.4).
