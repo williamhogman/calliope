@@ -1687,10 +1687,39 @@ impl World {
         pull
     }
 
+/// M56 — the smallest town that can victual a caravan: below a market's
+/// worth of people there is no grain surplus, no water to spare and no
+/// beasts for hire, so the staging posts of the desert trade are towns,
+/// not hamlets.
+pub const CARAVAN_MARKET_POP: i64 = 400;
+
+    /// M56 — the caravan's provisioning field over the live world: how
+    /// well a victualling train out of the nearest *watered* town can
+    /// supply each cell. Only watered towns victual a caravan — a camp
+    /// that drinks from a shaft has no surplus water to send out with
+    /// somebody else's camels — and only towns big enough to hold a
+    /// market (`CARAVAN_MARKET_POP`) count as a staging post.
+    ///
+    /// pub since M56: diagnostics read the same field the siting does.
+    pub fn caravan_provision(&self) -> Array2<f32> {
+        let markets: Vec<(usize, usize)> = self
+            .peoples
+            .settlements
+            .iter()
+            .filter(|s| {
+                s.pop >= Self::CARAVAN_MARKET_POP
+                    && !self.arid_dry[[s.y as usize, s.x as usize]]
+            })
+            .map(|s| (s.y as usize, s.x as usize))
+            .collect();
+        trade::caravan_provision(&self.trade, &markets, self.site_score.dim())
+    }
+
     pub(crate) fn try_colonize(&mut self, month_abs: i64) -> (Vec<Event>, bool) {
         let mut events = Vec::new();
         let mut founded = false;
         let mut pull: Option<Array2<f64>> = None;
+        let mut provision: Option<Array2<f32>> = None;
         let initial = self.peoples.settlements.len();
         let mods_v: Vec<society::Mods> =
             self.peoples.societies.iter().map(society::mods_for).collect();
@@ -1729,6 +1758,13 @@ impl World {
             if pull.is_none() {
                 pull = Some(self.resource_pull());
             }
+            // M56 — the caravan field: which dry ground a victualling
+            // train out of a watered market can still reach. Computed
+            // once per colonizing tick from the standing towns, like
+            // the market's pull above.
+            if provision.is_none() {
+                provision = Some(self.caravan_provision());
+            }
             let site = {
                 let parent = self.peoples.settlements[pi].clone();
                 let range = self
@@ -1748,6 +1784,7 @@ impl World {
                     aquifer: &self.fields.aquifer,
                     dry_site_score: &self.dry_site_score,
                     well_reach_m: reach,
+                    provision: provision.as_ref().unwrap(),
                 };
                 settlements::colony_site(
                     &self.site_score,

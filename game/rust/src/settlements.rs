@@ -528,6 +528,39 @@ pub struct DryFrontier<'a> {
     pub aquifer: &'a Array2<f32>,
     pub dry_site_score: &'a Array2<f64>,
     pub well_reach_m: f64,
+    /// M56 — the caravan's provisioning field (`trade::caravan_provision`):
+    /// 1.0 on a watered market's own ground, falling to 0.0 where no
+    /// caravan out of a market can still be victualled.
+    pub provision: &'a Array2<f32>,
+}
+
+// ------------------------------------------------------ M56 the caravan frontier
+
+/// M56 — how much a mining camp is worth *as a mine*. The ordinary site
+/// score prices a cell as a farm; a camp on the dry frontier is priced
+/// by the seam under it, victualled by caravan. Potosi stood at 4000 m
+/// on ground that grew nothing because the silver paid for every sack
+/// of maize that climbed to it; the gain is what turns a market signal
+/// into a reason to leave the plough.
+pub const EXTRACTIVE_GAIN: f64 = 2.6;
+
+/// M56 — what a fully provisioned caravan lane is worth as subsistence
+/// to a camp that grows nothing: exactly the founding bar (2.2). A
+/// supplied camp with no ore under it is precisely marginal — it is the
+/// seam, not the caravan, that makes the desert worth taking.
+pub const CARAVAN_SUBSISTENCE: f64 = 2.2;
+
+/// M56 — the shaft's standing cost, in score units per metre of lift.
+/// A well is not a one-off: it is rope, leather, beasts and hands every
+/// day the town drinks. At 0.06 a hand-dug 12 m pit costs 0.7 — a
+/// nuisance — while an engineered 90 m shaft costs 5.4, which only a
+/// rich seam under a well-provisioned lane can carry. This is what
+/// makes the M55 ladder load-bearing rather than a pass/fail switch.
+pub const WELL_UPKEEP_PER_M: f64 = 0.06;
+
+/// M56 — the standing cost of drinking from a table `depth` metres down.
+pub fn well_upkeep(depth_m: f64) -> f64 {
+    WELL_UPKEEP_PER_M * depth_m.max(0.0)
 }
 
 impl DryFrontier<'_> {
@@ -543,6 +576,44 @@ impl DryFrontier<'_> {
         } else {
             -1e9
         }
+    }
+
+    /// M56 — what a site is actually *offered* for, market included.
+    ///
+    /// Ordinary ground is priced as it always was: the farm score plus
+    /// whatever the market's unworked seams add to it. Dry ground is a
+    /// different proposition and is priced as one — an extractive camp,
+    /// not a farm:
+    ///
+    ///   · the seam's pull dominates, at `EXTRACTIVE_GAIN`, because the
+    ///     camp lives on what it digs, not on what it grows;
+    ///   · that pull is conditioned on the caravan that must victual it
+    ///     — a seam nobody can supply is worth nothing on the ground;
+    ///   · and the well is a standing cost against the yield, deeper
+    ///     tables charging more, so 12 m ground is marginal and 60 m
+    ///     ground pays only where the seam is rich.
+    ///
+    /// The M55 veto still runs first: no reach, no town, at any price.
+    pub fn offer(&self, site_score: &Array2<f64>, pull: &Array2<f64>, y: usize, x: usize) -> f64 {
+        if !self.arid_dry[[y, x]] {
+            return site_score[[y, x]] + pull[[y, x]];
+        }
+        let held = self.score_at(site_score, y, x);
+        if held < -1e8 {
+            return held; // the well does not reach: no price opens this ground
+        }
+        let prov = self.provision[[y, x]] as f64;
+        if prov <= 0.0 {
+            return -1e9; // no caravan reaches it; a camp there starves
+        }
+        // A camp is not a farm. `held` prices this ground as a farm and
+        // charges it the desert's full agricultural penalty; a mining
+        // camp does not grow its bread, it buys it off the caravan, so
+        // its floor is the victualled subsistence the lane can carry —
+        // never below what the ground itself would have offered.
+        let floor = held.max(CARAVAN_SUBSISTENCE * prov);
+        floor + EXTRACTIVE_GAIN * pull[[y, x]] * prov
+            - well_upkeep(self.aquifer[[y, x]] as f64)
     }
 }
 
@@ -568,7 +639,7 @@ pub fn colony_site(
     let mut found: Option<(usize, usize)> = None;
     for y in 0..rows {
         for x in 0..cols {
-            let s = dry.score_at(site_score, y, x) + pull[[y, x]];
+            let s = dry.offer(site_score, pull, y, x);
             if s <= 2.2 || s <= best {
                 continue;
             }
