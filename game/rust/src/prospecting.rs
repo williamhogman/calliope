@@ -9,7 +9,70 @@ use crate::trade;
 use crate::util::round2;
 use crate::world::{Event, EventKind, World};
 
+// ------------------------------------------------------- M57 the outcrop
+
+/// M57 — the depth of soil, in metres, at which a profile hides its own
+/// basement from a prospector on foot. Derived from the orders, not
+/// guessed: a lithosol (0.15 m) is rubble over rock and shows its seams;
+/// a cambisol (1.00 m) is the temperate brown earth that hides them; a
+/// loess mantle (2.20 m) buries the country entirely. `exp(-d/COVER_E)`
+/// with the folding depth at 0.80 m puts the brown earth at 0.29 and the
+/// lithosol at 0.83, which is the ratio the field expresses: bare ground
+/// shows roughly three times the rock that farmland does.
+pub const COVER_E: f64 = 0.80;
+
+/// The reference profile the visibility scale is normalised against —
+/// the temperate brown earth is 1.0 by construction, so M57 re-weights
+/// discovery between grounds without changing its global rate by fiat.
+pub const REFERENCE_COVER: f64 = 0.286_504_796_860_137_1; // exp(-1.0/0.80)
+
+/// How much of the ground a standing biome's canopy and litter hides,
+/// 1.0 = bare rock and sand in full sun, down to closed rainforest where
+/// the basement is seen only in river cuts. This is why the Atacama, the
+/// Pilbara and the Kalgoorlie fields were prospected out of the surface
+/// and the Amazon's greenstone belts were not.
+#[inline]
+pub fn canopy_openness(biome: u8) -> f64 {
+    use crate::constants as gc;
+    match biome {
+        gc::DESERT => 1.00,
+        gc::ICE => 0.05,
+        gc::TUNDRA => 0.85,
+        gc::WET_TUNDRA => 0.70,
+        gc::GRASSLAND => 0.70,
+        gc::SAVANNA => 0.75,
+        gc::WOODLAND => 0.45,
+        gc::SEASONAL_RAIN_FOREST => 0.35,
+        gc::TEMPERATE_RAIN_FOREST => 0.25,
+        gc::BOREAL_FOREST => 0.30,
+        gc::TROPICAL_RAIN_FOREST => 0.20,
+        _ => 0.50,
+    }
+}
+
+/// M57 — outcrop visibility: how readily a hidden seam under this cell
+/// shows itself, relative to a seam under temperate farmland (1.0).
+/// A pure function of the frozen ground — soil profile depth and the
+/// standing vegetation — and therefore replay-safe (ADR-0003). It scales
+/// *discovery*, never a settlement's score: the desert becomes better
+/// known, not artificially more attractive.
+#[inline]
+pub fn outcrop_visibility(soil_code: u8, biome: u8) -> f64 {
+    use crate::agriculture::SoilOrder;
+    let order = SoilOrder::from_code(soil_code);
+    let bare = if matches!(order, SoilOrder::None) {
+        // no profile is classified on water and lake beds; a placer in a
+        // channel is neither hidden nor bared by soil, so it sits at the
+        // reference rather than at the bare-rock ceiling.
+        1.0
+    } else {
+        (-order.depth() / COVER_E).exp() / REFERENCE_COVER
+    };
+    (bare * canopy_openness(biome)).clamp(0.12, 3.0)
+}
+
 impl World {
+
     /// Prospectors comb the hinterlands for hidden seams; worked mines thin
     /// toward exhaustion. Returns events and whether the deposit list changed.
     pub(crate) fn prospect_and_deplete(&mut self, month_abs: i64) -> (Vec<Event>, bool) {
@@ -66,10 +129,16 @@ impl World {
                 resources::Abundance::Legendary => 0.12,
                 resources::Abundance::Common => 1.0,
             };
+            // M57 — what the ground shows. Thin profiles and open country
+            // bare the basement; deep soil and closed canopy bury it.
+            let vis = outcrop_visibility(
+                self.fields.soil[[d.y as usize, d.x as usize]],
+                self.fields.biomes[[d.y as usize, d.x as usize]],
+            );
             let p = if ratio <= 1.0 {
-                0.012 * rarity * (1.0 - 0.65 * ratio) // combing the home range
+                0.012 * rarity * (1.0 - 0.65 * ratio) * vis // combing the home range
             } else if ratio <= 3.5 {
-                0.0018 * rarity // a far venture into unclaimed country
+                0.0018 * rarity * vis // a far venture into unclaimed country
             } else {
                 0.0
             };
@@ -80,6 +149,11 @@ impl World {
         for (di, si) in found {
             self.deposits[di].known = true;
             changed = true;
+            // M57 — stamp the month the ground gave it up.
+            if self.flows.found_m.len() != self.deposits.len() {
+                self.flows = resources::Flows::for_deposits(self.deposits.len());
+            }
+            self.flows.found_m[di] = month_abs as i32;
             let kind = self.deposits[di].r;
             let rich = self.deposits[di].rich;
             let precious = matches!(

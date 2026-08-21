@@ -4870,6 +4870,87 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         "M55 gate: craftless peoples open no dry ground, and every deeper shaft opens at least as much as the shallower one, ending above zero",
     );
 
+    // --- M57: the outcrop. Discovery is an act of seeing, so the ground
+    // that shows its basement must be the ground that gets found. Measure
+    // the finished world's known-share of hidden-at-dawn mineral seams
+    // against the visibility of the ground each one lies under.
+    {
+        use calliope::prospecting::outcrop_visibility;
+        // the pure function first: the ordering it claims must hold before
+        // any world is asked to display it.
+        let bare_desert = outcrop_visibility(1, gc::DESERT); // lithosol
+        let farm = outcrop_visibility(3, gc::WOODLAND); // cambisol
+        let buried = outcrop_visibility(10, gc::TROPICAL_RAIN_FOREST); // loess
+        let arid_soil = outcrop_visibility(8, gc::DESERT); // aridisol
+        println!();
+        println!(
+            "outcrop visibility (M57): bare desert lithosol {:.2} · arid aridisol {:.2} · wooded cambisol {:.2} · rainforest loess {:.2}",
+            bare_desert, arid_soil, farm, buried
+        );
+        c.must(
+            "the outcrop orders the ground",
+            bare_desert > arid_soil && arid_soil > farm && farm > buried && buried > 0.0,
+            format!("{:.2} > {:.2} > {:.2} > {:.2}", bare_desert, arid_soil, farm, buried),
+            "M57: bared rock must be more visible than thin arid soil, which must beat farmland, which must beat a loess mantle under closed canopy",
+        );
+
+        // now the world. A century and a half finds nearly every seam
+        // somewhere, so terminal known-share saturates and proves little;
+        // the honest measure is *when* the ground gave its ore up. Split
+        // the mineral seams into visibility terciles by their own
+        // distribution (so every band is populated by construction) and
+        // compare median discovery month, counting a seam still hidden at
+        // the end as later than any found one.
+        let horizon = (years as i32) * 12;
+        let mut seams: Vec<(f64, i32)> = Vec::new();
+        let mut arid: Vec<i32> = Vec::new();
+        let mut elsewhere: Vec<i32> = Vec::new();
+        for (di, d) in w.deposits.iter().enumerate() {
+            if !d.r.is_mineral() {
+                continue;
+            }
+            let (y, x) = (d.y as usize, d.x as usize);
+            let v = outcrop_visibility(w.fields.soil[[y, x]], w.fields.biomes[[y, x]]);
+            let found = w.flows.found_m.get(di).copied().unwrap_or(-1);
+            // dawn-known seams (never hidden) carry month 0; still-hidden
+            // seams are censored at the horizon.
+            let when = if d.known && found < 0 { 0 } else if found >= 0 { found } else { horizon };
+            seams.push((v, when));
+            if w.fields.biomes[[y, x]] == gc::DESERT { arid.push(when) } else { elsewhere.push(when) }
+        }
+        seams.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        let n = seams.len();
+        let med = |v: &mut Vec<i32>| -> f64 {
+            if v.is_empty() { return f64::NAN; }
+            v.sort_unstable();
+            v[v.len() / 2] as f64
+        };
+        let mut band: Vec<Vec<i32>> = vec![Vec::new(); 3];
+        for (i, (_, when)) in seams.iter().enumerate() {
+            let b = (i * 3 / n.max(1)).min(2);
+            band[b].push(*when);
+        }
+        let vlo = seams.first().map(|s| s.0).unwrap_or(f64::NAN);
+        let vhi = seams.last().map(|s| s.0).unwrap_or(f64::NAN);
+        let (m_lo, m_mid, m_hi) = (med(&mut band[0]), med(&mut band[1]), med(&mut band[2]));
+        println!(
+            "seams found by ground (M57): {} mineral seams, visibility {:.2}..{:.2} · median discovery month — buried tercile {:.0} · middling {:.0} · bared {:.0} (horizon {}) · desert {:.0} vs elsewhere {:.0}",
+            n, vlo, vhi, m_lo, m_mid, m_hi, horizon, med(&mut arid), med(&mut elsewhere)
+        );
+        c.must(
+            "every visibility band carries seams",
+            n >= 30 && band.iter().all(|b| b.len() >= 8) && vhi > vlo,
+            format!("{} · {} · {} seams over visibility {:.2}..{:.2}", band[0].len(), band[1].len(), band[2].len(), vlo, vhi),
+            "M57: the claim is only measurable if buried, middling and bared ground all hold seams and the visibility field actually varies",
+        );
+        c.must(
+            "the bared ground is found first",
+            m_hi < m_lo && m_mid <= m_lo,
+            format!("median month {:.0} bared vs {:.0} middling vs {:.0} buried", m_hi, m_mid, m_lo),
+            "M57 gate: prospecting yield rises with how much basement the ground shows, so bared country must give up its seams earlier than buried country",
+        );
+    }
+
     // M55 counterfactual: the same world, run again with the dry-frontier
     // veto lifted (every people's well reaches any table). If colonists
     // then settle waterless arid ground that the real run left empty, the
@@ -4879,7 +4960,48 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     {
         let mut cf = World::generate(seed, size);
         cf.dry_reach_override = Some(f64::INFINITY);
-        let _ = run_years(&mut cf, years);
+        // M57 — a terminal snapshot of the desert's offer lies: a seam
+        // found early is worked (and so pulls nothing) by the century's
+        // end, which is exactly what better prospecting causes. Walk the
+        // run in decades and keep the *peak* offer the dry country ever
+        // made, so the auction is judged when it was actually held.
+        let mut peak_dry = f64::NEG_INFINITY;
+        let mut peak_at = (0usize, 0usize, 0i64, 0.0f64, 0.0f64);
+        let mut peak_wet = f64::NEG_INFINITY;
+        let step = 10usize;
+        let mut done = 0usize;
+        while done < years {
+            let chunk = step.min(years - done);
+            let _ = run_years(&mut cf, chunk);
+            done += chunk;
+            let pull_s = cf.resource_pull();
+            let prov_s = cf.caravan_provision();
+            let dry_s = calliope::settlements::DryFrontier {
+                arid_dry: &cf.arid_dry,
+                aquifer: &cf.fields.aquifer,
+                dry_site_score: &cf.dry_site_score,
+                well_reach_m: f64::INFINITY,
+                provision: &prov_s,
+            };
+            let (rr, cc) = cf.arid_dry.dim();
+            for y in 0..rr {
+                for x in 0..cc {
+                    if cf.arid_dry[[y, x]] {
+                        let o = dry_s.offer(&cf.site_score, &pull_s, y, x);
+                        if o > peak_dry {
+                            peak_dry = o;
+                            peak_at = (y, x, cf.month, pull_s[[y, x]], prov_s[[y, x]] as f64);
+                        }
+                    } else {
+                        peak_wet = peak_wet.max(cf.site_score[[y, x]] + pull_s[[y, x]]);
+                    }
+                }
+            }
+        }
+        println!(
+            "the desert's best hour (M57): peak arid-dry offer {:.2} at ({},{}) in month {} (pull {:.2} · provision {:.2}) against the best watered site ever seen, {:.2}",
+            peak_dry, peak_at.0, peak_at.1, peak_at.2, peak_at.3, peak_at.4, peak_wet
+        );
         let cf_dry = cf
             .peoples
             .settlements
