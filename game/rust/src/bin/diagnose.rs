@@ -4930,6 +4930,34 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 "the desert's offer (M56): best arid-dry site {:.2} vs best watered site {:.2} · best ore pull {:.2} · caravan-provisioned {}/{} arid-dry cells (best {:.2})",
                 best_dry, best_wet, best_pull, provisioned, arid_cells, best_prov
             );
+            // Break the winner down so a weak desert is diagnosable:
+            // which term is short — the seam, the lane, or the shaft?
+            {
+                let (rows, cols) = cf.arid_dry.dim();
+                let mut bo = f64::NEG_INFINITY;
+                let mut at = (0usize, 0usize);
+                let mut bp = f64::NEG_INFINITY;
+                let mut pat = (0usize, 0usize);
+                for y in 0..rows {
+                    for x in 0..cols {
+                        if !cf.arid_dry[[y, x]] { continue; }
+                        let o = dry.offer(&cf.site_score, &pull, y, x);
+                        if o > bo { bo = o; at = (y, x); }
+                        if pull[[y, x]] > bp { bp = pull[[y, x]]; pat = (y, x); }
+                    }
+                }
+                for (tag, (y, x)) in [("best offer", at), ("best pull", pat)] {
+                    println!(
+                        "  {tag} cell ({y},{x}): held {:.2} · pull {:.2} · provision {:.2} · table {:.0} m · upkeep {:.2} · offer {:.2}",
+                        cf.dry_site_score[[y, x]],
+                        pull[[y, x]],
+                        prov[[y, x]],
+                        cf.fields.aquifer[[y, x]],
+                        calliope::settlements::well_upkeep(cf.fields.aquifer[[y, x]] as f64),
+                        dry.offer(&cf.site_score, &pull, y, x),
+                    );
+                }
+            }
         }
         c.must(
             "the dry-frontier veto is load-bearing",
