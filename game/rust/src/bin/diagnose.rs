@@ -3238,6 +3238,12 @@ fn cmd_resources(seed: i64, size: usize) {
                 if !land[[y, x]] {
                     continue;
                 }
+                // lakes are land by the height mask but carry no profile
+                if calliope::state::CellFlags::from_bits_truncate(w.fields.flags[[y, x]])
+                    .contains(calliope::state::CellFlags::LAKE)
+                {
+                    continue;
+                }
                 let o = w.fields.soil[[y, x]] as usize;
                 if o == 0 {
                     bare += 1;

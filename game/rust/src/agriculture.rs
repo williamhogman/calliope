@@ -116,7 +116,7 @@ pub const SOIL_GAIN: f64 = 0.6;
 /// the regolith walks downhill as fast as it forms.
 const LITHO_SLOPE: f64 = 1.10;
 /// Slope below which water can pond rather than run — the gley gate.
-const FLAT_SLOPE: f64 = 0.10;
+const FLAT_SLOPE: f64 = 0.32;
 
 /// The soil orders (M51). Codes are stable — they ship in the pack.
 #[derive(
