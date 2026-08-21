@@ -465,4 +465,17 @@ use crate::util::Band;
 pub const BANDS: &[Band] = &[
     Band { name: "arable share of land", sweet: (0.15, 0.65), hard: (0.06, 0.85), target: "M2.1: wheat+rice+maize belts cover the good land" },
     Band { name: "famine events per century", sweet: (1.0, 60.0), hard: (0.0, 150.0), target: "M2.6: the rains must fail sometimes" },
+    // M51 — the soil-order mix. Bands are shares of *land*, read against
+    // the Whittaker distribution the same world already classifies: no
+    // order may vanish (a world with no black earth has no breadbasket)
+    // and none may eat the map.
+    Band { name: "lithosol share of land", sweet: (0.05, 0.45), hard: (0.01, 0.65), target: "M51: the steep and the frozen carry no profile" },
+    Band { name: "podzol share of land", sweet: (0.02, 0.35), hard: (0.003, 0.55), target: "M51: cool conifer country leaches acid" },
+    Band { name: "cambisol share of land", sweet: (0.05, 0.45), hard: (0.01, 0.65), target: "M51: the temperate brown earth is the ordinary case" },
+    Band { name: "chernozem share of land", sweet: (0.01, 0.18), hard: (0.002, 0.30), target: "M51: black earth is rare and continental" },
+    Band { name: "laterite share of land", sweet: (0.02, 0.30), hard: (0.003, 0.50), target: "M51: the hot wet tropics weather deep and poor" },
+    Band { name: "andosol share of land", sweet: (0.01, 0.25), hard: (0.001, 0.40), target: "M51: ash country tracks the volcanic province" },
+    Band { name: "gley share of land", sweet: (0.01, 0.25), hard: (0.001, 0.40), target: "M51: valley floors and cold flats pond" },
+    Band { name: "aridisol share of land", sweet: (0.03, 0.35), hard: (0.005, 0.55), target: "M51: the dry share tracks the desert share" },
+    Band { name: "soil fertility rank correlation", sweet: (0.30, 1.0), hard: (0.10, 1.0), target: "M51: the order's curve must order the farms" },
 ];
