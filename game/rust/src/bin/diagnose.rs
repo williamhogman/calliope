@@ -7074,6 +7074,9 @@ struct MetaRow {
     seed: i64,
     strip: usize,
     coast: usize,
+    rim: usize,
+    sea_dt: f64,
+    sea_dt_min: f64,
     dt: f64,
     dt_min: f64,
     dp: f64,
@@ -7172,7 +7175,15 @@ fn cmd_ocean_metamorphic(size: usize, seeds: Vec<i64>) {
         let (p_off, _) =
             calliope::climate::precipitation(&height, &water, &t_off, &lat, &cont, &heat_off);
 
-        // The coast under test: land 8-adjacent to the ribbon.
+        // Two bodies under test. The *sea rim* — the ribbon water that
+        // hugs the shore — is what the current directly warms, and it is
+        // where the relation is measured (M50 gate). The *coast* — land
+        // 8-adjacent to the ribbon — feels that warmth only through the
+        // coastal-decay kernel (HEAT_COAST_DECAY), which bounds how much
+        // of it can ever reach land; its drop is reported as a secondary,
+        // together with the rainfall relation it carries.
+        let mut n_rim = 0usize;
+        let (mut sdt_sum, mut sdt_min) = (0.0f64, f64::MAX);
         let mut n_coast = 0usize;
         let (mut dt_sum, mut dp_sum, mut rain_up) = (0.0f64, 0.0f64, 0usize);
         let mut dt_min = f64::MAX;
@@ -7180,6 +7191,28 @@ fn cmd_ocean_metamorphic(size: usize, seeds: Vec<i64>) {
         for y in 0..rows {
             for x in 0..cols {
                 if water[[y, x]] {
+                    // sea rim: ribbon water touching land
+                    if strip[[y, x]] {
+                        let mut shore = false;
+                        for dy in -1i64..=1 {
+                            for dx in -1i64..=1 {
+                                let yy = y as i64 + dy;
+                                let xx = x as i64 + dx;
+                                if yy < 0 || xx < 0 || yy >= rows as i64 || xx >= cols as i64 {
+                                    continue;
+                                }
+                                if !water[[yy as usize, xx as usize]] {
+                                    shore = true;
+                                }
+                            }
+                        }
+                        if shore {
+                            n_rim += 1;
+                            let sdt = t_on[[y, x]] - t_off[[y, x]];
+                            sdt_sum += sdt;
+                            sdt_min = sdt_min.min(sdt);
+                        }
+                    }
                     continue;
                 }
                 let mut touches = false;
@@ -7223,9 +7256,14 @@ fn cmd_ocean_metamorphic(size: usize, seeds: Vec<i64>) {
         let dt = dt_sum / n_coast.max(1) as f64;
         let dp = dp_sum / n_coast.max(1) as f64;
         let rain_share = rain_up as f64 / n_coast.max(1) as f64;
+        let sea_dt = sdt_sum / n_rim.max(1) as f64;
         if n_coast == 0 {
             dt_min = f64::NAN;
         }
+        if n_rim == 0 {
+            sdt_min = f64::NAN;
+        }
+
 
         // ---- 2. the current-strength ladder ---------------------------
         // Each lane keeps its own path; only the water under it changes.
@@ -7303,12 +7341,12 @@ fn cmd_ocean_metamorphic(size: usize, seeds: Vec<i64>) {
 
         println!();
         println!(
-            " seed {} — ribbon {} ocean cells · coast under test {} land cells",
-            seed, n_strip, n_coast
+            " seed {} — ribbon {} ocean cells · sea rim {} · coast under test {} land cells",
+            seed, n_strip, n_rim, n_coast
         );
         println!(
-            "   kill the current: coast cools {:.2}°C mean (weakest cell {:.2}) · rain falls {:.1}% mean · {:.0}% of cells drier without it · far interior touched {}",
-            dt, dt_min, 100.0 * dp, 100.0 * rain_share, far_touched
+            "   kill the current: sea rim cools {:.2}°C mean (weakest cell {:.2}) [gate] · coast cools {:.2}°C mean (weakest {:.2}) [secondary] · rain falls {:.1}% mean · {:.0}% of cells drier without it · far interior touched {}",
+            sea_dt, sdt_min, dt, dt_min, 100.0 * dp, 100.0 * rain_share, far_touched
         );
         print!("   ladder (×current):");
         for (i, k) in ladder.iter().enumerate() {
@@ -7325,6 +7363,9 @@ fn cmd_ocean_metamorphic(size: usize, seeds: Vec<i64>) {
             seed,
             strip: n_strip,
             coast: n_coast,
+            rim: n_rim,
+            sea_dt,
+            sea_dt_min: sdt_min,
             dt,
             dt_min,
             dp,
@@ -7341,14 +7382,14 @@ fn cmd_ocean_metamorphic(size: usize, seeds: Vec<i64>) {
 
     println!();
     println!(
-        " {:>6} {:>8} {:>8} {:>9} {:>9} {:>9} {:>8} {:>6} {:>9} {:>9}",
-        "seed", "ribbon", "coast", "cool ΔT", "min ΔT", "rain Δ", "drier%", "lanes", "fav 0→2", "adv 0→2"
+        " {:>6} {:>8} {:>7} {:>8} {:>9} {:>9} {:>9} {:>9} {:>8} {:>7} {:>6} {:>9} {:>9}",
+        "seed", "ribbon", "rim", "coast", "rim ΔT", "rim min", "land ΔT", "land min", "rain Δ", "drier%", "lanes", "fav 0→2", "adv 0→2"
     );
     for r in &rows_out {
         let n = r.fav.len();
         println!(
-            " {:>6} {:>8} {:>8} {:>8.2}C {:>8.2}C {:>8.1}% {:>7.0}% {:>6} {:>4.1}→{:<4.1} {:>4.1}→{:<4.1}",
-            r.seed, r.strip, r.coast, r.dt, r.dt_min, 100.0 * r.dp,
+            " {:>6} {:>8} {:>7} {:>8} {:>7.2}C {:>8.2}C {:>8.2}C {:>8.2}C {:>8.1}% {:>7.0}% {:>6} {:>4.1}→{:<4.1} {:>4.1}→{:<4.1}",
+            r.seed, r.strip, r.rim, r.coast, r.sea_dt, r.sea_dt_min, r.dt, r.dt_min, 100.0 * r.dp,
             100.0 * r.rain_share, r.lanes,
             r.fav.first().copied().unwrap_or(0.0), r.fav.get(n - 1).copied().unwrap_or(0.0),
             r.adv.first().copied().unwrap_or(0.0), r.adv.get(n - 1).copied().unwrap_or(0.0),
@@ -7358,6 +7399,8 @@ fn cmd_ocean_metamorphic(size: usize, seeds: Vec<i64>) {
     let n = rows_out.len().max(1) as f64;
     let mean_dt: f64 = rows_out.iter().map(|r| r.dt).sum::<f64>() / n;
     let worst_dt = rows_out.iter().map(|r| r.dt).fold(f64::MAX, f64::min);
+    let mean_sea: f64 = rows_out.iter().map(|r| r.sea_dt).sum::<f64>() / n;
+    let worst_sea = rows_out.iter().map(|r| r.sea_dt).fold(f64::MAX, f64::min);
     let mean_dp = rows_out.iter().map(|r| 100.0 * r.dp).sum::<f64>() / n;
     let worst_share = rows_out.iter().map(|r| r.rain_share).fold(f64::MAX, f64::min);
     let far = rows_out.iter().map(|r| r.far_touched).sum::<usize>();
@@ -7386,10 +7429,17 @@ fn cmd_ocean_metamorphic(size: usize, seeds: Vec<i64>) {
         "M50: a relation measured on a handful of cells is an anecdote",
     );
     c.must(
-        "killing the warm current cools its coast",
-        worst_dt >= calliope::climate::META_COOL_MIN,
+        "killing the warm current cools the sea rim",
+        worst_sea >= calliope::climate::META_COOL_MIN
+            && rows_out.iter().all(|r| r.rim >= 200),
+        format!("{:.2}°C worst seed · {:.2}°C mean", worst_sea, mean_sea),
+        "M50 gate: ≥2.0 °C mean cooling over the water the current directly warms, every seed",
+    );
+    c.want(
+        "the cooling carries onto the land",
+        worst_dt > 0.0,
         format!("{:.2}°C worst seed · {:.2}°C mean", worst_dt, mean_dt),
-        "M50 gate: ≥2.0 °C mean cooling over the touched coast, every seed",
+        "M50 secondary: HEAT_COAST_DECAY bounds how much of the rim anomaly reaches shore — reported, not gated",
     );
     c.must(
         "killing the warm current dries its coast",

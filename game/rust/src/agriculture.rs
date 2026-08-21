@@ -7,6 +7,7 @@ use ndarray::Array2;
 
 use crate::ndimage;
 
+
 pub fn fertility(
     height: &Array2<f64>,
     tmean: &Array2<f64>,
