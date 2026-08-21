@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 777 · 640x512
 ========================================================================
-world: "Halios" · generated in 2532 ms
+world: "Halios" · generated in 3119 ms
 land: 117290 cells of 327680 (35.8%) · 1876640 km²
 hypsometry (land h): p5 0.021 · p25 0.105 · p50 0.251 · p75 0.389 · p95 0.528 · max 0.687
 bathymetry (sea h): p5 -0.591 · p50 -0.392 · p95 -0.039
