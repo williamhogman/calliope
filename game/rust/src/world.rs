@@ -182,6 +182,13 @@ pub struct World {
     /// a pure function of the seed; the harness uses it to run the same
     /// world with the dry-frontier veto lifted and see what changes.
     pub dry_reach_override: Option<f64>,
+    /// E10.2 — memo for M56's caravan provisioning field. The Dijkstra
+    /// over the trade grid is a pure function of (victualling markets,
+    /// purse); both change rarely, while colonisation asks for the field
+    /// every month. Keyed on those inputs, so a hit returns exactly the
+    /// grid a recompute would have produced — derived state only, never
+    /// hashed, never packed.
+    pub(crate) caravan_memo: std::cell::RefCell<Option<(u64, Array2<f32>)>>,
 
     /// The coastal band (land within 2 cells of sea) — the ground the
     /// shelter field scores; pub so diagnostics read the same mask.
@@ -945,6 +952,7 @@ impl GenBuilder {
             arid_dry: founded.arid_dry,
             dry_site_score: founded.dry_site_score,
             dry_reach_override: None,
+            caravan_memo: std::cell::RefCell::new(None),
             coast: founded.coast,
             shelter,
             max_settlements: founded.max_settlements,
@@ -1738,7 +1746,28 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             })
             .map(|s| (s.y as usize, s.x as usize))
             .collect();
-        trade::caravan_provision_budget(&self.trade, &markets, self.site_score.dim(), budget)
+        // E10.2 — the field is a pure function of these inputs; key on
+        // them exactly (market cells in order, purse bit-for-bit) so a
+        // hit is indistinguishable from the recompute it replaces.
+        let mut key = 0xcbf29ce484222325u64;
+        let mut mix = |v: u64| {
+            key ^= v;
+            key = key.wrapping_mul(0x100000001b3);
+        };
+        mix(budget.to_bits());
+        mix(markets.len() as u64);
+        for &(y, x) in markets.iter() {
+            mix(((y as u64) << 32) | x as u64);
+        }
+        if let Some((k, grid)) = self.caravan_memo.borrow().as_ref() {
+            if *k == key {
+                return grid.clone();
+            }
+        }
+        let grid =
+            trade::caravan_provision_budget(&self.trade, &markets, self.site_score.dim(), budget);
+        *self.caravan_memo.borrow_mut() = Some((key, grid.clone()));
+        grid
     }
 
     /// M58 — the claim pressures every crown is currently pressing.
@@ -1824,9 +1853,13 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                 let f = (self.resource_pull_for(&per), self.caravan_provision_claim(top));
                 realm_fields.insert(prealm, f);
             }
+
+            // E10.2 — borrowed, never cloned: `realm_fields` is a local
+            // map, so the pull/provision grids can be read in place. The
+            // clone here was copying ~4 MB of field per candidate parent
+            // and dominated the grown-in tick.
             let (pull_r, prov_r) = realm_fields.get(&prealm).unwrap();
-            let pull_r = pull_r.clone();
-            let prov_r = prov_r.clone();
+
             let site = {
                 let parent = self.peoples.settlements[pi].clone();
                 let range = self
