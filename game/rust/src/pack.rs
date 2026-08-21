@@ -92,6 +92,22 @@ impl World {
                     entry["dtype"] = json!("uint16");
                     entry["q"] = json!({ "scale": scale, "offset": lo, "xform": "sqrt" });
                 }
+                (FieldData::F32(a), Quant::Linear8) => {
+                    // E3.4 — 8-bit lane: normalized, overlay-only fields
+                    // (shares in −1..1, indices in 0..1, metre depths read
+                    // at map scale) do not earn 16 bits on the wire. Storage
+                    // and the determinism hash still see full f32.
+                    let s = a.as_slice().expect("registry grids are contiguous");
+                    let (lo, hi) = min_max(s);
+                    let (scale, inv) = quant_steps8(lo, hi);
+                    blob.reserve(s.len());
+                    for &v in s {
+                        let q = ((v as f64 - lo) * inv).round().clamp(0.0, 255.0) as u8;
+                        blob.push(q);
+                    }
+                    entry["dtype"] = json!("uint8");
+                    entry["q"] = json!({ "scale": scale, "offset": lo, "xform": "linear" });
+                }
                 (data, _) => data.write_into(&mut blob),
             }
             entry["offset"] = json!(offset);
@@ -218,6 +234,15 @@ fn min_max(s: &[f32]) -> (f64, f64) {
 }
 
 /// `(scale, 1/scale)` for a u16 span over `[lo, hi]`; constant fields get 0.
+fn quant_steps8(lo: f64, hi: f64) -> (f64, f64) {
+    if hi > lo {
+        let scale = (hi - lo) / 255.0;
+        (scale, 1.0 / scale)
+    } else {
+        (0.0, 0.0)
+    }
+}
+
 fn quant_steps(lo: f64, hi: f64) -> (f64, f64) {
     if hi > lo {
         let scale = (hi - lo) / 65535.0;
@@ -276,6 +301,7 @@ macro_rules! quant_mode {
     (raw) => { Quant::None };
     (u16) => { Quant::Linear };
     (u16sqrt) => { Quant::Sqrt };
+    (u8) => { Quant::Linear8 };
 }
 
 macro_rules! field_registry {
@@ -315,9 +341,9 @@ field_registry! {
     tmean:     F32, units "°C annual mean",                  hash false, gpu true,  wire u16;
     tamp:      F32, units "°C seasonal amplitude",           hash false, gpu true,  wire u16;
     precip:    F32, units "mm/yr",                           hash false, gpu true,  wire u16;
-    pamp:      F32, units "signed monsoon share −1..1",      hash true,  gpu false, wire u16;
+    pamp:      F32, units "signed monsoon share −1..1",      hash true,  gpu false, wire u8;
     discharge: F32, units "flow accumulation (cells·rain)",  hash false, gpu true,  wire u16sqrt;
-    flow_amp:  F32, units "signed seasonal swing −1..1",     hash true,  gpu false, wire u16;
+    flow_amp:  F32, units "signed seasonal swing −1..1",     hash true,  gpu false, wire u8;
     fertility: F32, units "0..1 arable index",               hash false, gpu true,  wire u16;
     biomes:    U8,  units "biome id",                        hash true,  gpu false, wire raw;
     crops:     U8,  units "crop package id",                 hash true,  gpu false, wire raw;
@@ -326,8 +352,8 @@ field_registry! {
     territory: I16, units "owner realm, −1 wild",            hash false, gpu false, wire raw;
     rock:      U8,  units "rock province id (M18)",          hash true,  gpu false, wire raw;
     soil:      U8,  units "soil order id (M51)",              hash true,  gpu false, wire raw;
-    upwelling: F32, units "0..1 coastal upwelling (M47)",    hash true,  gpu false, wire u16;
-    aquifer:   F32, units "m depth to water table (M54)",    hash true,  gpu false, wire u16;
+    upwelling: F32, units "0..1 coastal upwelling (M47)",    hash true,  gpu false, wire u8;
+    aquifer:   F32, units "m depth to water table (M54)",    hash true,  gpu false, wire u8;
 }
 
 /// Wire quantization mode for a registry field (E3.4).
@@ -339,6 +365,9 @@ pub enum Quant {
     Linear,
     /// Linear u16 in sqrt-space — for wide-dynamic-range fields.
     Sqrt,
+    /// Linear u8 over the field's live `[min, max]` span — normalized,
+    /// overlay-only grids (E3.4).
+    Linear8,
 }
 
 /// Borrowed grid storage behind a registry entry. Storage is f32 at rest

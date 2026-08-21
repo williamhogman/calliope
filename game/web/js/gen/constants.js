@@ -26,7 +26,9 @@ export const FIELDS = [
   { name: "flags", dtype: "uint8", units: "CellFlags bits", gpu: true },
   { name: "territory", dtype: "int16", units: "owner realm, −1 wild", gpu: false },
   { name: "rock", dtype: "uint8", units: "rock province id (M18)", gpu: false },
+  { name: "soil", dtype: "uint8", units: "soil order id (M51)", gpu: false },
   { name: "upwelling", dtype: "float32", units: "0..1 coastal upwelling (M47)", gpu: false },
+  { name: "aquifer", dtype: "float32", units: "m depth to water table (M54)", gpu: false },
 ];
 
 export const EVENT_KINDS = [
