@@ -706,10 +706,12 @@ proptest! {
         let aquifer = Array2::from_elem((1, 1), depth);
         let dry_site_score = Array2::from_elem((1, 1), held);
         let site_score = Array2::from_elem((1, 1), open);
+        let provision = Array2::from_elem((1, 1), 1.0f32);
         let f = calliope::settlements::DryFrontier {
             arid_dry: &arid_dry,
             aquifer: &aquifer,
             dry_site_score: &dry_site_score,
+            provision: &provision,
             well_reach_m: reach,
         };
         let got = f.score_at(&site_score, 0, 0);
@@ -738,12 +740,14 @@ proptest! {
         let aquifer = Array2::from_elem((1, 1), depth);
         let held_a = Array2::from_elem((1, 1), held);
         let site = Array2::from_elem((1, 1), 0.0f64);
+        let provision = Array2::from_elem((1, 1), 1.0f32);
         let mut opened_before = false;
         for reach in [0.0f64, 12.0, 30.0, 60.0, 90.0] {
             let f = calliope::settlements::DryFrontier {
                 arid_dry: &arid_dry,
                 aquifer: &aquifer,
                 dry_site_score: &held_a,
+                provision: &provision,
                 well_reach_m: reach,
             };
             let open = f.score_at(&site, 0, 0) > -1e8;
