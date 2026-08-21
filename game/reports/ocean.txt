@@ -16,7 +16,7 @@ gyres · current-coast heat · upwelling · sea-lane seasonality  (M40–M48)
  seed 31337 — 1 basins · 2 gyres (2 earthly) · mean 34094 cells/gyre · speed p95 1.07 · west 3.2×
    coasts: warm rims +0.65°C (444 cells) · cold rims -0.81°C (734) against their own row's coast
    upwelling: 315 of 4510 coastal-ocean cells nutrient-rich (7.0%) · median |lat| 8° · 0 stray off-coast
-   lanes: 19 sea-touching · 15 seasonal (79%) · swing p50 100% · spread p90−p10 100pp
+   lanes: 21 sea-touching · 18 seasonal (86%) · swing p50 100% · spread p90−p10 100pp
 
  seed 90210 — 1 basins · 2 gyres (2 earthly) · mean 32589 cells/gyre · speed p95 0.90 · west 4.0×
    coasts: warm rims +0.54°C (515 cells) · cold rims -0.83°C (751) against their own row's coast
@@ -38,7 +38,7 @@ gyre roll (subtropical band 10–40°, ≥250 cells):
    seed  basins  gyres  cells/g   sp p95   west×  warm ΔT  cold ΔT  upwell seasonal   seas%  swing50   spread
   12345       1      2    32701     0.94    2.9×    0.72C   -0.82C    6.7%       10     48%       4%    100pp
     777       1      2    30730     0.92    2.6×    0.65C   -0.76C    6.8%       15     75%     100%     99pp
-  31337       1      2    34094     1.07    3.2×    0.65C   -0.81C    7.0%       15     79%     100%    100pp
+  31337       1      2    34094     1.07    3.2×    0.65C   -0.81C    7.0%       18     86%     100%    100pp
   90210       1      2    32589     0.90    4.0×    0.54C   -0.83C    6.0%       15     83%     100%     99pp
     555       1      2    31652     0.99    2.8×    0.60C   -0.82C    6.7%       16     76%     100%     96pp
 
@@ -56,6 +56,6 @@ gyre roll (subtropical band 10–40°, ≥250 cells):
 [PASS] upwelling coverage (ocean lane)                6.7%   (sweet 3–10% · hard 1.5–15% (M47: nutrient-rich share of coastal ocean cells — Earth's eastern-boundary analogues))
 [PASS] upwelling median latitude                        8°   (sweet 5–60° · hard 0–75° (M49: median |latitude| of nutrient-rich coast — Earth's eastern-boundary systems run 5–45°))
 [PASS] every seed sails a sea lane          0 seeds without   (M49 gate: the seasonality bands need water traffic to measure)
-[PASS] seasonal sea-lane share                         72%   (M49: share of sea-touching lanes (%) whose year is not flat — ice-shut, gale-shut or monsoon-leaning)
+[PASS] seasonal sea-lane share                         74%   (M49: share of sea-touching lanes (%) whose year is not flat — ice-shut, gale-shut or monsoon-leaning)
 [PASS] sea-lane seasonality spread                    99pp   (M49: p90−p10 of per-lane throughput swing (pp) — the fleet's calendar must differ lane to lane, not move as one)
 CHECKS: 15 pass · 0 warn · 0 fail

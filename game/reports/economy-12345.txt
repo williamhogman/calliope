@@ -2,144 +2,141 @@
  CALLIOPE DIAGNOSTIC · ECONOMY                      seed 12345 · 640x512 · 100y
 ========================================================================
 good        base    mean     min     max mean/base   pinned
-clay        1.00    0.46    0.36    0.93      0.46       0%
-coal        1.00    1.18    0.71    2.57      1.18       0%
-copper      1.00    1.63    0.85    2.38      1.63       0%
-dyes        3.40    2.33    1.58    3.43      0.68       0%
-fish        0.85    0.34    0.31    0.67      0.40       0%
-furs        3.40    2.66    1.46    4.51      0.78       0%
-gems        3.40    5.82    4.62    8.37      1.71       0%
-gold        3.40    9.06    3.98   11.21      2.67       0%
-grain       1.00    0.39    0.36    0.79      0.39       0%
-grapes      1.80    0.82    0.64    1.61      0.45       0%
-hides       1.00    1.23    0.94    1.59      1.23       0%
-iron        1.00    2.58    1.24    3.46      2.58       0%
-marble      3.40    4.24    3.32    5.31      1.25       0%
-mithril     7.00   31.46   13.29   32.15      4.49       0%
-salt        1.80    1.62    0.83    3.62      0.90       0%
-silver      1.80    8.14    3.42    8.26      4.52       0%
-spices      3.40    2.37    1.29    3.96      0.70       0%
-stone       1.00    1.91    1.20    2.48      1.91       0%
-timber      1.00    0.48    0.36    0.90      0.48       0%
-wool        1.80    2.87    1.43    5.30      1.59       0%
+clay        1.00    0.49    0.36    0.94      0.49       0%
+coal        1.00    1.26    0.69    2.03      1.26       0%
+copper      1.00    2.71    1.57    4.51      2.71       0%
+dyes        3.40    2.82    1.86    3.52      0.83       0%
+fish        0.85    0.34    0.31    0.67      0.39       0%
+furs        3.40    3.13    2.31    4.67      0.92       0%
+gems        3.40   10.02    4.01   14.26      2.95       0%
+gold        3.40    7.93    6.46   15.57      2.33       0%
+grain       1.00    0.38    0.36    0.77      0.38       0%
+grapes      1.80    1.07    0.79    1.64      0.60       0%
+hides       1.00    1.12    0.73    1.59      1.12       0%
+iron        1.00    2.64    1.24    3.41      2.64       0%
+marble      3.40    5.73    3.79    7.31      1.68       0%
+salt        1.80    1.93    0.86    3.64      1.07       0%
+silver      1.80    4.90    3.42    8.25      2.72       0%
+spices      3.40    2.15    1.20    3.97      0.63       0%
+stone       1.00    1.61    1.17    2.48      1.61       0%
+timber      1.00    0.54    0.36    0.95      0.54       0%
+wool        1.80    2.87    1.39    5.40      1.59       0%
 (pinned = months at the 0.3×/5× clamp — a pinned price is a mis-tuned market)
 
-market shocks: 55 strikes · 43 depletions · 1314 trade chronicle entries
-wealth: total 516753 · gini 0.68
+market shocks: 56 strikes · 52 depletions · 1541 trade chronicle entries
+wealth: total 704415 · gini 0.64
 richest towns:
-  Skjalastrand         pop  41232 · wealth    48994 · exports bananas · harbour
-  Altaabek             pop  17361 · wealth    36411 · exports wine · harbour
-  Koropia              pop  33052 · wealth    32499 · exports fish · harbour
-  Thorarheim           pop  29895 · wealth    31213 · exports grain · harbour
-  Oros                 pop  10436 · wealth    23611 · exports dyes · harbour
+  Skjalastrand         pop  35939 · wealth    74236 · exports bananas · harbour
+  Koropia              pop  24138 · wealth    60768 · exports fish · harbour
+  Meleiantheia         pop  16737 · wealth    49262 · exports spices · harbour
+  Briaradell           pop  44274 · wealth    33331 · exports fish · harbour
+  Aeldell              pop  12413 · wealth    27103 · exports elk · harbour
 poorest towns:
-  Glenrun              pop     94 · wealth       36
-  Bayagan              pop    161 · wealth       39
-  Stenmark             pop    231 · wealth       45
+  Aelorwick            pop     83 · wealth       19
+  Oddheim              pop    854 · wealth       65
+  Kerasarai            pop    539 · wealth      109
 
-routes: 171 (68 sea / 27 mixed / 76 land) · mean cost 59.0 · mean length 27 km
-harbours: 54 · unconnected towns: 0
+routes: 164 (70 sea / 32 mixed / 62 land) · mean cost 62.5 · mean length 30 km
+harbours: 55 · unconnected towns: 0
 treasuries (crowns — ADR-0018):
-  Melliopia                   3133
-  Yurtachi                   10776
-  Jorgard                     2941
-  Aelhollow                  11382
-  Xandoossa                     47
-  Kaldheim                     212
-  Norastrand                   569
-  Eirgard                      614
-  Kaldstrand                   320
+  Mossbrook                    993
+  Vargengard                 11181
+  Yurtachi                    5582
+  Kaldoeia                   18360
+  Aelthorn                   11203
+  Kaldarnes                      9
+  Ulfheim                       47
+  Stenastad                     59
 
-sea ice on the lanes (M37): 18 winter-closed of 95 sea-touching routes · 0 perennially shut · 0 malformed masks
-  hardest lane: Altaabek — Borbek · calendar [··■■■■■■■■■·] · 9 months shut
+sea ice on the lanes (M37): 19 winter-closed of 102 sea-touching routes · 0 perennially shut · 0 malformed masks
+  hardest lane: Briaradell — Thoravik · calendar [■■■■·■■■·■■■] · 10 months shut
 
-the directed sea (M46): 68 blue-water lanes · 7 sail ≥2% faster one way (10%) · best mirror advantage 22.8%
+the directed sea (M46): 70 blue-water lanes · 9 sail ≥2% faster one way (13%) · best mirror advantage 29.3%
+  Kaldnes — Norstad · out 21.5 · home 30.5 · with-current 29.3% faster
   Koropia — Skjalastrand · out 27.4 · home 35.6 · with-current 22.8% faster
   Skjalastrand — Kalddal · out 24.0 · home 28.3 · with-current 15.1% faster
-  Thorurheim — Oros · out 25.2 · home 28.1 · with-current 10.3% faster
   the field: open cells 11955 · |current| p50 0.067 · p90 0.760 · max 4.429 · becalmed rows 12 of 128
 
-the sailor's calendar (M48): 32 monsoon lanes of 95 sea-touching (34%) · 26 shut in the burst · 0 malformed arcs · swing mean 74% best 100%
-  hardest gale lane: Briaradell — Mosswydell · burst [■■···■■■···■] · season +0.02
+the sailor's calendar (M48): 32 monsoon lanes of 102 sea-touching (31%) · 27 shut in the burst · 0 malformed arcs · swing mean 72% best 100%
+  hardest gale lane: Qartau — Kalossa · burst [■■···■■■···■] · season -0.07
   the field: monsoon sea cells 62671 · |lean| p50 0.00 · p90 0.34 · max 0.43 · gale threshold 0.40
 
-mines: 44 live mineral seams known · 37 worked by a town
-towns listing each good: bananas 10 · blackberries 2 · blueberries 7 · clay 11 · cloth 1 · coal 9 · copper 6 · deer 1 · dyes 4 · elk 4 · fish 39 · furs 3 · gems 2 · grain 22 · grapes 3 · hides 4 · horse 7 · iron 4 · jewelry 2 · leather 3 · marble 4 · mithril 1 · pig 4 · pottery 4 · salt 7 · sheep 10 · silver 1 · spices 7 · stone 6 · strawberries 11 · timber 13 · wine 1 · wool 9
+mines: 42 live mineral seams known · 38 worked by a town
+towns listing each good: bananas 9 · blackberries 3 · blueberries 7 · brick 1 · clay 8 · cloth 3 · coal 10 · copper 7 · deer 2 · dyes 3 · elk 6 · fish 38 · furs 3 · grain 16 · grapes 2 · hides 6 · horse 7 · iron 5 · jewelry 1 · leather 3 · marble 2 · pig 5 · pottery 1 · salt 4 · sheep 13 · silver 2 · spices 8 · stone 4 · strawberries 10 · timber 7 · tools 3 · weapons 2 · wool 12
 
-quarries (M20): basalt 12 · granite 19 · limestone 59 · marble 13
+quarries (M20): basalt 11 · granite 17 · limestone 63 · marble 9
 
-wild stocks (M14.8): transitions thin 19 · collapse 16 · recover 11 · timber scar cells 261
+wild stocks (M14.8): transitions thin 23 · collapse 21 · recover 14 · timber scar cells 270
 good      grounds min stock      mean  thinned  collapsed
-timber         11      0.07      0.41        3          5
-fish            7      0.54      0.79        0          0
-furs            5      0.71      0.88        0          0
-deer            3      0.90      0.97        0          0
-elk            12      0.64      0.93        0          0
+timber         11      0.07      0.40        1          6
+fish            7      0.69      0.87        0          0
+furs            5      0.33      0.75        0          1
+deer            3      0.90      0.94        0          0
+elk            12      0.33      0.85        1          0
 
 conservation ledger (M15.6): state delta vs site meter, 174 deposits
 good           n      state Δ      metered  worst resid
-coal          23     11619.97     11619.97     1.36e-12
-copper         8      6281.80      6281.80     2.27e-12
-deer           3        -0.10        -0.10       0.00e0
-elk           12        -0.82        -0.82       0.00e0
-fish           7        -1.50        -1.50       0.00e0
-furs           5        -0.61        -0.61       0.00e0
-gems           3      2216.39      2216.39     1.02e-12
-gold           2       673.00       673.00     2.27e-13
-iron           4      2408.00      2408.00     1.14e-12
-marble         4      2581.41      2581.41     2.27e-13
-mithril        1       479.55       479.55       0.00e0
-salt           8      5705.11      5705.11     1.36e-12
-silver         2       322.90       322.90       0.00e0
-timber        11        -6.50        -6.50     2.89e-15
+coal          23     15700.68     15700.68     2.05e-12
+copper         8      4883.34      4883.34     2.27e-13
+deer           3        -0.19        -0.19       0.00e0
+elk           12        -1.84        -1.84     6.66e-16
+fish           7        -0.94        -0.94       0.00e0
+furs           5        -1.24        -1.24     8.88e-16
+gems           3      1605.00      1605.00     2.16e-12
+gold           2       673.00       673.00     1.14e-12
+iron           4      3191.04      3191.04     5.91e-12
+marble         4      2913.79      2913.79       0.00e0
+salt           8      3877.40      3877.40     2.05e-12
+silver         2      1354.81      1354.81     3.41e-13
+timber        11        -6.61        -6.61     2.33e-15
  taste geography: 7 market areas · 6 peoples
 
 ---- checks ----------------------------------------------------------
 [PASS] max pinned price share                         0.0%   (sweet ≤25% · hard ≤55%)
-[PASS] wealth gini                                    0.68   (sweet 0.20–0.80 — some inequality, no monopoly)
-[PASS] routes exist                                    171   (the web of trade must hold)
+[PASS] wealth gini                                    0.64   (sweet 0.20–0.80 — some inequality, no monopoly)
+[PASS] routes exist                                    164   (the web of trade must hold)
 [PASS] no unconnected towns                              0   (every town trades)
-[PASS] harbours exist                                   54   (coastal trade should produce ports)
+[PASS] harbours exist                                   55   (coastal trade should produce ports)
 [PASS] route costs deterministic across reruns      22 routes   (M37 gate: same seed, same web, same prices)
-[PASS] icebound lanes freeze in one winter arc 0 malformed of 18   (M37 gate: closure is a single hemisphere-true season)
+[PASS] icebound lanes freeze in one winter arc 0 malformed of 19   (M37 gate: closure is a single hemisphere-true season)
 [PASS] the ledger obeys the calendar        0 mismatched route-months   (M37/M48 gate: flow zero when shut — ice or gale — alive when the water opens)
-[PASS] monsoon lane share                              34%   (M48: share of sea-touching lanes (%) sailing the monsoon calendar)
-[PASS] monsoon throughput swing                        74%   (M48 gate: monsoon-lane throughput swings ≥30% between the year's peak and its floor)
-[PASS] monsoon closures are burst arcs      0 malformed of 26   (M48 gate: the gale season is the wet monsoon's height, nothing else)
+[PASS] monsoon lane share                              31%   (M48: share of sea-touching lanes (%) sailing the monsoon calendar)
+[PASS] monsoon throughput swing                        72%   (M48 gate: monsoon-lane throughput swings ≥30% between the year's peak and its floor)
+[PASS] monsoon closures are burst arcs      0 malformed of 27   (M48 gate: the gale season is the wet monsoon's height, nothing else)
 [PASS] the sailing calendar replays byte-identically 89edcc9330c08fd3   (M48 gate: month-by-month route state is a pure function of the seed)
 [PASS] prices finite                                   yes   (no NaN in the market)
 [PASS] treasuries sane                                 yes   (≥0 and finite)
 [PASS] search and re-walk agree             0 divergent lanes   (M46 gate: one edge law prices the search and the ledger)
-[PASS] sea-lane mirror advantage (best)              22.8%   (M46 gate: the with-current passage sails ≥15% faster than its against-current mirror)
-[WARN] directional lanes alive                         10%   (M46: share of blue-water lanes (%) sailing ≥2% faster one way than the other)
-[PASS] strikes moved markets                            55   (discovery shocks should fire)
-[PASS] known seams worked                            84.1%   (found ore must reach the market, not rust in the hills)
-[PASS] quarry stone matches rock province   0 mismatched of 103   (M20 gate: the stone a town cuts is the stone it stands on)
+[PASS] sea-lane mirror advantage (best)              29.3%   (M46 gate: the with-current passage sails ≥15% faster than its against-current mirror)
+[WARN] directional lanes alive                         13%   (M46: share of blue-water lanes (%) sailing ≥2% faster one way than the other)
+[PASS] strikes moved markets                            56   (discovery shocks should fire)
+[PASS] known seams worked                            90.5%   (found ore must reach the market, not rust in the hills)
+[PASS] quarry stone matches rock province   0 mismatched of 100   (M20 gate: the stone a town cuts is the stone it stands on)
 [PASS] wild stocks breathe                  min stock 0.07   (M14.8: harvest pressure actually moves a stock)
-[PASS] the axe bites somewhere              thin 19 · collapse 16   (M14.8: some crowded ground thins under the axe or the net)
-[PASS] wild collapse share                           13.2%   (M14.8: overharvest bites somewhere, never everywhere)
+[PASS] the axe bites somewhere              thin 23 · collapse 21   (M14.8: some crowded ground thins under the axe or the net)
+[PASS] wild collapse share                           18.4%   (M14.8: overharvest bites somewhere, never everywhere)
 [PASS] wild goods trace to living grounds   0 untraced listings   (M14.8: collapse withdraws the good (subsistence nets exempt))
-[PASS] ledger balances to rounding          worst residual 2.27e-12   (M15.6: every draw and every breath was metered where it happened)
+[PASS] ledger balances to rounding          worst residual 5.91e-12   (M15.6: every draw and every breath was metered where it happened)
 [PASS] taste table sane                     steppe·horse 1.60 · hellenic·wine 1.30 · nordic·furs 1.40 · arid·furs 0.60   (M14.9: multipliers in [0.5,1.7] and lean the way the cultures do)
-[PASS] taste moves the book (A/B)           "furs": nordic 3.740 vs arid 3.310   (M14.9: same supply, the prizing culture's book prices it higher)
+[PASS] taste moves the book (A/B)           "furs": nordic 3.760 vs arid 3.320   (M14.9: same supply, the prizing culture's book prices it higher)
 [PASS] tastes vary across areas             max mix spread 0.600   (M14.9: different peoples, different books — the mix is not flat)
-[PASS] wealth~pop scaling β                 1.14 over 103 towns   (M2.4: superlinear output, target ≈1.15)
-[PASS] iron/grain price ratio                         6.6×   (M2.7: metal dear, bread cheap)
-[PASS] staples cheaper than metal           grain 0.39 · timber 0.48 · iron 2.58   (the ordering of the price lists holds)
-[PASS] gold/grain price ratio                        23.3×   (M2.7: the precious envelope)
-[PASS] salt towns exist                                  7   (M14.2 gate: pans on arid shores get worked)
-[PASS] salt/grain price ratio                         4.2×   (M14.2: dear inland, never gold — the Hodges envelope)
-[PASS] wool towns exist                                  9   (M14.3: sheep country shears — the fiber rides behind the flock)
-[PASS] hide towns exist                                  4   (M14.3: cattle and game yield hides wherever they are worked)
+[PASS] wealth~pop scaling β                 1.08 over 100 towns   (M2.4: superlinear output, target ≈1.15)
+[PASS] iron/grain price ratio                         6.9×   (M2.7: metal dear, bread cheap)
+[PASS] staples cheaper than metal           grain 0.38 · timber 0.54 · iron 2.64   (the ordering of the price lists holds)
+[PASS] gold/grain price ratio                        20.7×   (M2.7: the precious envelope)
+[PASS] salt towns exist                                  4   (M14.2 gate: pans on arid shores get worked)
+[PASS] salt/grain price ratio                         5.1×   (M14.2: dear inland, never gold — the Hodges envelope)
+[PASS] wool towns exist                                 12   (M14.3: sheep country shears — the fiber rides behind the flock)
+[PASS] hide towns exist                                  6   (M14.3: cattle and game yield hides wherever they are worked)
 [PASS] the cold calls                       3 fur towns · ground placed true   (M14.3: fur country placed or worked — the luxury pull on the waste)
-[PASS] wool/grain price ratio                         7.4×   (M14.3: the staple export — dearer than bread, cheaper than iron)
-[PASS] vineyard hills placed                2 grounds · 3 towns   (M14.4: the warm-hill belt places and gets worked)
-[PASS] spice coast placed                   4 grounds · 7 towns   (M14.4: tropical shores place — the long-route luxury)
-[PASS] murex shore placed                   3 grounds · 4 towns   (M14.4: temperate dye shores place — concentrated, not everywhere)
-[PASS] clay pits placed                     7 grounds · 11 towns   (M14.5: the alluvial margins place — the kiln's feedstock)
-[PASS] marble quarries placed               4 grounds · 4 towns   (M14.5: the luxury stone places — Bulk, so it moves by water or not at all)
-[PASS] gem seams placed                     3 grounds · 2 towns   (M14.5: the jeweler's third ore places beside gold and silver)
-[PASS] kilns lit                            4 pottery · 0 brick towns · 11 clay towns   (M14.5: worked clay must reach a kiln — pottery or brick towns exist)
-[PASS] soft trades lit                      1 cloth · 3 leather · 1 wine · 3 kinds   (M14.6: wool/hides/grapes reach a workshop — cloth, leather or wine towns exist)
-[PASS] processing splits from extraction    3 workshop towns without their own feedstock ground   (M14.6: at least one workshop buys its raw off the area market — towns divide by role)
+[PASS] wool/grain price ratio                         7.5×   (M14.3: the staple export — dearer than bread, cheaper than iron)
+[PASS] vineyard hills placed                2 grounds · 2 towns   (M14.4: the warm-hill belt places and gets worked)
+[PASS] spice coast placed                   4 grounds · 8 towns   (M14.4: tropical shores place — the long-route luxury)
+[PASS] murex shore placed                   3 grounds · 3 towns   (M14.4: temperate dye shores place — concentrated, not everywhere)
+[PASS] clay pits placed                     7 grounds · 8 towns   (M14.5: the alluvial margins place — the kiln's feedstock)
+[PASS] marble quarries placed               4 grounds · 2 towns   (M14.5: the luxury stone places — Bulk, so it moves by water or not at all)
+[PASS] gem seams placed                     3 grounds · 0 towns   (M14.5: the jeweler's third ore places beside gold and silver)
+[PASS] kilns lit                            1 pottery · 1 brick towns · 8 clay towns   (M14.5: worked clay must reach a kiln — pottery or brick towns exist)
+[PASS] soft trades lit                      3 cloth · 3 leather · 0 wine · 2 kinds   (M14.6: wool/hides/grapes reach a workshop — cloth, leather or wine towns exist)
+[PASS] processing splits from extraction    6 workshop towns without their own feedstock ground   (M14.6: at least one workshop buys its raw off the area market — towns divide by role)
 CHECKS: 46 pass · 1 warn · 0 fail

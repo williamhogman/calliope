@@ -222,6 +222,7 @@ pub struct GenBuilder {
     world_name: Option<String>,
     deposits: Option<Vec<Deposit>>,
     rock: Option<Array2<u8>>,
+    soil: Option<Array2<u8>>,
     world: Option<World>,
 }
 
@@ -274,6 +275,7 @@ impl GenBuilder {
             world_name: None,
             deposits: None,
             rock: None,
+            soil: None,
             world: None,
         }
     }
@@ -468,11 +470,38 @@ impl GenBuilder {
 
     fn stage_fertility(&mut self) {
         let t4 = now_ms();
+        // M51 — the basement is read here now, before the soil: the
+        // orders need their parent material (M18). It is the same pure
+        // classification stage_resources used to run, on the same f32
+        // relief, so the ore pass downstream reads an identical grid.
+        let height32 = self.height64.as_ref().unwrap().mapv(|x| x as f32);
+        let rock = crate::rock::classify(
+            self.seed,
+            self.size,
+            self.plates.as_ref().unwrap(),
+            &height32,
+        );
         {
             let height = self.height64.as_ref().unwrap();
             let tmean = self.tmean64.as_ref().unwrap();
             let precip = self.precip64.as_ref().unwrap();
             let hydro = self.hydro.as_ref().unwrap();
+            let ice = self.ice.as_ref().unwrap();
+            // Jenny's factors, in one pass: parent material, climate,
+            // organisms (the biome), relief, and the young-surface time
+            // proxy carried by ash and glacial dust.
+            let soil = agriculture::soil_genesis(
+                height,
+                tmean,
+                precip,
+                self.biome_map.as_ref().unwrap(),
+                &rock,
+                &hydro.rivers,
+                &hydro.lakes,
+                &hydro.discharge,
+                &ice.till,
+                &ice.loess,
+            );
             let fert = agriculture::fertility(
                 height,
                 tmean,
@@ -480,22 +509,27 @@ impl GenBuilder {
                 &hydro.rivers,
                 &hydro.lakes,
                 &hydro.discharge,
-                &self.ice.as_ref().unwrap().till,
-                &self.ice.as_ref().unwrap().loess,
-                &self.ice.as_ref().unwrap().outwash,
+                &ice.till,
+                &ice.loess,
+                &ice.outwash,
+                &soil,
             );
             let crops =
                 agriculture::crop_packages(height, tmean, precip, &hydro.rivers, &hydro.lakes);
             self.fertility = Some(fert.mapv(|x| x as f32));
             self.crops = Some(crops);
+            self.soil = Some(soil);
         }
+        self.rock = Some(rock);
+        self.height = Some(height32);
         self.timings.push(("fertility", now_ms() - t4));
+
 
         // E3.2 — the physical stages are done; the world's float grids
         // drop to their resting f32 width here, and every human stage
         // below (naming, resources, settlements, trade, economy) reads
         // the same f32 the ticks will read.
-        self.height = Some(self.height64.take().unwrap().mapv(|x| x as f32));
+        self.height64 = None; // the f32 relief was taken above (M51)
         self.tmean = Some(self.tmean64.take().unwrap().mapv(|x| x as f32));
         self.tamp = Some(self.tamp64.take().unwrap().mapv(|x| x as f32));
         self.precip = Some(self.precip64.take().unwrap().mapv(|x| x as f32));
@@ -529,16 +563,12 @@ impl GenBuilder {
 
     fn stage_resources(&mut self) {
         let t6 = now_ms();
-        // M18 — the basement is read once off the sketch and the relief:
-        // shield, basin, fold belt, volcanic. Frozen from here on. It is
-        // classified *before* the ore roll because M19 re-seats deposits
-        // on it: geology decides where ore belongs.
-        let rock = crate::rock::classify(
-            self.seed,
-            self.size,
-            self.plates.as_ref().unwrap(),
-            self.height.as_ref().unwrap(),
-        );
+        // M18 — the basement: shield, basin, fold belt, volcanic, read
+        // once off the sketch and the relief. Classified in the
+        // fertility stage since M51 (the soil orders need their parent
+        // material) and frozen from there; M19 re-seats deposits on it,
+        // so geology still decides where ore belongs.
+        let rock = self.rock.take().expect("rock classified in stage_fertility");
         let deposits = resources::place_resources(
             self.biome_map.as_ref().unwrap(),
             self.height.as_ref().unwrap(),
@@ -575,6 +605,8 @@ impl GenBuilder {
         // M18 — the basement, classified back in stage_resources (M19
         // reads it for ore placement). It rides into the fields here.
         let rock = self.rock.take().unwrap();
+        // M51 — the soil orders, classified in the fertility stage.
+        let soil = self.soil.take().unwrap();
 
         let t7 = now_ms();
         let mut taken: HashSet<String> = HashSet::new();
@@ -803,6 +835,7 @@ impl GenBuilder {
                 flow_amp,
                 strahler: hydro.strahler,
                 rock,
+                soil,
                 // M47 — placeholder like territory: the upwelling shore is
                 // solved at the dawn, off the final post-widen coastline.
                 upwelling: Array2::from_elem((1, 1), 0.0f32),
@@ -1133,6 +1166,10 @@ impl World {
         // The basement rides along (M18): the open-ocean margins are
         // young sea floor under sediment — basin, never shield.
         self.fields.rock = grow(&self.fields.rock, pad, |_, _| crate::rock::BASIN);
+        // M51 — the margins are open ocean: no profile, no soil order.
+        self.fields.soil = grow(&self.fields.soil, pad, |_, _| {
+            crate::agriculture::SoilOrder::None.code()
+        });
         self.fields.strahler = {
             let a = &self.fields.strahler;
             Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {

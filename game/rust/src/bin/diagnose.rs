@@ -2154,11 +2154,14 @@ fn cmd_terrain(seed: i64, size: usize) {
             let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
             let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
             let none: ndarray::Array2<f32> = ndarray::Array2::zeros((tr, tc));
+            // M51 — a neutral soil plane on both legs: the counterfactual
+            // must isolate the deposit, not the soil order under it.
+            let nsoil: ndarray::Array2<u8> = ndarray::Array2::from_elem((tr, tc), calliope::agriculture::SoilOrder::Cambisol.code());
             let f_with = calliope::agriculture::fertility(
-                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash,
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash, &nsoil,
             );
             let f_bare = calliope::agriculture::fertility(
-                &h64, &t64, &p64, &rivers, &lakes, &q64, &none, &none, &ice.outwash,
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &none, &none, &ice.outwash, &nsoil,
             );
             // Measured on the farmable footprint only (bare fertility
             // ≥ 0.05): the sheet interior is tundra where the temperature
@@ -2314,11 +2317,14 @@ fn cmd_terrain(seed: i64, size: usize) {
             let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
             let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
             let none: ndarray::Array2<f32> = ndarray::Array2::zeros((ir, icn));
+            // M51 — a neutral soil plane on both legs: the counterfactual
+            // must isolate the deposit, not the soil order under it.
+            let nsoil: ndarray::Array2<u8> = ndarray::Array2::from_elem((ir, icn), calliope::agriculture::SoilOrder::Cambisol.code());
             let f_with = calliope::agriculture::fertility(
-                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash,
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &ice.outwash, &nsoil,
             );
             let f_bare = calliope::agriculture::fertility(
-                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &none,
+                &h64, &t64, &p64, &rivers, &lakes, &q64, &ice.till, &ice.loess, &none, &nsoil,
             );
             let (mut up, mut un) = (0.0f64, 0usize);
             for y in 0..ir {
@@ -3058,6 +3064,38 @@ fn cmd_hydro(seed: i64, size: usize) {
 
 // ================================================================ resources
 
+/// Spearman rank correlation over (x, y) pairs — small n, no ties
+/// expected (the fertility curve is strictly ordered by construction).
+fn spearman(pairs: &[(f64, f64)]) -> f64 {
+    let n = pairs.len();
+    if n < 3 {
+        return 0.0;
+    }
+    let rank = |key: &dyn Fn(&(f64, f64)) -> f64| -> Vec<f64> {
+        let mut idx: Vec<usize> = (0..n).collect();
+        idx.sort_by(|&a, &b| key(&pairs[a]).partial_cmp(&key(&pairs[b])).unwrap());
+        let mut r = vec![0.0; n];
+        for (pos, &i) in idx.iter().enumerate() {
+            r[i] = pos as f64;
+        }
+        r
+    };
+    let rx = rank(&|p: &(f64, f64)| p.0);
+    let ry = rank(&|p: &(f64, f64)| p.1);
+    let mean = (n as f64 - 1.0) / 2.0;
+    let (mut num, mut dx, mut dy) = (0.0, 0.0, 0.0);
+    for i in 0..n {
+        let (a, b) = (rx[i] - mean, ry[i] - mean);
+        num += a * b;
+        dx += a * a;
+        dy += b * b;
+    }
+    if dx <= 0.0 || dy <= 0.0 {
+        return 0.0;
+    }
+    num / (dx * dy).sqrt()
+}
+
 fn cmd_resources(seed: i64, size: usize) {
     let w = World::generate(seed, size);
     header("RESOURCES", &format!("seed {} · {}x{}", seed, w.width, size));
@@ -3176,6 +3214,123 @@ fn cmd_resources(seed: i64, size: usize) {
         home_share,
         format!("{} of {} ({})", in_home, total, pct(home_share)),
     );
+
+    // ---- M51 — soil genesis: the orders under the map ----
+    // Jenny's factors are solved once at genesis; here we read the mix
+    // back off the finished world and hold it to Whittaker-consistent
+    // bands, plus the two structural claims: every land cell carries a
+    // profile, and the black earth stays in continental grass country.
+    {
+        use calliope::agriculture::SoilOrder;
+        use strum::IntoEnumIterator;
+
+        let (h, wd) = w.fields.soil.dim();
+        let mut count = [0usize; 9];
+        let mut fert_sum = [0.0f64; 9];
+        let mut bare = 0usize;          // land cells with no profile
+        let mut cher = 0usize;
+        let mut cher_climate = 0usize;  // chernozem inside its climate window
+        let mut cher_grass = 0usize;    // chernozem under grass/savanna/woodland
+        let mut andosol_volcanic = 0usize;
+        let mut andosol = 0usize;
+        for y in 0..h {
+            for x in 0..wd {
+                if !land[[y, x]] {
+                    continue;
+                }
+                // lakes are land by the height mask but carry no profile
+                if calliope::state::CellFlags::from_bits_truncate(w.fields.flags[[y, x]])
+                    .contains(calliope::state::CellFlags::LAKE)
+                {
+                    continue;
+                }
+                let o = w.fields.soil[[y, x]] as usize;
+                if o == 0 {
+                    bare += 1;
+                    continue;
+                }
+                count[o] += 1;
+                fert_sum[o] += w.fields.fertility[[y, x]] as f64;
+                let t = w.fields.tmean[[y, x]] as f64;
+                let p = w.fields.precip[[y, x]] as f64;
+                let b = w.fields.biomes[[y, x]];
+                if o == SoilOrder::Chernozem.code() as usize {
+                    cher += 1;
+                    if calliope::agriculture::chernozem_climate(t, p) {
+                        cher_climate += 1;
+                    }
+                    if b == calliope::constants::GRASSLAND
+                        || b == calliope::constants::SAVANNA
+                        || b == calliope::constants::WOODLAND
+                    {
+                        cher_grass += 1;
+                    }
+                }
+                if o == SoilOrder::Andosol.code() as usize {
+                    andosol += 1;
+                    if w.fields.rock[[y, x]] == calliope::rock::VOLCANIC {
+                        andosol_volcanic += 1;
+                    }
+                }
+            }
+        }
+        let soil_n: usize = count.iter().sum();
+        let denom = soil_n.max(1) as f64;
+
+        println!();
+        println!("soil orders (M51 · clorpt):");
+        println!("{:<12} {:>8} {:>8} {:>9} {:>9} {:>7}", "order", "cells", "share", "mean fert", "curve", "depth m");
+        let mut ranks: Vec<(f64, f64)> = Vec::new();
+        for o in SoilOrder::iter() {
+            if o == SoilOrder::None {
+                continue;
+            }
+            let i = o.code() as usize;
+            let share = count[i] as f64 / denom;
+            let mean_f = if count[i] > 0 { fert_sum[i] / count[i] as f64 } else { 0.0 };
+            println!(
+                "{:<12} {:>8} {:>7.1}% {:>9.3} {:>9.2} {:>7.2}",
+                o.name(), count[i], 100.0 * share, mean_f, o.fertility(), o.depth()
+            );
+            if count[i] >= 200 {
+                ranks.push((o.fertility(), mean_f));
+            }
+            c.band_as(&format!("{} share", o.name()), &format!("{} share of land", o.name()), share, format!("{} of {} ({})", count[i], soil_n, pct(share)));
+        }
+
+        // The curve must actually order the farms: Spearman between each
+        // order's declared fertility curve and the mean arable index the
+        // world measures on it. This is the claim M51 makes — that the
+        // soil map explains fertility rather than decorating it.
+        let rho = spearman(&ranks);
+        println!(
+            "curve-vs-measured rank correlation over {} orders: ρ = {:.2}",
+            ranks.len(), rho
+        );
+        c.band("soil fertility rank correlation", rho, format!("ρ {:.2} over {} orders", rho, ranks.len()));
+
+        c.must(
+            "every land cell carries a soil order",
+            bare == 0,
+            format!("{} bare of {} land cells", bare, soil_n + bare),
+            "M51: the classifier is total over land — no cell falls through the ladder",
+        );
+        let cher_cl = cher_climate as f64 / cher.max(1) as f64;
+        let cher_gr = cher_grass as f64 / cher.max(1) as f64;
+        c.must(
+            "chernozem confined to its climate window",
+            cher > 0 && cher_cl >= 0.999,
+            format!("{} of {} in window · {} under grass/woodland ({})", cher_climate, cher, cher_grass, pct(cher_gr)),
+            "M51 gate: black earth only where humus outlasts the summer and rain never flushes the profile",
+        );
+        c.must(
+            "andosol sits on volcanic parent rock",
+            andosol == 0 || andosol_volcanic == andosol,
+            format!("{} of {} on volcanic province", andosol_volcanic, andosol),
+            "M51: ash soils cannot exist off the ash",
+        );
+    }
+
     c.print();
 }
 
@@ -3264,11 +3419,14 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
         let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
         let none: ndarray::Array2<f32> = ndarray::Array2::zeros((ir, ic));
+            // M51 — a neutral soil plane on both legs: the counterfactual
+            // must isolate the deposit, not the soil order under it.
+            let nsoil: ndarray::Array2<u8> = ndarray::Array2::from_elem((ir, ic), calliope::agriculture::SoilOrder::Cambisol.code());
         let f_with = calliope::agriculture::fertility(
-            &h64, &t64, &p64, &rivers, &lakes, &q64, &w.ice.till, &w.ice.loess, &w.ice.outwash,
+            &h64, &t64, &p64, &rivers, &lakes, &q64, &w.ice.till, &w.ice.loess, &w.ice.outwash, &nsoil,
         );
         let f_bare = calliope::agriculture::fertility(
-            &h64, &t64, &p64, &rivers, &lakes, &q64, &none, &none, &w.ice.outwash,
+            &h64, &t64, &p64, &rivers, &lakes, &q64, &none, &none, &w.ice.outwash, &nsoil,
         );
         let (mut up, mut n) = (0.0f64, 0usize);
         for s in &w.peoples.settlements {
@@ -5940,7 +6098,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
             match name {
                 "biomes" => &w.fields.biomes, "crops" => &w.fields.crops,
                 "strahler" => &w.fields.strahler, "flags" => &w.fields.flags,
-                "rock" => &w.fields.rock,
+                "rock" => &w.fields.rock, "soil" => &w.fields.soil,
                 other => unreachable!("unknown u8 field {other}"),
             }
         };
