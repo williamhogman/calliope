@@ -58,11 +58,12 @@
  * @property {number} month
  * @property {Array<number>} [peoples]
  * @property {Array<{asab: number, i: number, legit: number, treasury: number, unrest: number}>} [r_hot]
- * @property {Array<{alive: boolean, asab: number, color: string, founded: number, house: string, id: number, legit: number, name: string, people: number, ruler: string, seat: number, treasury: number, unrest: number}>} [realms]
+ * @property {Array<{alive: boolean, asab: number, color: string, founded: number, house: string, id: number, legit: number, name: string, people: number, ruler?: string, seat: number, treasury: number, unrest: number}>} [realms]
  * @property {Array<{a: number, b: number, closed?: number, cost: number, goods: Array<string>, m: Array<number>, path: Array<Array<number>>, ramp: number, sea: number, season?: number, shut?: Array<{ice?: number, monsoon?: number}>, w: number}>} [routes]
  * @property {Array<Array<number | null>>} s_hot
  * @property {Array<{coastal: boolean, connections: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, quarry: string, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} [settlements]
  * @property {Array<number>} [territory]
+ * @property {Array<{a: number, b: number, ent: number, name: string, score: number, start: number, until: number}>} [wars]
  */
 
 /**
@@ -98,7 +99,7 @@
 /**
  * One sifted microstory.
  * @typedef {Object} Story
- * @property {Array<{ids: Array<number>, k: number, legend?: string, m: number, s: string, text: string, veiled?: boolean, x: number, y: number}>} beats
+ * @property {Array<{ids: Array<number>, k: number, legend?: string, m: number, s: string, text: string, veiled?: boolean, x?: number, y?: number}>} beats
  * @property {Array<number>} ids
  * @property {string} pattern
  * @property {number} score
@@ -115,13 +116,13 @@
 /**
  * Term ledger behind a derived quantity, or null when the engine has nothing to say.
  * @typedef {Object} ExplainLedger
- * @property {number} [dp]
+ * @property {number} dp
  * @property {{coastal: boolean, river: boolean, shelter: number, upwelling: number}} [site]
- * @property {Array<{l: string, v: number}>} [terms]
- * @property {string} [title]
- * @property {number} [total]
- * @property {string} [total_label]
- * @property {string} [unit]
+ * @property {Array<{l: string, v: number}>} terms
+ * @property {string} title
+ * @property {number} total
+ * @property {string} total_label
+ * @property {string} unit
  */
 
 export {};

@@ -82,8 +82,14 @@ export function unpack(buf) {
   const arrays = {};
   for (const a of header.arrays) {
     if (a.q) {
-      // quantized u16 wire (E3.4) — dequantize to the field's true float32
-      const q = new Uint16Array(buf, base + a.offset, a.nbytes / 2);
+      // quantized wire (E3.4) — u16 or u8 depending on the field's lane;
+      // dequantize to the field's true float32. Read through a byte view so
+      // a u8 lane can leave the following u16 section at an odd offset.
+      const bytes = new Uint8Array(buf, base + a.offset, a.nbytes);
+      const q =
+        a.dtype === "uint8"
+          ? bytes
+          : new Uint16Array(bytes.slice().buffer, 0, a.nbytes / 2);
       const out = new Float32Array(q.length);
       const { scale, offset, xform } = a.q;
       if (xform === "sqrt") {

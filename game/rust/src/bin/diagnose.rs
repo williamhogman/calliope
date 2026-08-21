@@ -6564,7 +6564,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
                 "height" => &w.fields.height, "tmean" => &w.fields.tmean, "tamp" => &w.fields.tamp,
                 "precip" => &w.fields.precip, "pamp" => &w.fields.pamp, "discharge" => &w.fields.discharge,
                 "flow_amp" => &w.fields.flow_amp, "fertility" => &w.fields.fertility,
-                "upwelling" => &w.fields.upwelling,
+                "upwelling" => &w.fields.upwelling, "aquifer" => &w.fields.aquifer,
                 other => unreachable!("unknown f32 field {other}"),
             }
         };
@@ -6587,8 +6587,12 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
                 let qoff = q["offset"].as_f64().unwrap();
                 let sqrt = q["xform"].as_str() == Some("sqrt");
                 let grid = f32_grid(name);
-                let qs: Vec<u16> = p1[off..off + nb].chunks_exact(2)
-                    .map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
+                let qs: Vec<u32> = if e["dtype"].as_str() == Some("uint8") {
+                    p1[off..off + nb].iter().map(|&b| b as u32).collect()
+                } else {
+                    p1[off..off + nb].chunks_exact(2)
+                        .map(|b| u16::from_le_bytes([b[0], b[1]]) as u32).collect()
+                };
                 ok_data &= qs.len() == grid.len();
                 for (&qv, &orig) in qs.iter().zip(grid.iter()) {
                     let dec = qoff + qv as f64 * scale;
@@ -6619,7 +6623,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         c.must(&format!("raw sections bit-equal ({})", seed), ok_data,
             "bit-equal".into(), "M8.1: arrays survive the wire");
         c.must(&format!("quantization ≤ ε ({})", seed), worst_q <= 0.5 + 1e-6,
-            format!("worst {:.3}·scale", worst_q), "E3.4: u16 wire loses ≤ half a step");
+            format!("worst {:.3}·scale", worst_q), "E3.4: quantized wire loses ≤ half a step");
 
         // territory rides the header as RLE (E3.5) — expand and compare
         let rle: Vec<i64> = hdr["territory"].as_array().unwrap().iter()
