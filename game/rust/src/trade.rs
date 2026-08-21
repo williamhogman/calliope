@@ -1281,6 +1281,21 @@ pub fn caravan_provision(
     markets: &[(usize, usize)],
     fine: (usize, usize),
 ) -> Array2<f32> {
+    caravan_provision_budget(grid, markets, fine, CARAVAN_BUDGET)
+}
+
+/// M58 — the same field, with the purse stated. A caravan's range is set
+/// by what the cargo can pay for: an ordinary victualling train reaches
+/// `CARAVAN_BUDGET`, while a crown that must have a metal it cannot
+/// smelt from its own ground will pay for a longer, dearer lane. The
+/// budget is *demand-side* — it buys reach, never suitability.
+pub fn caravan_provision_budget(
+    grid: &TradeGrid,
+    markets: &[(usize, usize)],
+    fine: (usize, usize),
+    budget: f64,
+) -> Array2<f32> {
+    let budget = budget.max(1.0);
     let (hh, ww) = grid.cost.dim();
     let mut dist = vec![f64::INFINITY; hh * ww];
     let mut heap: BinaryHeap<AItem> = BinaryHeap::new();
@@ -1298,7 +1313,7 @@ pub fn caravan_provision(
         if g > dist[y * ww + x] {
             continue;
         }
-        if g >= CARAVAN_BUDGET {
+        if g >= budget {
             continue;
         }
         for (k, &(dy, dx)) in N8.iter().enumerate() {
@@ -1312,7 +1327,7 @@ pub fn caravan_provision(
             }
             let step = DIST[k] * 0.5 * (grid.cost[[y, x]] + grid.cost[[ny, nx]]);
             let ng = g + step;
-            if ng < dist[ny * ww + nx] && ng < CARAVAN_BUDGET {
+            if ng < dist[ny * ww + nx] && ng < budget {
                 dist[ny * ww + nx] = ng;
                 heap.push(AItem(ng, 0.0, ny, nx));
             }
@@ -1325,7 +1340,7 @@ pub fn caravan_provision(
         if !d.is_finite() {
             0.0
         } else {
-            (1.0 - d / CARAVAN_BUDGET).clamp(0.0, 1.0) as f32
+            (1.0 - d / budget).clamp(0.0, 1.0) as f32
         }
     })
 }

@@ -1,6 +1,6 @@
 //! World orchestration — port of world.py: generation pipeline + simulation.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use ndarray::Array2;
 use rand::Rng;
@@ -25,7 +25,7 @@ use crate::naming::{self, Feature};
 use crate::noisegen::Perlin3;
 use crate::patina::{self, Ruin};
 use crate::politics::{self, Politics};
-use crate::resources::{self, Deposit};
+use crate::resources::{self, Deposit, Good};
 use crate::settlements::{self, Settlement};
 use crate::snapshot::SentCache;
 use crate::state::{Chronicle, Economy, Fields, Peoples};
@@ -1640,6 +1640,18 @@ impl World {
     /// pub since M55: diagnostics weigh the desert against the pull that
     /// would draw a colony into it.
     pub fn resource_pull(&self) -> Array2<f64> {
+        self.resource_pull_for(&Default::default())
+    }
+
+    /// M58 — the same pull, heard by a particular crown. `claim` is the
+    /// realm's per-good claim pressure (`economy::claim_pressure`): the
+    /// weight of workshops it could run and cannot, for want of that ore.
+    /// A deprived crown hears a known seam of the metal it lacks louder
+    /// than a rich neighbour does — and, because the pressure also lifts
+    /// the local cap, a single strategic seam can out-call a whole
+    /// district of ordinary ones. No site score is touched: it is the
+    /// *seam* that gains a voice, not the ground around it.
+    pub fn resource_pull_for(&self, claim: &BTreeMap<Good, f64>) -> Array2<f64> {
         let (h, w) = self.site_score.dim();
         let mut pull = Array2::<f64>::zeros((h, w));
         const R: i64 = 5;
@@ -1653,7 +1665,6 @@ impl World {
             // Grapes and dyes lie in comfortable country and wait for
             // ordinary settlement to reach them.
             {
-                use crate::resources::Good;
                 if !(d.r.is_mineral() || d.r == Good::Furs || d.r == Good::Spices) {
                     continue;
                 }
@@ -1668,7 +1679,12 @@ impl World {
                 continue;
             }
             // far ore must out-pull farmland or nobody ever leaves the plough
-            let worth = self.economy.market.price(d.r) * d.rich * 2.2;
+            // M58 — the crown's own hunger multiplies what this seam is
+            // worth to *it*: an iron realm with dark forges bids for iron.
+            let press = claim.get(&d.r).copied().unwrap_or(0.0).max(0.0);
+            let voice = 1.0 + economy::CLAIM_GAIN * press;
+            let worth = self.economy.market.price(d.r) * d.rich * 2.2 * voice;
+            let cap = 7.0 * voice;
             for yy in (d.y - R).max(0)..=(d.y + R).min(h as i64 - 1) {
                 for xx in (d.x - R).max(0)..=(d.x + R).min(w as i64 - 1) {
                     if self.fields.height[[yy as usize, xx as usize]] < 0.0 {
@@ -1680,7 +1696,7 @@ impl World {
                     }
                     let v = worth * (1.0 - dist / (R as f64 + 1.0));
                     let c = &mut pull[[yy as usize, xx as usize]];
-                    *c = (*c + v).min(7.0);
+                    *c = (*c + v).min(cap);
                 }
             }
         }
@@ -1702,6 +1718,16 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
     ///
     /// pub since M56: diagnostics read the same field the siting does.
     pub fn caravan_provision(&self) -> Array2<f32> {
+        self.caravan_provision_claim(0.0)
+    }
+
+    /// M58 — the provisioning field a crown under claim pressure can
+    /// afford. `press` is the strongest claim that crown is pressing;
+    /// the state's purse buys lane length (`CLAIM_REACH_GAIN`), which is
+    /// how strategic ground far past ordinary trade got victualled.
+    pub fn caravan_provision_claim(&self, press: f64) -> Array2<f32> {
+        let budget = trade::CARAVAN_BUDGET
+            * (1.0 + economy::CLAIM_REACH_GAIN * press.max(0.0));
         let markets: Vec<(usize, usize)> = self
             .peoples
             .settlements
@@ -1712,14 +1738,44 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             })
             .map(|s| (s.y as usize, s.x as usize))
             .collect();
-        trade::caravan_provision(&self.trade, &markets, self.site_score.dim())
+        trade::caravan_provision_budget(&self.trade, &markets, self.site_score.dim(), budget)
+    }
+
+    /// M58 — the claim pressures every crown is currently pressing.
+    /// pub so diagnostics read exactly the map colonisation reads.
+    pub fn claim_pressure(&self) -> BTreeMap<(RealmId, Good), f64> {
+        economy::claim_pressure(
+            &self.peoples.settlements,
+            &self.peoples.societies,
+            &self.economy.areas,
+        )
+    }
+
+    /// M58 — one realm's slice of the claim map, plus its strongest press.
+    pub fn realm_claim(
+        claims: &BTreeMap<(RealmId, Good), f64>,
+        realm: RealmId,
+    ) -> (BTreeMap<Good, f64>, f64) {
+        let mut per: BTreeMap<Good, f64> = BTreeMap::new();
+        let mut top = 0.0f64;
+        for (&(r, g), &v) in claims.iter() {
+            if r == realm {
+                per.insert(g, v);
+                top = top.max(v);
+            }
+        }
+        (per, top)
     }
 
     pub(crate) fn try_colonize(&mut self, month_abs: i64) -> (Vec<Event>, bool) {
         let mut events = Vec::new();
         let mut founded = false;
-        let mut pull: Option<Array2<f64>> = None;
-        let mut provision: Option<Array2<f32>> = None;
+        // M58 — the crowns' claim pressures, computed once per colonising
+        // tick, and the per-realm pull/provision fields they imply. A
+        // realm that can smelt a metal but owns no seam of it hears the
+        // known distant seams louder and pays for a longer lane to them.
+        let mut claims: Option<BTreeMap<(RealmId, Good), f64>> = None;
+        let mut realm_fields: BTreeMap<RealmId, (Array2<f64>, Array2<f32>)> = BTreeMap::new();
         let initial = self.peoples.settlements.len();
         let mods_v: Vec<society::Mods> =
             self.peoples.societies.iter().map(society::mods_for).collect();
@@ -1755,16 +1811,22 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             if self.rng.gen::<f64>() > 0.02 {
                 continue;
             }
-            if pull.is_none() {
-                pull = Some(self.resource_pull());
+            if claims.is_none() {
+                claims = Some(self.claim_pressure());
             }
-            // M56 — the caravan field: which dry ground a victualling
-            // train out of a watered market can still reach. Computed
-            // once per colonizing tick from the standing towns, like
-            // the market's pull above.
-            if provision.is_none() {
-                provision = Some(self.caravan_provision());
+            let prealm = self.peoples.settlements[pi].realm;
+            if !realm_fields.contains_key(&prealm) {
+                let (per, top) =
+                    Self::realm_claim(claims.as_ref().unwrap(), prealm);
+                // M56 — the caravan field: which dry ground a victualling
+                // train out of a watered market can still reach; M58 sets
+                // its purse from this crown's own hunger.
+                let f = (self.resource_pull_for(&per), self.caravan_provision_claim(top));
+                realm_fields.insert(prealm, f);
             }
+            let (pull_r, prov_r) = realm_fields.get(&prealm).unwrap();
+            let pull_r = pull_r.clone();
+            let prov_r = prov_r.clone();
             let site = {
                 let parent = self.peoples.settlements[pi].clone();
                 let range = self
@@ -1784,11 +1846,11 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                     aquifer: &self.fields.aquifer,
                     dry_site_score: &self.dry_site_score,
                     well_reach_m: reach,
-                    provision: provision.as_ref().unwrap(),
+                    provision: &prov_r,
                 };
                 settlements::colony_site(
                     &self.site_score,
-                    pull.as_ref().unwrap(),
+                    &pull_r,
                     &self.peoples.settlements,
                     &parent,
                     3600.0 * range * range,
@@ -1797,7 +1859,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             };
             let Some((y, x)) = site else { continue };
             // an ore-led venture: the seams called louder than the soil
-            let ore_led = pull.as_ref().unwrap()[[y, x]] > self.site_score[[y, x]].max(0.0);
+            let ore_led = pull_r[[y, x]] > self.site_score[[y, x]].max(0.0);
             // past the soft cap only miners still sail
             if self.peoples.settlements.len() >= self.max_settlements && !ore_led {
                 continue;
