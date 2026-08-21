@@ -6098,7 +6098,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
             match name {
                 "biomes" => &w.fields.biomes, "crops" => &w.fields.crops,
                 "strahler" => &w.fields.strahler, "flags" => &w.fields.flags,
-                "rock" => &w.fields.rock,
+                "rock" => &w.fields.rock, "soil" => &w.fields.soil,
                 other => unreachable!("unknown u8 field {other}"),
             }
         };
