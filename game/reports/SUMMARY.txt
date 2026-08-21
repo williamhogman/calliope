@@ -1,10 +1,10 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-21 18:16 UTC
+mode: full · size: 512 · generated: 2026-08-21 18:22 UTC
 
-totals: 761 pass · 21 warn · 3 fail
+totals: 762 pass · 21 warn · 2 fail
 
 -- assay.txt
-[FAIL] property lane broken                              (M15: a law found its counterexample — read above)
+   all checks pass
 
 -- bench.txt
 [WARN] median tick payload                          7873 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
