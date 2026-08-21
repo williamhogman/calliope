@@ -450,6 +450,206 @@ pub fn hydrology(
     }
 }
 
+// ------------------------------------------------------- M54 aquifers
+
+/// M54 — the water table beneath the map.
+///
+/// Rain that neither runs off nor evaporates soaks in, and the ground
+/// carries it sideways toward whatever the land has already opened: a
+/// river, a lake, the sea. The steady state of that slow sideways
+/// travel is Darcy's law with a recharge source,
+///
+/// ```text
+///     ∇·(K ∇h) + R = 0
+/// ```
+///
+/// solved here for hydraulic head `h` (metres above sea level) on the
+/// same grid the rivers were routed over. `K` is the rock province's
+/// conductivity (M18), `R` the share of the year's rain that infiltrates,
+/// and the boundary conditions are the surface waters themselves —
+/// where a river, a lake or the ocean already stands, the table is *at*
+/// that water and cannot rise past it. Everywhere else the head is free,
+/// clamped only by the ground above it (a table cannot daylight where no
+/// spring was drawn) and by a regional floor far below.
+///
+/// The output grid is **depth to water**: `surface − head`, in metres.
+/// Zero on open water and where the table reaches the surface; deep
+/// under dry uplands of permeable rock.
+///
+/// Frozen at genesis like every other physical field (ADR-0005), CRC-
+/// stable, and hashed.
+
+/// Relative hydraulic conductivity by rock province (M18). Crystalline
+/// shield rock passes water only through its fractures; a sedimentary
+/// basin is the classic aquifer; folded strata sit between; young
+/// volcanics are cracked and thirsty but shallow-bedded.
+pub fn conductivity(province: u8) -> f64 {
+    match province {
+        crate::rock::SHIELD => 0.10,
+        crate::rock::BASIN => 1.00,
+        crate::rock::FOLD_BELT => 0.32,
+        crate::rock::VOLCANIC => 0.55,
+        _ => 0.50,
+    }
+}
+
+/// Share of the year's rain that reaches the table rather than running
+/// off or returning to the sky — modulated by the same rock.
+fn infiltration(province: u8) -> f64 {
+    match province {
+        crate::rock::SHIELD => 0.06,
+        crate::rock::BASIN => 0.20,
+        crate::rock::FOLD_BELT => 0.11,
+        crate::rock::VOLCANIC => 0.16,
+        _ => 0.12,
+    }
+}
+
+/// The regional floor: no cell reports a table deeper than this. Below
+/// it the rock is dry enough that "how deep" stops meaning anything a
+/// well could act on.
+pub const AQUIFER_FLOOR_M: f64 = 150.0;
+
+/// Metres of head the unit recharge buys against unit conductivity —
+/// the one dial that sets how high the table mounds between drains.
+const AQUIFER_MOUND: f64 = 60.0;
+
+/// Subgrid drainage: at 4 km cells the routed river network is only the
+/// trunk of the real drainage. Every valley that gathers even a little
+/// flow carries an unmapped stream, and that stream drains the table
+/// beside it. Cells above this accumulation are treated as drains —
+/// pinned to their own surface — so the table is a *subdued replica* of
+/// the terrain rather than a single dome under the whole upland.
+pub const SUBGRID_DRAIN_Q: f64 = 6.0;
+
+/// Successive over-relaxation factor and sweep counts, coarse to fine.
+const AQ_OMEGA: f64 = 1.82;
+const AQ_SWEEPS: [usize; 3] = [90, 34, 12];
+
+/// Solve the steady-state water table; returns depth to water in metres.
+pub fn water_table(
+    height: &Array2<f64>,
+    water: &Array2<bool>,
+    rivers: &Array2<bool>,
+    lakes: &Array2<bool>,
+    discharge: &Array2<f64>,
+    precip: &Array2<f64>,
+    rock: &Array2<u8>,
+) -> Array2<f32> {
+    let (rows, cols) = height.dim();
+    let m_per_unit = crate::constants::METRES_PER_UNIT;
+
+    // Per-cell surface, conductivity, recharge and pinning.
+    let mut surf = Array2::<f64>::zeros((rows, cols));
+    let mut k = Array2::<f64>::zeros((rows, cols));
+    let mut rech = Array2::<f64>::zeros((rows, cols));
+    let mut pinned = Array2::<bool>::from_elem((rows, cols), false);
+    for y in 0..rows {
+        for x in 0..cols {
+            let s = height[[y, x]] * m_per_unit;
+            surf[[y, x]] = s;
+            let p = rock[[y, x]];
+            k[[y, x]] = conductivity(p);
+            // mm/yr -> m/yr, times the province's infiltration share
+            rech[[y, x]] = (precip[[y, x]].max(0.0) / 1000.0) * infiltration(p);
+            pinned[[y, x]] = water[[y, x]]
+                || rivers[[y, x]]
+                || lakes[[y, x]]
+                || discharge[[y, x]] >= SUBGRID_DRAIN_Q;
+        }
+    }
+
+    // Head starts at the drains and relaxes upward. Ocean pins at sea
+    // level (0 m); fresh water pins at its own surface.
+    let mut head = Array2::<f64>::zeros((rows, cols));
+    for y in 0..rows {
+        for x in 0..cols {
+            head[[y, x]] = if water[[y, x]] {
+                0.0
+            } else if pinned[[y, x]] {
+                surf[[y, x]]
+            } else {
+                (surf[[y, x]] - AQUIFER_FLOOR_M).max(0.0)
+            };
+        }
+    }
+
+    // Coarse-to-fine: the table is a long-wavelength surface, so the
+    // low frequencies are settled on a cheap grid first and the fine
+    // sweeps only clean up the detail. Deterministic: fixed sweep
+    // counts, fixed scan order, no convergence test on wall clock.
+    for (level, &sweeps) in AQ_SWEEPS.iter().enumerate() {
+        let step = 1usize << (AQ_SWEEPS.len() - 1 - level); // 4, 2, 1
+        for _ in 0..sweeps {
+            sor_sweep(&mut head, &surf, &k, &rech, &pinned, step);
+        }
+    }
+
+    // Depth to water, clamped to the reportable window.
+    let mut depth = Array2::<f32>::zeros((rows, cols));
+    for y in 0..rows {
+        for x in 0..cols {
+            depth[[y, x]] = if water[[y, x]] {
+                0.0
+            } else {
+                ((surf[[y, x]] - head[[y, x]]).clamp(0.0, AQUIFER_FLOOR_M)) as f32
+            };
+        }
+    }
+    depth
+}
+
+/// One over-relaxed Gauss-Seidel sweep of ∇·(K∇h) + R = 0 over the
+/// sub-lattice of stride `step`, in fixed scan order.
+fn sor_sweep(
+    head: &mut Array2<f64>,
+    surf: &Array2<f64>,
+    k: &Array2<f64>,
+    rech: &Array2<f64>,
+    pinned: &Array2<bool>,
+    step: usize,
+) {
+    let (rows, cols) = head.dim();
+    let h2 = (step * step) as f64;
+    let mut y = 0usize;
+    while y < rows {
+        let mut x = 0usize;
+        while x < cols {
+            if pinned[[y, x]] {
+                x += step;
+                continue;
+            }
+            let kc = k[[y, x]];
+            let mut num = 0.0;
+            let mut den = 0.0;
+            for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                let ny = y as isize + dy * step as isize;
+                let nx = x as isize + dx * step as isize;
+                if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
+                    continue;
+                }
+                let (ny, nx) = (ny as usize, nx as usize);
+                let kn = k[[ny, nx]];
+                // harmonic mean: the tighter rock throttles the face
+                let t = if kc + kn > 0.0 { 2.0 * kc * kn / (kc + kn) } else { 0.0 };
+                num += t * head[[ny, nx]];
+                den += t;
+            }
+            if den <= 0.0 {
+                x += step;
+                continue;
+            }
+            let target = (num + AQUIFER_MOUND * rech[[y, x]] * h2) / den;
+            let relaxed = head[[y, x]] + AQ_OMEGA * (target - head[[y, x]]);
+            head[[y, x]] = relaxed
+                .min(surf[[y, x]])
+                .max(surf[[y, x]] - AQUIFER_FLOOR_M);
+            x += step;
+        }
+        y += step;
+    }
+}
+
 // ---------------------------------------------------------------- bands
 
 use crate::util::Band;
@@ -461,5 +661,6 @@ pub const BANDS: &[Band] = &[
     Band { name: "river systems", sweet: (8.0, 400.0), hard: (3.0, 2000.0), target: "sweet 8–400 · hard 3–2000" },
     Band { name: "strahler top order", sweet: (4.0, 9.0), hard: (3.0, 12.0), target: "sweet 4–9 · hard 3–12" },
     Band { name: "river seasonal swing", sweet: (0.05, 0.50), hard: (0.01, 0.90), target: "mean |amp| · sweet .05–.50 · hard .01–.90" },
+    Band { name: "aquifer median depth m", sweet: (4.0, 60.0), hard: (1.0, 120.0), target: "M54: median depth to water on unpinned land · sweet 4–60 m · hard 1–120" },
     Band { name: "glacier-fed river share %", sweet: (0.5, 15.0), hard: (0.05, 40.0), target: "sweet 0.5–15 · hard 0.05–40 (M35: % of river cells carrying ≥25% accumulated melt — the ice keeps its rivers; measured 1.3–1.5 on three seeds)" },
 ];
