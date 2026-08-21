@@ -5013,8 +5013,22 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // The lever itself: a claimed seam must call louder to the crown
         // that lacks it than to one that does not. Measured on the same
         // pull field colonisation reads.
-        if let Some((&(realm, good), &press)) = claims.iter().max_by(|a, b| a.1.total_cmp(b.1)) {
-            let base = w.resource_pull_for(&Default::default());
+        // The strongest claim whose ore still has an unworked seam to
+        // call from: a crown can want iron most of all and every iron
+        // seam in the world already sit inside somebody's work radius,
+        // in which case the lever has nothing to act on and measuring it
+        // there proves nothing either way.
+        let base_all = w.resource_pull_for(&Default::default());
+        let free_seam = |g: calliope::resources::Good| -> bool {
+            w.deposits.iter().any(|d| {
+                d.r == g && d.live() && base_all[[d.y as usize, d.x as usize]] > 0.0
+            })
+        };
+        let mut ranked: Vec<(&(RealmId, Good), &f64)> = claims.iter().collect();
+        ranked.sort_by(|a, b| b.1.total_cmp(a.1));
+        let pick = ranked.into_iter().find(|(&(_, g), _)| free_seam(g));
+        if let Some((&(realm, good), &press)) = pick {
+            let base = base_all.clone();
             let (per, top) = calliope::world::World::realm_claim(&claims, realm);
             let heard = w.resource_pull_for(&per);
             // Measure the lever where it acts: on the ground over known
@@ -5052,7 +5066,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 "a claim makes its seam call louder",
                 false,
                 "no standing claims".into(),
-                "M58: no crown in this world is short of a feedstock it can smelt — the lever is unexercised here",
+                "M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world",
             );
         }
     }
