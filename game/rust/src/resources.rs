@@ -827,11 +827,15 @@ pub struct Flows {
     pub extracted: Vec<f64>,
     /// Net movement of each renewable ground's `stock` (regrowth − harvest).
     pub dstock: Vec<f64>,
+    /// M57 — the month each seam came to light, −1 while still hidden.
+    /// Pure bookkeeping: never packed, never hashed, read by the outcrop
+    /// gate, which asks *when* ground gave up its ore, not merely whether.
+    pub found_m: Vec<i32>,
 }
 
 impl Flows {
     pub fn for_deposits(n: usize) -> Flows {
-        Flows { extracted: vec![0.0; n], dstock: vec![0.0; n] }
+        Flows { extracted: vec![0.0; n], dstock: vec![0.0; n], found_m: vec![-1; n] }
     }
 }
 
