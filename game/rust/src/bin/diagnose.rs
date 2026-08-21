@@ -3107,6 +3107,47 @@ fn cmd_hydro(seed: i64, size: usize) {
             }
         }
     }
+    // Height above the local drainage floor: the terrain variable the
+    // Darcy solve actually answers to. The subgrid drains sit on the
+    // valley floors, so a cell's lift above the lowest ground within
+    // ~28 km is the head the table has to climb.
+    let mut hand: Vec<(f64, f64)> = Vec::new();
+    let mut strat: Vec<(f64, f64)> = Vec::new();
+    {
+        let rad = 3isize;
+        for y in 0..rr {
+            for x in 0..cc {
+                if !land[[y, x]] {
+                    continue;
+                }
+                let f = w.fields.flags[[y, x]];
+                if f & (CellFlags::RIVER.bits() | CellFlags::LAKE.bits()) != 0 {
+                    continue;
+                }
+                let mut lo = f64::INFINITY;
+                for dy in -rad..=rad {
+                    for dx in -rad..=rad {
+                        let ny = y as isize + dy;
+                        let nx = x as isize + dx;
+                        if ny < 0 || nx < 0 || ny >= rr as isize || nx >= cc as isize {
+                            continue;
+                        }
+                        lo = lo.min(w.fields.height[[ny as usize, nx as usize]] as f64);
+                    }
+                }
+                let elev = w.fields.height[[y, x]] as f64 * calliope::constants::METRES_PER_UNIT;
+                let lift = elev - lo * calliope::constants::METRES_PER_UNIT;
+                let d = w.fields.aquifer[[y, x]] as f64;
+                hand.push((lift, d));
+                let p = w.fields.precip[[y, x]] as f64;
+                if (400.0..900.0).contains(&p) {
+                    strat.push((elev, d));
+                }
+            }
+        }
+    }
+    let rho_hand = spearman(&hand);
+    let rho_strat = spearman(&strat);
     let depths: Vec<f64> = free.iter().map(|p| p.1).collect();
     let med_depth = if depths.is_empty() { 0.0 } else { quantile(&depths, 0.5) };
     let rho_elev = spearman(&free);
@@ -3134,7 +3175,10 @@ fn cmd_hydro(seed: i64, size: usize) {
         m_wet,
         wet.len()
     );
-    println!("  spearman(surface elevation, depth to water) = {:.2}", rho_elev);
+    println!(
+        "  spearman: vs lift above local valley floor {:.2} · vs raw elevation {:.2} · vs elevation at 400-900mm {:.2} ({} cells)",
+        rho_hand, rho_elev, rho_strat, strat.len()
+    );
 
     let hashed = calliope::pack::FIELD_SPECS
         .iter()
