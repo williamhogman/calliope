@@ -6,16 +6,16 @@ expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
       seed   land  river   mntn  entrp   coast  lmbig  towns  spacing
      12345  0.349  0.031  0.138  2.108    8.75  0.515     11   167.8km
      20264  0.338  0.026  0.114  2.061    9.07  0.988     12   114.0km
-     28183  0.351  0.031  0.097  2.079    8.54  0.499     14   132.9km
+     28183  0.351  0.031  0.097  2.079    8.54  0.499     13   137.6km
      36102  0.356  0.029  0.109  2.082    9.18  0.490     13   155.4km
-     44021  0.355  0.028  0.136  2.085    9.48  0.497     11   165.8km
+     44021  0.355  0.028  0.136  2.085    9.48  0.497     10   177.1km
      51940  0.363  0.034  0.097  2.087    8.67  0.493     10   141.6km
      59859  0.364  0.031  0.176  2.127    9.27  0.504     10   165.2km
-     67778  0.356  0.028  0.195  2.123    8.37  0.519     11   155.6km
-     75697  0.326  0.029  0.098  2.024    9.21  0.514     12   148.5km
-     83616  0.336  0.030  0.063  2.071    9.67  0.498     11   141.9km
+     67778  0.356  0.028  0.195  2.123    8.37  0.519     12   145.2km
+     75697  0.326  0.029  0.098  2.024    9.21  0.514     11   138.6km
+     83616  0.336  0.030  0.063  2.071    9.67  0.498     10   161.3km
      91535  0.347  0.027  0.143  2.093    8.91  0.509     12   107.2km
-     99454  0.365  0.033  0.136  2.109    8.80  0.506     12   137.6km
+     99454  0.365  0.033  0.136  2.109    8.80  0.506     10   149.0km
     107373  0.343  0.029  0.085  2.082    8.69  0.516     12   123.8km
     115292  0.326  0.027  0.095  2.069    8.51  0.519     11   130.1km
     123211  0.364  0.030  0.153  2.093    9.31  0.500     10   144.7km
@@ -43,16 +43,16 @@ expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
     |      ·                 |
     occupied cells: 14
 
-  ERA 3 · the human layer — x: settlements [9.000 … 14.000] · y: NN spacing km [107.176 … 167.819]
-    |     ·   :              |
-    |         ·        ·     |
-    |·             ·         |
-    |     :   ·    ·         |
-    |         ·             ·|
-    |              ·         |
-    |              ·         |
-    |              ·         |
-    occupied cells: 14
+  ERA 3 · the human layer — x: settlements [9.000 … 13.000] · y: NN spacing km [107.176 … 177.088]
+    |      ·                 |
+    |      ·     ·           |
+    |·     ·                ·|
+    |      :          ·      |
+    |      ·     ·          ·|
+    |            ·    ·      |
+    |                 ·      |
+    |                 ·      |
+    occupied cells: 15
 
   ERA 4 · the shape of coasts — x: coast complexity [7.997 … 9.669] · y: largest landmass [0.490 … 0.988]
     |               ·        |
@@ -65,14 +65,14 @@ expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
     |·    · : :·· ·  ··: ·  ·|
     occupied cells: 13
 
-  oatmeal: min 0.0076 (seeds 28183 vs 51940) · mean 0.0690 · max 0.2761 · min/mean 0.110
+  oatmeal: min 0.0055 (seeds 28183 vs 51940) · mean 0.0718 · max 0.2761 · min/mean 0.077
 
 
 ---- checks ----------------------------------------------------------
 [PASS] land share varies                            Δ0.040   (M8.3: the range is a range)
 [PASS] relief varies                                Δ0.132   (M8.3: not one mountain recipe)
-[PASS] towns vary                                       Δ5   (M8.3: history diverges)
-[PASS] ERA occupancy / seed                           0.89   (M8.3: seeds spread across the plates)
-[PASS] oatmeal min/mean ratio                        0.110   (M8.4: no two worlds are the same bowl)
-[PASS] oatmeal mean distance                        0.0690   (M8.4: the family resembles, never repeats)
+[PASS] towns vary                                       Δ4   (M8.3: history diverges)
+[PASS] ERA occupancy / seed                           0.91   (M8.3: seeds spread across the plates)
+[PASS] oatmeal min/mean ratio                        0.077   (M8.4: no two worlds are the same bowl)
+[PASS] oatmeal mean distance                        0.0718   (M8.4: the family resembles, never repeats)
 CHECKS: 6 pass · 0 warn · 0 fail

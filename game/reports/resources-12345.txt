@@ -58,6 +58,28 @@ M52 delivery upgrade · shipped soil vs the profile it buried:
 fluvisol       5332 farmable cells · x1.24 · buried: podzol 488 · cambisol 1892 · chernozem 304 · laterite 738 · andosol 332 · gley 400 · aridisol 1178
 loess          9221 farmable cells · x1.48 · buried: podzol 1696 · cambisol 951 · chernozem 340 · andosol 674 · gley 141 · aridisol 5419
 
+M53 crop packages against the ground they stand on:
+package       cells   drainage    depth m
+wheat         19710      0.651       1.24
+rice           2042      0.617       1.94
+maize          9242      0.653       1.38
+pastoral      41014      0.645       0.77
+wildland      40392      0.804       0.42
+mean drainage under wheat 0.651 · under rice 0.617
+
+order          edaphic     farmed     cells
+lithosol         0.098       1.8%     28850
+podzol           0.626       5.3%      8857
+cambisol         1.000      79.0%     17356
+chernozem        1.129      82.7%      2257
+laterite         0.822      62.9%      4593
+andosol          1.068      83.4%      4537
+gley             0.828      14.7%      2354
+aridisol         0.325       2.3%     28016
+fluvisol         0.912      65.0%      6070
+loess            1.186      29.4%      9510
+edaphic-vs-farmed rank correlation over 10 orders: ρ = 0.78
+
 ---- checks ----------------------------------------------------------
 [PASS] deposits per 1000 land cells                   1.52   (sweet 1–6 · hard 0.5–12)
 [PASS] mineral hidden share at dawn                  76.7%   (sweet 45–85% — leave an age of prospectors)
@@ -85,7 +107,10 @@ loess          9221 farmable cells · x1.48 · buried: podzol 1696 · cambisol 9
 [PASS] loess order present                      9510 cells   (M52: every world has a floodplain and a dust belt)
 [PASS] alluvium upgrade                     x1.24 over the buried profile on 5332 farmable cells   (M52: silt must out-farm the profile the river buried)
 [PASS] loess upgrade                        x1.48 over the buried profile on 9221 farmable cells   (M52: the dust must out-farm the profile it blanketed)
+[PASS] paddy wet-soil enrichment            rice takes 19.8% of grain on wet profiles (4295 cells) vs 6.6% everywhere — x3.01   (M53: rice takes the wet ground wheat refuses)
+[PASS] grain does not root in rock          529 of 30994 grain cells on <0.35 m profiles   (M53: the depth term must close the skeletal soils to the plough)
+[PASS] crop soil suitability correlation    ρ 0.78 over 10 orders   (M53: the edaphic table must predict what gets farmed)
 [PASS] every land cell carries a soil order 0 bare of 112400 land cells   (M51: the classifier is total over land — no cell falls through the ladder)
 [PASS] chernozem confined to its climate window 2257 of 2257 in window · 2257 under grass/woodland (100.0%)   (M51 gate: black earth only where humus outlasts the summer and rain never flushes the profile)
 [PASS] andosol sits on volcanic parent rock 4537 of 4537 on volcanic province   (M51: ash soils cannot exist off the ash)
-CHECKS: 28 pass · 1 warn · 0 fail
+CHECKS: 31 pass · 1 warn · 0 fail

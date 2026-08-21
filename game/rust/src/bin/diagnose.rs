@@ -3440,6 +3440,142 @@ fn cmd_resources(seed: i64, size: usize) {
             }
         }
 
+        // ---- M53 — the crop tables re-based on the orders ----------
+        // The claim: the ground now decides *which* package wins, not
+        // just how much it yields. Three readings, all against the same
+        // shipped `soil_suitability` table the classifier plants by.
+        {
+            use calliope::agriculture::{soil_suitability, CropPackage};
+            let mut drain_sum = [0.0f64; 5];
+            let mut depth_sum = [0.0f64; 5];
+            let mut crop_n = [0usize; 5];
+            let mut shallow_grain = 0usize;   // grain rooted in <0.35 m profile
+            let mut grain = 0usize;
+            // per-order: how much of it is farmed at all
+            let mut order_farm = [0usize; 11];
+            for y in 0..h {
+                for x in 0..wd {
+                    if !land[[y, x]] {
+                        continue;
+                    }
+                    let o = SoilOrder::from_code(w.fields.soil[[y, x]]);
+                    if o == SoilOrder::None {
+                        continue;
+                    }
+                    let cp = w.fields.crops[[y, x]] as usize;
+                    crop_n[cp] += 1;
+                    drain_sum[cp] += o.drainage();
+                    depth_sum[cp] += o.depth();
+                    if (1..=3).contains(&cp) {
+                        grain += 1;
+                        order_farm[o.code() as usize] += 1;
+                        if o.depth() < 0.35 {
+                            shallow_grain += 1;
+                        }
+                    }
+                }
+            }
+            println!();
+            println!("M53 crop packages against the ground they stand on:");
+            println!("{:<10} {:>8} {:>10} {:>10}", "package", "cells", "drainage", "depth m");
+            for cp in [
+                CropPackage::Wheat,
+                CropPackage::Rice,
+                CropPackage::Maize,
+                CropPackage::Pastoral,
+                CropPackage::Wildland,
+            ] {
+                let i = cp.code() as usize;
+                let n = crop_n[i].max(1) as f64;
+                println!(
+                    "{:<10} {:>8} {:>10.3} {:>10.2}",
+                    cp.name(), crop_n[i], drain_sum[i] / n, depth_sum[i] / n
+                );
+            }
+            let rice_dr = drain_sum[2] / crop_n[2].max(1) as f64;
+            let wheat_dr = drain_sum[1] / crop_n[1].max(1) as f64;
+            println!(
+                "mean drainage under wheat {:.3} · under rice {:.3}",
+                wheat_dr, rice_dr
+            );
+            // The paddy claim is conditional, not absolute: rice is a hot
+            // crop, so most of it stands wherever the tropics allow and
+            // the mean drainage under it is dominated by climate. What the
+            // drainage curve must do is decide the *contested* cells —
+            // where two packages are climatically possible, the wet
+            // profile must go to rice. Measured as enrichment: rice's
+            // share of grain on poorly drained orders against its share
+            // of grain everywhere.
+            let mut wet_grain = 0usize;
+            let mut wet_rice = 0usize;
+            for y in 0..h {
+                for x in 0..wd {
+                    let o = SoilOrder::from_code(w.fields.soil[[y, x]]);
+                    let cp = w.fields.crops[[y, x]] as usize;
+                    if o == SoilOrder::None || !(1..=3).contains(&cp) || o.drainage() >= 0.5 {
+                        continue;
+                    }
+                    wet_grain += 1;
+                    if cp == CropPackage::Rice.code() as usize {
+                        wet_rice += 1;
+                    }
+                }
+            }
+            let base_rice = crop_n[2] as f64 / grain.max(1) as f64;
+            let wet_share = wet_rice as f64 / wet_grain.max(1) as f64;
+            let paddy = if base_rice > 0.0 { wet_share / base_rice } else { 0.0 };
+            c.band(
+                "paddy wet-soil enrichment",
+                paddy,
+                format!(
+                    "rice takes {} of grain on wet profiles ({} cells) vs {} everywhere — x{:.2}",
+                    pct(wet_share), wet_grain, pct(base_rice), paddy
+                ),
+            );
+
+            c.must(
+                "grain does not root in rock",
+                crop_n[2] == 0 || (shallow_grain as f64 / grain.max(1) as f64) < 0.02,
+                format!("{} of {} grain cells on <0.35 m profiles", shallow_grain, grain),
+                "M53: the depth term must close the skeletal soils to the plough",
+            );
+
+            // The ordering claim: an order's best edaphic score for the
+            // grain packages must predict how much of that order is
+            // actually farmed. Climate still dominates any single cell,
+            // so this is a rank test over the orders, not a fit.
+            let mut ranks: Vec<(f64, f64)> = Vec::new();
+            println!();
+            println!("{:<12} {:>9} {:>10} {:>9}", "order", "edaphic", "farmed", "cells");
+            for o in SoilOrder::iter() {
+                if o == SoilOrder::None {
+                    continue;
+                }
+                let i = o.code() as usize;
+                if count[i] < 200 {
+                    continue;
+                }
+                let ed = soil_suitability(o, CropPackage::Wheat)
+                    .max(soil_suitability(o, CropPackage::Rice))
+                    .max(soil_suitability(o, CropPackage::Maize));
+                let farmed = order_farm[i] as f64 / count[i] as f64;
+                println!("{:<12} {:>9.3} {:>10} {:>9}", o.name(), ed, pct(farmed), count[i]);
+                ranks.push((ed, farmed));
+            }
+            let rho = spearman(&ranks);
+            println!(
+                "edaphic-vs-farmed rank correlation over {} orders: ρ = {:.2}",
+                ranks.len(), rho
+            );
+            c.band(
+                "crop soil suitability correlation",
+                rho,
+                format!("ρ {:.2} over {} orders", rho, ranks.len()),
+            );
+        }
+
+
+
         c.must(
             "every land cell carries a soil order",
             bare == 0,

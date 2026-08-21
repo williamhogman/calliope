@@ -453,15 +453,89 @@ fn trap(p: f64, lo: f64, peak: f64, hi: f64) -> f64 {
     }
 }
 
+// ---- M53 — the crop tables re-based on the soil orders --------------
+// GAEZ (FAO/IIASA) scores a crop on a site by *multiplying* independent
+// suitability terms — thermal, moisture, and edaphic — rather than
+// averaging them: any factor at zero fails the site outright. M2.1 had
+// the first two. M51/M52 built the third and left it bypassed; M53
+// wires it in. The edaphic term is itself the product of three curves
+// the orders already declare:
+//
+//   * **nutrient supply** — the order's fertility curve, read directly.
+//   * **rooting depth** — each package needs a profile to root in, and
+//     a shallow one caps the yield rather than merely trimming it: a
+//     lithosol (0.15 m) cannot carry wheat, whatever the sky does.
+//   * **drainage** — the axis the orders exist to express. Paddy rice
+//     *wants* the water table in the root zone; wheat rots in it. This
+//     is the term that makes a gley valley floor rice country and the
+//     same climate on a podzol wheat country.
+
+/// Rooting depth (m) a package needs before depth stops limiting it.
+#[inline]
+const fn root_need(c: CropPackage) -> f64 {
+    match c {
+        CropPackage::Wildland => 0.10,
+        CropPackage::Wheat => 0.90,
+        CropPackage::Rice => 0.55,
+        CropPackage::Maize => 0.80,
+        CropPackage::Pastoral => 0.30,
+    }
+}
+
+/// Drainage optimum and tolerance for a package, on the order's own
+/// 0 (waterlogged) .. 1 (freely draining) scale.
+#[inline]
+const fn drain_pref(c: CropPackage) -> (f64, f64) {
+    match c {
+        CropPackage::Wildland => (0.55, 1.20),
+        // Bread wheat is the classic well-drained loam crop.
+        CropPackage::Wheat => (0.75, 0.34),
+        // Paddy: the field is deliberately flooded — poor drainage is
+        // the asset, and a freely draining slope is the failure case.
+        CropPackage::Rice => (0.25, 0.36),
+        CropPackage::Maize => (0.65, 0.38),
+        // Grass tolerates nearly anything; only rock defeats it.
+        CropPackage::Pastoral => (0.55, 0.70),
+    }
+}
+
+/// How hard the edaphic term is allowed to pull the climatic score.
+/// 1.0 would let the soil alone decide the package; the crops are still
+/// climate-first crops, so the term is blended toward unity.
+pub const EDAPHIC_GAIN: f64 = 0.75;
+
+/// The edaphic suitability of one soil order for one crop package —
+/// nutrient × depth × drainage, blended toward 1 by `EDAPHIC_GAIN`.
+/// Public because the M53 gate reads exactly this function: the check
+/// cannot drift from the table the world plants by.
+pub fn soil_suitability(order: SoilOrder, crop: CropPackage) -> f64 {
+    if order == SoilOrder::None {
+        return 0.0;
+    }
+    let nutrient = (0.45 + 0.55 * order.fertility()).min(1.35);
+    let (mu, sig) = drain_pref(crop);
+    let drain = gauss(order.drainage(), mu, sig);
+    // Nutrients and drainage *bend* the climatic score — a hungry or
+    // badly drained field still yields something. Depth does not: GAEZ's
+    // multiplicative logic is literal here, a profile too thin to root
+    // in is not a poor field but no field at all, so the depth term sits
+    // outside the blend and can take the score to zero on rock.
+    let depth = (order.depth() / root_need(crop)).clamp(0.0, 1.0);
+    depth * ((1.0 - EDAPHIC_GAIN) + EDAPHIC_GAIN * nutrient * drain)
+}
+
+
 /// Classify every cell into the crop package that wins it. Deterministic,
-/// pure function of climate + water adjacency; rivers and lakeshores count
-/// as irrigable floodplain (paddies and canal-fed fields ignore a dry sky).
+/// pure function of climate, water adjacency and the soil order beneath
+/// (M53); rivers and lakeshores count as irrigable floodplain (paddies
+/// and canal-fed fields ignore a dry sky).
 pub fn crop_packages(
     height: &Array2<f64>,
     tmean: &Array2<f64>,
     precip: &Array2<f64>,
     rivers: &Array2<bool>,
     lakes: &Array2<bool>,
+    soil: &Array2<u8>,
 ) -> Array2<u8> {
     let (rows, cols) = height.dim();
     let riv = ndimage::binary_dilation(rivers, 1);
@@ -472,6 +546,7 @@ pub fn crop_packages(
         }
         let t = tmean[[y, x]];
         let p = precip[[y, x]];
+        let order = SoilOrder::from_code(soil[[y, x]]);
         let irrigated = riv[[y, x]] || lak[[y, x]];
         // no growing season at all: the high ice and the deep tundra
         if t < 1.5 {
@@ -496,7 +571,13 @@ pub fn crop_packages(
             maize = 0.0;
             rice = 0.0;
         }
-        let pastoral = 0.32 * gauss(t, 12.0, 18.0) * trap(p, 110.0, 420.0, 1500.0);
+        let mut pastoral = 0.32 * gauss(t, 12.0, 18.0) * trap(p, 110.0, 420.0, 1500.0);
+        // M53 — the edaphic term. Multiplicative, per package, so the
+        // ground can move the winner and not merely the margin.
+        wheat *= soil_suitability(order, CropPackage::Wheat);
+        maize *= soil_suitability(order, CropPackage::Maize);
+        rice *= soil_suitability(order, CropPackage::Rice);
+        pastoral *= soil_suitability(order, CropPackage::Pastoral);
         let best = wheat.max(maize).max(rice).max(pastoral);
         if best < 0.07 {
             CropPackage::Wildland.code()
@@ -511,6 +592,7 @@ pub fn crop_packages(
         }
     })
 }
+
 
 // ---------------------------------------------------------------- bands
 
@@ -547,4 +629,11 @@ pub const BANDS: &[Band] = &[
     Band { name: "alluvium soil upgrade", sweet: (1.15, 3.0), hard: (1.05, 4.0), target: "M52: silt must out-farm the profile the river buried" },
     Band { name: "loess soil upgrade", sweet: (1.15, 3.0), hard: (1.05, 4.0), target: "M52: the dust must out-farm the profile it blanketed" },
     Band { name: "soil fertility rank correlation", sweet: (0.30, 1.0), hard: (0.10, 1.0), target: "M51: the order's curve must order the farms" },
+    // M53 — the crop tables read the ground. Two claims: paddies pick
+    // the wet profiles the drainage curve marks out (the gap is signed —
+    // wheat country must drain better than rice country), and the
+    // edaphic score of an order must predict how much of it is farmed.
+    Band { name: "paddy wet-soil enrichment", sweet: (1.30, 8.0), hard: (1.05, 15.0), target: "M53: rice takes the wet ground wheat refuses" },
+    Band { name: "crop soil suitability correlation", sweet: (0.30, 1.0), hard: (0.10, 1.0), target: "M53: the edaphic table must predict what gets farmed" },
+
 ];
