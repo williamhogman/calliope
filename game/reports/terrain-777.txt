@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 777 · 640x512
 ========================================================================
-world: "Halios" · generated in 1772 ms
+world: "Halios" · generated in 1778 ms
 land: 117290 cells of 327680 (35.8%) · 1876640 km²
 hypsometry (land h): p5 0.021 · p25 0.105 · p50 0.251 · p75 0.389 · p95 0.528 · max 0.687
 bathymetry (sea h): p5 -0.591 · p50 -0.392 · p95 -0.039
@@ -29,7 +29,7 @@ longshore drift (M44): spit cells 97 in 39 chains · barrier cells 4 in 4 chains
 
 glacial relief: u-cells alpine 3573 / sheet 3787 · cirques 225 (164 alpine) · hangs 122 · fjord cells 50
 glacial legacy: till 18183 cells (69.9% of iced lowland) · moraine 2472 · drumlins 45 · esker cells 172 · loess 31011 cells (26.4% of land)
-till dividend (observational): -0.0343 fertility over 13 matched lat×h bins
+till dividend (observational): -0.0590 fertility over 13 matched lat×h bins
 legacy counterfactual: 22367 of 49194 till+loess cells farmable · mean uplift +0.0539 there
 proglacial (M31): 5 lakes (1 refilled today) · 0 chains · 64 spillway cells · widths 4/1/0 · 0 of 59 steps ascend
 outwash (M32): 203 corridor + 726 apron cells · 144 of 4200 below-margin river cells braided (3.4%)

@@ -3225,8 +3225,12 @@ fn cmd_resources(seed: i64, size: usize) {
         use strum::IntoEnumIterator;
 
         let (h, wd) = w.fields.soil.dim();
-        let mut count = [0usize; 9];
-        let mut fert_sum = [0.0f64; 9];
+        let mut count = [0usize; 11];
+        let mut fert_sum = [0.0f64; 11];
+        // M52 — the decile test: the delivered orders must sit in the
+        // best tenth of the map's farmland, not merely above average.
+        let mut land_fert: Vec<f64> = Vec::new();
+        let mut order_of: Vec<(usize, f64)> = Vec::new();
         let mut bare = 0usize;          // land cells with no profile
         let mut cher = 0usize;
         let mut cher_climate = 0usize;  // chernozem inside its climate window
@@ -3250,7 +3254,10 @@ fn cmd_resources(seed: i64, size: usize) {
                     continue;
                 }
                 count[o] += 1;
-                fert_sum[o] += w.fields.fertility[[y, x]] as f64;
+                let fv = w.fields.fertility[[y, x]] as f64;
+                fert_sum[o] += fv;
+                land_fert.push(fv);
+                order_of.push((o, fv));
                 let t = w.fields.tmean[[y, x]] as f64;
                 let p = w.fields.precip[[y, x]] as f64;
                 let b = w.fields.biomes[[y, x]];
@@ -3308,6 +3315,130 @@ fn cmd_resources(seed: i64, size: usize) {
             ranks.len(), rho
         );
         c.band("soil fertility rank correlation", rho, format!("ρ {:.2} over {} orders", rho, ranks.len()));
+
+        // ---- M52 — alluvium and loess: the delivered orders ----
+        // A soil laid down by a river or the wind should not merely be
+        // "better than average": the claim is that these belts *are* the
+        // best farmland on the map. Measure the top fertility decile of
+        // all land, then the rate at which each order falls inside it.
+        // Baseline is 10% by construction, so the enrichment ratio is a
+        // pure multiple of chance.
+        {
+            let mut sorted = land_fert.clone();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let cut = if sorted.is_empty() {
+                0.0
+            } else {
+                sorted[((sorted.len() as f64 * 0.90) as usize).min(sorted.len() - 1)]
+            };
+            let mut top = [0usize; 11];
+            for (o, f) in &order_of {
+                if *f >= cut {
+                    top[*o] += 1;
+                }
+            }
+            let base = order_of.iter().filter(|(_, f)| *f >= cut).count() as f64
+                / order_of.len().max(1) as f64;
+            println!();
+            println!(
+                "M52 delivered soils · top-decile cut fert {:.3} (baseline {})",
+                cut, pct(base)
+            );
+            for o in [SoilOrder::Fluvisol, SoilOrder::Loess] {
+                let i = o.code() as usize;
+                let rate = top[i] as f64 / count[i].max(1) as f64;
+                let enrich = if base > 0.0 { rate / base } else { 0.0 };
+                println!(
+                    "{:<12} {:>8} cells · {:>6} in top decile ({}) · x{:.2}",
+                    o.name(), count[i], top[i], pct(rate), enrich
+                );
+                let label = if o == SoilOrder::Fluvisol { "alluvium" } else { "loess" };
+                if o == SoilOrder::Fluvisol {
+                    c.band_as(
+                        "alluvium enrichment",
+                        "alluvium top-decile enrichment",
+                        enrich,
+                        format!("{} of {} in top decile ({}) — x{:.2} chance", top[i], count[i], pct(rate), enrich),
+                    );
+                }
+                c.must(
+                    &format!("{} order present", label),
+                    count[i] > 0,
+                    format!("{} cells", count[i]),
+                    "M52: every world has a floodplain and a dust belt",
+                );
+            }
+
+            // The upgrade gate: rerun the classifier with the dust mantle
+            // and the flood swept off, then rerun the shipped fertility
+            // law under both soil planes. The ratio on each delivered
+            // order's own cells is what the delivery is worth — it reads
+            // whichever profile the ladder would have grown there
+            // (podzol on the cold dust, aridisol on a desert wadi), so it
+            // cannot be satisfied by the curve constant alone.
+            let h64 = w.fields.height.mapv(|v| v as f64);
+            let t64 = w.fields.tmean.mapv(|v| v as f64);
+            let p64 = w.fields.precip.mapv(|v| v as f64);
+            let q64 = w.fields.discharge.mapv(|v| v as f64);
+            let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
+            let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
+            let zerof: ndarray::Array2<f32> = ndarray::Array2::zeros((h, wd));
+            let zeroq: ndarray::Array2<f64> = ndarray::Array2::zeros((h, wd));
+            let buried_soil = calliope::agriculture::soil_genesis(
+                &h64, &t64, &p64, &w.fields.biomes, &w.fields.rock,
+                &rivers, &lakes, &zeroq, &w.ice.till, &zerof,
+            );
+            let f_now = calliope::agriculture::fertility(
+                &h64, &t64, &p64, &rivers, &lakes, &q64,
+                &w.ice.till, &w.ice.loess, &w.ice.outwash, &w.fields.soil,
+            );
+            let f_buried = calliope::agriculture::fertility(
+                &h64, &t64, &p64, &rivers, &lakes, &q64,
+                &w.ice.till, &w.ice.loess, &w.ice.outwash, &buried_soil,
+            );
+            println!();
+            println!("M52 delivery upgrade · shipped soil vs the profile it buried:");
+            for o in [SoilOrder::Fluvisol, SoilOrder::Loess] {
+                let code = o.code();
+                let (mut a, mut b, mut n) = (0.0f64, 0.0f64, 0usize);
+                let mut buried_mix = [0usize; 11];
+                for y in 0..h {
+                    for x in 0..wd {
+                        if w.fields.soil[[y, x]] != code {
+                            continue;
+                        }
+                        // the farmable footprint: averaging over ground
+                        // the climate has already closed dilutes the belt
+                        // where the farms actually stand.
+                        if f_now[[y, x]] < 0.05 && f_buried[[y, x]] < 0.05 {
+                            continue;
+                        }
+                        a += f_now[[y, x]];
+                        b += f_buried[[y, x]];
+                        buried_mix[buried_soil[[y, x]] as usize] += 1;
+                        n += 1;
+                    }
+                }
+                let up = if b > 0.0 { a / b } else { 0.0 };
+                let mut mix: Vec<String> = Vec::new();
+                for (i, cnt) in buried_mix.iter().enumerate() {
+                    if *cnt > 0 {
+                        mix.push(format!("{} {}", SoilOrder::from_code(i as u8).name(), cnt));
+                    }
+                }
+                let label = if o == SoilOrder::Fluvisol { "alluvium" } else { "loess" };
+                println!(
+                    "{:<12} {:>6} farmable cells · x{:.2} · buried: {}",
+                    o.name(), n, up, mix.join(" · ")
+                );
+                c.band_as(
+                    &format!("{} upgrade", label),
+                    &format!("{} soil upgrade", label),
+                    up,
+                    format!("x{:.2} over the buried profile on {} farmable cells", up, n),
+                );
+            }
+        }
 
         c.must(
             "every land cell carries a soil order",

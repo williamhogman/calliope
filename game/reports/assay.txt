@@ -1,3 +1,47 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · ASSAY                    M15 property proofs
 ========================================================================
+    Compiling rand_xorshift v0.4.0
+    Compiling rand v0.9.5
+    Compiling rand_pcg v0.3.1
+    Compiling ndarray v0.16.1
+    Compiling tempfile v3.27.0
+    Compiling rusty-fork v0.3.1
+    Compiling serde_derive v1.0.229
+    Compiling serde_repr v0.1.21
+    Compiling ppv-lite86 v0.2.21
+    Compiling wasm-bindgen-macro-support v0.2.127
+    Compiling rand_chacha v0.3.1
+    Compiling rand_chacha v0.9.0
+    Compiling strum_macros v0.26.4
+    Compiling enum-map-derive v0.17.0
+    Compiling proptest v1.11.0
+    Compiling rand v0.8.7
+    Compiling enum-map v2.7.3
+    Compiling smallvec v1.15.2
+    Compiling strum v0.26.3
+    Compiling wasm-bindgen-macro v0.2.127
+    Compiling calliope v1.0.0 (/dev-server/game/rust)
+ error[E0061]: this function takes 10 arguments but 9 arguments were supplied
+   --> src/bin/stagetest.rs:75:17
+    |
+ 75 | ... = agriculture::fertility(&height, &tmean, &precip, &hydro.rivers, &hydro.lakes, &hydro.discharge, &ice.till, &ice.loess, &ice.outwash);
+    |       ^^^^^^^^^^^^^^^^^^^^^^-------------------------------------------------------------------------------------------------------------- argument #10 of type `&ArrayBase<OwnedRepr<u8>, Dim<[usize; 2]>>` is missing
+    |
+ note: function defined here
+   --> /dev-server/game/rust/src/agriculture.rs:21:8
+    |
+ 21 | pub fn fertility(
+    |        ^^^^^^^^^
+ help: provide the argument
+    |
+ 75 |     let _fert = agriculture::fertility(&height, &tmean, &precip, &hydro.rivers, &hydro.lakes, &hydro.discharge, &ice.till, &ice.loess, &ice.outwash, /* &ArrayBase<OwnedRepr<u8>, Dim<[usize; 2]>> */);
+    |                                                                                                                                                    ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 
+ For more information about this error, try `rustc --explain E0061`.
+ error: could not compile `calliope` (bin "stagetest") due to 1 previous error
+ warning: build failed, waiting for other jobs to finish...
+
+---- checks ----------------------------------------------------------
+[FAIL] property lane broken                              (M15: a law found its counterexample — read above)
+CHECKS: see row above

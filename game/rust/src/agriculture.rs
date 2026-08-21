@@ -118,6 +118,27 @@ const LITHO_SLOPE: f64 = 1.10;
 /// Slope below which water can pond rather than run — the gley gate.
 const FLAT_SLOPE: f64 = 0.32;
 
+// ---- M52 — the depositional overrides -------------------------------
+// Two orders are not weathered in place: they are *delivered*. A river
+// lays its own valley floor down again after every flood, and the wind
+// carries the ice's dust hundreds of kilometres past the last outwash
+// apron (M30's mantle). Both bury whatever profile the clorpt ladder
+// would otherwise have grown, so they are decided before it runs.
+
+/// Discharge a channel must carry before its floods build a floodplain
+/// rather than merely cut a gully. Above the M51 gley probe (40) — an
+/// alluvial belt is the work of a *big* river.
+pub const ALLU_Q: f64 = 120.0;
+/// Valley-floor slope ceiling for alluvium: silt settles on the flat,
+/// it does not cling to a valley wall.
+pub const ALLU_SLOPE: f64 = 0.55;
+/// Mantle strength at which loess stops being a fertility dusting and
+/// becomes the profile itself — measured against `ice::LOESS_MIN` (0.08,
+/// the deposition floor): the order needs a real blanket, not a trace.
+pub const LOESS_ORDER_MIN: f32 = 0.30;
+/// Loess is a plains soil: on a steep face the dust never settles.
+pub const LOESS_SLOPE: f64 = 0.70;
+
 /// The soil orders (M51). Codes are stable — they ship in the pack.
 #[derive(
     Clone,
@@ -151,6 +172,12 @@ pub enum SoilOrder {
     Gley = 7,
     /// Dryland profile: thin, saline-prone, carbonate at depth.
     Aridisol = 8,
+    /// M52 — young river alluvium: the silt a big river lays on its own
+    /// valley floor, renewed by every flood, deep and never exhausted.
+    Fluvisol = 9,
+    /// M52 — the loess mantle as its own order: wind-graded glacial
+    /// dust, deep, friable, mineral-fresh — the premium farm soil.
+    Loess = 10,
 }
 
 impl SoilOrder {
@@ -170,6 +197,8 @@ impl SoilOrder {
             6 => SoilOrder::Andosol,
             7 => SoilOrder::Gley,
             8 => SoilOrder::Aridisol,
+            9 => SoilOrder::Fluvisol,
+            10 => SoilOrder::Loess,
             _ => SoilOrder::None,
         }
     }
@@ -192,6 +221,8 @@ impl SoilOrder {
             SoilOrder::Andosol => 1.20,
             SoilOrder::Gley => 0.85,
             SoilOrder::Aridisol => 0.45,
+            SoilOrder::Fluvisol => 1.30,
+            SoilOrder::Loess => 1.45,
         }
     }
 
@@ -209,6 +240,8 @@ impl SoilOrder {
             SoilOrder::Andosol => 0.70,
             SoilOrder::Gley => 0.10,
             SoilOrder::Aridisol => 0.55,
+            SoilOrder::Fluvisol => 0.45,
+            SoilOrder::Loess => 0.75,
         }
     }
 
@@ -225,6 +258,8 @@ impl SoilOrder {
             SoilOrder::Andosol => 0.90,
             SoilOrder::Gley => 1.10,
             SoilOrder::Aridisol => 0.35,
+            SoilOrder::Fluvisol => 1.80,
+            SoilOrder::Loess => 2.20,
         }
     }
 }
@@ -266,6 +301,16 @@ pub fn soil_genesis(
         1,
     );
     let lake_near = ndimage::binary_dilation(lakes, 1);
+    // M52 — the alluvial belt: the valley floor a big river floods over.
+    // Two rings off the channel (~8 km at 4 km/cell) is the meander belt
+    // a lowland river actually rebuilds; the slope test below keeps it
+    // off the walls the dilation would otherwise climb.
+    let flood = ndimage::binary_dilation(
+        &Array2::from_shape_fn((rows, cols), |(y, x)| {
+            rivers[[y, x]] && discharge[[y, x]] > ALLU_Q
+        }),
+        2,
+    );
 
     Array2::from_shape_fn((rows, cols), |(y, x)| {
         if height[[y, x]] < 0.0 || lakes[[y, x]] {
@@ -279,6 +324,16 @@ pub fn soil_genesis(
         // (r) relief and the permanent cold: no profile survives either.
         if slope > LITHO_SLOPE || b == gc::ICE || t < -8.0 {
             return SoilOrder::Lithosol.code();
+        }
+        // ---- M52: what was delivered outranks what was weathered ----
+        // (p) fresh river alluvium — the flood renews the profile faster
+        // than any horizon can develop under it.
+        if slope < ALLU_SLOPE && flood[[y, x]] {
+            return SoilOrder::Fluvisol.code();
+        }
+        // (p) the loess mantle, thick enough to be the ground itself.
+        if loess[[y, x]] >= LOESS_ORDER_MIN && slope < LOESS_SLOPE {
+            return SoilOrder::Loess.code();
         }
         // (p, t) parent material young enough to still be the story:
         // volcanic ash weathers to andosol wherever the climate works it.
@@ -477,5 +532,19 @@ pub const BANDS: &[Band] = &[
     Band { name: "andosol share of land", sweet: (0.01, 0.25), hard: (0.001, 0.40), target: "M51: ash country tracks the volcanic province" },
     Band { name: "gley share of land", sweet: (0.01, 0.25), hard: (0.001, 0.40), target: "M51: valley floors and cold flats pond" },
     Band { name: "aridisol share of land", sweet: (0.03, 0.35), hard: (0.005, 0.55), target: "M51: the dry share tracks the desert share" },
+    // M52 — the delivered orders. Both are narrow belts by construction
+    // (a meander floor, a downwind dust apron): present in every world,
+    // never a large share of it.
+    Band { name: "fluvisol share of land", sweet: (0.005, 0.12), hard: (0.001, 0.22), target: "M52: the alluvial belt is a ribbon, not a region" },
+    Band { name: "loess share of land", sweet: (0.002, 0.20), hard: (0.0, 0.35), target: "M52: the dust apron reaches far but not everywhere" },
+    Band { name: "alluvium top-decile enrichment", sweet: (3.0, 10.0), hard: (2.0, 10.0), target: "M52: floodplain soil must land in the best tenth of the map" },
+    // The dust belt is laid down downwind of ice, so much of it lies in
+    // country whose climate — not whose ground — caps the harvest. The
+    // honest claim for a delivered soil is therefore not "it is the best
+    // tenth of the map" but "it is better than the profile it buried":
+    // measured against the ladder's own verdict for the same cells with
+    // the mantle and the flood removed.
+    Band { name: "alluvium soil upgrade", sweet: (1.15, 3.0), hard: (1.05, 4.0), target: "M52: silt must out-farm the profile the river buried" },
+    Band { name: "loess soil upgrade", sweet: (1.15, 3.0), hard: (1.05, 4.0), target: "M52: the dust must out-farm the profile it blanketed" },
     Band { name: "soil fertility rank correlation", sweet: (0.30, 1.0), hard: (0.10, 1.0), target: "M51: the order's curve must order the farms" },
 ];
