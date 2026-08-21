@@ -470,11 +470,38 @@ impl GenBuilder {
 
     fn stage_fertility(&mut self) {
         let t4 = now_ms();
+        // M51 — the basement is read here now, before the soil: the
+        // orders need their parent material (M18). It is the same pure
+        // classification stage_resources used to run, on the same f32
+        // relief, so the ore pass downstream reads an identical grid.
+        let height32 = self.height64.as_ref().unwrap().mapv(|x| x as f32);
+        let rock = crate::rock::classify(
+            self.seed,
+            self.size,
+            self.plates.as_ref().unwrap(),
+            &height32,
+        );
         {
             let height = self.height64.as_ref().unwrap();
             let tmean = self.tmean64.as_ref().unwrap();
             let precip = self.precip64.as_ref().unwrap();
             let hydro = self.hydro.as_ref().unwrap();
+            let ice = self.ice.as_ref().unwrap();
+            // Jenny's factors, in one pass: parent material, climate,
+            // organisms (the biome), relief, and the young-surface time
+            // proxy carried by ash and glacial dust.
+            let soil = agriculture::soil_genesis(
+                height,
+                tmean,
+                precip,
+                self.biome_map.as_ref().unwrap(),
+                &rock,
+                &hydro.rivers,
+                &hydro.lakes,
+                &hydro.discharge,
+                &ice.till,
+                &ice.loess,
+            );
             let fert = agriculture::fertility(
                 height,
                 tmean,
@@ -482,16 +509,21 @@ impl GenBuilder {
                 &hydro.rivers,
                 &hydro.lakes,
                 &hydro.discharge,
-                &self.ice.as_ref().unwrap().till,
-                &self.ice.as_ref().unwrap().loess,
-                &self.ice.as_ref().unwrap().outwash,
+                &ice.till,
+                &ice.loess,
+                &ice.outwash,
+                &soil,
             );
             let crops =
                 agriculture::crop_packages(height, tmean, precip, &hydro.rivers, &hydro.lakes);
             self.fertility = Some(fert.mapv(|x| x as f32));
             self.crops = Some(crops);
+            self.soil = Some(soil);
         }
+        self.rock = Some(rock);
+        self.height = Some(height32);
         self.timings.push(("fertility", now_ms() - t4));
+
 
         // E3.2 — the physical stages are done; the world's float grids
         // drop to their resting f32 width here, and every human stage
