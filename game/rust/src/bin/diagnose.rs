@@ -3494,12 +3494,45 @@ fn cmd_resources(seed: i64, size: usize) {
             }
             let rice_dr = drain_sum[2] / crop_n[2].max(1) as f64;
             let wheat_dr = drain_sum[1] / crop_n[1].max(1) as f64;
-            let gap = wheat_dr - rice_dr;
-            c.band(
-                "paddy drainage gap",
-                gap,
-                format!("wheat {:.3} vs rice {:.3} on the order's drainage curve", wheat_dr, rice_dr),
+            println!(
+                "mean drainage under wheat {:.3} · under rice {:.3}",
+                wheat_dr, rice_dr
             );
+            // The paddy claim is conditional, not absolute: rice is a hot
+            // crop, so most of it stands wherever the tropics allow and
+            // the mean drainage under it is dominated by climate. What the
+            // drainage curve must do is decide the *contested* cells —
+            // where two packages are climatically possible, the wet
+            // profile must go to rice. Measured as enrichment: rice's
+            // share of grain on poorly drained orders against its share
+            // of grain everywhere.
+            let mut wet_grain = 0usize;
+            let mut wet_rice = 0usize;
+            for y in 0..h {
+                for x in 0..wd {
+                    let o = SoilOrder::from_code(w.fields.soil[[y, x]]);
+                    let cp = w.fields.crops[[y, x]] as usize;
+                    if o == SoilOrder::None || !(1..=3).contains(&cp) || o.drainage() >= 0.5 {
+                        continue;
+                    }
+                    wet_grain += 1;
+                    if cp == CropPackage::Rice.code() as usize {
+                        wet_rice += 1;
+                    }
+                }
+            }
+            let base_rice = crop_n[2] as f64 / grain.max(1) as f64;
+            let wet_share = wet_rice as f64 / wet_grain.max(1) as f64;
+            let paddy = if base_rice > 0.0 { wet_share / base_rice } else { 0.0 };
+            c.band(
+                "paddy wet-soil enrichment",
+                paddy,
+                format!(
+                    "rice takes {} of grain on wet profiles ({} cells) vs {} everywhere — x{:.2}",
+                    pct(wet_share), wet_grain, pct(base_rice), paddy
+                ),
+            );
+
             c.must(
                 "grain does not root in rock",
                 crop_n[2] == 0 || (shallow_grain as f64 / grain.max(1) as f64) < 0.02,
