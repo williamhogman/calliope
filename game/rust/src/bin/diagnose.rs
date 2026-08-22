@@ -5202,7 +5202,10 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let (mut dp_n, mut dp_s, mut yl_n, mut yl_s) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
         let (mut dq_n, mut dq_s, mut fl_n, mut fl_s) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
         let (mut pred_s, mut pred_n, mut clamped, mut out_of_band) = (0.0f64, 0.0f64, 0usize, 0usize);
+        let (mut ex_s, mut ex_n) = (0.0f64, 0.0f64);
+        let (mut sign_ok, mut sign_n) = (0usize, 0usize);
         let mut pairs: Vec<(f64, f64)> = Vec::new();
+        let mut ex_pairs: Vec<(f64, f64)> = Vec::new();
         for &yr in &sample_years {
             for &(y, x) in &cells {
                 let pack = calliope::agriculture::CropPackage::from_code(w.fields.crops[[y, x]]);
@@ -5221,13 +5224,35 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 if !(0.34..=2.21).contains(&ff) {
                     out_of_band += 1;
                 }
-                // the linear prediction: the crop curve's own local
-                // sensitivities — a ±1 % central difference in rain and a
-                // ±0.1 °C one in warmth, derivatives of the very curves the
-                // world plants by — carried by the year's two anomalies.
                 // Watered ground drinks the catchment lane, not the cloud.
                 let rain = if irr { calliope::climate::FLOW_ANOM_GAIN * dq } else { dp };
                 let base = calliope::agriculture::climatic_score(pack, t, p, irr);
+                // (a) the *exact* prediction: the crop curves re-scored here,
+                // in the harness, from the raw mean fields and the year's two
+                // anomalies — the same law, an independent evaluation path.
+                // This is what the harvest must equal: the curves' full
+                // nonlinear response, gaussian curvature and trapezoid kinks
+                // and all, not a tangent line drawn at the mean.
+                let exact = if base > 1e-9 {
+                    let now = calliope::agriculture::climatic_score(
+                        pack,
+                        t + dt_here,
+                        (p * (1.0 + rain)).max(0.0),
+                        irr,
+                    );
+                    (now / base).clamp(
+                        calliope::agriculture::YIELD_FLOOR,
+                        calliope::agriculture::YIELD_CEIL,
+                    ) - 1.0
+                } else {
+                    0.0
+                };
+                // (b) the *linear* model: a ±1 % central difference in rain
+                // and a ±0.1 °C one in warmth, carried by the year's
+                // anomalies. Kept as the direction lane only — at σ ≈ 12 %
+                // rain swings a tangent line cannot price the curves'
+                // concavity, and measuring magnitude against it measured the
+                // linearization, not the world.
                 let pred = if base > 1e-9 {
                     let pu = calliope::agriculture::climatic_score(pack, t, p * 1.01, irr);
                     let pd = calliope::agriculture::climatic_score(pack, t, p * 0.99, irr);
@@ -5237,13 +5262,22 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 } else {
                     0.0
                 };
+                if pred.abs() >= 0.01 {
+                    sign_n += 1;
+                    if pred.signum() == (yf - 1.0).signum() || (yf - 1.0).abs() < 1e-12 {
+                        sign_ok += 1;
+                    }
+                }
                 pred_s += pred * pred;
                 pred_n += pred;
+                ex_s += exact * exact;
+                ex_n += exact;
                 dp_n += dp; dp_s += dp * dp;
                 yl_n += yf - 1.0; yl_s += (yf - 1.0).powi(2);
                 dq_n += dq; dq_s += dq * dq;
                 fl_n += ff - 1.0; fl_s += (ff - 1.0).powi(2);
                 pairs.push((pred, yf - 1.0));
+                ex_pairs.push((exact, yf - 1.0));
             }
         }
         let n = (cells.len() * sample_years.len()) as f64;
@@ -5253,21 +5287,42 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let sd_yield = sd(yl_n, yl_s);
         let sd_flow = sd(fl_n, fl_s);
         let sd_pred = sd(pred_n, pred_s);
+        let sd_exact = sd(ex_n, ex_s);
+        let pearson = |v: &Vec<(f64, f64)>| -> f64 {
+            let (mx, my): (f64, f64) = (
+                v.iter().map(|p| p.0).sum::<f64>() / v.len() as f64,
+                v.iter().map(|p| p.1).sum::<f64>() / v.len() as f64,
+            );
+            let (mut cov, mut vx, mut vy) = (0.0, 0.0, 0.0);
+            for (a, b) in v {
+                cov += (a - mx) * (b - my);
+                vx += (a - mx).powi(2);
+                vy += (b - my).powi(2);
+            }
+            cov / (vx.sqrt() * vy.sqrt()).max(1e-12)
+        };
+        let rho_exact = pearson(&ex_pairs);
+        let rho_lin = pearson(&pairs);
         println!();
         println!("M72 · the year that was — {} farmed cells × {} years", cells.len(), sample_years.len());
         println!(
-            "  rain anomaly σ {:.4} · catchment σ {:.4} · harvest σ {:.4} (predicted {:.4}) · flow σ {:.4}",
-            sd_dp, sd_dq, sd_yield, sd_pred, sd_flow,
+            "  rain anomaly σ {:.4} · catchment σ {:.4} · harvest σ {:.4} (curves {:.4} · tangent {:.4}) · flow σ {:.4}",
+            sd_dp, sd_dq, sd_yield, sd_exact, sd_pred, sd_flow,
+        );
+        println!(
+            "  ρ against the curves {:.4} · against the tangent {:.4} · direction agrees {}/{} where the tangent calls a ≥1% move",
+            rho_exact, rho_lin, sign_ok, sign_n,
         );
 
-        // the harvest moves, and it moves the way the crop curves say it
-        // should: measured spread against the curves' own linearization.
-        let harvest_err = if sd_pred > 1e-9 { (sd_yield / sd_pred - 1.0).abs() } else { 1.0 };
+        // the harvest moves, and it moves exactly as the crop curves say:
+        // the harness re-scores the same law from the raw fields and the
+        // year's sky, and the world's realized spread must equal it.
+        let harvest_err = if sd_exact > 1e-9 { (sd_yield / sd_exact - 1.0).abs() } else { 1.0 };
         c.must(
             "harvest variance tracks the sky",
-            harvest_err <= 0.15 && sd_yield > 1e-4,
-            format!("σ {:.4} vs predicted {:.4} ({:+.1}%)", sd_yield, sd_pred, 100.0 * (sd_yield / sd_pred.max(1e-12) - 1.0)),
-            "M72: the year's harvest spread matches the crop curves' own linearized sensitivity to the year's sky within 15%",
+            harvest_err <= 0.01 && sd_yield > 1e-4,
+            format!("σ {:.4} vs curves {:.4} ({:+.2}%)", sd_yield, sd_exact, 100.0 * (sd_yield / sd_exact.max(1e-12) - 1.0)),
+            "M72: the year's harvest spread equals the crop curves re-scored at the year's own sky, within 1%",
         );
         // the rivers move with their catchments, at the declared gain
         let flow_pred = calliope::climate::FLOW_ANOM_GAIN * sd_dq;
@@ -5278,23 +5333,21 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             format!("σ {:.4} vs {:.2}× catchment σ {:.4} ({:+.1}%)", sd_flow, calliope::climate::FLOW_ANOM_GAIN, flow_pred, 100.0 * (sd_flow / flow_pred.max(1e-12) - 1.0)),
             "M72: the year's flow spread is the catchment anomaly times the declared gain, within 15%",
         );
-        // sign and strength: wet years feed, dry years starve
-        let (mx, my): (f64, f64) = (
-            pairs.iter().map(|p| p.0).sum::<f64>() / n,
-            pairs.iter().map(|p| p.1).sum::<f64>() / n,
-        );
-        let (mut cov, mut vx, mut vy) = (0.0, 0.0, 0.0);
-        for (a, b) in &pairs {
-            cov += (a - mx) * (b - my);
-            vx += (a - mx).powi(2);
-            vy += (b - my).powi(2);
-        }
-        let rho = cov / (vx.sqrt() * vy.sqrt()).max(1e-12);
         c.must(
             "the harvest follows the curves",
-            rho >= 0.80,
-            format!("ρ {:.3}", rho),
-            "M72: the realized harvest factor tracks the crop curves' own linearized response to the year's sky (Pearson ρ ≥ 0.80)",
+            rho_exact >= 0.999,
+            format!("ρ {:.4} (tangent model {:.3})", rho_exact, rho_lin),
+            "M72: the realized harvest factor is the crop curves' own response to the year's sky (Pearson ρ ≥ 0.999 against an independent re-scoring)",
+        );
+        // and the direction is first-order right: where the tangent calls a
+        // move worth ≥1%, the world moves that way. Magnitude is the curves'
+        // to price; sign is the derivative's, and it must not be wrong.
+        let sign_rate = if sign_n == 0 { 0.0 } else { sign_ok as f64 / sign_n as f64 };
+        c.must(
+            "wet years feed, dry years starve",
+            sign_rate >= 0.95 && sign_n > 1000,
+            format!("{:.1}% of {} called moves go the derivative's way", 100.0 * sign_rate, sign_n),
+            "M72: the sign of the harvest response matches the crop curves' own derivatives on the year's anomalies",
         );
         c.must(
             "the year is bounded, not deleted",
