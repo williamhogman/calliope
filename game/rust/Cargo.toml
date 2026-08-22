@@ -57,13 +57,15 @@ panic = "unwind"
 # E6.3 — explicit wasm-opt pass; M66 adds --no-inline=*stage_*: rustc's
 # #[inline(never)] holds through LLVM, but binaryen re-merges single-caller
 # functions unless told otherwise — the gen stages stay their own bodies.
+# The flag must PRECEDE -Oz: binaryen applies options positionally, and a
+# no-inline mark set after the pass pipeline ran marks nothing (measured).
 # Was: explicit wasm-opt pass (wasm-pack runs this via binaryen on PATH;
 # scripts/build.sh's nix path provides it). -O3 measured against -Oz on the
 # real binary; producers/target-features metadata stripped (E6.6).
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-Oz", "--strip-producers", "--strip-target-features", "--no-inline=*stage_*"]
+wasm-opt = ["--no-inline=*stage_*", "-Oz", "--strip-producers", "--strip-target-features"]
 
 # E6.6 — the symbolized twin for scripts/wasm-audit.sh: wasm-opt keeps the
 # name section (-g) so twiggy can name what weighs. Never shipped.
 [package.metadata.wasm-pack.profile.profiling]
-wasm-opt = ["-O", "-g", "--no-inline=*stage_*"]
+wasm-opt = ["--no-inline=*stage_*", "-O", "-g"]
