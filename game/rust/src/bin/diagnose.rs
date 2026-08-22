@@ -9814,6 +9814,11 @@ fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
     // (the recorded subject sha256 against the shipped bytes), never the
     // clock — captured here, judged after the table.
     let mut audit_sha: Option<String> = None;
+    // M55 (corrected scope) — the veto's load-bearing claim is a law of the
+    // model, so it is proved over the ensemble of composed civ lanes, not
+    // demanded of every single world's 150 years. Per lane: how many towns
+    // the veto-lifted run stood on ground the real run's veto refused.
+    let mut veto_lanes: Vec<(String, usize)> = Vec::new();
 
     if let Some(dir) = &reports {
         // ---- compose the suite's own reports (the SUMMARY's rows, sealed
