@@ -500,7 +500,7 @@ pub fn compute(seed: i64, height: &Array2<f64>) -> Ice {
                 continue;
             }
             let mut edge = false;
-            for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+            for (dy, dx) in crate::grid::N4 {
                 let ny = y as isize + dy;
                 let nx = x as isize + dx;
                 if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -519,7 +519,7 @@ pub fn compute(seed: i64, height: &Array2<f64>) -> Ice {
     }
     while let Some((y, x)) = queue.pop_front() {
         let d = dist[[y, x]];
-        for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+        for (dy, dx) in crate::grid::N4 {
             let ny = y as isize + dy;
             let nx = x as isize + dx;
             if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -577,10 +577,10 @@ pub fn carve(height: &mut Array2<f64>, ice: &mut Ice) {
 
     // The pre-carve drainage tree: ice flowed where water had cut.
     let water = height.mapv(|v| v < 0.0);
-    let filled = crate::hydrology::fill_depressions(height, &water);
-    let dirs = crate::hydrology::flow_directions(&filled, &water);
+    let filled = crate::grid::fill_depressions(height, &water);
+    let dirs = crate::grid::flow_directions(&filled, &water);
     let ones = Array2::from_elem((rows, cols), 1000.0);
-    let acc = crate::hydrology::flow_accumulation(&filled, &dirs, &ones, &water);
+    let acc = crate::grid::flow_accumulation(&filled, &dirs, &ones, &water);
 
     let mut cut: Array2<f64> = Array2::zeros((rows, cols));
     // Centerline depths, unspread — the hang test compares what the ice
@@ -640,7 +640,7 @@ pub fn carve(height: &mut Array2<f64>, ice: &mut Ice) {
                 continue;
             }
             let mut wall = false;
-            for (dy, dx) in [(-1isize, -1isize), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)] {
+            for (dy, dx) in crate::grid::N8 {
                 let ny = y as isize + dy;
                 let nx = x as isize + dx;
                 if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -685,7 +685,7 @@ pub fn carve(height: &mut Array2<f64>, ice: &mut Ice) {
             if d < 0 {
                 continue;
             }
-            let (dy, dx) = crate::hydrology::N8[d as usize];
+            let (dy, dx) = crate::grid::N8[d as usize];
             let ny = y as isize + dy;
             let nx = x as isize + dx;
             if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -709,12 +709,11 @@ pub fn carve(height: &mut Array2<f64>, ice: &mut Ice) {
 pub fn deposit(seed: i64, height: &mut Array2<f64>, ice: &mut Ice) {
     let (rows, cols) = height.dim();
     let water = height.mapv(|v| v < 0.0);
-    const N4: [(isize, isize); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
     fn slope_at(h: &Array2<f64>, y: usize, x: usize) -> f64 {
         let (rows, cols) = h.dim();
         let mut s = 0.0f64;
-        for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+        for (dy, dx) in crate::grid::N4 {
             let ny = y as isize + dy;
             let nx = x as isize + dx;
             if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -816,7 +815,7 @@ pub fn deposit(seed: i64, height: &mut Array2<f64>, ice: &mut Ice) {
             let t0 = ice.thickness[[y, x]] as f64;
             let mut best: Option<(usize, usize)> = None;
             let mut drop = 0.0f64;
-            for (dy, dx) in crate::hydrology::N8 {
+            for (dy, dx) in crate::grid::N8 {
                 let ny = y as isize + dy;
                 let nx = x as isize + dx;
                 if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -842,10 +841,10 @@ pub fn deposit(seed: i64, height: &mut Array2<f64>, ice: &mut Ice) {
     // 4. Eskers: subglacial meltwater lines — small-catchment drainage
     // under deep ice, walked downstream as chains. The drainage tree is
     // the post-carve one: melt ran in the carved world.
-    let filled = crate::hydrology::fill_depressions(height, &water);
-    let dirs = crate::hydrology::flow_directions(&filled, &water);
+    let filled = crate::grid::fill_depressions(height, &water);
+    let dirs = crate::grid::flow_directions(&filled, &water);
     let ones = Array2::from_elem((rows, cols), 1000.0);
-    let acc = crate::hydrology::flow_accumulation(&filled, &dirs, &ones, &water);
+    let acc = crate::grid::flow_accumulation(&filled, &dirs, &ones, &water);
     let ebase = base ^ 0xE5_4E12_u64;
     let mut egrid: Array2<u8> = Array2::zeros((rows, cols));
     for y in 0..rows {
@@ -878,7 +877,7 @@ pub fn deposit(seed: i64, height: &mut Array2<f64>, ice: &mut Ice) {
                 if d < 0 {
                     break;
                 }
-                let (dy, dx) = crate::hydrology::N8[d as usize];
+                let (dy, dx) = crate::grid::N8[d as usize];
                 let ny = cy as isize + dy;
                 let nx = cx as isize + dx;
                 if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -914,7 +913,6 @@ pub fn deposit(seed: i64, height: &mut Array2<f64>, ice: &mut Ice) {
 /// climate can use it.
 pub fn loess_mantle(height: &Array2<f64>, ice: &mut Ice) {
     let (rows, cols) = height.dim();
-    const N4: [(isize, isize); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
     // The apron: ice-free land cells touching the former margin.
     let mut src = Array2::<u8>::zeros((rows, cols));
@@ -1007,8 +1005,8 @@ pub fn loess_mantle(height: &Array2<f64>, ice: &mut Ice) {
 pub fn proglacial(height: &mut Array2<f64>, ice: &mut Ice) {
     let (rows, cols) = height.dim();
     let water = height.mapv(|v| v < 0.0);
-    let filled = crate::hydrology::fill_depressions(height, &water);
-    let dirs = crate::hydrology::flow_directions(&filled, &water);
+    let filled = crate::grid::fill_depressions(height, &water);
+    let dirs = crate::grid::flow_directions(&filled, &water);
 
     // Moraine dams, dilated to PROG_MORAINE_R.
     let mut dam: Array2<u8> = Array2::zeros((rows, cols));
@@ -1041,7 +1039,6 @@ pub fn proglacial(height: &mut Array2<f64>, ice: &mut Ice) {
         dammed: bool,
     }
     let mut basins: Vec<Basin> = Vec::new();
-    const N4: [(isize, isize); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
     for y in 0..rows {
         for x in 0..cols {
             if label[[y, x]] != -1 || !is_dep(y, x, &water) {
@@ -1099,7 +1096,7 @@ pub fn proglacial(height: &mut Array2<f64>, ice: &mut Ice) {
     for (bi, b) in basins.iter_mut().enumerate() {
         if !b.dammed && b.cells.len() >= PROG_MIN_AREA {
             'rim: for &(cy, cx) in &b.cells {
-                for (dy, dx) in crate::hydrology::N8 {
+                for (dy, dx) in crate::grid::N8 {
                     let ny = cy as isize + dy;
                     let nx = cx as isize + dx;
                     if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -1149,7 +1146,7 @@ pub fn proglacial(height: &mut Array2<f64>, ice: &mut Ice) {
         let mut pour: Option<(usize, usize)> = None;
         let mut pour_f = f64::INFINITY;
         for &(cy, cx) in &b.cells {
-            for (dy, dx) in crate::hydrology::N8 {
+            for (dy, dx) in crate::grid::N8 {
                 let ny = cy as isize + dy;
                 let nx = cx as isize + dx;
                 if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -1215,7 +1212,7 @@ pub fn proglacial(height: &mut Array2<f64>, ice: &mut Ice) {
             if d < 0 {
                 break;
             }
-            let (dy, dx) = crate::hydrology::N8[d as usize];
+            let (dy, dx) = crate::grid::N8[d as usize];
             let ny = cy as isize + dy;
             let nx = cx as isize + dx;
             if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -1252,9 +1249,9 @@ pub fn proglacial(height: &mut Array2<f64>, ice: &mut Ice) {
 pub fn outwash(height: &mut Array2<f64>, ice: &mut Ice) {
     let (rows, cols) = height.dim();
     let water = height.mapv(|v| v < 0.0);
-    let filled = crate::hydrology::fill_depressions(height, &water);
-    let dirs = crate::hydrology::flow_directions(&filled, &water);
-    let order = crate::hydrology::drainage_order(&filled);
+    let filled = crate::grid::fill_depressions(height, &water);
+    let dirs = crate::grid::flow_directions(&filled, &water);
+    let order = crate::grid::drainage_order(&filled);
 
     // Meltwater accumulation: every glaciated cell sheds its ice column
     // (in km) downstream; acc is the ice drained through a cell.
@@ -1268,7 +1265,7 @@ pub fn outwash(height: &mut Array2<f64>, ice: &mut Ice) {
         let (y, x) = (idx / cols, idx % cols);
         let d = dirs[[y, x]];
         if d >= 0 {
-            let (dy, dx) = crate::hydrology::N8[d as usize];
+            let (dy, dx) = crate::grid::N8[d as usize];
             let ny = y as isize + dy;
             let nx = x as isize + dx;
             if ny >= 0 && nx >= 0 && ny < rows as isize && nx < cols as isize {
@@ -1291,7 +1288,7 @@ pub fn outwash(height: &mut Array2<f64>, ice: &mut Ice) {
                 continue;
             }
             let mut relief = 0.0f64;
-            for &(dy, dx) in crate::hydrology::N8.iter() {
+            for &(dy, dx) in crate::grid::N8.iter() {
                 let ny = y as isize + dy;
                 let nx = x as isize + dx;
                 if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -1327,7 +1324,7 @@ pub fn outwash(height: &mut Array2<f64>, ice: &mut Ice) {
                 continue;
             }
             let hc = h0[[y, x]];
-            for &(dy, dx) in crate::hydrology::N8.iter() {
+            for &(dy, dx) in crate::grid::N8.iter() {
                 let ny = y as isize + dy;
                 let nx = x as isize + dx;
                 if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {

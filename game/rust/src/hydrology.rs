@@ -89,7 +89,7 @@ pub fn hydrology(
             while qi < comp.len() {
                 let (cy, cx) = comp[qi];
                 qi += 1;
-                for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                for (dy, dx) in crate::grid::N4 {
                     let ny = cy as isize + dy;
                     let nx = cx as isize + dx;
                     if ny < 0 || nx < 0 || ny >= size as isize || nx >= size as isize {
@@ -615,7 +615,7 @@ pub fn springs_and_oases(
             // Steepest fall below and steepest rise above, in m/km.
             let mut down = 0.0f64;
             let mut up = 0.0f64;
-            for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+            for (dy, dx) in crate::grid::N4 {
                 let ny = y as isize + dy;
                 let nx = x as isize + dx;
                 if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {

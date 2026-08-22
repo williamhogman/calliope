@@ -481,7 +481,7 @@ fn diffuse_pass(h: &mut Array2<f64>, src: &mut Array2<f64>) {
             }
             let mut sum = 0.0;
             let mut n = 0usize;
-            for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+            for (dy, dx) in crate::grid::N4 {
                 let ny = y as isize + dy;
                 let nx = x as isize + dx;
                 if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {

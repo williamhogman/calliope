@@ -14,7 +14,7 @@ use serde::Serialize;
 use crate::ids::SettlementId;
 use crate::state::CellFlags;
 use crate::constants as gc;
-use crate::hydrology::{DIST, N8};
+use crate::grid::{DIST, N8};
 use crate::ndimage;
 use crate::resources::{Abundance, Deposit, Good, Goods};
 use crate::settlements::Settlement;
