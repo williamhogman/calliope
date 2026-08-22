@@ -69,6 +69,7 @@ MADR-lite. See [`template.md`](template.md). Sections:
 | [0023](0023-no-sab-field-mirror.md) | No shared-memory field mirror; transferables stay the lane | Accepted (renumbered from 0015) |
 | [0024](0024-plate-history-sketch.md) | The plate-history sketch: deep past as input, never simulation | Accepted |
 | [0025](0025-cross-runtime-replay-identity.md) | Cross-runtime replay identity for gated ledgers | Accepted |
+| [0026](0026-one-lattice-law-shared-grid.md) | One lattice law — the shared grid module | Accepted |
 
 ## Era gates
 
