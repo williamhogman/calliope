@@ -5695,7 +5695,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 "{} town(s) on ground the veto refused ({} dry without · {} with)",
                 veto_refused, cf_dry, dry_towns
             ),
-            "M55 gate: the veto-lifted run must stand ≥1 town on waterless ground beyond its founder's terminal well reach — ground the real run provably refused",
+            "M55 gate: the veto-lifted run must stand ≥1 town on waterless ground deeper than its founder's well reach at the founding — the instant the real run's veto ran and refused it",
         );
 
     }
