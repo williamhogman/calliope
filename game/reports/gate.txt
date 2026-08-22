@@ -6,42 +6,42 @@
  lane                          pass  warn  fail     age
  assay.txt                        1     0     0    0.0h
  atlas.txt                       13     0     0    0.2h
- bench.txt                        4     1     0    0.2h
+ bench.txt                        4     1     0    0.1h
  browser.txt                      6     1     0    0.0h
- build.txt                        0     1     0    0.5h
+ build.txt                        0     1     0    0.4h
  civ-12345.txt                   69     3     0    0.3h
  civ-777.txt                     66     4     0    0.3h
- climate-12345.txt               25     1     0    0.2h
- climate-777.txt                 24     2     0    0.2h
- climate-90210.txt               25     1     0    0.2h
+ climate-12345.txt               25     1     0    0.3h
+ climate-777.txt                 24     2     0    0.3h
+ climate-90210.txt               25     1     0    0.3h
  coastjs.txt                      4     0     0    0.1h
- compile.txt                      1     0     0    0.1h
- compute.txt                      7     0     0    0.1h
+ compile.txt                      0     0     0    0.1h
+ compute.txt                      6     1     0    0.1h
  determinism.txt                  3     0     0    0.3h
  earth-wasm.txt                   2     0     0    0.1h
  earth.txt                       51     0     0    0.2h
  economy-12345.txt               46     1     0    0.3h
  era.txt                          8     1     0    0.3h
- hydro-12345.txt                 24     1     0    0.4h
- hydro-777.txt                   24     1     0    0.4h
+ hydro-12345.txt                 24     1     0    0.3h
+ hydro-777.txt                   24     1     0    0.3h
  hydro-90210.txt                 24     1     0    0.3h
  moddag.txt                       1     0     0    0.0h
  ocean-meta.txt                   9     0     0    0.2h
  ocean.txt                       15     0     0    0.2h
  patina.txt                       9     1     0    0.3h
- perf.txt                         9     4     0    0.2h
+ perf.txt                         9     4     0    0.1h
  properties.txt                  72     6     0    0.3h
- resources-12345.txt             32     0     0    0.4h
- resources-777.txt               32     0     0    0.4h
+ resources-12345.txt             32     0     0    0.3h
+ resources-777.txt               32     0     0    0.3h
  resources-90210.txt             32     0     0    0.3h
- sweep.txt                       18     1     0    0.2h
- systems.txt                      3     0     0    0.2h
+ sweep.txt                       18     1     0    0.1h
+ systems.txt                      3     0     0    0.1h
  telling-12345.txt               12     0     0    0.3h
- terrain-12345.txt               76     0     0    0.2h
- terrain-777.txt                 75     1     0    0.2h
- terrain-90210.txt               76     0     0    0.2h
+ terrain-12345.txt               76     0     0    0.1h
+ terrain-777.txt                 75     1     0    0.1h
+ terrain-90210.txt               76     0     0    0.1h
  wasm-audit.txt                   2     0     0       -
  wasm.txt                         0     1     0    0.1h
- TOTAL                          900    33     0
+ TOTAL                          898    34     0
 
  structural leg: seed 12345 · 3600 months · chunkings 240/120 vs 180
