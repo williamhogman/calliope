@@ -624,11 +624,11 @@ pub const ANOM_YEAR_STEP: f64 = 1.7;
 /// Offset that hands the rain its own slice of the same field, so a hot
 /// year is not mechanically a wet one.
 pub const ANOM_RAIN_LANE: f64 = 137.0;
-/// Two-octave fbm on this lattice measures 0.3222 population σ over the
+/// Two-octave fbm on this lattice measures 0.2076 population σ over the
 /// land of a 512-world (measured by `diagnose climate`, which then holds
 /// the realized amplitude to the declared one ±20%). Dividing
 /// by it makes the declared amplitudes mean what they say in °C.
-pub const ANOM_FBM_SIGMA: f64 = 0.3222;
+pub const ANOM_FBM_SIGMA: f64 = 0.2076;
 /// A year may not take more than this share of the rain away — total
 /// failure of the rains is famine's verdict (M2.6), not the sky's noise.
 pub const ANOM_P_FLOOR: f64 = -0.85;
