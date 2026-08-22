@@ -133,8 +133,10 @@ export class Orbital {
      * Upload the world fields as textures. Coast distance is computed here.
      * Upload the world grids. Parameter order is the field registry's
      * pack order filtered to `gpu: true` (E2.2) — the JS caller derives
-     * its argument list from the generated `FIELDS` table, so this
-     * signature and the registry cannot drift apart.
+     * its argument list from the generated `FIELDS` table, and
+     * `pack::GPU_UPLOAD_ORDER` (with `SET_WORLD_ARITY` above) holds this
+     * signature to the same table in `const` assertions, so the two
+     * cannot drift apart.
      * @param {number} w
      * @param {number} h
      * @param {Float32Array} height
@@ -359,7 +361,7 @@ export class WasmWorld {
         return this;
     }
     /**
-     * Binary world payload, pack v2: [u32 header_len][header json][blob]
+     * Binary world payload, pack v3: [u32 header_len][header json][blob]
      * — crc-stamped, quantized u16 float grids, territory as header RLE.
      * @returns {Uint8Array}
      */

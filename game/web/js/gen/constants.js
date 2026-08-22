@@ -33,6 +33,8 @@ export const FIELDS = [
   { name: "upwelling", dtype: "float32", units: "0..1 coastal upwelling (M47)", gpu: false },
   { name: "aquifer", dtype: "float32", units: "m depth to water table (M54)", gpu: false },
   { name: "landform", dtype: "uint8", units: "landform vocabulary id (M60)", gpu: true },
+  { name: "coastform", dtype: "uint8", units: "coast form id (M44)", gpu: false },
+  { name: "silt", dtype: "float32", units: "deposition depth, height units", gpu: false },
 ];
 
 export const EVENT_KINDS = [

@@ -7,7 +7,7 @@
  * The pack header: meta + entity lists riding ahead of the field arrays.
  * @typedef {Object} WorldHeader
  * @property {{hubs: Array<{id: number, n: number, name: string, p: Object<string, number>}>, of: Array<number>, spread: Array<unknown>}} areas
- * @property {Array<{dtype: string, name: string, nbytes: number, offset: number, q?: {offset: number, scale: number, xform: string}, shape: Array<number>}>} arrays
+ * @property {Array<{bits?: number, dtype: string, name: string, nbytes: number, offset: number, q?: {offset: number, scale: number, xform: string}, shape: Array<number>}>} arrays
  * @property {Array<{color: Array<number>, id: number, name: string}>} biomes
  * @property {Array<unknown>} civs
  * @property {number} crc32
