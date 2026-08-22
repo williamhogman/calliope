@@ -525,6 +525,84 @@ pub fn soil_suitability(order: SoilOrder, crop: CropPackage) -> f64 {
 }
 
 
+/// The climatic half of a package's suitability at one cell: the thermal
+/// gaussian times the moisture trapezoid, with the irrigation floors and
+/// the <300 mm pastoral boundary the classifier has always applied. Split
+/// out of `crop_packages` at M72 so the year's weather can be scored
+/// through *the same curves the world plants by* — a good year and a bad
+/// year cannot be judged by a second, drifting table.
+pub fn climatic_score(crop: CropPackage, t: f64, p: f64, irrigated: bool) -> f64 {
+    let dry_veto = !irrigated && p < 300.0;
+    match crop {
+        CropPackage::Wheat => {
+            let v = gauss(t, 12.0, 8.0) * trap(p, 270.0, 700.0, 1400.0);
+            if irrigated {
+                v.max(0.70 * gauss(t, 12.0, 8.0))
+            } else if dry_veto {
+                0.0
+            } else {
+                v
+            }
+        }
+        CropPackage::Maize => {
+            let v = gauss(t, 21.0, 6.0) * trap(p, 430.0, 950.0, 2000.0);
+            if irrigated {
+                v.max(0.60 * gauss(t, 21.0, 6.0))
+            } else if dry_veto {
+                0.0
+            } else {
+                v
+            }
+        }
+        CropPackage::Rice => {
+            let v = gauss(t, 26.0, 5.5) * trap(p, 900.0, 1700.0, 4200.0);
+            if irrigated {
+                if t > 17.0 {
+                    v.max(0.75 * gauss(t, 26.0, 6.5))
+                } else {
+                    v
+                }
+            } else if dry_veto {
+                0.0
+            } else {
+                v
+            }
+        }
+        // the pastoral boundary: below ~300 mm farming fails (research/08),
+        // but the herds still walk it — pastoral is never dry-vetoed.
+        CropPackage::Pastoral => 0.32 * gauss(t, 12.0, 18.0) * trap(p, 110.0, 420.0, 1500.0),
+        CropPackage::Wildland => 0.0,
+    }
+}
+
+/// M72 — a bad year may not take more than this share of the harvest,
+/// and a good one may not mint more than its ceiling. The sky moves the
+/// yield; it does not delete or double a town in one turn of the year.
+pub const YIELD_FLOOR: f64 = 0.25;
+pub const YIELD_CEIL: f64 = 1.75;
+
+/// M72 — what this year's weather did to this cell's harvest, as a
+/// multiplier on the mean-climate yield. The package is scored twice
+/// through `climatic_score` — once at the climate mean, once at
+/// mean-plus-anomaly — and the ratio is the year's verdict. The soil and
+/// depth terms are identical in both scorings and cancel exactly, so
+/// this is purely the sky's contribution.
+pub fn year_yield_factor(
+    crop: CropPackage,
+    t: f64,
+    p: f64,
+    dt: f64,
+    dp: f64,
+    irrigated: bool,
+) -> f64 {
+    let base = climatic_score(crop, t, p, irrigated);
+    if base <= 1e-9 {
+        return 1.0;
+    }
+    let now = climatic_score(crop, t + dt, (p * (1.0 + dp)).max(0.0), irrigated);
+    (now / base).clamp(YIELD_FLOOR, YIELD_CEIL)
+}
+
 /// Classify every cell into the crop package that wins it. Deterministic,
 /// pure function of climate, water adjacency and the soil order beneath
 /// (M53); rivers and lakeshores count as irrigable floodplain (paddies
@@ -556,22 +634,10 @@ pub fn crop_packages(
                 CropPackage::Wildland.code()
             };
         }
-        let mut wheat = gauss(t, 12.0, 8.0) * trap(p, 270.0, 700.0, 1400.0);
-        let mut maize = gauss(t, 21.0, 6.0) * trap(p, 430.0, 950.0, 2000.0);
-        let mut rice = gauss(t, 26.0, 5.5) * trap(p, 900.0, 1700.0, 4200.0);
-        if irrigated {
-            if t > 17.0 {
-                rice = rice.max(0.75 * gauss(t, 26.0, 6.5));
-            }
-            wheat = wheat.max(0.70 * gauss(t, 12.0, 8.0));
-            maize = maize.max(0.60 * gauss(t, 21.0, 6.0));
-        } else if p < 300.0 {
-            // the pastoral boundary: below ~300 mm farming fails (research/08)
-            wheat = 0.0;
-            maize = 0.0;
-            rice = 0.0;
-        }
-        let mut pastoral = 0.32 * gauss(t, 12.0, 18.0) * trap(p, 110.0, 420.0, 1500.0);
+        let mut wheat = climatic_score(CropPackage::Wheat, t, p, irrigated);
+        let mut maize = climatic_score(CropPackage::Maize, t, p, irrigated);
+        let mut rice = climatic_score(CropPackage::Rice, t, p, irrigated);
+        let mut pastoral = climatic_score(CropPackage::Pastoral, t, p, irrigated);
         // M53 — the edaphic term. Multiplicative, per package, so the
         // ground can move the winner and not merely the margin.
         wheat *= soil_suitability(order, CropPackage::Wheat);
