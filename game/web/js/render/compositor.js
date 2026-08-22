@@ -73,43 +73,70 @@ export function buildShade(R) {
   R.shade = sh;
 }
 
-// Chamfer distance (cells) from every sea cell to the nearest land —
-// powers the engraved coastal vignette (M7.1) on the CPU path.
+// The coast law (M67, ADR-0027) — distance in cells from every sea cell
+// to the nearest land, powering the engraved coastal vignette (M7.1) on
+// the CPU path. This is the JS twin of compute.rs's integer jump-flood:
+// seeds are cell indices, distances exact integer squares, ties break
+// toward the smaller index — the same law the WGSL kernel and the Rust
+// CPU twin execute, so all three paths ring the same shore. Any edit
+// here edits compute.rs and coastdist.wgsl too.
+const JFA_NONE = 0xffffffff;
+
 function coastDistance(R) {
   const W = R.w, H = R.h;
   const hgt = R.world.arrays.height;
-  const INF = 1e9;
-  const d = new Float32Array(W * H);
-  for (let i = 0; i < W * H; i++) d[i] = hgt[i] >= 0 ? 0 : INF;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const i = y * W + x;
-      if (d[i] === 0) continue;
-      let best = d[i];
-      if (x > 0) best = Math.min(best, d[i - 1] + 1);
-      if (y > 0) {
-        best = Math.min(best, d[i - W] + 1);
-        if (x > 0) best = Math.min(best, d[i - W - 1] + 1.4);
-        if (x < W - 1) best = Math.min(best, d[i - W + 1] + 1.4);
+  const n = W * H;
+  let src = new Uint32Array(n).fill(JFA_NONE);
+  let dst = new Uint32Array(n);
+  for (let i = 0; i < n; i++) if (hgt[i] >= 0) src[i] = i;
+  // the one stride schedule: next_pow2(max(W,H))/2 … 1 — compute::jfa_strides
+  let p = 1;
+  while (p < Math.max(W, H)) p <<= 1;
+  for (let s = p >> 1; s >= 1; s >>= 1) {
+    for (let y = 0; y < H; y++) {
+      const yr = y * W;
+      for (let x = 0; x < W; x++) {
+        const i = yr + x;
+        let best = src[i];
+        let bd = 0;
+        if (best !== JFA_NONE) {
+          const dx = (best % W) - x, dy = ((best / W) | 0) - y;
+          bd = dx * dx + dy * dy;
+        }
+        for (let oy = -1; oy <= 1; oy++) {
+          const ny = y + oy * s;
+          if (ny < 0 || ny >= H) continue;
+          for (let ox = -1; ox <= 1; ox++) {
+            if (ox === 0 && oy === 0) continue;
+            const nx = x + ox * s;
+            if (nx < 0 || nx >= W) continue;
+            const cand = src[ny * W + nx];
+            if (cand === JFA_NONE) continue;
+            const dx = (cand % W) - x, dy = ((cand / W) | 0) - y;
+            const d = dx * dx + dy * dy;
+            if (best === JFA_NONE || d < bd || (d === bd && cand < best)) {
+              best = cand;
+              bd = d;
+            }
+          }
+        }
+        dst[i] = best;
       }
-      d[i] = best;
+    }
+    const t = src; src = dst; dst = t;
+  }
+  // finalize — compute::finalize: land 0, sea √(exact integer square)
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const sd = src[i];
+    if (sd === JFA_NONE) out[i] = 1e9;
+    else if (sd === i) out[i] = 0;
+    else {
+      const dx = (sd % W) - (i % W), dy = ((sd / W) | 0) - ((i / W) | 0);
+      out[i] = Math.sqrt(dx * dx + dy * dy);
     }
   }
-  for (let y = H - 1; y >= 0; y--) {
-    for (let x = W - 1; x >= 0; x--) {
-      const i = y * W + x;
-      if (d[i] === 0) continue;
-      let best = d[i];
-      if (x < W - 1) best = Math.min(best, d[i + 1] + 1);
-      if (y < H - 1) {
-        best = Math.min(best, d[i + W] + 1);
-        if (x < W - 1) best = Math.min(best, d[i + W + 1] + 1.4);
-        if (x > 0) best = Math.min(best, d[i + W - 1] + 1.4);
-      }
-      d[i] = best;
-    }
-  }
-  return d;
+  return out;
 }
 
 // True-colour composite: what a survey satellite would see in high summer.

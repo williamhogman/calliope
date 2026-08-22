@@ -23,6 +23,17 @@ const EMPTY = {
 export async function createGpu(canvas, { forceGl = false } = {}) {
   const { Orbital } = await loadEngine();
   const orbital = forceGl ? await Orbital.create_gl(canvas) : await Orbital.create(canvas);
+  // M67 — run the compute lane's bring-up contract in the background: on a
+  // compute-capable adapter it executes the fixture kernel and holds it
+  // byte-for-byte against the CPU twin; the verdict lands in
+  // compute_status() for the HUD and the browser probe. Guarded so a stale
+  // wasm build (predating the lane) still boots.
+  if (typeof orbital.compute_bringup === "function") {
+    orbital.compute_bringup().then(
+      (s) => console.log("[calliope] compute lane: " + s),
+      (e) => console.warn("[calliope] compute bring-up failed:", e),
+    );
+  }
   return new GpuEngine(canvas, orbital);
 }
 
@@ -50,6 +61,13 @@ class GpuEngine {
 
   backend() {
     return this.orbital.backend();
+  }
+
+  // M67 — the compute lane's verdict string, for the HUD and the probe.
+  computeStatus() {
+    return typeof this.orbital.compute_status === "function"
+      ? this.orbital.compute_status()
+      : "not probed (stale engine build)";
   }
 
   setWorld(world) {
