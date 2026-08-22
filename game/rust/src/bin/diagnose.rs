@@ -5086,6 +5086,100 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             format!("mean SPI {:.2}", mean_z),
             "M72: the mean famine year sits at or beyond moderate drought",
         );
+
+        // ---- dose-response: dryness governs hunger, it does not merely
+        // accompany it. Every eligible town-year (the famine pass's own
+        // predicate) is binned by the SPI it actually stood in, and the
+        // share that starved is read off per bin. If rain governs, the
+        // share is zero above the threshold and climbs as the bins dry.
+        let spi_of = |year: i64, x: i64, y: i64| -> f64 {
+            let lat = (-90.0 + (y as f64) * 180.0 / (rows - 1.0)).abs();
+            let sigma = calliope::climate::anomaly_amp_p(lat).max(1e-6);
+            w.with_year_sky(year, |_, dp, _| dp[[y as usize, x as usize]]) / sigma
+        };
+        let struck: BTreeSet<(i64, i64, i64)> =
+            log.famine_sites.iter().map(|&(m, x, y)| (m / 12, x, y)).collect();
+        // bins, driest first: ≤−2 (extreme), (−2,−1] (moderate), (−1,0], >0
+        let edges = [-2.0f64, -1.0, 0.0];
+        let names = ["SPI ≤ −2", "−2 < SPI ≤ −1", "−1 < SPI ≤ 0", "SPI > 0"];
+        let mut tot = [0usize; 4];
+        let mut hit = [0usize; 4];
+        for &(year, x, y) in &log.famine_pool {
+            let z = spi_of(year, x, y);
+            let b = if z <= edges[0] {
+                0
+            } else if z <= edges[1] {
+                1
+            } else if z <= edges[2] {
+                2
+            } else {
+                3
+            };
+            tot[b] += 1;
+            if struck.contains(&(year, x, y)) {
+                hit[b] += 1;
+            }
+        }
+        let rate = |b: usize| if tot[b] == 0 { 0.0 } else { hit[b] as f64 / tot[b] as f64 };
+        println!(
+            "  dose-response over {} eligible town-years — {}",
+            log.famine_pool.len(),
+            (0..4)
+                .map(|b| format!("{} {:.0}% ({}/{})", names[b], 100.0 * rate(b), hit[b], tot[b]))
+                .collect::<Vec<_>>()
+                .join(" · ")
+        );
+        let wet_clean = hit[2] + hit[3] == 0;
+        c.must(
+            "no town starves in a year that was not dry",
+            wet_clean,
+            format!("{} famines above SPI −1 of {} wet-side town-years", hit[2] + hit[3], tot[2] + tot[3]),
+            "M72: the drought threshold is a hard boundary on hunger — above SPI −1 the harvest verdict never starves anyone",
+        );
+        let dose_climbs = tot[0] > 0 && tot[1] > 0 && rate(0) > rate(1) && rate(1) > 0.0;
+        c.must(
+            "hunger climbs with the drought",
+            dose_climbs,
+            format!("{:.0}% at SPI ≤ −2 vs {:.0}% at −2..−1", 100.0 * rate(0), 100.0 * rate(1)),
+            "M72: famine incidence rises monotonically as the bins dry — a dose-response, not a coincidence",
+        );
+
+        // ---- the placebo: the same towns, the same years' worth of sky,
+        // but the wrong year. If hunger were a property of *place* (bad
+        // ground, a thin margin) rather than of the *year's* rain, these
+        // shuffled skies would look just as dry as the real ones. They
+        // must not: the real famine years are drought-selected, the
+        // counterfactual ones are the world's ordinary base rate.
+        // Deterministic offsets, no die.
+        let horizon = (years as i64).max(1);
+        let mut cf_dry = 0usize;
+        let mut cf_n = 0usize;
+        for (i, &(m, x, y)) in log.famine_sites.iter().enumerate() {
+            let year = m / 12;
+            for k in 1..=4i64 {
+                let alt = ((year + k * 7 + i as i64 * 3).rem_euclid(horizon)).max(1);
+                if alt == year {
+                    continue;
+                }
+                cf_n += 1;
+                if spi_of(alt, x, y) <= calliope::famine::DROUGHT_Z {
+                    cf_dry += 1;
+                }
+            }
+        }
+        let cf_rate = if cf_n == 0 { 1.0 } else { cf_dry as f64 / cf_n as f64 };
+        println!(
+            "  counterfactual sky — the same {} hungry cells under {} wrong-year skies: {:.0}% would have been dry (real 100%)",
+            log.famine_sites.len(),
+            cf_n,
+            100.0 * cf_rate
+        );
+        c.must(
+            "the year, not the place, makes the famine",
+            cf_rate <= 0.50,
+            format!("{:.0}% of wrong-year skies dry vs 100% of the real ones", 100.0 * cf_rate),
+            "M72: swap the year and the drought mostly vanishes — hunger is selected by the realized sky, not by the cell",
+        );
     }
 
 
