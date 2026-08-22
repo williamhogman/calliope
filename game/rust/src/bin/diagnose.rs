@@ -1430,7 +1430,7 @@ struct RunLog {
     /// M72 — where and when each famine struck: (month, x, y). The famine
     /// pass no longer rolls a private die, so every one of these must be
     /// answerable by the year's own realized rain (SPI ≤ −1 at that cell).
-    famine_sites: Vec<(i64, i64, i64)>,
+    famine_sites: Vec<(i64, i64, i64, i64)>,
     /// M72 — the eligible pool: every rain-fed farming town-year that
     /// *could* have starved (the famine pass's own predicate), as
     /// (year, x, y). Without the pool a famine list proves only that the
@@ -1519,7 +1519,16 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
                 "war" => log.wars += 1,
                 "famine" => {
                     log.famines += 1;
-                    log.famine_sites.push((e.m, e.x, e.y));
+                    // the toll, read off the telling: the first number in
+                    // a famine line is its dead. Severity is the dose the
+                    // threshold model actually modulates.
+                    let dead: i64 = e
+                        .text
+                        .split(|ch: char| !ch.is_ascii_digit())
+                        .find(|t| !t.is_empty())
+                        .and_then(|t| t.parse().ok())
+                        .unwrap_or(0);
+                    log.famine_sites.push((e.m, e.x, e.y, dead));
                 }
                 "tech" | "society" => log.arc.push((e.m, e.text.clone())),
                 _ => {}
@@ -5054,7 +5063,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     if !log.famine_sites.is_empty() {
         let rows = w.fields.tmean.dim().0 as f64;
         let mut zs: Vec<f64> = Vec::with_capacity(log.famine_sites.len());
-        for &(m, x, y) in &log.famine_sites {
+        for &(m, x, y, _) in &log.famine_sites {
             let year = m / 12;
             let lat = (-90.0 + (y as f64) * 180.0 / (rows - 1.0)).abs();
             let sigma = calliope::climate::anomaly_amp_p(lat).max(1e-6);
@@ -5098,7 +5107,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             w.with_year_sky(year, |_, dp, _| dp[[y as usize, x as usize]]) / sigma
         };
         let struck: BTreeSet<(i64, i64, i64)> =
-            log.famine_sites.iter().map(|&(m, x, y)| (m / 12, x, y)).collect();
+            log.famine_sites.iter().map(|&(m, x, y, _)| (m / 12, x, y)).collect();
         // bins, driest first: ≤−2 (extreme), (−2,−1] (moderate), (−1,0], >0
         let edges = [-2.0f64, -1.0, 0.0];
         let names = ["SPI ≤ −2", "−2 < SPI ≤ −1", "−1 < SPI ≤ 0", "SPI > 0"];
@@ -5154,7 +5163,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let horizon = (years as i64).max(1);
         let mut cf_dry = 0usize;
         let mut cf_n = 0usize;
-        for (i, &(m, x, y)) in log.famine_sites.iter().enumerate() {
+        for (i, &(m, x, y, _)) in log.famine_sites.iter().enumerate() {
             let year = m / 12;
             for k in 1..=4i64 {
                 let alt = ((year + k * 7 + i as i64 * 3).rem_euclid(horizon)).max(1);
