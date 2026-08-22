@@ -173,7 +173,10 @@ pub struct World {
     /// M71 — the current year's weather, memoized: `(year, dt °C, dp share)`.
     /// Derived state (a pure function of seed × year), never hashed, never
     /// packed; recomputed the first time a year is asked for.
-    pub(crate) year_weather: std::sync::Mutex<Option<(i64, Array2<f64>, Array2<f64>)>>,
+    /// M72 adds a third lane, `dq`: the same rain anomaly integrated over
+    /// a catchment-sized neighbourhood — what the rivers carry that year.
+    pub(crate) year_weather:
+        std::sync::Mutex<Option<(i64, Array2<f64>, Array2<f64>, Array2<f64>)>>,
     /// Last year grain was shock-priced by famine, to spike at most once a year.
     pub(crate) grain_shock_year: i64,
     /// pub since M55: diagnostics weigh dry ground against watered ground.
@@ -1248,18 +1251,29 @@ impl World {
     /// `tmean`, `dp` the fractional change on `precip`.
 
     pub fn with_year_weather<R>(&self, year: i64, f: impl FnOnce(&Array2<f64>, &Array2<f64>) -> R) -> R {
+        self.with_year_sky(year, |dt, dp, _| f(dt, dp))
+    }
+
+    /// M72 — the full year: temperature anomaly, rain anomaly, and the
+    /// catchment-integrated rain anomaly the rivers run on.
+    pub fn with_year_sky<R>(
+        &self,
+        year: i64,
+        f: impl FnOnce(&Array2<f64>, &Array2<f64>, &Array2<f64>) -> R,
+    ) -> R {
         let mut slot = self.year_weather.lock().unwrap();
         let stale = match slot.as_ref() {
-            Some((y, _, _)) => *y != year,
+            Some((y, _, _, _)) => *y != year,
             None => true,
         };
         if stale {
             let (rows, cols) = self.fields.tmean.dim();
             let (dt, dp) = climate::year_anomaly(&self.variability, rows, cols, year);
-            *slot = Some((year, dt, dp));
+            let dq = crate::ndimage::gaussian_filter(&dp, CATCHMENT_SIGMA);
+            *slot = Some((year, dt, dp, dq));
         }
-        let (_, dt, dp) = slot.as_ref().unwrap();
-        f(dt, dp)
+        let (_, dt, dp, dq) = slot.as_ref().unwrap();
+        f(dt, dp, dq)
     }
 
     /// M71 — the mean temperature this cell actually saw in `year`:
@@ -1273,6 +1287,39 @@ impl World {
     pub fn year_precip(&self, year: i64, y: usize, x: usize) -> f64 {
         self.with_year_weather(year, |_, dp| {
             (self.fields.precip[[y, x]] as f64 * (1.0 + dp[[y, x]])).max(0.0)
+        })
+    }
+
+    /// M72 — the flow this cell's river actually carried in `year`. The
+    /// stored `discharge` grid is never touched: a river's rank, its
+    /// Strahler order and every endorheic call are the dawn's, solved on
+    /// the mean climate and frozen (ADR-0005). What breathes is the
+    /// *year's* water, a bounded multiplier read by whoever needs it.
+    pub fn year_discharge(&self, year: i64, y: usize, x: usize) -> f64 {
+        self.fields.discharge[[y, x]] as f64 * self.year_flow_factor(year, y, x)
+    }
+
+    /// M72 — the bounded flow multiplier itself, catchment-integrated so a
+    /// single dry cell cannot empty a trunk river.
+    pub fn year_flow_factor(&self, year: i64, y: usize, x: usize) -> f64 {
+        self.with_year_sky(year, |_, _, dq| {
+            (1.0 + FLOW_ANOM_GAIN * dq[[y, x]]).clamp(FLOW_FACTOR_MIN, FLOW_FACTOR_MAX)
+        })
+    }
+
+    /// M72 — what the year did to this cell's harvest: the crop package
+    /// standing here, scored through `agriculture::climatic_score` at the
+    /// mean and at mean-plus-anomaly. Watered ground reads the catchment
+    /// lane instead of the local rain — a canal is fed by the river's
+    /// year, not by the cloud overhead.
+    pub fn year_yield(&self, year: i64, y: usize, x: usize) -> f64 {
+        let pack = agriculture::CropPackage::from_code(self.fields.crops[[y, x]]);
+        let irrigated = self.near_fresh[[y, x]];
+        let t = self.fields.tmean[[y, x]] as f64;
+        let p = self.fields.precip[[y, x]] as f64;
+        self.with_year_sky(year, |dt, dp, dq| {
+            let rain = if irrigated { FLOW_ANOM_GAIN * dq[[y, x]] } else { dp[[y, x]] };
+            agriculture::year_yield_factor(pack, t, p, dt[[y, x]], rain, irrigated)
         })
     }
 
