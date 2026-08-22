@@ -475,7 +475,7 @@ pub fn drift(h: &mut Array2<f64>, keep_open: &Array2<bool>) -> Coast {
         }
     }
 
-    Coast { form, deposits }
+    Coast { form_gen: form, deposits }
 }
 
 /// The largest water component's label — the world ocean.

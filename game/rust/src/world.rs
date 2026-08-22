@@ -684,7 +684,7 @@ impl GenBuilder {
         // price the anchorage from this one field.
         let mut shelter = settlements::shelter_score(
             &height,
-            &self.coastform.as_ref().expect("glacial stage ran").form,
+            &self.coastform.as_ref().expect("glacial stage ran").form_gen,
         );
         // M59 — the harbor pays for the river's load: where fan silt
         // lies in the 5×5 anchorage window shelter_score itself reads,
