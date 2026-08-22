@@ -1427,6 +1427,10 @@ struct RunLog {
     depletions: usize,
     wars: usize,
     famines: usize,
+    /// M72 — where and when each famine struck: (month, x, y). The famine
+    /// pass no longer rolls a private die, so every one of these must be
+    /// answerable by the year's own realized rain (SPI ≤ −1 at that cell).
+    famine_sites: Vec<(i64, i64, i64)>,
     placeholders: usize,
     empties: usize,
     /// events that speak a god's name — festivals, omens, war-oaths (M3.5)
@@ -1489,7 +1493,10 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
                 "discovery" => log.strikes += 1,
                 "depletion" => log.depletions += 1,
                 "war" => log.wars += 1,
-                "famine" => log.famines += 1,
+                "famine" => {
+                    log.famines += 1;
+                    log.famine_sites.push((e.m, e.x, e.y));
+                }
                 "tech" | "society" => log.arc.push((e.m, e.text.clone())),
                 _ => {}
             }
@@ -5014,6 +5021,50 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let per_c = log.famines as f64 * 100.0 / years.max(1) as f64;
         c.band("famine events per century", per_c, format!("{:.1}", per_c));
     }
+
+    // ---- M72 famine causality: every hunger answers to the year's rain ----
+    // The famine pass reads the realized rain anomaly as a standardized
+    // index (SPI, McKee 1993) against the latitude's own interannual
+    // spread. So each logged famine must sit at a cell-year whose SPI is
+    // at or below the drought threshold — no private die, no exception.
+    if !log.famine_sites.is_empty() {
+        let rows = w.fields.tmean.dim().0 as f64;
+        let mut zs: Vec<f64> = Vec::with_capacity(log.famine_sites.len());
+        for &(m, x, y) in &log.famine_sites {
+            let year = m / 12;
+            let lat = (-90.0 + (y as f64) * 180.0 / (rows - 1.0)).abs();
+            let sigma = calliope::climate::anomaly_amp_p(lat).max(1e-6);
+            let dp = w.with_year_sky(year, |_, dp, _| dp[[y as usize, x as usize]]);
+            zs.push(dp / sigma);
+        }
+        let worst = zs.iter().cloned().fold(f64::INFINITY, f64::min);
+        let driest_ok = zs
+            .iter()
+            .filter(|z| **z <= calliope::famine::DROUGHT_Z + 1e-9)
+            .count();
+        let mean_z = zs.iter().sum::<f64>() / zs.len() as f64;
+        println!();
+        println!(
+            "M72 · famine causality — {} famines · mean SPI {:.2} · worst {:.2}",
+            zs.len(),
+            mean_z,
+            worst
+        );
+        c.must(
+            "every famine stands in a failed year",
+            driest_ok == zs.len(),
+            format!("{}/{} at SPI ≤ {:.1}", driest_ok, zs.len(), calliope::famine::DROUGHT_Z),
+            "M72: hunger is the year's realized rain read as SPI, never a private die",
+        );
+        c.must(
+            "famine years are meaningfully dry",
+            mean_z <= calliope::famine::DROUGHT_Z,
+            format!("mean SPI {:.2}", mean_z),
+            "M72: the mean famine year sits at or beyond moderate drought",
+        );
+    }
+
+
 
     // ---- M72: the year that was — one sky over harvest, flow and famine ----
     {
