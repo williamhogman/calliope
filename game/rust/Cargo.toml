@@ -54,23 +54,16 @@ panic = "abort"
 inherits = "release"
 panic = "unwind"
 
-# E6.3 — explicit wasm-opt pass (wasm-pack runs this via binaryen on PATH;
+# E6.3 — explicit wasm-opt pass; M66 adds --no-inline=*stage_*: rustc's
+# #[inline(never)] holds through LLVM, but binaryen re-merges single-caller
+# functions unless told otherwise — the gen stages stay their own bodies.
+# Was: explicit wasm-opt pass (wasm-pack runs this via binaryen on PATH;
 # scripts/build.sh's nix path provides it). -O3 measured against -Oz on the
 # real binary; producers/target-features metadata stripped (E6.6).
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-Oz", "--strip-producers", "--strip-target-features"]
+wasm-opt = ["-Oz", "--strip-producers", "--strip-target-features", "--no-inline=*stage_*"]
 
 # E6.6 — the symbolized twin for scripts/wasm-audit.sh: wasm-opt keeps the
 # name section (-g) so twiggy can name what weighs. Never shipped.
-[package.metadata.wasm-pack.profile.profiling]
-wasm-opt = ["-O", "-g"]
-
-# M66 — the stage boundaries survive into the binary: rustc's
-# #[inline(never)] holds through LLVM, but wasm-opt re-merges
-# single-caller functions unless told otherwise. The audit (E6.6)
-# wants to see the gen pipeline as its stages, not one 360 KB body.
-[package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-O", "--no-inline=*stage_*"]
-
 [package.metadata.wasm-pack.profile.profiling]
 wasm-opt = ["-O", "-g", "--no-inline=*stage_*"]
