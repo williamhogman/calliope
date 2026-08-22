@@ -1,17 +1,17 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · WASM AUDIT                   twiggy top (E6.4)
 ========================================================================
- subject: calliope_bg.wasm 3514164 B · sha256 d2383467329dc708bc8faea636d4341e6e93162ba59a9921627384a7abb39a65
- profiling twin (symbolized): 3898590 B — sizes below are from the
+ subject: calliope_bg.wasm 3515909 B · sha256 32f8337d77445d3206e6bed6789473a5baa059f9577cd04e18d6867dc271bc86
+ profiling twin (symbolized): 3900392 B — sizes below are from the
  twin; the release binary is the same code without names.
 
  Shallow Bytes │ Shallow % │ Item
 ───────────────┼───────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-        325989 ┊     8.36% ┊ "function names" subsection
-        134170 ┊     3.44% ┊ calliope::world::GenBuilder::stage_dawn::h3338b61462d074c4
+        326048 ┊     8.36% ┊ "function names" subsection
+        134731 ┊     3.45% ┊ calliope::world::GenBuilder::stage_dawn::h3338b61462d074c4
          85453 ┊     2.19% ┊ orbital_render
-         62593 ┊     1.61% ┊ <wgpu::backend::wgpu_core::CoreDevice as wgpu::dispatch::DeviceInterface>::create_shader_module::haad146540d3c18a2
-         56145 ┊     1.44% ┊ calliope::world::GenBuilder::stage_glacial::hc34ae8c6377c37a5
+         62593 ┊     1.60% ┊ <wgpu::backend::wgpu_core::CoreDevice as wgpu::dispatch::DeviceInterface>::create_shader_module::haad146540d3c18a2
+         56146 ┊     1.44% ┊ calliope::world::GenBuilder::stage_glacial::hc34ae8c6377c37a5
          53496 ┊     1.37% ┊ wgpu_hal::gles::device::<impl wgpu_hal::gles::Device>::create_pipeline::hb9a1960047bef7f3
          49199 ┊     1.26% ┊ <calliope::systems::Statecraft as calliope::systems::System>::run::h335f9ec34abb2bd0
          40819 ┊     1.05% ┊ data segment ".rodata.266"
@@ -26,7 +26,7 @@
          29199 ┊     0.75% ┊ <calliope::systems::CivPulse as calliope::systems::System>::run::hd129fc263e3c1835
          27704 ┊     0.71% ┊ naga::valid::function::<impl naga::valid::Validator>::validate_block_impl::h356788578f00813e
          26866 ┊     0.69% ┊ naga::front::wgsl::lower::Lowerer::call::h18caa70c150afb16
-         26318 ┊     0.68% ┊ calliope::world::GenBuilder::stage_resources::hc23ef3e029c452db
+         26318 ┊     0.67% ┊ calliope::world::GenBuilder::stage_resources::hc23ef3e029c452db
          25171 ┊     0.65% ┊ <wgpu::backend::wgpu_core::CoreDevice as wgpu::dispatch::DeviceInterface>::create_render_pipeline::h4b324cf3ec67d460
          24910 ┊     0.64% ┊ wasmworld_stories multivalue shim
          24849 ┊     0.64% ┊ data segment ".rodata.208"
@@ -46,11 +46,11 @@
          14920 ┊     0.38% ┊ calliope::world::GenBuilder::stage_climate::he5bc6ce3c21244c2
          14644 ┊     0.38% ┊ calliope::world::GenBuilder::stage_terrain::h7b0f84cc727f8075
          14454 ┊     0.37% ┊ naga::front::wgsl::parse::Parser::statement::h08dfb8e2b45a831a
-         14306 ┊     0.37% ┊ wasmworld_earth_hash multivalue shim
-       2312261 ┊    59.31% ┊ ... and 4378 more.
-       3898590 ┊   100.00% ┊ Σ [4418 Total Rows]
+         14312 ┊     0.37% ┊ wasmworld_earth_hash multivalue shim
+       2313436 ┊    59.31% ┊ ... and 4379 more.
+       3900392 ┊   100.00% ┊ Σ [4419 Total Rows]
 
 ---- checks ----------------------------------------------------------
 [PASS] twin speaks for the shipped binary          Δ 1.7%   (E6.6: |twin − names − release| ≤3% sweet · ≤6% hard of release — beyond that the audit reads a different build)
-[PASS] no single item dominates the twin              3.4%   (E6.6: heaviest item ≤8% sweet · ≤12% hard — today's worst is the ~3.4% dawn stage; a jump names a new monster: calliope::world::GenBuilder::stage_dawn::h3338)
+[PASS] no single item dominates the twin              3.5%   (E6.6: heaviest item ≤8% sweet · ≤12% hard — today's worst is the ~3.4% dawn stage; a jump names a new monster: calliope::world::GenBuilder::stage_dawn::h3338)
 CHECKS: 2 pass · 0 warn · 0 fail

@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
 mode: full · size: 512 · generated: 2026-08-22 09:25 UTC
 
-totals: 877 pass · 33 warn · 4 fail
+totals: 878 pass · 33 warn · 3 fail
 
 -- assay.txt
    all checks pass
@@ -65,7 +65,6 @@ totals: 877 pass · 33 warn · 4 fail
 
 -- gate.txt
 [FAIL] the suite composes clean             1 fail · 33 warn · 871 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
-[FAIL] the wasm audit speaks for shipped bytes    STALE AUDIT   (E6.6: audit subject sha256 = shipped wasm — rerun scripts/wasm-audit.sh after a rebuild)
 [FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
 
 -- hydro-12345.txt
