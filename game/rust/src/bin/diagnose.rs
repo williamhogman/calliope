@@ -2001,6 +2001,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
         // ---- longshore drift (M44) ----------------------------------
         {
             let cf = &w.fields.coastform;
+            let ledger = &w.coastform;
             let mut n_spit = 0usize;
             let mut n_bar = 0usize;
             let mut n_lag = 0usize;
@@ -2045,7 +2046,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             let bar_chains = chains(calliope::coast::BARRIER);
             println!(
                 "longshore drift (M44): spit cells {} in {} chains · barrier cells {} in {} chains · lagoon cells {} · deposits {}",
-                n_spit, spit_chains, n_bar, bar_chains, n_lag, cf.deposits.len()
+                n_spit, spit_chains, n_bar, bar_chains, n_lag, ledger.deposits.len()
             );
             let share = 100.0 * (n_spit + n_bar + n_lag) as f64 / coastal_water.max(1) as f64;
             c.band("coastform share of coastal cells %", share, format!("{:.2} %", share));
@@ -2060,11 +2061,11 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             );
             c.must(
                 "deposit ledger matches the grown ground (M44)",
-                cf.deposits.len() == n_spit + n_bar,
-                format!("{} deposits vs {} formed cells", cf.deposits.len(), n_spit + n_bar),
+                ledger.deposits.len() == n_spit + n_bar,
+                format!("{} deposits vs {} formed cells", ledger.deposits.len(), n_spit + n_bar),
                 "M44: every deposited cell is a spit or barrier cell, and nothing else is",
             );
-            let shallow = cf.deposits.iter().all(|&(_, _, b)| {
+            let shallow = ledger.deposits.iter().all(|&(_, _, b)| {
                 let d = f32::from_bits(b) as f64;
                 d < 0.0 && d > calliope::coast::BAR_FLOOR
             });
