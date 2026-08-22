@@ -10112,6 +10112,35 @@ fn cmd_compute(size: usize, seeds: Vec<i64>, golden: Option<String>) {
     c.band("jfa max err cells", worst_err, format!("{worst_err:.3} cells"));
     c.band("jfa wrong cell share", worst_share, pct(worst_share));
     c.band("coast law cpu ms", worst_ms, format!("{worst_ms:.0} ms"));
+
+    // ---- the golden export (the JS twin's referee) ----------------------
+    if let Some(path) = golden.as_ref() {
+        let mut buf: Vec<u8> = Vec::new();
+        buf.extend_from_slice(b"CJFA");
+        buf.extend_from_slice(&(golden_cases.len() as u32).to_le_bytes());
+        for (name, w, h, hgt, sf) in &golden_cases {
+            buf.extend_from_slice(&(name.len() as u32).to_le_bytes());
+            buf.extend_from_slice(name.as_bytes());
+            buf.extend_from_slice(&(*w as u32).to_le_bytes());
+            buf.extend_from_slice(&(*h as u32).to_le_bytes());
+            for v in hgt {
+                buf.extend_from_slice(&v.to_le_bytes());
+            }
+            for v in sf {
+                buf.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        match std::fs::write(path, &buf) {
+            Ok(()) => println!(
+                " golden: {} case(s) · {} B -> {path}",
+                golden_cases.len(),
+                buf.len()
+            ),
+            Err(e) => {
+                c.must("golden export written", false, "error".into(), &format!("M67: the JS parity lane needs its referee — {e}"));
+            }
+        }
+    }
     c.print();
 }
 
