@@ -7567,23 +7567,27 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         c.must(&format!("unpack layout sound ({})", seed), ok_layout,
             format!("{} arrays", entries.len()), "M8.1: offsets contiguous, sizes exact");
 
-        // decode every section exactly the way the client does and compare
+        // decode every section exactly the way the client does and compare.
+        // M68 — the lookup comes from the registry itself (`field_decls`),
+        // not a hand-written name→grid map: a grid registered in pack.rs is
+        // a grid this gate judges, and there is no second list to drift.
+        let decls = w.field_decls();
+        let decl = |name: &str| -> &calliope::pack::FieldDecl<'_> {
+            decls
+                .iter()
+                .find(|d| d.name == name)
+                .expect("packed section is a registry field")
+        };
         let f32_grid = |name: &str| -> &ndarray::Array2<f32> {
-            match name {
-                "height" => &w.fields.height, "tmean" => &w.fields.tmean, "tamp" => &w.fields.tamp,
-                "precip" => &w.fields.precip, "pamp" => &w.fields.pamp, "discharge" => &w.fields.discharge,
-                "flow_amp" => &w.fields.flow_amp, "fertility" => &w.fields.fertility,
-                "upwelling" => &w.fields.upwelling, "aquifer" => &w.fields.aquifer,
-                other => unreachable!("unknown f32 field {other}"),
+            match &decl(name).data {
+                calliope::pack::FieldData::F32(a) => a,
+                _ => unreachable!("{name} is not an f32 field"),
             }
         };
         let u8_grid = |name: &str| -> &ndarray::Array2<u8> {
-            match name {
-                "biomes" => &w.fields.biomes, "crops" => &w.fields.crops,
-                "strahler" => &w.fields.strahler, "flags" => &w.fields.flags,
-                "rock" => &w.fields.rock, "soil" => &w.fields.soil,
-                "landform" => &w.fields.landform,
-                other => unreachable!("unknown u8 field {other}"),
+            match &decl(name).data {
+                calliope::pack::FieldData::U8(a) => a,
+                _ => unreachable!("{name} is not a u8 field"),
             }
         };
         let mut ok_data = true;
