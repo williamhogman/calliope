@@ -9637,11 +9637,12 @@ fn cmd_atlas(size: usize, seeds: Vec<i64>) {
     println!(" gpu upload order ({}): {}", order.len(), order.join(" · "));
     c.must(
         "upload order = registry gpu rows",
-        calliope::pack::gpu_order_is(calliope::render::SET_WORLD_GRIDS)
-            && order == calliope::render::SET_WORLD_GRIDS.to_vec(),
+        calliope::pack::gpu_order_is(calliope::pack::GPU_UPLOAD_ORDER)
+            && order == calliope::pack::GPU_UPLOAD_ORDER.to_vec(),
         format!("{} grids", order.len()),
-        "M69: set_world's parameter list is the field registry's gpu rows in pack order — no second list",
+        "M69: the Orbital upload list is the field registry's gpu rows in pack order — no second list",
     );
+
 
 
 
