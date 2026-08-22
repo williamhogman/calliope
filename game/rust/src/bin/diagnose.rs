@@ -5145,12 +5145,48 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             format!("{} famines above SPI −1 of {} wet-side town-years", hit[2] + hit[3], tot[2] + tot[3]),
             "M72: the drought threshold is a hard boundary on hunger — above SPI −1 the harvest verdict never starves anyone",
         );
-        let dose_climbs = tot[0] > 0 && tot[1] > 0 && rate(0) > rate(1) && rate(1) > 0.0;
+        // The verdict is a *threshold* law: below SPI −1 the harvest fails,
+        // full stop, so incidence saturates at 100% in both dry bins and
+        // carries no dose. The dose the law actually modulates is severity
+        // — the shortfall runs from SPI −1 to −2 and the toll rides it —
+        // so the dose-response is measured in the dead, not in the count.
+        let mut sev: Vec<(f64, f64)> = Vec::new(); // (shortfall, dead)
+        let (mut dead_b0, mut n_b0, mut dead_b1, mut n_b1) = (0.0f64, 0usize, 0.0f64, 0usize);
+        for &(m, x, y, dead) in &log.famine_sites {
+            let z = spi_of(m / 12, x, y);
+            let shortfall = (((-z) - (-calliope::famine::DROUGHT_Z)) / (-calliope::famine::DROUGHT_Z)).min(1.0);
+            sev.push((shortfall, dead as f64));
+            if z <= edges[0] {
+                dead_b0 += dead as f64;
+                n_b0 += 1;
+            } else {
+                dead_b1 += dead as f64;
+                n_b1 += 1;
+            }
+        }
+        let mean_b0 = if n_b0 == 0 { 0.0 } else { dead_b0 / n_b0 as f64 };
+        let mean_b1 = if n_b1 == 0 { 0.0 } else { dead_b1 / n_b1 as f64 };
+        let ns = sev.len() as f64;
+        let (msx, msy) = (
+            sev.iter().map(|p| p.0).sum::<f64>() / ns,
+            sev.iter().map(|p| p.1).sum::<f64>() / ns,
+        );
+        let (mut cov, mut vx, mut vy) = (0.0, 0.0, 0.0);
+        for (a, b) in &sev {
+            cov += (a - msx) * (b - msy);
+            vx += (a - msx).powi(2);
+            vy += (b - msy).powi(2);
+        }
+        let rho_sev = cov / (vx.sqrt() * vy.sqrt()).max(1e-12);
+        println!(
+            "  severity dose — mean dead {:.1} at SPI ≤ −2 ({} famines) vs {:.1} at −2..−1 ({}) · ρ(shortfall, dead) {:.3}",
+            mean_b0, n_b0, mean_b1, n_b1, rho_sev
+        );
         c.must(
             "hunger climbs with the drought",
-            dose_climbs,
-            format!("{:.0}% at SPI ≤ −2 vs {:.0}% at −2..−1", 100.0 * rate(0), 100.0 * rate(1)),
-            "M72: famine incidence rises monotonically as the bins dry — a dose-response, not a coincidence",
+            n_b0 > 0 && n_b1 > 0 && mean_b0 > mean_b1 && rho_sev > 0.0,
+            format!("{:.1} dead at SPI ≤ −2 vs {:.1} at −2..−1 · ρ {:.3}", mean_b0, mean_b1, rho_sev),
+            "M72: the toll rises with the depth of the drought — the threshold decides whether, the shortfall decides how hard",
         );
 
         // ---- the placebo: the same towns, the same years' worth of sky,
