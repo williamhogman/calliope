@@ -167,6 +167,13 @@ pub struct World {
     pub(crate) wire_buf: Vec<u8>,
     /// Deterministic drought field over (space × year) — the famine die (M2.6).
     pub(crate) drought: Perlin3,
+    /// M71 — the interannual variability field over (space × year): its own
+    /// stream, so the sky's noise and the famine die never share a draw.
+    pub(crate) variability: Perlin3,
+    /// M71 — the current year's weather, memoized: `(year, dt °C, dp share)`.
+    /// Derived state (a pure function of seed × year), never hashed, never
+    /// packed; recomputed the first time a year is asked for.
+    pub(crate) year_weather: std::sync::Mutex<Option<(i64, Array2<f64>, Array2<f64>)>>,
     /// Last year grain was shock-priced by famine, to spike at most once a year.
     pub(crate) grain_shock_year: i64,
     /// pub since M55: diagnostics weigh dry ground against watered ground.
@@ -1015,6 +1022,8 @@ impl GenBuilder {
             sent: SentCache::default(),
             wire_buf: Vec::new(),
             drought: Perlin3::new(seed + 4444),
+            variability: Perlin3::new(seed + 7717),
+            year_weather: std::sync::Mutex::new(None),
             grain_shock_year: -1,
             site_score: founded.site_score,
             food_grid: founded.food_grid,
@@ -1226,9 +1235,51 @@ impl GenBuilder {
 }
 
 impl World {
+    /// M71 — the year's anomaly grids computed from scratch, bypassing the
+    /// memo. Diagnostics hold this against the memoized copy so the cache
+    /// can never quietly become a second source of weather.
+    pub fn year_anomaly_fresh(&self, year: i64) -> (Array2<f64>, Array2<f64>) {
+        let (rows, cols) = self.fields.tmean.dim();
+        climate::year_anomaly(&self.variability, rows, cols, year)
+    }
+
+    /// M71 — hand the caller the year's anomaly grids, computing them once
+    /// per year and holding them until the year turns. `dt` is degrees on
+    /// `tmean`, `dp` the fractional change on `precip`.
+
+    pub fn with_year_weather<R>(&self, year: i64, f: impl FnOnce(&Array2<f64>, &Array2<f64>) -> R) -> R {
+        let mut slot = self.year_weather.lock().unwrap();
+        let stale = match slot.as_ref() {
+            Some((y, _, _)) => *y != year,
+            None => true,
+        };
+        if stale {
+            let (rows, cols) = self.fields.tmean.dim();
+            let (dt, dp) = climate::year_anomaly(&self.variability, rows, cols, year);
+            *slot = Some((year, dt, dp));
+        }
+        let (_, dt, dp) = slot.as_ref().unwrap();
+        f(dt, dp)
+    }
+
+    /// M71 — the mean temperature this cell actually saw in `year`:
+    /// the climate mean plus that year's anomaly (°C).
+    pub fn year_tmean(&self, year: i64, y: usize, x: usize) -> f64 {
+        self.with_year_weather(year, |dt, _| self.fields.tmean[[y, x]] as f64 + dt[[y, x]])
+    }
+
+    /// M71 — the rain this cell actually got in `year` (mm), the climate
+    /// mean scaled by that year's fractional anomaly.
+    pub fn year_precip(&self, year: i64, y: usize, x: usize) -> f64 {
+        self.with_year_weather(year, |_, dp| {
+            (self.fields.precip[[y, x]] as f64 * (1.0 + dp[[y, x]])).max(0.0)
+        })
+    }
+
     pub fn generate(seed: i64, size: usize) -> World {
         World::generate_scaled(seed, size, 1.0)
     }
+
 
     /// `generate` with a rainfall multiplier — the metamorphic-testing knob
     /// (M8.2): the harness generates the same seed wetter and asserts the
