@@ -127,16 +127,24 @@ the era files are binding; this ledger only records completion.
   nearer strategically-claimed seam emerging from a re-derived claim
   scope — never a softer veto or a widened band. The era seals the day
   that row turns, and the gate will say so on its own.
-- The gen monolith (named by the audit's first measured run): the
-  heaviest item in the symbolized twin is our own
-  `calliope::world::GenBuilder::step` at **9.3% (~364 KB)** — the whole
-  generation pipeline inlined into one function body, now WARN against
-  the ≤8% sweet band. In the same window the shipped wasm grew 2.86 →
-  3.36 MiB across M41–M65 (WARN against E6's 3.2 sweet). One diet, two
-  rows: put `#[inline(never)]` boundaries on the stage bodies inside
-  `step` (codegen units can then deduplicate and the twin names each
-  stage separately), re-audit, and prove `hash_state` and the deep-earth
-  identity line unchanged — a size cut may never buy a bit of drift.
+- The wasm size diet, residual (E6.4): the gen monolith half of the
+  old diet item closed with M66 (stage boundaries survive binaryen;
+  heaviest own item now `stage_dawn` 3.44%, domination row PASS, and
+  the split *shrank* the shipped binary ~6 KB) — but the binary still
+  reads 3.35 MiB against the 3.0 sweet band, grown 2.86 → 3.35 across
+  M41–M65. The audit's table names the real candidates: the naga
+  WGSL-validate + GLSL-writer chain (~300+ KB across rows) runs full
+  shader validation at boot for shaders that never change — a
+  pre-validated pipeline (validate in the harness, ship the module
+  trusted, keep the validator behind a debug feature) is the one cut
+  whose size is already measured. Any cut proves `hash_state` and the
+  deep-earth identity line unchanged — size may never buy drift.
+- The dawn stage as the next legibility target: with the monolith
+  split, `stage_dawn` is the heaviest own body (134 KB — founding,
+  cultures, goods, routes and the hashed dawn ledgers in one stage).
+  If a future audit run shows it growing, the same `#[inline(never)]`
+  + `--no-inline` recipe applies one level down (its inner passes are
+  single-caller too); today it is within band and left alone.
 - The fertility kernel's residual cost (E10.1): 152–186 ms against an
   80 ms sweet band even after the SOR face-transmissivity and
   flat-slice work — the remainder sits in the M54 Darcy solve's fixed
