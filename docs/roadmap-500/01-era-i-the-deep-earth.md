@@ -321,6 +321,20 @@ in the parent file are binding; these specs expand them.
 - **Build:** Generalize the M57 erosion compute shader into a lane abstraction in `render.rs` (buffer staging, dispatch sizing, CPU-fallback contract, and readback synchronization as shared code) so future compute passes register against the same lane instead of duplicating wgpu boilerplate, and migrate the erosion pass to be its first client.
 - **Touches:** game/rust/src/render.rs, new: game/rust/src/compute.rs, game/rust/src/erosion.rs, game/rust/src/shaders/erosion.wgsl
 - **Gate:** `diagnose bench` shows erosion compute-lane throughput unchanged or improved versus pre-refactor timings, and `diagnose determinism` confirms GPU/CPU parity is preserved.
+- **Recast (2026-08-22, ADR-0027):** the lane landed as specced — buffer
+  staging, dispatch sizing, readback synchronization, fallback contract as
+  shared code in `compute.rs` — but its first client is the coast-distance
+  law, not erosion. Building the erosion port surfaced the wall: the
+  fluvial ledger is f64 walking the drainage tree donor-before-receiver,
+  WGSL has no f64, and `hash_state` remembers every bit — a device-side
+  erosion pass forks determinism (ADR-0003) or forces a fixed-point recast
+  of the era's most sensitive stage for no measured need. Closed as the
+  decision *simulation truth never moves to a device*; the lane serves
+  display-side derived state, first client the integer-JFA coast law
+  (byte-parity contract across WGSL kernel, Rust twin, JS port), gated by
+  `diagnose compute` with the GPU leg executing on software Vulkan every
+  suite run. The original gate's determinism clause is honored in the
+  stronger form: nothing the lane touches enters `hash_state` at all.
 
 ### M68 — New Grids into the Registry
 - **Intent:** Everything the era grew — soil, aquifer, landform, sediment — lands in the field registry properly instead of riding along as hand-wired extras.
