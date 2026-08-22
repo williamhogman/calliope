@@ -145,7 +145,7 @@ impl WasmWorld {
         })
     }
 
-    /// Binary world payload, pack v2: [u32 header_len][header json][blob]
+    /// Binary world payload, pack v3: [u32 header_len][header json][blob]
     /// — crc-stamped, quantized u16 float grids, territory as header RLE.
     pub fn pack(&self) -> Vec<u8> {
         self.inner.pack()
