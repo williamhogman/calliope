@@ -9843,6 +9843,12 @@ fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
                 .and_then(|m| m.modified().ok())
                 .and_then(|t| t.elapsed().ok())
                 .map(|d| d.as_secs_f64() / 3600.0);
+            if n.starts_with("civ-") {
+                veto_lanes.push((
+                    n.clone(),
+                    text.lines().filter(|l| l.contains("REFUSED by the real veto")).count(),
+                ));
+            }
             let mut t = tally_lane(n, &text, age_h);
             if n == "wasm-audit.txt" {
                 t.age_h = None;
