@@ -588,7 +588,99 @@ pub fn precipitation(
     (p, pamp)
 }
 
+// ------------------------------------------------- M71 · the year stops repeating
+//
+// Every simulated year gets its own weather instead of the climate mean.
+// The anomaly is a pure function of (seed, x, y, year): a two-octave fbm
+// over space × year, scaled by a latitude-shaped amplitude — the tropics
+// barely move, the poles swing wide, which is the variance shape Earth's
+// instrumental record carries (interannual σ of annual-mean temperature
+// runs a few tenths of a degree in the deep tropics and well over a
+// degree in the high-latitude interiors). Temperature is additive in °C;
+// precipitation is fractional, because a dry year takes a *share* of the
+// rain, not a fixed millimetre count.
+//
+// Derived state, deliberately: nothing here is stored, hashed or packed.
+// The field is recomputed from the seed and the year whenever it is asked
+// for, so determinism is structural rather than checked.
+
+/// 1σ of the annual temperature anomaly at the equator, °C.
+pub const ANOM_T_EQ: f64 = 0.30;
+/// 1σ of the annual temperature anomaly at the pole, °C.
+pub const ANOM_T_POLE: f64 = 1.85;
+/// 1σ of the annual precipitation anomaly at the equator, as a fraction.
+pub const ANOM_P_EQ: f64 = 0.09;
+/// 1σ of the annual precipitation anomaly at the pole, as a fraction.
+pub const ANOM_P_POLE: f64 = 0.24;
+/// How sharply the swing grows poleward (>1: the mid-latitudes stay
+/// closer to the tropics than to the poles).
+pub const ANOM_LAT_POW: f64 = 1.55;
+/// Spatial frequency of the anomaly cells — ~30 cells (120 km) across,
+/// so a bad year covers a region, never a single farm.
+pub const ANOM_SPACE: f64 = 0.033;
+/// Step through the noise's third axis per year. Large enough that
+/// consecutive years are effectively independent draws.
+pub const ANOM_YEAR_STEP: f64 = 1.7;
+/// Offset that hands the rain its own slice of the same field, so a hot
+/// year is not mechanically a wet one.
+pub const ANOM_RAIN_LANE: f64 = 137.0;
+/// Two-octave fbm on this lattice measures 0.2586 population σ over a
+/// 512-world (measured, not assumed — see `diagnose climate`). Dividing
+/// by it makes the declared amplitudes mean what they say in °C.
+pub const ANOM_FBM_SIGMA: f64 = 0.2586;
+/// A year may not take more than this share of the rain away — total
+/// failure of the rains is famine's verdict (M2.6), not the sky's noise.
+pub const ANOM_P_FLOOR: f64 = -0.85;
+
+/// 1σ of the year-to-year temperature swing at this latitude, °C.
+pub fn anomaly_amp_t(lat_abs: f64) -> f64 {
+    ANOM_T_EQ + (ANOM_T_POLE - ANOM_T_EQ) * (lat_abs.abs() / 90.0).clamp(0.0, 1.0).powf(ANOM_LAT_POW)
+}
+
+/// 1σ of the year-to-year rainfall swing at this latitude, as a fraction.
+pub fn anomaly_amp_p(lat_abs: f64) -> f64 {
+    ANOM_P_EQ + (ANOM_P_POLE - ANOM_P_EQ) * (lat_abs.abs() / 90.0).clamp(0.0, 1.0).powf(ANOM_LAT_POW)
+}
+
+/// The raw (unscaled) anomaly draw for one cell in one year — the shared
+/// lattice both lanes read, exposed so diagnostics can measure its σ
+/// rather than trust the constant above.
+pub fn anomaly_draw(noise: &crate::noisegen::Perlin3, x: usize, y: usize, year: i64, lane: f64) -> f64 {
+    noise.fbm(
+        x as f64 * ANOM_SPACE,
+        y as f64 * ANOM_SPACE,
+        year as f64 * ANOM_YEAR_STEP + lane,
+        2,
+    )
+}
+
+/// M71 — the year's weather: `(dt, dp)` over the whole grid, where `dt`
+/// is degrees added to `tmean` and `dp` is the fractional change applied
+/// to `precip` (`precip * (1 + dp)`). `rows` carries the latitude, which
+/// is a property of the row alone (margins widen columns, never rows).
+pub fn year_anomaly(
+    noise: &crate::noisegen::Perlin3,
+    rows: usize,
+    cols: usize,
+    year: i64,
+) -> (Array2<f64>, Array2<f64>) {
+    let mut dt = Array2::<f64>::zeros((rows, cols));
+    let mut dp = Array2::<f64>::zeros((rows, cols));
+    let n = rows as f64;
+    for y in 0..rows {
+        let lat = (-90.0 + (y as f64) * 180.0 / (n - 1.0)).abs();
+        let at = anomaly_amp_t(lat) / ANOM_FBM_SIGMA;
+        let ap = anomaly_amp_p(lat) / ANOM_FBM_SIGMA;
+        for x in 0..cols {
+            dt[[y, x]] = anomaly_draw(noise, x, y, year, 0.0) * at;
+            dp[[y, x]] = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE) * ap).max(ANOM_P_FLOOR);
+        }
+    }
+    (dt, dp)
+}
+
 // ---------------------------------------------------------------- bands
+
 
 use crate::util::Band;
 

@@ -70,6 +70,7 @@ static GLOBAL: alloc_count::Counting = alloc_count::Counting;
 use ndarray::Array2;
 
 use calliope::world::CellFlags;
+use calliope::climate as clim;
 use calliope::constants as gc;
 use calliope::economy;
 use calliope::entity::EntityKind;
@@ -3282,6 +3283,137 @@ fn cmd_climate(seed: i64, size: usize) {
             "M37: no icebound tropics — Earth's pack stays poleward of ~44°",
         );
     }
+
+    // ---- M71: the year stops repeating -------------------------------
+    // Sixty years of anomaly draws, measured on land only, split into the
+    // three latitude belts the declared amplitude law separates. The gate
+    // is the variance *shape* (σ climbs poleward, band by band) plus the
+    // determinism the field's construction promises — and a check that the
+    // measured σ matches the amplitude the constants declare, so the
+    // normalizing constant can never drift away from the lattice it
+    // normalizes.
+    {
+        const YEARS: i64 = 60;
+        // (Σx, Σx², n) per belt, temperature and rain lanes.
+        let mut belt_t = [[0.0f64; 3]; 3];
+        let mut belt_p = [[0.0f64; 3]; 3];
+        let mut declared_t = [[0.0f64; 2]; 3]; // (Σ declared σ, n)
+        let mut worst_floor = 0.0f64;
+        let mut nonfinite = 0usize;
+        let rows = w.fields.tmean.dim().0;
+        let belt = |lat: f64| -> usize {
+            if lat < 23.5 {
+                0
+            } else if lat < 55.0 {
+                1
+            } else {
+                2
+            }
+        };
+        for year in 1..=YEARS {
+            let (dt, dp) = w.year_anomaly_fresh(year);
+            for y in 0..rows {
+                let lat = (-90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0)).abs();
+                let b = belt(lat);
+                for x in 0..w.width {
+                    if !land[[y, x]] {
+                        continue;
+                    }
+                    let (a, r) = (dt[[y, x]], dp[[y, x]]);
+                    if !a.is_finite() || !r.is_finite() {
+                        nonfinite += 1;
+                        continue;
+                    }
+                    belt_t[b][0] += a;
+                    belt_t[b][1] += a * a;
+                    belt_t[b][2] += 1.0;
+                    belt_p[b][0] += r;
+                    belt_p[b][1] += r * r;
+                    belt_p[b][2] += 1.0;
+                    declared_t[b][0] += clim::anomaly_amp_t(lat);
+                    declared_t[b][1] += 1.0;
+                    if r < worst_floor {
+                        worst_floor = r;
+                    }
+                }
+            }
+        }
+        let sd = |acc: [f64; 3]| -> f64 {
+            let n = acc[2].max(1.0);
+            let m = acc[0] / n;
+            (acc[1] / n - m * m).max(0.0).sqrt()
+        };
+        let names = ["tropics (<23.5°)", "mid-latitudes (23.5–55°)", "polar (>55°)"];
+        println!();
+        println!("interannual variability (M71) · {} years · land cells only:", YEARS);
+        println!("  {:<26} {:>10} {:>12} {:>12}", "belt", "σ T (°C)", "declared σ", "σ rain (frac)");
+        for b in 0..3 {
+            let dec = declared_t[b][0] / declared_t[b][1].max(1.0);
+            println!(
+                "  {:<26} {:>10.3} {:>12.3} {:>12.3}",
+                names[b],
+                sd(belt_t[b]),
+                dec,
+                sd(belt_p[b])
+            );
+        }
+        let (st, sp): (Vec<f64>, Vec<f64>) =
+            (0..3).map(|b| (sd(belt_t[b]), sd(belt_p[b]))).unzip();
+        c.must(
+            "the year's heat swings wider toward the poles",
+            st[0] < st[1] && st[1] < st[2],
+            format!("σ {:.3} → {:.3} → {:.3} °C", st[0], st[1], st[2]),
+            "M71 gate: annual temperature-anomaly σ rises monotonically across the three latitude belts",
+        );
+        c.must(
+            "the year's rain swings wider toward the poles",
+            sp[0] < sp[1] && sp[1] < sp[2],
+            format!("σ {:.3} → {:.3} → {:.3}", sp[0], sp[1], sp[2]),
+            "M71: the same latitude law shapes the rain lane, in fractional terms",
+        );
+        // The declared amplitude is a claim in °C; hold the measurement to it.
+        let dec_mean: Vec<f64> = (0..3).map(|b| declared_t[b][0] / declared_t[b][1].max(1.0)).collect();
+        let worst_rel = (0..3)
+            .map(|b| ((st[b] - dec_mean[b]) / dec_mean[b].max(1e-9)).abs())
+            .fold(0.0f64, f64::max);
+        c.must(
+            "the measured swing is the declared swing",
+            worst_rel <= 0.20,
+            format!("worst belt off by {:.1}%", worst_rel * 100.0),
+            "M71: ANOM_FBM_SIGMA normalizes the lattice — if the measured σ drifts from the declared amplitude, the constant is stale, not the sky",
+        );
+        c.must(
+            "the anomaly field is finite",
+            nonfinite == 0,
+            format!("{} non-finite cells", nonfinite),
+            "M71: every year's draw is a number",
+        );
+        c.must(
+            "a bad year never takes all the rain",
+            worst_floor >= clim::ANOM_P_FLOOR - 1e-12,
+            format!("worst {:+.2} share", worst_floor),
+            "M71: total failure of the rains is famine's verdict (M2.6), not the sky's noise",
+        );
+        // Determinism, bit-for-bit: the same year drawn twice, and the
+        // memoized copy against a fresh solve after the year has turned.
+        let (a1, b1) = w.year_anomaly_fresh(7);
+        let (a2, b2) = w.year_anomaly_fresh(7);
+        let repeat_same = a1 == a2 && b1 == b2;
+        let _ = w.year_tmean(7, rows / 2, w.width / 2);
+        let _ = w.year_tmean(8, rows / 2, w.width / 2); // evict
+        let memo_same = w.with_year_weather(7, |dt, dp| *dt == a1 && *dp == b1);
+        c.must(
+            "one seed, one year, one sky",
+            repeat_same && memo_same,
+            format!(
+                "redraw {} · memo {}",
+                if repeat_same { "identical" } else { "DIVERGE" },
+                if memo_same { "identical" } else { "DIVERGE" }
+            ),
+            "M71 gate: repeated runs at one seed reproduce identical per-year anomaly grids bit-for-bit, memo or fresh",
+        );
+    }
+
     c.print();
 }
 
