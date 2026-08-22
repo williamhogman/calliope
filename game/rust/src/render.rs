@@ -13,6 +13,27 @@
 
 use wasm_bindgen::prelude::*;
 
+/// The grids `set_world` takes, in the order of its parameter list (M69).
+///
+/// A wasm-bindgen signature cannot be generated from the field registry —
+/// it is positional by construction — so the registry judges it instead:
+/// the `const` assertion below fails the *build* if these names are not
+/// exactly the registry's `gpu true` rows in pack order. Before this, a
+/// flag flipped in `pack.rs` surfaced only in the browser, as an arity
+/// mismatch on a call the JS side derives from the generated `FIELDS`
+/// table (`gpu.js`). One law, two executors, no hand-mirrored list that
+/// can drift in silence.
+pub const SET_WORLD_GRIDS: &[&str] = &[
+    "height", "tmean", "tamp", "precip", "discharge", "fertility", "strahler", "flags", "rock",
+    "soil", "landform",
+];
+const _: () = assert!(
+    crate::pack::gpu_order_is(SET_WORLD_GRIDS),
+    "set_world's grid list has drifted from the field registry's gpu rows (pack.rs)"
+);
+
+
+
 const SHADER: &str = r#"
 struct Uni {
   cam:  vec4<f32>,  // world-cell bounds of the viewport: left, right, top, bottom
