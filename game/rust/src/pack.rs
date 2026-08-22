@@ -31,7 +31,7 @@ impl World {
     }
 
     /// Pack v2 (E3.3–E3.6): `[u32 header_len][header json (padded to 4)][blob]`.
-    /// The header carries `pack: 2`, a CRC-32 of the blob (E3.6), and the
+    /// The header carries `pack: 3`, a CRC-32 of the blob (E3.6), and the
     /// territory grid as RLE instead of a raw section (E3.5); float grids
     /// ride as quantized u16 where the registry says so (E3.4). The blob is
     /// written once, straight from grid storage — no per-field temporary
@@ -169,7 +169,7 @@ impl World {
 }
 
 /// Pack protocol version — the client refuses any other (E3.6).
-pub const PACK_VERSION: u32 = 2;
+pub const PACK_VERSION: u32 = 3;
 
 /// M15.7 — hostile-proof pack reader: everything the client's unpacker
 /// trusts, re-checked here with bounds instead of faith. Returns

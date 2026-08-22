@@ -1,6 +1,6 @@
 // World engine bridge: the simulation is Rust compiled to WASM, running in
-// a worker. The pack v2 payload is [u32 header_len][header json][blob]:
-// the header is stamped `pack: 2`, carries a CRC-32 of the blob (E3.6),
+// a worker. The pack v3 payload is [u32 header_len][header json][blob]:
+// the header is stamped `pack: 3`, carries a CRC-32 of the blob (E3.6),
 // the territory grid as RLE (E3.5), and per-array quantization descriptors
 // (`q`, E3.4) that this edge dequantizes back to float32 — everything
 // downstream of unpack() sees exactly the arrays it always did.
@@ -69,8 +69,8 @@ export function unpack(buf) {
   const dv = new DataView(buf);
   const hlen = dv.getUint32(0, true);
   const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hlen)));
-  if (header.pack !== 2) {
-    throw new Error(`world payload is pack v${header.pack ?? 1}; this client speaks v2`);
+  if (header.pack !== 3) {
+    throw new Error(`world payload is pack v${header.pack ?? 1}; this client speaks v3`);
   }
   const base = 4 + hlen;
   const got = crc32(new Uint8Array(buf, base));
