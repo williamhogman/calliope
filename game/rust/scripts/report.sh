@@ -115,11 +115,13 @@ if CARGO_TARGET_DIR=target/gpu "${GPU_BUILD[@]}"; then
     done
   fi
   echo "-- diagnose compute $COMPUTE -> compute.txt"
+  GOLDEN="${TMPDIR:-/tmp}/calliope-coast-golden.bin"
+  rm -f "$GOLDEN"
   if [ -n "$ICD" ] && [ -n "$VKLIB" ]; then
     VK_ICD_FILENAMES="$ICD" LD_LIBRARY_PATH="$VKLIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-      ./target/gpu/release/diagnose compute $COMPUTE > "$OUT/compute.txt"
+      ./target/gpu/release/diagnose compute $COMPUTE --golden "$GOLDEN" > "$OUT/compute.txt"
   else
-    ./target/gpu/release/diagnose compute $COMPUTE > "$OUT/compute.txt"
+    ./target/gpu/release/diagnose compute $COMPUTE --golden "$GOLDEN" > "$OUT/compute.txt"
   fi
 else
   {
