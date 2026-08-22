@@ -10265,14 +10265,23 @@ fn main() {
             cmd_patina(size, years, seeds);
         }
         "gate" => cmd_gate(sized(2, 512), num(3, 300) as usize, num(4, 12345), reports),
+        "compute" => {
+            let size = sized(2, 512);
+            let mut seeds: Vec<i64> = a.get(3..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 90210];
+            }
+            cmd_compute(size, seeds);
+        }
         _ => {
-            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean|atlas|gate> [args]");
+            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean|atlas|gate|compute> [args]");
             println!("  terrain|climate|hydro|resources  <seed=12345> <size=512>");
             println!("  civ <seed> <size> <years=120> · economy <seed> <size> <years=80> · telling <seed> <size> <years=150>");
             println!("  determinism <seed> <size> <months=120> · bench · perf <size=512> <seeds…> · sweep <size> <years> <seeds…>");
             println!("  properties <size=512> <years=60> <seeds…> · era <size=256> <years=60> <n=16> <base=12345>");
             println!("  patina <size=512> <years=300> <seeds…> · systems <seed=12345> <size=512> <years=150>");
             println!("  gate <size=512> <years=300> <seed=12345> [--reports <dir>]  — the Era I gate (M65)");
+            println!("  compute <size=512> <seeds…>  — the M67 lane: JFA coast law vs exact EDT, GPU leg when built with --features gpu");
         }
     }
 }
