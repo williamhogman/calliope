@@ -1431,6 +1431,12 @@ struct RunLog {
     /// pass no longer rolls a private die, so every one of these must be
     /// answerable by the year's own realized rain (SPI ≤ −1 at that cell).
     famine_sites: Vec<(i64, i64, i64)>,
+    /// M72 — the eligible pool: every rain-fed farming town-year that
+    /// *could* have starved (the famine pass's own predicate), as
+    /// (year, x, y). Without the pool a famine list proves only that the
+    /// hungry were dry; with it we can measure whether dryness governs
+    /// hunger — the dose-response the causal claim actually rests on.
+    famine_pool: Vec<(i64, i64, i64)>,
     placeholders: usize,
     empties: usize,
     /// events that speak a god's name — festivals, omens, war-oaths (M3.5)
