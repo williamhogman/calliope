@@ -355,6 +355,13 @@ field_registry! {
     upwelling: F32, units "0..1 coastal upwelling (M47)",    hash true,  gpu false, wire u8;
     aquifer:   F32, units "m depth to water table (M54)",    hash true,  gpu false, wire u8;
     landform:  U8,  units "landform vocabulary id (M60)",    hash true,  gpu true,  wire raw;
+    // M68 — the era's last two hand-wired grids come home. Both are
+    // already hashed by their ledgers (`Coast::hash`, `Sediment::hash`,
+    // which read these very arrays), so the registry declares them
+    // `hash false`: one grid, one hash, no double counting and no
+    // churn in the replay identity the era sealed against.
+    coastform: U8,  units "coast form id (M44)",             hash false, gpu false, wire raw;
+    silt:      F32, units "deposition depth, height units",  hash false, gpu false, wire u16sqrt;
 }
 
 /// Wire quantization mode for a registry field (E3.4).

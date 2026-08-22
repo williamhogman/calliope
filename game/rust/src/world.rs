@@ -710,7 +710,7 @@ impl GenBuilder {
                             }
                             let (ny, nx) = (ny as usize, nx as usize);
                             if height[[ny, nx]] < 0.0 {
-                                silt = silt.max(sed.depth[[ny, nx]]);
+                                silt = silt.max(sed.depth_gen[[ny, nx]]);
                             }
                         }
                     }

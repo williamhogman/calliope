@@ -331,9 +331,9 @@ fn hash_state(w: &World) -> u64 {
     // M43 — the tide field is state: the shore's breath holds still.
     s.push_str(&format!("T{:016x}\n", w.tides.hash()));
     // M44 — the drift ledger is state: the grown shore holds still.
-    s.push_str(&format!("S{:016x}\n", w.coastform.hash()));
+    s.push_str(&format!("S{:016x}\n", w.coastform.hash(&w.fields.coastform)));
     // M59 — the sediment books are state: the budget holds still.
-    s.push_str(&format!("D{:016x}\n", w.sediment.hash()));
+    s.push_str(&format!("D{:016x}\n", w.sediment.hash(&w.fields.silt)));
     // M45 — the shelter field is state: the anchorage reading holds still.
     {
         let mut sb: Vec<u8> = Vec::with_capacity(w.shelter.len() * 4);
@@ -1251,7 +1251,7 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
             w.tick(step);
             left -= step;
         }
-        (w.seismic.hash(), w.ice.hash(), w.currents.hash(), w.tides.hash(), w.coastform.hash())
+        (w.seismic.hash(), w.ice.hash(), w.currents.hash(), w.tides.hash(), w.coastform.hash(&w.fields.coastform))
     };
     let ((ha, ia, ca, ta, oa), (hb, ib, cb, tb, ob)) = (hash_after(240), hash_after(12));
     println!();
@@ -1876,7 +1876,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
         calliope::landform::stamp_patterned(&mut regen, &w.permafrost.pattern, hgt);
         calliope::landform::stamp_tidal(&mut regen, &w.tides, hgt, &w.fields.flags);
         calliope::landform::stamp_delta(&mut regen, &w.sediment.delta, hgt);
-        calliope::landform::stamp_coastforms(&mut regen, &w.coastform.form, hgt);
+        calliope::landform::stamp_coastforms(&mut regen, &w.fields.coastform, hgt);
         {
             let water = hgt.mapv(|h| h < 0.0);
             let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
@@ -2106,7 +2106,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             );
             // the grid is the ledger's footprint: Σdepth re-summed
             // independently must match the on-map share of the books
-            let grid_sum: f64 = sed.depth.iter().map(|&v| v as f64).sum();
+            let grid_sum: f64 = w.fields.silt.iter().map(|&v| v as f64).sum();
             let on_map = sed.settled + sed.delta_fill;
             let drift = (grid_sum - on_map).abs() / det;
             c.must(
@@ -2173,7 +2173,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             // bit, cells with silt shoal by exactly 1/(1+k·depth). The
             // widening seam is skipped: the raw recompute sees margin
             // ocean where the pre-widen call saw the grid edge.
-            let raw = calliope::settlements::shelter_score(&w.fields.height, &w.coastform.form);
+            let raw = calliope::settlements::shelter_score(&w.fields.height, &w.fields.coastform);
             let pad = w.size / 8;
             let (sh_r, sh_c) = raw.dim();
             let mut n_silted = 0usize;
@@ -2195,7 +2195,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
                             }
                             let (ny, nx) = (ny as usize, nx as usize);
                             if w.fields.height[[ny, nx]] < 0.0 {
-                                silt = silt.max(sed.depth[[ny, nx]]);
+                                silt = silt.max(w.fields.silt[[ny, nx]]);
                             }
                         }
                     }
@@ -7830,13 +7830,13 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         let plain: Vec<bool> = (0..rows * cols).map(|i| {
             let (y, x) = (i / cols, i % cols);
             if water[[y, x]] { return false; }
-            let m = w.sediment.depth[[y, x]] as f64 * mpu;
+            let m = w.fields.silt[[y, x]] as f64 * mpu;
             m >= 10.0
         }).collect();
         for y in 0..rows {
             for x in 0..cols {
                 if water[[y, x]] { continue; }
-                let m = w.sediment.depth[[y, x]] as f64 * mpu;
+                let m = w.fields.silt[[y, x]] as f64 * mpu;
                 if m >= 1.0 { fp_ladder[0] += 1; }
                 if m >= 5.0 { fp_ladder[1] += 1; }
                 if m >= 10.0 { fp_ladder[2] += 1; }
@@ -10317,7 +10317,7 @@ fn main() {
             let seed = num(2, 777);
             let size = sized(3, 512);
             let w = World::generate(seed, size);
-            let (pos, bits, form) = w.coastform.debug_parts();
+            let (pos, bits, form) = w.coastform.debug_parts(&w.fields.coastform);
             println!("pos={pos:016x} bits={bits:016x} form={form:016x}");
         }
         "era" => cmd_era(sized(2, 256), num(3, 60) as usize, num(4, 16) as usize, num(5, 12345)),

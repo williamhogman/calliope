@@ -197,7 +197,7 @@ impl WasmWorld {
     /// positions, pre-height bits and the form grid, so a cross-runtime
     /// divergence names the constituent it lives in.
     pub fn coast_debug(&self) -> String {
-        let (pos, bits, form) = self.inner.coastform.debug_parts();
+        let (pos, bits, form) = self.inner.coastform.debug_parts(&self.inner.fields.coastform);
         format!("pos={pos:016x} bits={bits:016x} form={form:016x}")
     }
 
