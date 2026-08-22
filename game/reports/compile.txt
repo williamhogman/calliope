@@ -1,3 +1,8 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · COMPILE                   every target, one gate
 ========================================================================
+ lib · bins · tests: every target compiles
+
+---- checks ----------------------------------------------------------
+[PASS] every target compiles                             (M65 firewall: a build break names itself, never masquerades as a failed law)
+CHECKS: see row above
