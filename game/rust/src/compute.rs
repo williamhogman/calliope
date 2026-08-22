@@ -528,7 +528,7 @@ mod lane {
     }
 }
 
-#[cfg(any(target_arch = "wasm32", feature = "gpu"))]
+#[cfg(feature = "gpu")]
 pub use lane::{coast_contract, coast_seeds_gpu, ComputeLane, ContractReport, PassSpec, COAST_PASS};
 
 // ======================================================== wasm bring-up
@@ -551,29 +551,21 @@ mod wasm_glue {
         STATUS.with(|s| *s.borrow_mut() = v);
     }
 
-    /// Run the bring-up contract on the fixture and record the verdict.
-    /// `supported` arrives from the adapter probe at Orbital::finish —
-    /// WebGL2 downlevel simply reports the twin as the law.
-    pub async fn bringup(supported: bool, device: wgpu::Device, queue: wgpu::Queue) -> String {
-        if !supported {
-            let s = "cpu-twin (no compute: webgl2 downlevel)".to_string();
-            set_status(s.clone());
-            return s;
+    /// Record the lane's verdict for this session. `supported` arrives
+    /// from the adapter probe at Orbital::finish. The shipped wasm carries
+    /// no device executor — linking it measured +108 KB of wgpu/naga
+    /// compute paths for a leg whose output no pixel consumes (ADR-0027).
+    /// Production truth is the CPU twin on every browser path; the kernel
+    /// is proven natively on lavapipe every suite run. The first per-frame
+    /// device client (Era II's sky) ships the executor here, and the
+    /// `gpu:` / `DEGRADED` verdict vocabulary returns with it.
+    pub fn bringup(supported: bool) -> String {
+        let s = if supported {
+            "cpu-twin (adapter has compute; device leg native-proven — awaits a per-frame client)"
+        } else {
+            "cpu-twin (no compute: webgl2 downlevel)"
         }
-        let (w, h) = (96usize, 64usize);
-        let fix = super::fixture(w, h);
-        let mut lane = super::ComputeLane::new(device, queue);
-        let s = match super::coast_contract(&mut lane, &fix, w, h).await {
-            Ok(r) if r.matched => format!(
-                "gpu: contract byte-parity ok (fixture {w}×{h} · gpu {:.1}ms · cpu {:.1}ms)",
-                r.gpu_ms, r.cpu_ms
-            ),
-            Ok(r) => format!(
-                "DEGRADED to cpu-twin: {} of {} cells diverged on the fixture",
-                r.mismatches, r.cells
-            ),
-            Err(e) => format!("DEGRADED to cpu-twin: {e}"),
-        };
+        .to_string();
         set_status(s.clone());
         s
     }

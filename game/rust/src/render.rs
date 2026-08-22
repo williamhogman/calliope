@@ -543,23 +543,20 @@ impl Orbital {
     }
 
     /// M67 — the compute lane's current verdict, for the HUD and the
-    /// browser probe: "not probed", "cpu-twin (no compute: …)",
-    /// "gpu: contract byte-parity ok (…)" or "DEGRADED to cpu-twin: …".
+    /// browser probe: "not probed" or a "cpu-twin (…)" form. The
+    /// `gpu:` / `DEGRADED` vocabulary returns with the first per-frame
+    /// device client (ADR-0027).
     pub fn compute_status(&self) -> String {
         crate::compute::wasm_status()
     }
 
-    /// M67 — run the lane's bring-up contract: on a compute-capable
-    /// adapter, execute the fixture on the GPU and hold it byte-for-byte
-    /// against the CPU twin; otherwise record that the twin is the law.
-    /// Resolves to the status string it also stores for `compute_status`.
-    pub fn compute_bringup(&self) -> js_sys::Promise {
-        let ok = self.compute_ok;
-        let device = self.device.clone();
-        let queue = self.queue.clone();
-        wasm_bindgen_futures::future_to_promise(async move {
-            Ok(JsValue::from_str(&crate::compute::wasm_bringup(ok, device, queue).await))
-        })
+    /// M67 — record the lane's bring-up verdict: the CPU twin is the law
+    /// on every browser path. The shipped wasm carries no device executor
+    /// (measured +108 KB for a leg no pixel consumes — ADR-0027); the
+    /// kernel is proven natively on lavapipe every suite run. Returns the
+    /// status string it also stores for `compute_status`.
+    pub fn compute_bringup(&self) -> String {
+        crate::compute::wasm_bringup(self.compute_ok)
     }
 
     fn finish(

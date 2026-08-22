@@ -9967,7 +9967,7 @@ fn cmd_compute(size: usize, seeds: Vec<i64>) {
             compatible_surface: None,
             force_fallback_adapter: false,
         })) {
-            Some(adapter) if compute::ComputeLane::adapter_supported(&adapter) => {
+            Some(adapter) if compute::adapter_supported(&adapter) => {
                 let info = adapter.get_info();
                 println!(" adapter: {:?} · {} · {:?}", info.backend, info.name, info.device_type);
                 match pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)) {
