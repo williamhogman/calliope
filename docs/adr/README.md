@@ -71,6 +71,8 @@ MADR-lite. See [`template.md`](template.md). Sections:
 | [0025](0025-cross-runtime-replay-identity.md) | Cross-runtime replay identity for gated ledgers | Accepted |
 | [0026](0026-one-lattice-law-shared-grid.md) | One lattice law — the shared grid module | Accepted |
 | [0027](0027-compute-lane-and-coast-law.md) | The compute lane and the one coast law | Accepted |
+| [0028](0028-pack-v3-measured-width-bit-lane.md) | Pack v3 — the measured-width bit lane for categorical grids | Accepted |
+
 
 ## Era gates
 
