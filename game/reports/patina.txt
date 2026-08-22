@@ -1,20 +1,3 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · PATINA                       size 512 · 300y · 3 seeds
 ========================================================================
-   seed  ruins    late  veiled%  rename    worn  field  faded   wars  xfers  rivers  sundr  fused  gold  arcs
-  12345     36      36      2.3      16       6     42      4      1     78    held     20      5     1     4
-    777     41      41      2.0      37       4     57      2      0    154    held     20      2     5     3
-  90210     29      29      2.5      33       5     40      3      0    105    held     20      7     3     3
-
----- checks ----------------------------------------------------------
-[WARN] ruins per century (after y100)                17.67   (M9.1 gate: mature worlds carry ruins)
-[PASS] withheld share of the chronicle                2.3%   (M9.5 gate: 2-8% of entries veiled)
-[PASS] hydronyms conserved                        all held   (M9.2 gate: river names survive every border change)
-[PASS] border changes occurred               337 transfers   (the conservation claim is tested, not vacuous)
-[PASS] name strata bounded                          0 over   (M9.2: at most two former names per place)
-[PASS] every new name carries a gloss               0 bare   (M9.3 gate: renames and wearings are etymologized)
-[PASS] names worn or relaid somewhere                86+15   (M9.2/M9.3: the strata actually accrue)
-[PASS] battlefields mark the map            139 fields / 1 wars   (M9.4: decisive fields earn names)
-[PASS] people count moves both ways (≥60% of seeds)            3/3   (M12.6: sunderings and fusions both fire on the patina clock)
-[PASS] civ arcs completed per 300 y         3.3 (gold 9 · arcs 10)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
-CHECKS: 9 pass · 1 warn · 0 fail
