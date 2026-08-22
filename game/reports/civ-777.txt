@@ -155,9 +155,10 @@ seams found by ground (M57): 57 mineral seams, visibility 0.12..2.46 · median d
 claim pressure (M58): 39 standing claims over 9 crowns — 0:"copper" 3.00 · 0:"gems" 3.00 · 0:"gold" 3.00 · 0:"iron" 3.00 · 0:"silver" 3.00 · 2:"gems" 3.00
 the desert's best hour (M57): peak arid-dry offer 7.95 at (63,424) in month 720 (pull 0.00 · provision 0.96) against the best watered site ever seen, 25.96
 counterfactual (M55): with wells of unlimited reach, 3 towns stand on waterless arid ground (real run: 3)
-  cf dry town at (428,474): table 30 m · founder's terminal well reach 90 m · within reach (the veto never barred it)
-  cf dry town at (445,170): table 30 m · founder's terminal well reach 60 m · within reach (the veto never barred it)
-  cf dry town at (168,475): table 35 m · founder's terminal well reach 90 m · within reach (the veto never barred it)
+  cf dry town at (428,474) founded by month 1080: table 30 m · founder's well reach then 90 m (terminal 90 m) · within reach (the veto never barred it)
+  cf dry town at (168,475) founded by month 1320: table 35 m · founder's well reach then 90 m (terminal 90 m) · within reach (the veto never barred it)
+  cf dry town at (445,170) founded by month 1440: table 30 m · founder's well reach then 60 m (terminal 60 m) · within reach (the veto never barred it)
+  cf dry town at (168,475) founded by month 1560: table 35 m · founder's well reach then 90 m (terminal 90 m) · within reach (the veto never barred it)
 the desert's offer (M56): best arid-dry site 7.95 vs best watered site 19.11 · best ore pull 7.00 · caravan-provisioned 23308/26290 arid-dry cells (best 1.00)
   best offer cell (63,424): held 9.02 · pull 0.00 · provision 0.96 · table 18 m · upkeep 1.07 · offer 7.95
   best pull cell (74,245): held -3.33 · pull 7.00 · provision 0.16 · table 146 m · upkeep 8.73 · offer -5.37
@@ -231,6 +232,6 @@ the desert's offer (M56): best arid-dry site 7.95 vs best watered site 19.11 · 
 [PASS] the bared ground is found first      median month 450 bared vs 573 middling vs 1017 buried   (M57 gate: prospecting yield rises with how much basement the ground shows, so bared country must give up its seams earlier than buried country)
 [PASS] every claim stands on a dark forge   0 of 39 claims unbacked   (M58 gate: claim pressure is unmet demand — each claim must be backed by a town of that realm whose market area holds no seam of the ore)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
-[FAIL] the dry-frontier veto is load-bearing 0 town(s) on ground the veto refused (3 dry without · 3 with)   (M55 gate: the veto-lifted run must stand ≥1 town on waterless ground beyond its founder's terminal well reach — ground the real run provably refused)
+[WARN] the dry-frontier veto is load-bearing no auction held — 4 cf dry founding(s), earliest month 1080, deepest table 35 m, all inside the founder's reach (3 dry without · 3 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
 [PASS] names tell the truth about the ground 100% (100 of 100 eligible towns)   (M62 gate: ≥90% of towns whose tongue has a generic for their landform carry it as the name's tail (worn names count through their recorded source))
-CHECKS: 66 pass · 3 warn · 1 fail
+CHECKS: 66 pass · 4 warn · 0 fail
