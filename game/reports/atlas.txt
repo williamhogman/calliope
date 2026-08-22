@@ -1,0 +1,22 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · ATLAS                        size 512 · 3 seeds · M63
+========================================================================
+ arid column sweep (60 mm · 24 °C): 101 elevations · max hue 43° at h=0.00 · 0 in green band
+ seed  12345: pack 7543008 B · max ids rock 3 soil 10 landform 26 · hash 34d07c5c40aa73b3
+ seed    777: pack 7542876 B · max ids rock 3 soil 10 landform 26 · hash bf7618c9fc35f52d
+ seed  90210: pack 7543220 B · max ids rock 3 soil 10 landform 26 · hash 9371c57ea3bc9a40
+
+---- checks ----------------------------------------------------------
+[PASS] palettes cover their vocabularies    4+11+27 swatches   (M63: rock, soil, landform lenses — one distinct swatch per word)
+[PASS] desert ladder outside green band        max hue 43°   (M63 gate: synthetic desert-elevation cells render outside 70–170°)
+[PASS] humid lowland reads green                   hue 95°   (M63: the wet ladder keeps its green — the arid law is not vacuous)
+[PASS] frost greys the ladder                 chroma 0.024   (M63: deep-cold cells lose hue toward polar grey/firn)
+[PASS] wgsl prelude generated from tables           1947 B   (M63: seg + both ramps + hypso, one segment per table stop pair)
+[PASS] lens lanes flagged for gpu upload    rock·soil·landform   (M63: the deep-earth grids reach Orbital through the registry)
+[PASS] ids within palettes (seed 12345)            3/10/26   (M63: no id on the map escapes its palette row)
+[PASS] pack leaves hash_state alone (seed 12345)      untouched   (M63 gate: the lens toggle round-trips pack v2 without altering state)
+[PASS] ids within palettes (seed 777)              3/10/26   (M63: no id on the map escapes its palette row)
+[PASS] pack leaves hash_state alone (seed 777)      untouched   (M63 gate: the lens toggle round-trips pack v2 without altering state)
+[PASS] ids within palettes (seed 90210)            3/10/26   (M63: no id on the map escapes its palette row)
+[PASS] pack leaves hash_state alone (seed 90210)      untouched   (M63 gate: the lens toggle round-trips pack v2 without altering state)
+CHECKS: 12 pass · 0 warn · 0 fail

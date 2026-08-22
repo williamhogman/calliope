@@ -78,6 +78,13 @@ pub struct Fields {
     /// genesis as a steady-state Darcy head over rock-province
     /// conductivity (M18) and infiltrated rainfall; frozen thereafter.
     pub aquifer: Array2<f32>,
+    /// M60 — the landform vocabulary: one word per cell (`landform::NAMES`),
+    /// folding the era's stories (coasts, ice, tide, river, drift, dry
+    /// water) over a Hammond-style generic relief fill so no land or
+    /// shore cell is nameless. Pure derived state: recomputed at the
+    /// dawn post-widen, folded into `hash_state` and the deep-earth
+    /// identity line, never ticked. `NONE` survives only on open sea.
+    pub landform: Array2<u8>,
     /// Influence-map territory: owner REALM per cell, −1 wilderness
     /// (M4.1, realm axis per ADR-0018).
     pub territory: Array2<i16>,

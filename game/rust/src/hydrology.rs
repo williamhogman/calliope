@@ -1,184 +1,19 @@
-//! Hydrology — port of hydrology.py: priority-flood fill, D8 routing, rivers.
-
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
+//! Hydrology — the *water* stage of the fixed pipeline (rock → ice →
+//! **water** → soil → landform, ADR-0026): rivers, lakes, salt basins,
+//! seasonal regimes and the Darcy water table, all read off the relief
+//! the ice stage finished. Ported from hydrology.py; the shared lattice
+//! law it grew (priority-flood fill, D8 routing, drainage-order
+//! accumulation) now lives in `grid` and is re-exported here so the
+//! historical `hydrology::` paths keep working.
 
 use ndarray::Array2;
 
-pub const N8: [(isize, isize); 8] = [
-    (-1, -1),
-    (-1, 0),
-    (-1, 1),
-    (0, -1),
-    (0, 1),
-    (1, -1),
-    (1, 0),
-    (1, 1),
-];
-pub const DIST: [f64; 8] = [
-    1.4142135, 1.0, 1.4142135, 1.0, 1.0, 1.4142135, 1.0, 1.4142135,
-];
-
-/// Min-heap item ordered like Python's heapq tuples (h, y, x).
-struct HeapItem(f64, usize, usize);
-
-impl PartialEq for HeapItem {
-    fn eq(&self, o: &Self) -> bool {
-        self.0 == o.0 && self.1 == o.1 && self.2 == o.2
-    }
-}
-impl Eq for HeapItem {}
-impl PartialOrd for HeapItem {
-    fn partial_cmp(&self, o: &Self) -> Option<Ordering> {
-        Some(self.cmp(o))
-    }
-}
-impl Ord for HeapItem {
-    fn cmp(&self, o: &Self) -> Ordering {
-        // reversed: BinaryHeap is a max-heap, we want the smallest first
-        o.0
-            .partial_cmp(&self.0)
-            .unwrap()
-            .then_with(|| o.1.cmp(&self.1))
-            .then_with(|| o.2.cmp(&self.2))
-    }
-}
-
-/// Priority-flood fill so every land cell drains to the ocean or map edge.
-pub fn fill_depressions(height: &Array2<f64>, water: &Array2<bool>) -> Array2<f64> {
-    let eps = 1e-5;
-    let size = height.dim().0;
-    let mut filled = height.clone();
-    let mut visited = water.clone();
-    let mut heap: BinaryHeap<HeapItem> = BinaryHeap::new();
-
-    // seeds: land on the border, and land adjacent to water
-    for y in 0..size {
-        for x in 0..size {
-            if water[[y, x]] {
-                continue;
-            }
-            let border = y == 0 || y == size - 1 || x == 0 || x == size - 1;
-            let mut adj = false;
-            if !border {
-                adj = water[[y - 1, x]] || water[[y + 1, x]] || water[[y, x - 1]]
-                    || water[[y, x + 1]];
-            } else {
-                for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
-                    let ny = y as isize + dy;
-                    let nx = x as isize + dx;
-                    if ny >= 0 && nx >= 0 && ny < size as isize && nx < size as isize {
-                        adj |= water[[ny as usize, nx as usize]];
-                    }
-                }
-            }
-            if border || adj {
-                heap.push(HeapItem(filled[[y, x]], y, x));
-                visited[[y, x]] = true;
-            }
-        }
-    }
-
-    while let Some(HeapItem(hcur, y, x)) = heap.pop() {
-        for &(dy, dx) in N8.iter() {
-            let ny = y as isize + dy;
-            let nx = x as isize + dx;
-            if ny < 0 || nx < 0 || ny >= size as isize || nx >= size as isize {
-                continue;
-            }
-            let (ny, nx) = (ny as usize, nx as usize);
-            if visited[[ny, nx]] {
-                continue;
-            }
-            visited[[ny, nx]] = true;
-            let mut nh = filled[[ny, nx]];
-            if nh <= hcur {
-                nh = hcur + eps;
-                filled[[ny, nx]] = nh;
-            }
-            heap.push(HeapItem(nh, ny, nx));
-        }
-    }
-    filled
-}
-
-/// D8: index 0..7 into N8 of the steepest downslope neighbour, -1 = terminal.
-pub fn flow_directions(filled: &Array2<f64>, water: &Array2<bool>) -> Array2<i8> {
-    let size = filled.dim().0;
-    Array2::from_shape_fn((size, size), |(y, x)| {
-        if water[[y, x]] {
-            return -1i8;
-        }
-        let mut best_drop = 0.0f64;
-        let mut best_dir = -1i8;
-        for (i, (&(dy, dx), &dist)) in N8.iter().zip(DIST.iter()).enumerate() {
-            let ny = y as isize + dy;
-            let nx = x as isize + dx;
-            if ny < 0 || nx < 0 || ny >= size as isize || nx >= size as isize {
-                continue;
-            }
-            let drop = (filled[[y, x]] - filled[[ny as usize, nx as usize]]) / dist;
-            if drop > best_drop {
-                best_drop = drop;
-                best_dir = i as i8;
-            }
-        }
-        best_dir
-    })
-}
-
-/// Cells sorted by filled height, high to low — donors before receivers.
-pub fn drainage_order(filled: &Array2<f64>) -> Vec<usize> {
-    let size = filled.dim().0;
-    let mut order: Vec<usize> = (0..size * size).collect();
-    order.sort_by(|&a, &b| {
-        let fa = filled[[a / size, a % size]];
-        let fb = filled[[b / size, b % size]];
-        fb.partial_cmp(&fa).unwrap().then(a.cmp(&b)) // high to low
-    });
-    order
-}
-
-/// Accumulate a per-cell weight down the drainage tree.
-fn accumulate(
-    order: &[usize],
-    dirs: &Array2<i8>,
-    weight: impl Fn(usize, usize) -> f64,
-    size: usize,
-) -> Array2<f64> {
-    let mut acc = Array2::from_shape_fn((size, size), |(y, x)| weight(y, x));
-    for &idx in order {
-        let (y, x) = (idx / size, idx % size);
-        let d = dirs[[y, x]];
-        if d >= 0 {
-            let (dy, dx) = N8[d as usize];
-            let ny = y as isize + dy;
-            let nx = x as isize + dx;
-            if ny >= 0 && nx >= 0 && ny < size as isize && nx < size as isize {
-                let v = acc[[y, x]];
-                acc[[ny as usize, nx as usize]] += v;
-            }
-        }
-    }
-    acc
-}
-
-/// Accumulate precip downstream; returns discharge (precip-weighted area).
-pub fn flow_accumulation(
-    filled: &Array2<f64>,
-    dirs: &Array2<i8>,
-    precip: &Array2<f64>,
-    water: &Array2<bool>,
-) -> Array2<f64> {
-    let size = filled.dim().0;
-    let order = drainage_order(filled);
-    accumulate(
-        &order,
-        dirs,
-        |y, x| if water[[y, x]] { 0.0 } else { precip[[y, x]] / 1000.0 },
-        size,
-    )
-}
+// M66/ADR-0026 — the lattice law: N8 order, first-wins descent,
+// high-to-low index-tied drainage sort. Moved verbatim to `grid`;
+// the bits of every accumulated sum depend on that order.
+pub use crate::grid::{
+    accumulate, drainage_order, fill_depressions, flow_accumulation, flow_directions, DIST, N8,
+};
 
 pub struct Hydrology {
     pub filled: Array2<f64>,
@@ -254,7 +89,7 @@ pub fn hydrology(
             while qi < comp.len() {
                 let (cy, cx) = comp[qi];
                 qi += 1;
-                for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+                for (dy, dx) in crate::grid::N4 {
                     let ny = cy as isize + dy;
                     let nx = cx as isize + dx;
                     if ny < 0 || nx < 0 || ny >= size as isize || nx >= size as isize {
@@ -578,10 +413,38 @@ pub fn water_table(
     // low frequencies are settled on a cheap grid first and the fine
     // sweeps only clean up the detail. Deterministic: fixed sweep
     // counts, fixed scan order, no convergence test on wall clock.
+    //
+    // K is frozen for the whole solve, so each level's face
+    // transmissivities (harmonic means) are computed once here and
+    // reused by every sweep of that level — the same expression on the
+    // same operands as the in-loop version, so the head is bit-identical
+    // while the sweep sheds four divisions per cell (E10.1).
+    let ks = k.as_slice().expect("k is standard layout");
+    let mut t_h = vec![0.0f64; rows * cols];
+    let mut t_v = vec![0.0f64; rows * cols];
     for (level, &sweeps) in AQ_SWEEPS.iter().enumerate() {
         let step = 1usize << (AQ_SWEEPS.len() - 1 - level); // 4, 2, 1
+        let mut y = 0usize;
+        while y < rows {
+            let row = y * cols;
+            let mut x = 0usize;
+            while x < cols {
+                let i = row + x;
+                let kc = ks[i];
+                if x + step < cols {
+                    let kn = ks[i + step];
+                    t_h[i] = if kc + kn > 0.0 { 2.0 * kc * kn / (kc + kn) } else { 0.0 };
+                }
+                if y + step < rows {
+                    let kn = ks[i + step * cols];
+                    t_v[i] = if kc + kn > 0.0 { 2.0 * kc * kn / (kc + kn) } else { 0.0 };
+                }
+                x += step;
+            }
+            y += step;
+        }
         for _ in 0..sweeps {
-            sor_sweep(&mut head, &surf, &k, &rech, &pinned, step);
+            sor_sweep(&mut head, &surf, &rech, &pinned, step, &t_h, &t_v);
         }
     }
 
@@ -601,49 +464,80 @@ pub fn water_table(
 
 /// One over-relaxed Gauss-Seidel sweep of ∇·(K∇h) + R = 0 over the
 /// sub-lattice of stride `step`, in fixed scan order.
+///
+/// E10.1 — the sweep runs on the flat row-major slices with the four
+/// neighbor branches unrolled, and reads its face transmissivities from
+/// the per-level tables built in `water_table`: K never changes between
+/// sweeps, so the harmonic means are computed once per level instead of
+/// four divisions per cell per sweep. The arithmetic (accumulation
+/// order N, S, W, E; over-relaxed update) is byte-for-byte the naive
+/// loop's. This kernel is the deep half of the fertility stage's
+/// budget, swept 136 times per world.
+///
+/// `t_h[i]` is the face between cell `i` and `i + step` (east); `t_v[i]`
+/// the face between `i` and `i + step*cols` (south).
 fn sor_sweep(
     head: &mut Array2<f64>,
     surf: &Array2<f64>,
-    k: &Array2<f64>,
     rech: &Array2<f64>,
     pinned: &Array2<bool>,
     step: usize,
+    t_h: &[f64],
+    t_v: &[f64],
 ) {
     let (rows, cols) = head.dim();
     let h2 = (step * step) as f64;
+    // Standard-layout grids: the flat slices exist by construction.
+    let hs = head.as_slice_mut().expect("head is standard layout");
+    let ss = surf.as_slice().expect("surf is standard layout");
+    let rs = rech.as_slice().expect("rech is standard layout");
+    let ps = pinned.as_slice().expect("pinned is standard layout");
+    let vstride = step * cols;
     let mut y = 0usize;
     while y < rows {
+        let row = y * cols;
+        let up = y >= step;
+        let down = y + step < rows;
         let mut x = 0usize;
         while x < cols {
-            if pinned[[y, x]] {
+            let i = row + x;
+            if ps[i] {
                 x += step;
                 continue;
             }
-            let kc = k[[y, x]];
             let mut num = 0.0;
             let mut den = 0.0;
-            for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
-                let ny = y as isize + dy * step as isize;
-                let nx = x as isize + dx * step as isize;
-                if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
-                    continue;
-                }
-                let (ny, nx) = (ny as usize, nx as usize);
-                let kn = k[[ny, nx]];
-                // harmonic mean: the tighter rock throttles the face
-                let t = if kc + kn > 0.0 { 2.0 * kc * kn / (kc + kn) } else { 0.0 };
-                num += t * head[[ny, nx]];
+            // The four faces in the fixed order (-1,0) (1,0) (0,-1)
+            // (0,1); harmonic mean — the tighter rock throttles the face.
+            if up {
+                let j = i - vstride;
+                let t = t_v[j];
+                num += t * hs[j];
+                den += t;
+            }
+            if down {
+                let t = t_v[i];
+                num += t * hs[i + vstride];
+                den += t;
+            }
+            if x >= step {
+                let j = i - step;
+                let t = t_h[j];
+                num += t * hs[j];
+                den += t;
+            }
+            if x + step < cols {
+                let t = t_h[i];
+                num += t * hs[i + step];
                 den += t;
             }
             if den <= 0.0 {
                 x += step;
                 continue;
             }
-            let target = (num + AQUIFER_MOUND * rech[[y, x]] * h2) / den;
-            let relaxed = head[[y, x]] + AQ_OMEGA * (target - head[[y, x]]);
-            head[[y, x]] = relaxed
-                .min(surf[[y, x]])
-                .max(surf[[y, x]] - AQUIFER_FLOOR_M);
+            let target = (num + AQUIFER_MOUND * rs[i] * h2) / den;
+            let relaxed = hs[i] + AQ_OMEGA * (target - hs[i]);
+            hs[i] = relaxed.min(ss[i]).max(ss[i] - AQUIFER_FLOOR_M);
             x += step;
         }
         y += step;
@@ -721,7 +615,7 @@ pub fn springs_and_oases(
             // Steepest fall below and steepest rise above, in m/km.
             let mut down = 0.0f64;
             let mut up = 0.0f64;
-            for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
+            for (dy, dx) in crate::grid::N4 {
                 let ny = y as isize + dy;
                 let nx = x as isize + dx;
                 if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize {
@@ -765,4 +659,15 @@ pub const BANDS: &[Band] = &[
     Band { name: "spring share of land %", sweet: (0.05, 4.0), hard: (0.005, 12.0), target: "M55: land cells where the table daylights at a break in slope · sweet 0.05–4% · hard 0.005–12%" },
     Band { name: "oasis share of arid land %", sweet: (0.2, 25.0), hard: (0.0, 60.0), target: "M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%" },
     Band { name: "glacier-fed river share %", sweet: (0.5, 15.0), hard: (0.05, 40.0), target: "sweet 0.5–15 · hard 0.05–40 (M35: % of river cells carrying ≥25% accumulated melt — the ice keeps its rivers; measured 1.3–1.5 on three seeds)" },
+    // M64 — calibration vs Earth: the shape of the river net. Horton's
+    // bifurcation ratio is near-universal on Earth (Rb 3–5; Horton 1945,
+    // Strahler 1957), measured on the full drainage tree at a fixed
+    // support area — never on the render-pruned river mask, whose
+    // missing headwaters read Rb≈1 off pure artifact. Drainage density
+    // is scale-bound, so it is gated as a ratio against Hack-pruned
+    // expectation over humid land only (≥400 mm — the 1.4 constant is a
+    // humid-terrain figure): D_ref = 1.4/√A₅₀ km/km², with channel
+    // length walked along true D8 steps (diagonals 4√2 km).
+    Band { name: "horton bifurcation ratio", sweet: (2.8, 5.5), hard: (2.0, 8.0), target: "M64: Earth networks run Rb 3–5 (Horton 1945; Strahler 1957) — full tree at A_c 80 km²" },
+    Band { name: "hack density ratio", sweet: (0.4, 2.5), hard: (0.15, 6.0), target: "M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold" },
 ];

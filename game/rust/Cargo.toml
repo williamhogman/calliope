@@ -9,6 +9,11 @@ crate-type = ["cdylib", "rlib"]
 [features]
 # E5.10 — counting allocator in the diagnose harness; never in the wasm.
 alloc-count = []
+# M67/ADR-0027 — the native GPU leg of the compute lane: wgpu on whatever
+# adapter the machine offers (report.sh sources lavapipe via nix when the
+# machine is headless, so the WGSL executes in CI instead of being claimed).
+# Harness-only; the wasm target carries wgpu unconditionally for the renderer.
+gpu = ["dep:wgpu", "dep:pollster"]
 
 [dependencies]
 ndarray = "0.16"
@@ -23,11 +28,21 @@ wasm-bindgen = "0.2"
 strum = { version = "0.26", features = ["derive"] }
 enum-map = "2"
 smallvec = { version = "1", features = ["serde"] }
+# M67 — readback synchronization for the compute lane: the map_async
+# oneshot handshake, shared by the wasm renderer and the native gpu leg.
+futures-channel = "0.3"
 
 [dev-dependencies]
 # M15.1 — the assay: property-proofs for the resource economy. Dev-only:
 # never in the wasm, never in the shipped binary.
 proptest = "1"
+
+# M67 — the compute lane's native leg (feature `gpu`): the same wgpu the
+# renderer uses, on native backends, plus a blocking executor for the
+# harness. Optional: plain builds never pay the compile.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wgpu = { version = "24", optional = true }
+pollster = { version = "0.4", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3"
@@ -54,13 +69,18 @@ panic = "abort"
 inherits = "release"
 panic = "unwind"
 
-# E6.3 — explicit wasm-opt pass (wasm-pack runs this via binaryen on PATH;
+# E6.3 — explicit wasm-opt pass; M66 adds --no-inline=*stage_*: rustc's
+# #[inline(never)] holds through LLVM, but binaryen re-merges single-caller
+# functions unless told otherwise — the gen stages stay their own bodies.
+# The flag must PRECEDE -Oz: binaryen applies options positionally, and a
+# no-inline mark set after the pass pipeline ran marks nothing (measured).
+# Was: explicit wasm-opt pass (wasm-pack runs this via binaryen on PATH;
 # scripts/build.sh's nix path provides it). -O3 measured against -Oz on the
 # real binary; producers/target-features metadata stripped (E6.6).
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["-Oz", "--strip-producers", "--strip-target-features"]
+wasm-opt = ["--no-inline=*stage_*", "-Oz", "--strip-producers", "--strip-target-features"]
 
 # E6.6 — the symbolized twin for scripts/wasm-audit.sh: wasm-opt keeps the
 # name section (-g) so twiggy can name what weighs. Never shipped.
 [package.metadata.wasm-pack.profile.profiling]
-wasm-opt = ["-O", "-g"]
+wasm-opt = ["--no-inline=*stage_*", "-O", "-g"]

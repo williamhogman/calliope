@@ -72,59 +72,78 @@ pub fn classify(seed: i64, size: usize, plates: &Plates, height: &Array2<f32>) -
     let mut aff_fold = Array2::zeros((size, size));
     let mut aff_shield = Array2::zeros((size, size));
 
-    for y in 0..size {
-        for x in 0..size {
-            let pid = plates.cell[[y, x]] as usize;
-            let seam_d = plates.seam_dist[[y, x]] as f64;
-            let seam_a = plates.seam_age[[y, x]] as f64;
-            let edge_d = plates.edge_dist[[y, x]] as f64;
-            let b = plates.boundary[[y, x]];
+    // E10.1 — the cell loop reads five plate grids and writes four
+    // planes; on the flat row-major slices those ten accesses per cell
+    // are one add each instead of a 2-D stride multiply. Every float
+    // expression is untouched, so the province map is bit-identical.
+    {
+        let cells = plates.cell.as_slice().expect("cell is standard layout");
+        let seam_ds = plates.seam_dist.as_slice().expect("seam_dist is standard layout");
+        let seam_as = plates.seam_age.as_slice().expect("seam_age is standard layout");
+        let edge_ds = plates.edge_dist.as_slice().expect("edge_dist is standard layout");
+        let bnds = plates.boundary.as_slice().expect("boundary is standard layout");
+        let hts = height.as_slice().expect("height is standard layout");
+        let rocks = rock.as_slice_mut().expect("rock is standard layout");
+        let avs = aff_volc.as_slice_mut().expect("aff_volc is standard layout");
+        let afs = aff_fold.as_slice_mut().expect("aff_fold is standard layout");
+        let ass = aff_shield.as_slice_mut().expect("aff_shield is standard layout");
+        for y in 0..size {
+            let row = y * size;
+            let yc = y as f64 / n * 4.0;
+            for x in 0..size {
+                let i = row + x;
+                let pid = cells[i] as usize;
+                let seam_d = seam_ds[i] as f64;
+                let seam_a = seam_as[i] as f64;
+                let edge_d = edge_ds[i] as f64;
+                let b = bnds[i];
 
-            // Hotspot plumes: rare low-frequency blobs (the same deep
-            // machinery that strings the archipelagos).
-            let hs = hotspot.fbm(x as f64 / n * 4.0, y as f64 / n * 4.0, 2.5, 3);
+                // Hotspot plumes: rare low-frequency blobs (the same deep
+                // machinery that strings the archipelagos).
+                let hs = hotspot.fbm(x as f64 / n * 4.0, yc, 2.5, 3);
 
-            // Youth of the nearest collision — young seams stand wide.
-            let youth = (-seam_a / 900.0).exp();
+                // Youth of the nearest collision — young seams stand wide.
+                let youth = (-seam_a / 900.0).exp();
 
-            let v_aff = (hs - 0.30)
-                .max(1.0 - seam_d / 4.0 + 0.6 * youth - 0.6)
-                .max(if b != B_NONE && b != B_CONVERGENT { 0.9 } else { -1.0 });
-            let f_aff = (1.0 - seam_d / (5.0 + 11.0 * youth)).max(-1.0);
-            let s_aff = if cont[pid] {
-                (age_of[pid] / 2400.0) * (edge_d / (0.06 * n)).min(1.5) - 0.55
-            } else {
-                -1.0
-            };
-            aff_volc[[y, x]] = v_aff;
-            aff_fold[[y, x]] = f_aff;
-            aff_shield[[y, x]] = s_aff;
-
-            // Precedence: the loudest history wins the cell.
-            rock[[y, x]] = if hs > 0.62
-                || (seam_d <= 3.0 && seam_a <= 900.0)
-                || (b != B_NONE && b != B_CONVERGENT)
-            {
-                VOLCANIC
-            } else if seam_d <= 5.0 + 11.0 * youth {
-                FOLD_BELT
-            } else if cont[pid] && age_of[pid] >= 1000.0 && edge_d >= 0.06 * n {
-                SHIELD
-            } else if height[[y, x]] > 0.5 {
-                // M21 — legibility of the heights: a mountain cannot read
-                // as trough country. Near a seam it is fold country; on an
-                // old continental interior it is exhumed shield basement;
-                // anywhere else it is a hotspot pile.
-                if seam_d <= 18.0 {
-                    FOLD_BELT
-                } else if cont[pid] && age_of[pid] >= 1000.0 && edge_d >= 0.03 * n {
-                    SHIELD
+                let v_aff = (hs - 0.30)
+                    .max(1.0 - seam_d / 4.0 + 0.6 * youth - 0.6)
+                    .max(if b != B_NONE && b != B_CONVERGENT { 0.9 } else { -1.0 });
+                let f_aff = (1.0 - seam_d / (5.0 + 11.0 * youth)).max(-1.0);
+                let s_aff = if cont[pid] {
+                    (age_of[pid] / 2400.0) * (edge_d / (0.06 * n)).min(1.5) - 0.55
                 } else {
+                    -1.0
+                };
+                avs[i] = v_aff;
+                afs[i] = f_aff;
+                ass[i] = s_aff;
+
+                // Precedence: the loudest history wins the cell.
+                rocks[i] = if hs > 0.62
+                    || (seam_d <= 3.0 && seam_a <= 900.0)
+                    || (b != B_NONE && b != B_CONVERGENT)
+                {
                     VOLCANIC
-                }
-            } else {
-                BASIN
-            };
+                } else if seam_d <= 5.0 + 11.0 * youth {
+                    FOLD_BELT
+                } else if cont[pid] && age_of[pid] >= 1000.0 && edge_d >= 0.06 * n {
+                    SHIELD
+                } else if hts[i] > 0.5 {
+                    // M21 — legibility of the heights: a mountain cannot read
+                    // as trough country. Near a seam it is fold country; on an
+                    // old continental interior it is exhumed shield basement;
+                    // anywhere else it is a hotspot pile.
+                    if seam_d <= 18.0 {
+                        FOLD_BELT
+                    } else if cont[pid] && age_of[pid] >= 1000.0 && edge_d >= 0.03 * n {
+                        SHIELD
+                    } else {
+                        VOLCANIC
+                    }
+                } else {
+                    BASIN
+                };
+            }
         }
     }
 

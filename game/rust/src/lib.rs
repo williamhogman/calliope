@@ -12,6 +12,7 @@ pub mod chronicle;
 pub mod civ;
 pub mod climate;
 pub mod coast;
+pub mod compute;
 pub mod constants;
 pub mod culture;
 pub mod currents;
@@ -22,6 +23,7 @@ pub mod event;
 pub mod explain;
 pub mod famine;
 pub mod geo;
+pub mod grid;
 pub mod hydrology;
 pub mod ice;
 pub mod ids;
@@ -35,6 +37,7 @@ pub mod plates;
 pub mod politics;
 pub mod prospecting;
 
+pub mod atlas;
 #[cfg(target_arch = "wasm32")]
 pub mod render;
 pub mod resources;

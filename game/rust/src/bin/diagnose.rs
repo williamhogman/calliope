@@ -21,6 +21,7 @@
 //!   diagnose ocean       <size> <seeds>         gyres, coast heat, upwelling, sea seasons (M49)
 //!   diagnose ocean       <size> <seeds> --metamorphic  kill/scale the currents, assert response (M50)
 //!   diagnose seismic-hash <seed> <size> <months> bare ledger hash (wasm replay leg)
+//!   diagnose gate        <size> <years> <seed> [--reports <dir>]  Era I sealed as one verdict (M65)
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
@@ -320,7 +321,7 @@ fn hash_state(w: &World) -> u64 {
     // M25 — the waterline is state: freeze phase, stand, isostasy rows.
     s.push_str(&format!("L{:016x}\n", w.sealevel.hash()));
     // M26 — the coastal landform grid is state: the classifier held still.
-    s.push_str(&format!("F{:016x}\n", calliope::landform::hash(&w.landform)));
+    s.push_str(&format!("F{:016x}\n", calliope::landform::hash(&w.fields.landform)));
     // M28 — the LGM ice footprint is state: thickness grid, ELA rows.
     s.push_str(&format!("I{:016x}\n", w.ice.hash()));
     // M33 — the frozen-ground ledger is state: extent + pattern grids.
@@ -331,6 +332,8 @@ fn hash_state(w: &World) -> u64 {
     s.push_str(&format!("T{:016x}\n", w.tides.hash()));
     // M44 — the drift ledger is state: the grown shore holds still.
     s.push_str(&format!("S{:016x}\n", w.coastform.hash()));
+    // M59 — the sediment books are state: the budget holds still.
+    s.push_str(&format!("D{:016x}\n", w.sediment.hash()));
     // M45 — the shelter field is state: the anchorage reading holds still.
     {
         let mut sb: Vec<u8> = Vec::with_capacity(w.shelter.len() * 4);
@@ -779,7 +782,7 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
         // the alpine coasts); proglacial lakes and terminal moraines
         // live in the margin belt (50–75°: the Laurentide/Fennoscandian
         // fringe), and the moraine string hugs the measured margin.
-        let lfm = &w.landform;
+        let lfm = &w.fields.landform;
         let hgt = &w.fields.height;
         let (kr, kc) = hgt.dim();
         let knf = kr as f64;
@@ -1113,7 +1116,7 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
         let mut fl_rel = 0.0f64;
         for y in 0..t_r {
             for x in 0..t_c {
-                match w.landform[[y, x]] {
+                match w.fields.landform[[y, x]] {
                     calliope::landform::TIDEFLAT => {
                         n_flats += 1;
                         fl_rng += rng_near(y, x);
@@ -1530,7 +1533,7 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
 
 // ================================================================ terrain
 
-fn cmd_terrain(seed: i64, size: usize) {
+fn cmd_terrain(seed: i64, size: usize, explain: bool) {
     let t0 = Instant::now();
     let w = World::generate(seed, size);
     let gen_ms = t0.elapsed().as_millis();
@@ -1791,7 +1794,7 @@ fn cmd_terrain(seed: i64, size: usize) {
     }
     {
         // ---- coastal landforms (M26) --------------------------------
-        let lf = &w.landform;
+        let lf = &w.fields.landform;
         let hgt = &w.fields.height;
         let (gh, gw) = hgt.dim();
         let last = sl.row.len() - 1;
@@ -1866,20 +1869,134 @@ fn cmd_terrain(seed: i64, size: usize) {
             format!("{} tags against the offset sign", wrong_sign),
             "M26: raised only where the land rose, drowned only where the sea did",
         );
-        // M33/M43 — the shipped grid carries the patterned-ground and
-        // tidal stamps, which run after classify(); the regen leg must
-        // walk the same three steps or the compare reads its own
-        // omission.
-        let mut regen = calliope::landform::classify(hgt, sl, &w.ice);
+        // M33/M43/M60 — the shipped grid carries the full fold, which
+        // runs after classify(); the regen leg must walk the same steps
+        // in the same order or the compare reads its own omission.
+        let mut regen = calliope::landform::classify(hgt, sl, &w.ice, &w.sediment.delta);
         calliope::landform::stamp_patterned(&mut regen, &w.permafrost.pattern, hgt);
         calliope::landform::stamp_tidal(&mut regen, &w.tides, hgt, &w.fields.flags);
+        calliope::landform::stamp_delta(&mut regen, &w.sediment.delta, hgt);
+        calliope::landform::stamp_coastforms(&mut regen, &w.coastform.form, hgt);
+        {
+            let water = hgt.mapv(|h| h < 0.0);
+            let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
+            let lakes = w.fields.flags.mapv(|f| f & CellFlags::LAKE.bits() != 0);
+            let dry = calliope::hydrology::springs_and_oases(
+                hgt,
+                &water,
+                &rivers,
+                &lakes,
+                &w.fields.aquifer,
+                &w.fields.biomes,
+                &w.fields.precip,
+            );
+            calliope::landform::stamp_dry_water(
+                &mut regen,
+                &dry.springs,
+                &dry.oases,
+                &w.fields.aquifer,
+                hgt,
+            );
+        }
+        calliope::landform::stamp_trough(&mut regen, &w.ice.carved, hgt);
+        calliope::landform::finish(&mut regen, hgt);
         let purity = calliope::landform::hash(&regen) == calliope::landform::hash(lf);
         c.must(
             "landform grid regen byte-identical",
             purity,
             if purity { "identical".into() } else { "DIVERGED".into() },
-            "M26 gate: pure function of height + sea level (+ the M33 patterned and M43 tidal stamps); joins hash_state",
+            "M26/M60 gate: pure function of the dawn grids (classify + every stamp + the relief fill); joins hash_state",
         );
+
+        // ---- the landform vocabulary (M60) ---------------------------
+        {
+            // Totality: after `finish`, NONE survives only on open sea —
+            // no land cell and no shore-adjacent water cell goes nameless.
+            let mut nameless_land = 0usize;
+            let mut nameless_shore = 0usize;
+            let mut oasis_pond = 0usize;
+            let mut census = [0usize; calliope::landform::NAMES.len()];
+            for y in 0..gh {
+                for x in 0..gw {
+                    let tag = lf[[y, x]] as usize;
+                    if tag < census.len() {
+                        census[tag] += 1;
+                    }
+                    if tag == calliope::landform::OASIS as usize
+                        && w.fields.aquifer[[y, x]]
+                            <= calliope::hydrology::SPRING_DAYLIGHT_M as f32
+                    {
+                        oasis_pond += 1;
+                    }
+                    if tag != calliope::landform::NONE as usize {
+                        continue;
+                    }
+                    if hgt[[y, x]] >= 0.0 {
+                        nameless_land += 1;
+                    } else {
+                        let land_next = (y > 0 && hgt[[y - 1, x]] >= 0.0)
+                            || (y + 1 < gh && hgt[[y + 1, x]] >= 0.0)
+                            || (x > 0 && hgt[[y, x - 1]] >= 0.0)
+                            || (x + 1 < gw && hgt[[y, x + 1]] >= 0.0);
+                        if land_next {
+                            nameless_shore += 1;
+                        }
+                    }
+                }
+            }
+            let told: Vec<String> = calliope::landform::NAMES
+                .iter()
+                .zip(census.iter())
+                .filter(|(_, &n)| n > 0)
+                .map(|(name, n)| format!("{name} {n}"))
+                .collect();
+            println!("landform vocabulary (M60): {}", told.join(" · "));
+            let n_oasis = census[calliope::landform::OASIS as usize];
+            if n_oasis > 0 {
+                println!(
+                    "  oasis split: {} daylighted (table ≤2 m) · {} low-point of the reach",
+                    oasis_pond,
+                    n_oasis - oasis_pond
+                );
+            }
+            c.must(
+                "no ground is nameless",
+                nameless_land == 0 && nameless_shore == 0,
+                format!("{} land · {} shore cells untold", nameless_land, nameless_shore),
+                "M60 gate: after the fold, NONE survives only on open sea",
+            );
+            // The generic relief classes must actually carry the fill:
+            // a 512 world with continental relief tells mountains, hills
+            // and plains on every seed — an empty class means the
+            // thresholds read the wrong field, not a quiet world.
+            let n_mtn = census[calliope::landform::MOUNTAIN as usize];
+            let n_hill = census[calliope::landform::HILLS as usize];
+            let n_plain = census[calliope::landform::PLAIN as usize];
+            c.must(
+                "relief vocabulary is spoken",
+                n_mtn > 0 && n_hill > 0 && n_plain > 0,
+                format!("mountain {} · hills {} · plain {}", n_mtn, n_hill, n_plain),
+                "M60 gate: Hammond classes read real relief (300 m/90 m breaks over the 20 km window)",
+            );
+            // KARST is reserved, unstamped until a carbonate province
+            // exists (Ready queue) — a tagged cell is a contract break.
+            c.must(
+                "karst stays reserved",
+                census[calliope::landform::KARST as usize] == 0,
+                format!("{} cells", census[calliope::landform::KARST as usize]),
+                "M60: the code point is held for Karst Country II; no pass may stamp it yet",
+            );
+            // The oasis word names groves, not reaches: strict depth
+            // minima of the M55 mask. A count in the thousands means a
+            // basin-painting law leaked back in (the ≤2 m daylight
+            // override painted 8-11k; the non-strict minimum stamped
+            // ~5k rim-band cells of clamped basins).
+            c.band(
+                "oasis cells stay pointlike",
+                n_oasis as f64,
+                format!("{} cells", n_oasis),
+            );
+        }
 
         // ---- longshore drift (M44) ----------------------------------
         {
@@ -1958,6 +2075,164 @@ fn cmd_terrain(seed: i64, size: usize) {
                 "M44: longshore sand only lands on shallow seabed (0 to −80 m — the bank the 4 km grid resolves)",
             );
         }
+
+        // ---- the sediment budget (M59) --------------------------------
+        {
+            let sed = &w.sediment;
+            let det = sed.detached.max(1e-12);
+            let settled_pct = 100.0 * sed.settled / det;
+            let delta_pct = 100.0 * sed.delta_fill / det;
+            let abyssal_pct = 100.0 * sed.abyssal / det;
+            let n_mouths = sed.mouths.len();
+            let with_fans = sed.mouths.iter().filter(|m| m.fan > 0).count();
+            let delta_cells = sed.delta.iter().filter(|&&b| b).count();
+            let largest_fan = sed.mouths.iter().map(|m| m.fan).max().unwrap_or(0);
+            println!(
+                "sediment budget (M59): detached {:.2} · settled {:.2} ({:.0}%) · delta fill {:.2} ({:.0}%) · abyssal {:.2} ({:.0}%)",
+                sed.detached, sed.settled, settled_pct, sed.delta_fill, delta_pct, sed.abyssal, abyssal_pct
+            );
+            println!(
+                "deltas: {} mouths ledgered · {} built fans · {} delta cells ({} of land) · largest fan {} cells",
+                n_mouths, with_fans, delta_cells, pct(delta_cells as f64 / land_n.max(1.0)), largest_fan
+            );
+            // the books close by construction; 1% is the audit's
+            // tolerance for the float sums, not a licence
+            let closure = (sed.detached - (sed.settled + sed.delta_fill + sed.abyssal)).abs() / det;
+            c.must(
+                "sediment ledger closes (M59)",
+                closure <= 0.01,
+                format!("{:.4}% open", 100.0 * closure),
+                "M59 gate: detached = settled + delta fill + abyssal to within 1% end-to-end",
+            );
+            // the grid is the ledger's footprint: Σdepth re-summed
+            // independently must match the on-map share of the books
+            let grid_sum: f64 = sed.depth.iter().map(|&v| v as f64).sum();
+            let on_map = sed.settled + sed.delta_fill;
+            let drift = (grid_sum - on_map).abs() / det;
+            c.must(
+                "the grid remembers the ledger (M59)",
+                drift <= 0.01,
+                format!("Σdepth {:.2} vs books {:.2}", grid_sum, on_map),
+                "M59 gate: deposition depth re-summed from the grid matches the ledger to 1% (f32 grid vs f64 books)",
+            );
+            // Deltas scale with the river: fan area against mouth load
+            // and against drainage area (Spearman, the M54 instrument).
+            // M64's fluvial-dominance recalibration restricted the fan
+            // population to the ~80 big-basin mouths, so raw rank ρ
+            // mechanically fell from 0.84 (over 365 rill-to-major
+            // mouths) to 0.51–0.67 — restriction of range plus the fan
+            // reach cap flattening the top, not a change in the physics.
+            // The restated gate tests the law itself as a dose–response:
+            // rank correlation must stay unambiguous (ρ ≥ 0.35 is
+            // p < 0.001 at n ≈ 80), AND the top load quartile must build
+            // materially bigger fans than the bottom quartile.
+            let pairs: Vec<(f64, f64)> = sed.mouths.iter().map(|m| (m.load, m.fan as f64)).collect();
+            let rho_load = spearman(&pairs);
+            let pairs_a: Vec<(f64, f64)> = sed.mouths.iter().map(|m| (m.area, m.fan as f64)).collect();
+            let rho_area = spearman(&pairs_a);
+            let mut by_load: Vec<(f64, f64)> = pairs.clone();
+            by_load.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+            let qn = by_load.len() / 4;
+            let (q1_mean, q4_mean) = if qn >= 3 {
+                let q1: f64 = by_load[..qn].iter().map(|p| p.1).sum::<f64>() / qn as f64;
+                let q4: f64 = by_load[by_load.len() - qn..].iter().map(|p| p.1).sum::<f64>() / qn as f64;
+                (q1, q4)
+            } else {
+                (0.0, 0.0)
+            };
+            let dose = q4_mean / q1_mean.max(1e-9);
+            println!(
+                "  spearman: fan cells vs mouth load {:.2} · vs drainage area {:.2} ({} mouths)",
+                rho_load, rho_area, n_mouths
+            );
+            println!(
+                "  dose-response: mean fan cells Q1 {:.1} → Q4 {:.1} by load quartile (×{:.2}, n/4 = {})",
+                q1_mean, q4_mean, dose, qn
+            );
+            c.must(
+                "deltas scale with the load (M59)",
+                n_mouths >= 10 && rho_load >= 0.35 && dose >= 1.5,
+                format!("ρ {:.2} · Q4/Q1 ×{:.2} / {} mouths", rho_load, dose, n_mouths),
+                "M59/M64 gate: rank ρ ≥0.35 (p<0.001 at n≈80) AND top load quartile builds ≥1.5× the bottom's fans — over ≥10 mouths so the check cannot pass on vacancy",
+            );
+            c.want(
+                "deltas scale with the basin (M59)",
+                rho_area >= 0.25,
+                format!("ρ {:.2}", rho_area),
+                "M59: drainage area drives load drives fans — the indirect leg, range-restricted by the ≥10⁴ km² dominance bar itself (measured 0.38–0.42 ×3 seeds)",
+            );
+            let delta_share = 100.0 * delta_cells as f64 / land_n.max(1.0);
+            c.band("delta land share of land %", delta_share, format!("{:.3} %", delta_share));
+            c.band("river deltas per seed", with_fans as f64, format!("{}", with_fans));
+            c.band("sediment settled share %", settled_pct, format!("{:.1} %", settled_pct));
+            c.band("sediment abyssal share %", abyssal_pct, format!("{:.1} %", abyssal_pct));
+
+            // the shoaled anchorage: recompute the raw M45 field on the
+            // shipped grids and audit the silt wiring both ways — cells
+            // with no silt in the 5×5 window keep their score bit-for-
+            // bit, cells with silt shoal by exactly 1/(1+k·depth). The
+            // widening seam is skipped: the raw recompute sees margin
+            // ocean where the pre-widen call saw the grid edge.
+            let raw = calliope::settlements::shelter_score(&w.fields.height, &w.coastform.form);
+            let pad = w.size / 8;
+            let (sh_r, sh_c) = raw.dim();
+            let mut n_silted = 0usize;
+            let mut n_clean_moved = 0usize;
+            let mut n_silted_wrong = 0usize;
+            let mut ratio_sum = 0.0f64;
+            for y in 0..sh_r {
+                for x in (pad + 8)..sh_c.saturating_sub(pad + 8) {
+                    if raw[[y, x]] <= 0.0 {
+                        continue;
+                    }
+                    let mut silt = 0.0f32;
+                    for dy in -2..=2isize {
+                        for dx in -2..=2isize {
+                            let ny = y as isize + dy;
+                            let nx = x as isize + dx;
+                            if ny < 0 || nx < 0 || ny >= sh_r as isize || nx >= sh_c as isize {
+                                continue;
+                            }
+                            let (ny, nx) = (ny as usize, nx as usize);
+                            if w.fields.height[[ny, nx]] < 0.0 {
+                                silt = silt.max(sed.depth[[ny, nx]]);
+                            }
+                        }
+                    }
+                    if silt <= 0.0 {
+                        if w.shelter[[y, x]] != raw[[y, x]] {
+                            n_clean_moved += 1;
+                        }
+                    } else {
+                        n_silted += 1;
+                        let expect = raw[[y, x]] / (1.0 + calliope::erosion::SILT_SHOAL * silt);
+                        if (w.shelter[[y, x]] - expect).abs() > 1e-4 {
+                            n_silted_wrong += 1;
+                        }
+                        ratio_sum += (w.shelter[[y, x]] / raw[[y, x]]) as f64;
+                    }
+                }
+            }
+            let mean_ratio = if n_silted > 0 { ratio_sum / n_silted as f64 } else { 1.0 };
+            println!(
+                "  shoaling: {} silted anchorages · mean shelter ratio {:.2} · {} clean cells moved · {} silted cells off-law",
+                n_silted, mean_ratio, n_clean_moved, n_silted_wrong
+            );
+            c.must(
+                "silt shoals the anchorage, nothing else moves (M59)",
+                n_clean_moved == 0 && n_silted_wrong == 0,
+                format!("{} clean moved · {} off-law", n_clean_moved, n_silted_wrong),
+                "M59: shelter divides by 1+k·silt where fan silt stands in the anchorage window, and only there",
+            );
+            c.want(
+                "harbors shoal where the silt lands (M59)",
+                n_silted > 0 && mean_ratio < 0.99,
+                format!("{} anchorages at ratio {:.2}", n_silted, mean_ratio),
+                "M59: high-load mouths must actually cost their harbors something",
+            );
+        }
+
+
 
         // M29 — glacial relief: U-valleys, cirques and hangs by belt.
         {
@@ -2227,6 +2502,18 @@ fn cmd_terrain(seed: i64, size: usize) {
                     steps += 1;
                     if w.fields.height[[by, bx]] > w.fields.height[[ay, ax]] + 1e-6 {
                         ascents += 1;
+                        let in_chains = |cy: usize, cx: usize| {
+                            ice.spillways
+                                .iter()
+                                .filter(|c| c.iter().any(|&(py, px)| (py as usize, px as usize) == (cy, cx)))
+                                .count()
+                        };
+                        eprintln!(
+                            "  [ascent] step {}→{} of chain: ({},{}) h={:.5} ow={:.2} ch={} → ({},{}) h={:.5} ow={:.2} ch={}",
+                            k - 1, k,
+                            ay, ax, w.fields.height[[ay, ax]], ice.outwash[[ay, ax]], in_chains(ay, ax),
+                            by, bx, w.fields.height[[by, bx]], ice.outwash[[by, bx]], in_chains(by, bx)
+                        );
                     }
                 }
             }
@@ -2504,6 +2791,95 @@ fn cmd_terrain(seed: i64, size: usize) {
             c.band("wet share of the tundra", wet_share, format!("{:.1}%", wet_share));
         }
     }
+
+    // ---- M61 · "why is this here": the provenance chain proves itself ----
+    // A deterministic stride lattice plus every settlement site; each cell
+    // must return a non-empty chain whose stages read deep time forward
+    // (0 stone → 4 landform), opening on stone and closing on the cell's
+    // stored landform word verbatim — the chain reads recorded state, so
+    // any drift between it and the lane is a bug, not a phrasing choice.
+    if explain {
+        let (hh, ww) = w.fields.height.dim();
+        let mut cells: Vec<(usize, usize)> = Vec::new();
+        for y in (0..hh).step_by(13) {
+            for x in (0..ww).step_by(13) {
+                cells.push((y, x));
+            }
+        }
+        let lattice_n = cells.len();
+        for s in &w.peoples.settlements {
+            cells.push((s.y as usize, s.x as usize));
+        }
+        let mut empty = 0usize;
+        let mut disorder = 0usize;
+        let mut mismatch = 0usize;
+        let mut first_bad: Option<String> = None;
+        let note = |slot: &mut Option<String>, y: usize, x: usize, what: &str| {
+            if slot.is_none() {
+                *slot = Some(format!("({},{}) — {}", y, x, what));
+            }
+        };
+        let sampled = cells.len();
+        for &(y, x) in &cells {
+            let raw = calliope::explain::explain(&w, "cell", &format!("{},{}", y, x));
+            let v: serde_json::Value = serde_json::from_str(&raw).unwrap_or_default();
+            let chain = match v.get("chain").and_then(|c| c.as_array()) {
+                Some(c) if !c.is_empty() => c.clone(),
+                _ => {
+                    empty += 1;
+                    note(&mut first_bad, y, x, "no chain returned");
+                    continue;
+                }
+            };
+            let stages: Vec<i64> = chain
+                .iter()
+                .map(|e| e.get("s").and_then(|s| s.as_i64()).unwrap_or(-1))
+                .collect();
+            let ordered = stages.windows(2).all(|p| p[0] <= p[1])
+                && stages.first() == Some(&0)
+                && stages.last() == Some(&4);
+            if !ordered {
+                disorder += 1;
+                note(&mut first_bad, y, x, &format!("stages {:?}", stages));
+            }
+            let want = calliope::landform::NAMES[w.fields.landform[[y, x]] as usize];
+            let got = chain
+                .last()
+                .and_then(|e| e.get("l"))
+                .and_then(|l| l.as_str())
+                .unwrap_or("");
+            if got != want {
+                mismatch += 1;
+                note(&mut first_bad, y, x, &format!("terminal {:?} vs lane {:?}", got, want));
+            }
+        }
+        println!();
+        println!(
+            "provenance (M61): {} cells sampled ({} lattice + {} settlement sites) · {} empty · {} disordered · {} terminal mismatches",
+            sampled, lattice_n, sampled - lattice_n, empty, disorder, mismatch
+        );
+        if let Some(b) = &first_bad {
+            println!("  first offender: {}", b);
+        }
+        c.must(
+            "every sampled cell explains itself",
+            empty == 0,
+            format!("{} of {} chains non-empty", sampled - empty, sampled),
+            "M61 gate: every cell must return a provenance chain — no ground goes unexplained",
+        );
+        c.must(
+            "the chain reads deep time forward",
+            disorder == 0,
+            format!("{} of {} open on stone, close on landform, stages nondecreasing", sampled - disorder, sampled),
+            "M61 gate: stone → ice → water → soil → landform, in that order, always",
+        );
+        c.must(
+            "the chain ends on the stored landform",
+            mismatch == 0,
+            format!("{} of {} terminals match the lane verbatim", sampled - mismatch, sampled),
+            "M61 gate: the last word of the chain is the cell's Landform value, not a paraphrase",
+        );
+    }
     c.print();
 }
 
@@ -2697,12 +3073,19 @@ fn cmd_climate(seed: i64, size: usize) {
             water_g[[y, xx]]
         })
     };
+    // M59 — fan-built delta plains leave both samples: the matching is
+    // aspect-for-aspect precisely because relief is the stronger law,
+    // and a fresh depositional flat is unmatched relief. Deltas are not
+    // spread evenly either — the biggest fans sit at the mouths of the
+    // biggest rivers, which run to the wettest (warm-rim) coasts, so
+    // leaving them in dilutes exactly the sample the law measures.
+    let deltas = &w.sediment.delta;
     // per-row neutral-coast baselines, split by aspect [leeward, windward]
     let mut zonal_p = vec![[0.0f64; 2]; rows];
     let mut zonal_n = vec![[0usize; 2]; rows];
     for y in 0..rows {
         for x in 0..cols {
-            if land[[y, x]] && near[[y, x]] && heat[[y, x]].abs() < 0.5 {
+            if land[[y, x]] && near[[y, x]] && heat[[y, x]].abs() < 0.5 && !deltas[[y, x]] {
                 let a = is_windward(y, x) as usize;
                 zonal_p[y][a] += w.fields.precip[[y, x]] as f64;
                 zonal_n[y][a] += 1;
@@ -2722,6 +3105,7 @@ fn cmd_climate(seed: i64, size: usize) {
     };
     let (mut cold_p, mut cold_e, mut cold_n) = ([0.0f64; 4], [0.0f64; 4], [0usize; 4]);
     let (mut warm_p, mut warm_e, mut warm_n) = ([0.0f64; 4], [0.0f64; 4], [0usize; 4]);
+    let mut delta_skip = 0usize;
     for y in 0..rows {
         let belt = belt_of(y);
         for x in 0..cols {
@@ -2731,6 +3115,10 @@ fn cmd_climate(seed: i64, size: usize) {
             let b = heat[[y, x]];
             if b.abs() < 0.5 {
                 continue;
+            }
+            if deltas[[y, x]] {
+                delta_skip += 1;
+                continue; // fresh fan flat — relief unmatched, out of both samples
             }
             let a = is_windward(y, x) as usize;
             if zonal_n[y][a] < 4 {
@@ -2764,8 +3152,8 @@ fn cmd_climate(seed: i64, size: usize) {
     let warm_ratio = ratio(warm_p[0], warm_e[0]);
     println!();
     println!(
-        "current-aware rain (M42): sub-polar cold-rim land {} cells at {:.2}× its aspect-matched coast · warm-rim {} cells at {:.2}×",
-        cold_n[0], cold_ratio, warm_n[0], warm_ratio
+        "current-aware rain (M42): sub-polar cold-rim land {} cells at {:.2}× its aspect-matched coast · warm-rim {} cells at {:.2}× · {} delta-flat cells excluded",
+        cold_n[0], cold_ratio, warm_n[0], warm_ratio, delta_skip
     );
     println!(
         "  by wind belt: cold trades {:.2}× ({}) · westerlies {:.2}× ({}) · polar {:.2}× ({})",
@@ -4546,7 +4934,14 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             let b = naming::bank(&cu.style);
             audited += 1;
             let pre_ok = b.pre.iter().any(|(p, _)| s.name.starts_with(p));
-            let end_ok = b.end.iter().any(|(e, _)| s.name.ends_with(e));
+            // a tongue's closers are its bank ends PLUS its landform
+            // generics (M62) — the vocabulary grew, the audit knows it
+            let end_ok = b.end.iter().any(|(e, _)| s.name.ends_with(e))
+                || naming::CLASSES.iter().any(|cl| {
+                    naming::landform_generics(&cu.style, cl)
+                        .iter()
+                        .any(|(g, _)| s.name.ends_with(g))
+                });
             if pre_ok && end_ok {
                 hits += 1;
             }
@@ -5143,6 +5538,42 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             "counterfactual (M55): with wells of unlimited reach, {} towns stand on waterless arid ground (real run: {})",
             cf_dry, dry_towns
         );
+        // The load-bearing statement, named directly: a cf dry town whose
+        // table lies beyond even its people's *terminal* well reach is
+        // ground the veto provably refused in the real run (reach only
+        // grows, so the terminal bound is the conservative one). The old
+        // count-vs-count proxy (`cf_dry > dry_towns`) was fooled by
+        // substitution: with a finite founding budget, taking one refused
+        // site can displace founding a within-reach dry site, so both
+        // runs count 1 and the separation the veto actually caused
+        // disappears from the tally.
+        let mut veto_refused = 0usize;
+        for s in cf
+            .peoples
+            .settlements
+            .iter()
+            .filter(|s| cf.arid_dry[[s.y as usize, s.x as usize]])
+        {
+            let table = cf.fields.aquifer[[s.y as usize, s.x as usize]] as f64;
+            let reach = cf
+                .peoples
+                .societies
+                .get(s.people.idx())
+                .map(calliope::settlements::well_reach_m)
+                .unwrap_or(0.0);
+            let refused = reach <= 0.0 || table > reach;
+            println!(
+                "  cf dry town at ({},{}): table {:.0} m · founder's terminal well reach {:.0} m · {}",
+                s.y,
+                s.x,
+                table,
+                reach,
+                if refused { "REFUSED by the real veto" } else { "within reach (the veto never barred it)" }
+            );
+            if refused {
+                veto_refused += 1;
+            }
+        }
         // Why the desert wins or loses (M56): the best offer arid-dry
         // ground can make a colonist — the extractive price, caravan
         // provisioning and well upkeep included — against the best
@@ -5223,13 +5654,66 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         }
         c.must(
             "the dry-frontier veto is load-bearing",
-            cf_dry > dry_towns,
-            format!("{} dry towns without the veto · {} with it", cf_dry, dry_towns),
-            "M55 gate: lifting the well requirement must let colonists take waterless ground the real run refused — otherwise the gate is untested by this world",
+            veto_refused >= 1,
+            format!(
+                "{} town(s) on ground the veto refused ({} dry without · {} with)",
+                veto_refused, cf_dry, dry_towns
+            ),
+            "M55 gate: the veto-lifted run must stand ≥1 town on waterless ground beyond its founder's terminal well reach — ground the real run provably refused",
         );
 
     }
 
+    // M62 — geomorphic toponymy: place names tell the truth about the
+    // ground. Every town whose namer's tongue keeps a generic for the
+    // landform under it must carry that generic as its name's tail —
+    // either in the standing name, or (when the patina system has worn
+    // the word) in the recorded source name it was worn from. Towns on
+    // ground their tongue has no word for are not eligible: the plain
+    // coined name is the honest answer there, not a borrowed suffix.
+    {
+        let mut eligible = 0usize;
+        let mut matched = 0usize;
+        let mut miss: Vec<String> = Vec::new();
+        for s in &w.peoples.settlements {
+            let style = w
+                .peoples
+                .peoples
+                .get(s.namer.idx())
+                .map(|p| p.style.as_str())
+                .unwrap_or("old");
+            let code = w.fields.landform[[s.y as usize, s.x as usize]];
+            let Some(class) = calliope::naming::landform_class(code) else {
+                continue;
+            };
+            let gens = calliope::naming::landform_generics(style, class);
+            if gens.is_empty() {
+                continue;
+            }
+            eligible += 1;
+            let hit = gens.iter().any(|(g, _)| s.name.ends_with(g))
+                || s.formerly.iter().any(|f| gens.iter().any(|(g, _)| f.ends_with(g)));
+            if hit {
+                matched += 1;
+            } else if miss.len() < 5 {
+                miss.push(format!("{} ({} on {})", s.name, style, class));
+            }
+        }
+        if !miss.is_empty() {
+            println!("  landform-name misses: {}", miss.join(" · "));
+        }
+        let pct = if eligible > 0 {
+            100.0 * matched as f64 / eligible as f64
+        } else {
+            0.0
+        };
+        c.must(
+            "names tell the truth about the ground",
+            eligible > 0 && pct >= 90.0,
+            format!("{:.0}% ({} of {} eligible towns)", pct, matched, eligible),
+            "M62 gate: ≥90% of towns whose tongue has a generic for their landform carry it as the name's tail (worn names count through their recorded source)",
+        );
+    }
 
     c.print();
 }
@@ -6971,6 +7455,10 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
     println!();
 
     let mut c = Checks::default();
+    // M64 sweep aggregates — the Earth calibration answers as a family too
+    let (mut m64_b1, mut m64_elev, mut m64_rb, mut m64_hack, mut m64_fp, mut m64_built): (
+        Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>,
+    ) = Default::default();
     for &seed in &seeds {
         let mut w = World::generate(seed, size);
         w.tick(years as i64 * 12);
@@ -7094,6 +7582,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
                 "biomes" => &w.fields.biomes, "crops" => &w.fields.crops,
                 "strahler" => &w.fields.strahler, "flags" => &w.fields.flags,
                 "rock" => &w.fields.rock, "soil" => &w.fields.soil,
+                "landform" => &w.fields.landform,
                 other => unreachable!("unknown u8 field {other}"),
             }
         };
@@ -7173,8 +7662,338 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
             format!("{} → {}", rc_dry, rc_wet), "M8.2: metamorphic monotonicity");
         c.must(&format!("rain↑ ⇒ discharge↑ ({})", seed), q_wet > q_dry,
             format!("×{:.2}", q_wet / q_dry.max(1e-9)), "M8.2: more water flows");
+
+        // ---- M64: calibration vs Earth — the deep-earth stack answers
+        // to published numbers, not to taste. Hypsometry against the
+        // classic hypsographic curve, the river net against Horton's
+        // ratios and Hack-pruned drainage density, floodplains against
+        // mapped alluvium, the coast against its own vocabulary census.
+        // All dawn state: none of it moves with the ticked years.
+        let mpu = calliope::constants::METRES_PER_UNIT;
+        let mut land_n = 0usize;
+        let mut below1 = 0usize;
+        let mut hsum = 0.0f64;
+        for &h in w.fields.height.iter() {
+            if h < 0.0 { continue; }
+            land_n += 1;
+            let m = h as f64 * mpu;
+            hsum += m;
+            if m < 1000.0 { below1 += 1; }
+        }
+        let mean_elev = hsum / land_n.max(1) as f64;
+        let b1 = 100.0 * below1 as f64 / land_n.max(1) as f64;
+
+        // upstream area over the filled surface: highest cells first,
+        // every land cell hands its accumulated area to its receiver
+        let flat_filled = filled.as_slice().expect("filled is standard layout");
+        let mut order_idx: Vec<u32> = (0..(rows * cols) as u32).collect();
+        order_idx.sort_by(|&a, &b| flat_filled[b as usize].partial_cmp(&flat_filled[a as usize]).unwrap());
+        let mut area = vec![1.0f64; rows * cols];
+        for &i in &order_idx {
+            let i = i as usize;
+            let (y, x) = (i / cols, i % cols);
+            if water[[y, x]] { continue; }
+            let d = dirs[[y, x]];
+            if d >= 0 {
+                let (dy, dx) = hydrology::N8[d as usize];
+                let j = (y as isize + dy) as usize * cols + (x as isize + dx) as usize;
+                area[j] += area[i];
+            }
+        }
+
+        // Horton's law lives on the drainage tree, not on the render-
+        // pruned river mask: the mask's headwaters sit below the
+        // discharge threshold, so a census there reads Rb≈1 off pure
+        // artifact (the first measurement did exactly that). Build the
+        // measurement network at a fixed support area, give it its own
+        // Strahler orders, census streams on it.
+        const A_C_CELLS: f64 = 5.0; // 80 km² support — the finest channel this grid can honestly resolve
+        let chan: Vec<bool> = (0..rows * cols).map(|i| {
+            let (y, x) = (i / cols, i % cols);
+            !water[[y, x]] && area[i] >= A_C_CELLS
+        }).collect();
+        // decreasing filled height = every donor before its receiver
+        let mut ord = vec![0u8; rows * cols];
+        let mut top_m = vec![0u8; rows * cols]; // max donor order seen
+        let mut top_c = vec![0u8; rows * cols]; // donors carrying that max
+        for &iu in &order_idx {
+            let i = iu as usize;
+            if !chan[i] { continue; }
+            let (y, x) = (i / cols, i % cols);
+            let k = if top_m[i] == 0 { 1 } else if top_c[i] >= 2 { top_m[i] + 1 } else { top_m[i] };
+            ord[i] = k;
+            let d = dirs[[y, x]];
+            if d < 0 { continue; }
+            let (dy, dx) = hydrology::N8[d as usize];
+            let (ny, nx) = ((y as isize + dy) as usize, (x as isize + dx) as usize);
+            if water[[ny, nx]] { continue; }
+            let j = ny * cols + nx;
+            if !chan[j] { continue; }
+            if k > top_m[j] {
+                top_m[j] = k;
+                top_c[j] = 1;
+            } else if k == top_m[j] {
+                top_c[j] = top_c[j].saturating_add(1);
+            }
+        }
+        fn root(uf: &mut [u32], i: u32) -> u32 {
+            let mut r = i;
+            while uf[r as usize] != r { r = uf[r as usize]; }
+            let mut cur = i;
+            while uf[cur as usize] != r { let nx = uf[cur as usize]; uf[cur as usize] = r; cur = nx; }
+            r
+        }
+        let mut uf2: Vec<u32> = (0..(rows * cols) as u32).collect();
+        for y in 0..rows {
+            for x in 0..cols {
+                let i = y * cols + x;
+                if !chan[i] { continue; }
+                let d = dirs[[y, x]];
+                if d < 0 { continue; }
+                let (dy, dx) = hydrology::N8[d as usize];
+                let (ny, nx) = ((y as isize + dy) as usize, (x as isize + dx) as usize);
+                if water[[ny, nx]] { continue; }
+                let j = ny * cols + nx;
+                if chan[j] && ord[j] == ord[i] {
+                    let (ra, rb2) = (root(&mut uf2, i as u32), root(&mut uf2, j as u32));
+                    if ra != rb2 { uf2[ra as usize] = rb2; }
+                }
+            }
+        }
+        let mut stream_order: BTreeMap<u32, u8> = BTreeMap::new();
+        for i in 0..rows * cols {
+            if chan[i] {
+                let r = root(&mut uf2, i as u32);
+                stream_order.entry(r).or_insert(ord[i]);
+            }
+        }
+        let mut nk = [0usize; 16];
+        for (_, &k) in &stream_order { nk[(k as usize).min(15)] += 1; }
+        let kmax = (1..16).rev().find(|&k| nk[k] > 0).unwrap_or(1);
+        // log-linear fit of N_k over the populated orders: Rb = exp(−slope)
+        let pts_n: Vec<(f64, f64)> = (1..=kmax).filter(|&k| nk[k] > 0)
+            .map(|k| (k as f64, (nk[k] as f64).ln())).collect();
+        let nfit = pts_n.len() as f64;
+        let sx: f64 = pts_n.iter().map(|p| p.0).sum();
+        let sy2: f64 = pts_n.iter().map(|p| p.1).sum();
+        let sxx: f64 = pts_n.iter().map(|p| p.0 * p.0).sum();
+        let sxy: f64 = pts_n.iter().map(|p| p.0 * p.1).sum();
+        let slope = (nfit * sxy - sx * sy2) / (nfit * sxx - sx * sx).max(1e-12);
+        let rb = (-slope).exp();
+
+        // Drainage density answers on the ground where the pruning law
+        // holds: humid land (precip ≥ 400 mm — Whittaker's semi-arid
+        // line; the constant 1.4 is a humid-terrain figure and deserts
+        // rightly carry no channels). Channel length walks the real D8
+        // steps — a diagonal cell is 4√2 km of river, not 4.
+        let riv = |y: usize, x: usize| w.fields.flags[[y, x]] & CellFlags::RIVER.bits() != 0;
+        let mut has_donor = vec![false; rows * cols];
+        for y in 0..rows {
+            for x in 0..cols {
+                if !riv(y, x) { continue; }
+                let d = dirs[[y, x]];
+                if d < 0 { continue; }
+                let (dy, dx) = hydrology::N8[d as usize];
+                let (ny, nx) = ((y as isize + dy) as usize, (x as isize + dx) as usize);
+                if !water[[ny, nx]] && riv(ny, nx) { has_donor[ny * cols + nx] = true; }
+            }
+        }
+        let mut wet_land = 0usize;
+        let mut wet_len_km = 0.0f64;
+        let mut heads_a: Vec<f64> = Vec::new();
+        for y in 0..rows {
+            for x in 0..cols {
+                if water[[y, x]] { continue; }
+                if (w.fields.precip[[y, x]] as f64) < 400.0 { continue; }
+                wet_land += 1;
+                if !riv(y, x) { continue; }
+                let d = dirs[[y, x]];
+                let diag = d >= 0 && hydrology::N8[d as usize].0 != 0 && hydrology::N8[d as usize].1 != 0;
+                wet_len_km += if diag { 4.0 * std::f64::consts::SQRT_2 } else { 4.0 };
+                if !has_donor[y * cols + x] { heads_a.push(area[y * cols + x] * 16.0); }
+            }
+        }
+        heads_a.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let a50 = if heads_a.is_empty() { 0.0 } else { heads_a[heads_a.len() / 2] };
+        let dd = wet_len_km / (wet_land.max(1) as f64 * 16.0);
+        let hack = dd * a50.sqrt() / 1.4;
+
+        // Floodplain: "mapped alluvium" means an alluvial plain — tens
+        // of metres of valley fill — not a 1 m overbank veneer (the
+        // first measurement read 37% of land off exactly that
+        // misreading). The plain is silt ≥ 10 m; the veneer ladder
+        // prints for the record. And the channel law is a component
+        // law: every silt body must hold the water that laid it —
+        // plains run wider than one cell, so cell-adjacency undercounts
+        // by construction.
+        let mut fp_ladder = [0usize; 3]; // ≥1 m · ≥5 m · ≥10 m
+        let plain: Vec<bool> = (0..rows * cols).map(|i| {
+            let (y, x) = (i / cols, i % cols);
+            if water[[y, x]] { return false; }
+            let m = w.sediment.depth[[y, x]] as f64 * mpu;
+            m >= 10.0
+        }).collect();
+        for y in 0..rows {
+            for x in 0..cols {
+                if water[[y, x]] { continue; }
+                let m = w.sediment.depth[[y, x]] as f64 * mpu;
+                if m >= 1.0 { fp_ladder[0] += 1; }
+                if m >= 5.0 { fp_ladder[1] += 1; }
+                if m >= 10.0 { fp_ladder[2] += 1; }
+            }
+        }
+        let fp = fp_ladder[2];
+        // union silt bodies (8-conn); a body is river-borne when any
+        // cell in it or its 1-ring carries RIVER or LAKE
+        let mut uf3: Vec<u32> = (0..(rows * cols) as u32).collect();
+        for y in 0..rows {
+            for x in 0..cols {
+                let i = y * cols + x;
+                if !plain[i] { continue; }
+                for (dy, dx) in [(0isize, 1isize), (1, -1), (1, 0), (1, 1)] {
+                    let (ny, nx) = (y as isize + dy, x as isize + dx);
+                    if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize { continue; }
+                    let j = ny as usize * cols + nx as usize;
+                    if plain[j] {
+                        let (ra, rb2) = (root(&mut uf3, i as u32), root(&mut uf3, j as u32));
+                        if ra != rb2 { uf3[ra as usize] = rb2; }
+                    }
+                }
+            }
+        }
+        let mut body_size: BTreeMap<u32, usize> = BTreeMap::new();
+        let mut body_wet: BTreeMap<u32, bool> = BTreeMap::new();
+        for y in 0..rows {
+            for x in 0..cols {
+                let i = y * cols + x;
+                if !plain[i] { continue; }
+                let r = root(&mut uf3, i as u32);
+                *body_size.entry(r).or_insert(0) += 1;
+                let mut touch = false;
+                'tk: for dy in -1isize..=1 {
+                    for dx in -1isize..=1 {
+                        let (ny, nx) = (y as isize + dy, x as isize + dx);
+                        if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize { continue; }
+                        if w.fields.flags[[ny as usize, nx as usize]] & (CellFlags::RIVER.bits() | CellFlags::LAKE.bits()) != 0 {
+                            touch = true;
+                            break 'tk;
+                        }
+                    }
+                }
+                if touch { body_wet.insert(r, true); }
+            }
+        }
+        let fp_borne: usize = body_size.iter()
+            .filter(|(r, _)| body_wet.get(r).copied().unwrap_or(false))
+            .map(|(_, &n)| n).sum();
+        let fp_share = 100.0 * fp as f64 / land_n.max(1) as f64;
+        let fp_hug = 100.0 * fp_borne as f64 / fp.max(1) as f64;
+
+        // Coast-type census off the landform lane itself (M60 words) —
+        // counted as shoreline FRONTAGE, not area. Earth's coast-type
+        // frequencies (Stutz & Pilkey's ~10% barrier belt, coast
+        // classifications generally) are shares of coastline *length*:
+        // an areal word (delta plain, raised beach) counts only where
+        // it fronts the sea; water words (fjord, lagoon, estuary) are
+        // frontage by nature. The first measurement compared delta
+        // plain's whole area against spits counted cell by cell and
+        // read 85% dominance off that category error.
+        use calliope::landform as lf;
+        let mut fam = [0usize; 5]; // drowned · built · tidal · raised · open shore
+        let mut wordc: BTreeMap<u8, usize> = BTreeMap::new();
+        for y in 0..rows {
+            for x in 0..cols {
+                let cw = w.fields.landform[[y, x]];
+                let f = match cw {
+                    lf::RIA | lf::SKERRY | lf::FJORD => 0,
+                    lf::DELTA | lf::SPIT | lf::BARRIER | lf::LAGOON => 1,
+                    lf::TIDEFLAT | lf::ESTUARY => 2,
+                    lf::RAISED => 3,
+                    lf::SHORE => 4,
+                    _ => continue,
+                };
+                if w.fields.height[[y, x]] >= 0.0 {
+                    let mut fronts = false;
+                    'fr: for dy in -1isize..=1 {
+                        for dx in -1isize..=1 {
+                            let (ny, nx) = (y as isize + dy, x as isize + dx);
+                            if ny < 0 || nx < 0 || ny >= rows as isize || nx >= cols as isize { continue; }
+                            if w.fields.height[[ny as usize, nx as usize]] < 0.0 {
+                                fronts = true;
+                                break 'fr;
+                            }
+                        }
+                    }
+                    if !fronts { continue; }
+                }
+                fam[f] += 1;
+                if f < 4 { *wordc.entry(cw).or_insert(0) += 1; }
+            }
+        }
+        let coast_all: usize = fam.iter().sum();
+        let storied: usize = coast_all - fam[4];
+        let storied_share = 100.0 * storied as f64 / coast_all.max(1) as f64;
+        let built_share = 100.0 * fam[1] as f64 / coast_all.max(1) as f64;
+        // The mixing law governs the words active coastal processes
+        // mint. Raised/ria/skerry are dictated by the frozen sea-level
+        // curve and already banded per stand by the M26 gate — capping
+        // them here would double-gate the curve (777 runs 71% raised
+        // beach because its curve net-emerged; that is the curve's
+        // business, not the mixer's).
+        let minted = [lf::FJORD, lf::TIDEFLAT, lf::ESTUARY, lf::DELTA, lf::SPIT, lf::BARRIER, lf::LAGOON];
+        let minted_total: usize = minted.iter().map(|&k| *wordc.get(&k).unwrap_or(&0)).sum();
+        let (top_w, top_n) = minted.iter().map(|&k| (k, *wordc.get(&k).unwrap_or(&0)))
+            .max_by_key(|&(_, v)| v).unwrap();
+        let top_share = top_n as f64 / minted_total.max(1) as f64;
+
+        println!("seed {:>6}: hypsometry mean {:.0} m · below 1 km {:.1}%", seed, mean_elev, b1);
+        println!("seed {:>6}: streams (A_c 80 km²) N_k {:?} · Rb {:.2}", seed, &nk[1..=kmax.min(9)], rb);
+        println!("seed {:>6}: wet-land Dd {:.4} km/km² · head A₅₀ {:.0} km² · Hack ratio {:.2}",
+            seed, dd, a50, hack);
+        println!("seed {:>6}: silt ladder ≥1/5/10 m: {:.1}/{:.1}/{:.2}% of land · plain {} bodies · {:.1}% river-borne",
+            seed, 100.0 * fp_ladder[0] as f64 / land_n.max(1) as f64,
+            100.0 * fp_ladder[1] as f64 / land_n.max(1) as f64,
+            100.0 * fp_ladder[2] as f64 / land_n.max(1) as f64,
+            body_size.len(), fp_hug);
+        let census: Vec<String> = wordc.iter()
+            .map(|(&k, &v)| format!("{} {}", lf::NAMES[k as usize], v)).collect();
+        println!("seed {:>6}: coast frontage {} cells · storied {:.1}% · [{}] · shore {}",
+            seed, coast_all, storied_share, census.join(" · "), fam[4]);
+
+        c.band_as(&format!("land below 1 km % ({})", seed), "land below 1 km % (continent)", b1, format!("{:.1}%", b1));
+        c.band_as(&format!("mean land elevation m ({})", seed), "mean land elevation m (continent)", mean_elev, format!("{:.0} m", mean_elev));
+        c.band_as(&format!("horton bifurcation ratio ({})", seed), "horton bifurcation ratio", rb, format!("Rb {:.2}", rb));
+        c.band_as(&format!("hack density ratio ({})", seed), "hack density ratio", hack, format!("{:.2}", hack));
+        c.band_as(&format!("floodplain share of land % ({})", seed), "floodplain share of land %", fp_share, format!("{:.2}%", fp_share));
+        c.band_as(&format!("floodplain river adjacency % ({})", seed), "floodplain river adjacency %", fp_hug, format!("{:.1}%", fp_hug));
+        c.band_as(&format!("built belt share of coast % ({})", seed), "built belt share of coast %", built_share, format!("{:.1}%", built_share));
+        c.band_as(&format!("coast with a story % ({})", seed), "coast with a story %", storied_share, format!("{:.1}%", storied_share));
+        c.must(&format!("coastal families all present ({})", seed),
+            fam[0] > 0 && fam[1] > 0 && fam[2] > 0 && fam[3] > 0,
+            format!("{}/{}/{}/{}", fam[0], fam[1], fam[2], fam[3]),
+            "M64: drowned, built, tidal and raised coasts all exist");
+        c.must(&format!("no word owns the minted coast ({})", seed), top_share <= 0.70,
+            format!("{} {:.0}%", lf::NAMES[top_w as usize], 100.0 * top_share),
+            "M64: among process-minted words (fjord/tidal/estuary/delta/spit/barrier/lagoon), top ≤70%");
+        m64_b1.push(b1);
+        m64_elev.push(mean_elev);
+        m64_rb.push(rb);
+        m64_hack.push(hack);
+        m64_fp.push(fp_share);
+        m64_built.push(built_share);
         println!();
     }
+
+    // M64: the sweep's aggregate distributions against the same bands —
+    // the calibration must hold as a family, not only seed by seed
+    let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len().max(1) as f64;
+    c.band_as("sweep mean: land below 1 km %", "land below 1 km %", mean(&m64_b1), format!("{:.1}%", mean(&m64_b1)));
+    c.band_as("sweep mean: land elevation m", "mean land elevation m", mean(&m64_elev), format!("{:.0} m", mean(&m64_elev)));
+    c.band_as("sweep mean: horton Rb", "horton bifurcation ratio", mean(&m64_rb), format!("Rb {:.2}", mean(&m64_rb)));
+    c.band_as("sweep mean: hack ratio", "hack density ratio", mean(&m64_hack), format!("{:.2}", mean(&m64_hack)));
+    c.band_as("sweep mean: floodplain %", "floodplain share of land %", mean(&m64_fp), format!("{:.2}%", mean(&m64_fp)));
+    c.band_as("sweep mean: built belt %", "built belt share of coast %", mean(&m64_built), format!("{:.1}%", mean(&m64_built)));
+
 
     // ---- P4: tick v2 deltas tell the truth (E4). A client that starts
     // from bootstrap and merges every delta must end holding exactly the
@@ -7458,6 +8277,8 @@ struct EraRow {
     grid: Vec<f64>,
     /// Landmass size-class histogram (share of land per component).
     lm_hist: Vec<f64>,
+    /// M64: landform-word mix on land — the vocabulary's own range.
+    lf_hist: Vec<f64>,
 }
 
 fn era_metrics(seed: i64, size: usize, years: usize) -> EraRow {
@@ -7471,6 +8292,7 @@ fn era_metrics(seed: i64, size: usize, years: usize) -> EraRow {
     let mut coast = 0usize;
     let mut bcount = vec![0f64; 12];
     let mut hyps = vec![0f64; 8];
+    let mut lf_hist = vec![0f64; 27];
     for y in 0..rows {
         for x in 0..cols {
             let h = w.fields.height[[y, x]];
@@ -7482,6 +8304,8 @@ fn era_metrics(seed: i64, size: usize, years: usize) -> EraRow {
             if b < bcount.len() { bcount[b] += 1.0; }
             let bin = ((h.max(0.0).min(0.999)) * 8.0) as usize;
             hyps[bin] += 1.0;
+            let l = w.fields.landform[[y, x]] as usize;
+            if l < lf_hist.len() { lf_hist[l] += 1.0; }
             let mut sea_adj = false;
             for (dy, dx) in [(-1isize, 0isize), (1, 0), (0, -1), (0, 1)] {
                 let ny = y as isize + dy;
@@ -7583,6 +8407,7 @@ fn era_metrics(seed: i64, size: usize, years: usize) -> EraRow {
         sp_hist,
         grid,
         lm_hist,
+        lf_hist,
     }
 }
 
@@ -7669,7 +8494,8 @@ fn cmd_era(size: usize, years: usize, nseeds: usize, base: i64) {
                 + jsd(&rows[i].hyps, &rows[j].hyps)
                 + jsd(&rows[i].sp_hist, &rows[j].sp_hist)
                 + jsd(&rows[i].grid, &rows[j].grid)
-                + jsd(&rows[i].lm_hist, &rows[j].lm_hist)) / 5.0;
+                + jsd(&rows[i].lm_hist, &rows[j].lm_hist)
+                + jsd(&rows[i].lf_hist, &rows[j].lf_hist)) / 6.0;
             dists.push(d);
             if d < min_d { min_d = d; min_pair = (rows[i].seed, rows[j].seed); }
         }
@@ -7694,6 +8520,40 @@ fn cmd_era(size: usize, years: usize, nseeds: usize, base: i64) {
     // Healthy generator reads ~0.10-0.19 across 8-16 seeds; mean ~0.05-0.07.
     c.band("oatmeal min/mean ratio", ratio, format!("{:.3}", ratio));
     c.band("oatmeal mean distance", mean_d, format!("{:.4}", mean_d));
+
+    // ---- M64: the landform vocabulary joins the expressive range —
+    // no seed may collapse toward one bland word, and the mix itself
+    // must vary between worlds.
+    let mut lf_min_ent = f64::MAX;
+    let mut lf_max_dom = 0.0f64;
+    let mut lf_dom_word = 0usize;
+    let mut lf_dom_seed = 0i64;
+    for r in &rows {
+        let tot: f64 = r.lf_hist.iter().sum::<f64>().max(1.0);
+        let ent: f64 = r.lf_hist.iter().filter(|&&v| v > 0.0)
+            .map(|&v| { let p = v / tot; -p * p.ln() }).sum();
+        lf_min_ent = lf_min_ent.min(ent);
+        let (dom_i, &dom_n) = r.lf_hist.iter().enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).unwrap();
+        let dom = dom_n / tot;
+        if dom > lf_max_dom {
+            lf_max_dom = dom;
+            lf_dom_word = dom_i;
+            lf_dom_seed = r.seed;
+        }
+    }
+    let mut lf_min_d = f64::MAX;
+    for i in 0..n {
+        for j in (i + 1)..n {
+            lf_min_d = lf_min_d.min(jsd(&rows[i].lf_hist, &rows[j].lf_hist));
+        }
+    }
+    println!("  landforms: min entropy {:.2} nat · worst dominance {} {:.1}% (seed {}) · min pairwise JSD {:.4}",
+        lf_min_ent, calliope::landform::NAMES[lf_dom_word], 100.0 * lf_max_dom, lf_dom_seed, lf_min_d);
+    println!();
+    c.band("landform entropy floor", lf_min_ent, format!("{:.2} nat", lf_min_ent));
+    c.band("dominant landform share", lf_max_dom, format!("{} {:.1}%", calliope::landform::NAMES[lf_dom_word], 100.0 * lf_max_dom));
+    c.band("landform oatmeal floor", lf_min_d, format!("{:.4}", lf_min_d));
     c.print();
 }
 
@@ -8660,8 +9520,602 @@ fn dist_from_sea(water: &ndarray::Array2<bool>, y: usize, x: usize, cols: usize,
     cap
 }
 
+// ================================================================ atlas (M63)
+
+/// M63 — The Atlas Learns. Proves the cartographic law at its source:
+/// the same Rust tables that generate the WGSL prelude and the palette
+/// texture answer here, so a passing gate is a statement about what the
+/// GPU compiles, not about a copy of it. The phase gate demands two
+/// things by name: a synthetic desert-elevation cell renders outside
+/// the green hue band under the cross-blended ramp, and the lens toggle
+/// round-trips through pack v2 without touching `hash_state`.
+fn cmd_atlas(size: usize, seeds: Vec<i64>) {
+    use calliope::atlas;
+    header("ATLAS", &format!("size {} · {} seeds · M63", size, seeds.len()));
+
+    let mut c = Checks::default();
+
+    // -- palette soundness: every vocabulary word owns a distinct swatch
+    match atlas::palettes_sound() {
+        Ok(()) => c.must(
+            "palettes cover their vocabularies",
+            true,
+            format!(
+                "{}+{}+{} swatches",
+                atlas::ROCK_COLORS.len(),
+                atlas::SOIL_COLORS.len(),
+                atlas::LANDFORM_COLORS.len()
+            ),
+            "M63: rock, soil, landform lenses — one distinct swatch per word",
+        ),
+        Err(e) => c.must("palettes cover their vocabularies", false, e, "M63"),
+    }
+
+    // -- the cross-blended ramp: desert country must never read green.
+    // Sweep the whole elevation ladder as a synthetic arid column
+    // (60 mm/yr, 24 °C) and take the worst (most-green) hue on it.
+    let green = |hue: f32| hue > 70.0 && hue < 170.0;
+    let mut worst_arid: (f32, f32) = (-1.0, -1.0); // (hue, at elevation)
+    let mut arid_green = 0usize;
+    for i in 0..=100 {
+        let h = i as f32 / 100.0;
+        let hue = atlas::hue_deg(atlas::hypso_rgb(h, 60.0, 24.0));
+        if green(hue) {
+            arid_green += 1;
+        }
+        if hue > worst_arid.0 {
+            worst_arid = (hue, h);
+        }
+    }
+    println!(
+        " arid column sweep (60 mm · 24 °C): 101 elevations · max hue {:.0}° at h={:.2} · {} in green band",
+        worst_arid.0, worst_arid.1, arid_green
+    );
+    c.must(
+        "desert ladder outside green band",
+        arid_green == 0,
+        format!("max hue {:.0}°", worst_arid.0),
+        "M63 gate: synthetic desert-elevation cells render outside 70–170°",
+    );
+
+    // -- and the humid lowland still IS green, or the check above would
+    // pass vacuously with a broken ramp
+    let humid = atlas::hue_deg(atlas::hypso_rgb(0.08, 1600.0, 12.0));
+    c.must(
+        "humid lowland reads green",
+        green(humid),
+        format!("hue {:.0}°", humid),
+        "M63: the wet ladder keeps its green — the arid law is not vacuous",
+    );
+
+    // -- frost greys both ladders toward firn
+    let cold = atlas::hypso_rgb(0.5, 800.0, -20.0);
+    let chroma = cold[0].max(cold[1]).max(cold[2]) - cold[0].min(cold[1]).min(cold[2]);
+    c.must(
+        "frost greys the ladder",
+        chroma < 0.07,
+        format!("chroma {:.3}", chroma),
+        "M63: deep-cold cells lose hue toward polar grey/firn",
+    );
+
+    // -- the generated WGSL prelude actually carries the law
+    let wgsl = atlas::wgsl_ramps();
+    let ok_wgsl = wgsl.contains("fn seg(")
+        && wgsl.contains("fn elev_ramp(")
+        && wgsl.contains("fn elev_arid_ramp(")
+        && wgsl.contains("fn hypso(")
+        && wgsl.matches("seg(v,").count() == 2 * (atlas::ELEV_STOPS.len() - 1);
+    c.must(
+        "wgsl prelude generated from tables",
+        ok_wgsl,
+        format!("{} B", wgsl.len()),
+        "M63: seg + both ramps + hypso, one segment per table stop pair",
+    );
+
+    // -- the lens lanes ride the wire: rock, soil, landform flagged for
+    // GPU upload in the field registry (pack order = upload order, E2.2)
+    let lane = |n: &str| calliope::pack::FIELD_SPECS.iter().find(|f| f.name == n);
+    let lanes_ok = ["rock", "soil", "landform"].iter().all(|n| lane(n).map(|f| f.gpu).unwrap_or(false));
+    c.must(
+        "lens lanes flagged for gpu upload",
+        lanes_ok,
+        "rock·soil·landform".into(),
+        "M63: the deep-earth grids reach Orbital through the registry",
+    );
+
+    // -- per seed: every id on the grid has a swatch (no magenta on the
+    // map), and packing the world for the wire leaves the state hash
+    // untouched — the lens toggle is pure presentation
+    for &seed in &seeds {
+        let w = World::generate(seed, size);
+        let h0 = hash_state(&w);
+        let bytes = w.pack();
+        let h1 = hash_state(&w);
+        let max_rock = w.fields.rock.iter().copied().max().unwrap_or(0) as usize;
+        let max_soil = w.fields.soil.iter().copied().max().unwrap_or(0) as usize;
+        let max_lf = w.fields.landform.iter().copied().max().unwrap_or(0) as usize;
+        println!(
+            " seed {:>6}: pack {} B · max ids rock {} soil {} landform {} · hash {:016x}",
+            seed, bytes.len(), max_rock, max_soil, max_lf, h0
+        );
+        c.must(
+            &format!("ids within palettes (seed {})", seed),
+            max_rock < atlas::ROCK_COLORS.len()
+                && max_soil < atlas::SOIL_COLORS.len()
+                && max_lf < atlas::LANDFORM_COLORS.len(),
+            format!("{}/{}/{}", max_rock, max_soil, max_lf),
+            "M63: no id on the map escapes its palette row",
+        );
+        c.must(
+            &format!("pack leaves hash_state alone (seed {})", seed),
+            h0 == h1 && !bytes.is_empty(),
+            if h0 == h1 { "untouched".into() } else { "MUTATED".into() },
+            "M63 gate: the lens toggle round-trips pack v2 without altering state",
+        );
+    }
+
+    c.print();
+}
+
+// ================================================================ gate (M65)
+
+/// One composed lane: where its rows came from, what they counted.
+struct LaneTally {
+    name: String,
+    pass: usize,
+    warn: usize,
+    fail: usize,
+    fails: Vec<String>,
+    age_h: Option<f64>,
+}
+
+/// Count the [PASS]/[WARN]/[FAIL] rows in one lane's report text.
+fn tally_lane(name: &str, text: &str, age_h: Option<f64>) -> LaneTally {
+    let mut t = LaneTally { name: name.to_string(), pass: 0, warn: 0, fail: 0, fails: Vec::new(), age_h };
+    for l in text.lines() {
+        if l.starts_with("[PASS]") {
+            t.pass += 1;
+        } else if l.starts_with("[WARN]") {
+            t.warn += 1;
+        } else if l.starts_with("[FAIL]") {
+            t.fail += 1;
+            t.fails.push(l.trim_end().to_string());
+        }
+    }
+    t
+}
+
+/// M65 — the Era I gate. The deep earth closes as one verdict, not a
+/// folder of reports: compose every lane the suite writes (`--reports
+/// <dir>`, zero recompute — the same rows SUMMARY.txt greps) or run the
+/// native lanes as subprocesses of this binary when standalone, then walk
+/// one world through three centuries as a structural leg. One FAIL
+/// anywhere — including the honestly-held rows — keeps the era open; the
+/// gate exists to see them, never to scope past them.
+fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
+    header("ERA I GATE", &format!("size {} · {}y leg · seed {}", size, years, seed));
+    let mut c = Checks::default();
+    let mut lanes: Vec<LaneTally> = Vec::new();
+    let mut missing: Vec<&str> = Vec::new();
+    // wasm-audit is an on-demand instrument: its staleness law is content
+    // (the recorded subject sha256 against the shipped bytes), never the
+    // clock — captured here, judged after the table.
+    let mut audit_sha: Option<String> = None;
+
+    if let Some(dir) = &reports {
+        // ---- compose the suite's own reports (the SUMMARY's rows, sealed
+        // into a verdict). Excluded by name: the SUMMARY (a mirror, not a
+        // lane), the append-only history, and this gate's own output.
+        println!(" composing {dir}");
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .filter(|n| n.ends_with(".txt"))
+                    .filter(|n| n != "SUMMARY.txt" && n != "bench-history.txt" && n != "gate.txt")
+                    .collect()
+            })
+            .unwrap_or_default();
+        names.sort();
+        for n in &names {
+            let path = format!("{dir}/{n}");
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            let age_h = std::fs::metadata(&path)
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.elapsed().ok())
+                .map(|d| d.as_secs_f64() / 3600.0);
+            let mut t = tally_lane(n, &text, age_h);
+            if n == "wasm-audit.txt" {
+                t.age_h = None;
+                audit_sha = text
+                    .lines()
+                    .find(|l| l.contains("sha256 "))
+                    .and_then(|l| l.rsplit(' ').next())
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| s.len() == 64);
+            }
+            lanes.push(t);
+        }
+        // The era's load-bearing lane families must all be on the table —
+        // a gate over an empty folder proves nothing.
+        for fam in [
+            "terrain-", "climate-", "hydro-", "resources-", "civ-", "ocean.txt",
+            "ocean-meta.txt", "properties.txt", "era.txt", "earth.txt", "determinism.txt",
+        ] {
+            if !names.iter().any(|n| n.starts_with(fam.trim_end_matches(".txt")) && (fam.ends_with('-') || n == fam)) {
+                missing.push(fam);
+            }
+        }
+    } else {
+        // ---- standalone: run the native lanes as subprocesses of this
+        // very binary, so the composed rows are exactly the lanes' rows.
+        // (The suite-only legs — assay, wasm size, cross-runtime replay,
+        // browser — need cargo/bun/Chromium and ride report.sh instead.)
+        let exe = std::env::current_exe().expect("current_exe");
+        let ss = size.to_string();
+        let mut runs: Vec<Vec<String>> = Vec::new();
+        for s in ["12345", "777", "90210"] {
+            for lane in ["terrain", "climate", "hydro", "resources"] {
+                runs.push(vec![lane.into(), s.into(), ss.clone()]);
+            }
+        }
+        runs.push(vec!["ocean".into(), ss.clone(), "12345".into(), "777".into(), "31337".into(), "90210".into(), "555".into()]);
+        runs.push(vec!["ocean".into(), ss.clone(), "12345".into(), "777".into(), "31337".into(), "90210".into(), "555".into(), "--metamorphic".into()]);
+        runs.push(vec!["properties".into(), ss.clone(), "60".into(), "12345".into(), "777".into(), "90210".into()]);
+        runs.push(vec!["era".into(), "256".into(), "60".into(), "16".into(), "12345".into()]);
+        runs.push(vec!["earth".into(), ss.clone(), "150".into(), "12345".into(), "777".into(), "90210".into()]);
+        runs.push(vec!["determinism".into(), "12345".into(), ss.clone(), "120".into()]);
+        println!(" standalone: running {} native lanes (suite-only legs ride report.sh)", runs.len());
+        for args in &runs {
+            let name = args.join(" ");
+            match std::process::Command::new(&exe).args(args.iter()).output() {
+                Ok(out) if out.status.success() => {
+                    lanes.push(tally_lane(&name, &String::from_utf8_lossy(&out.stdout), None));
+                }
+                Ok(out) => {
+                    let mut t = tally_lane(&name, &String::from_utf8_lossy(&out.stdout), None);
+                    t.fail += 1;
+                    t.fails.push(format!("[FAIL] lane crashed ({})", out.status));
+                    lanes.push(t);
+                }
+                Err(e) => {
+                    lanes.push(LaneTally {
+                        name: name.clone(), pass: 0, warn: 0, fail: 1,
+                        fails: vec![format!("[FAIL] lane failed to spawn: {e}")], age_h: None,
+                    });
+                }
+            }
+        }
+    }
+
+    println!();
+    println!(" {:<28} {:>5} {:>5} {:>5} {:>7}", "lane", "pass", "warn", "fail", "age");
+    let (mut tp, mut tw, mut tf) = (0usize, 0usize, 0usize);
+    let mut oldest: f64 = 0.0;
+    for t in &lanes {
+        let age = t.age_h.map(|a| format!("{:.1}h", a)).unwrap_or_else(|| "-".into());
+        println!(" {:<28} {:>5} {:>5} {:>5} {:>7}", t.name, t.pass, t.warn, t.fail, age);
+        tp += t.pass;
+        tw += t.warn;
+        tf += t.fail;
+        // Freshness reckons only lanes that carry check rows — side
+        // artifacts with none (wasm-audit's prose dump) can't stale a
+        // verdict they contribute zero rows to.
+        if t.pass + t.warn + t.fail > 0 {
+            oldest = oldest.max(t.age_h.unwrap_or(0.0));
+        }
+    }
+    println!(" {:<28} {:>5} {:>5} {:>5}", "TOTAL", tp, tw, tf);
+    if tf > 0 {
+        println!();
+        println!(" held rows (each holds the era open):");
+        for t in &lanes {
+            for f in &t.fails {
+                // indented so SUMMARY.txt's ^[FAIL] grep never double-counts
+                println!("   {} · {}", t.name, f);
+            }
+        }
+    }
+
+    // ---- the structural leg: one world, three centuries, two chunkings.
+    // The lanes prove the parts; this leg proves the whole keeps its laws
+    // at era scale — replay identity under different tick chunkings
+    // (ADR-0003), finite fields, towns standing, a chronicle still spoken.
+    let months = (years as i64) * 12;
+    println!();
+    println!(" structural leg: seed {seed} · {months} months · chunkings 240/120 vs 180");
+    let t0 = Instant::now();
+    let mut w1 = World::generate(seed, size);
+    let dawn = w1.peoples.settlements.len();
+    let pre = (months - 120).max(0);
+    let mut left = pre;
+    while left > 0 {
+        let step = left.min(240);
+        w1.tick(step);
+        left -= step;
+    }
+    let (tail_evs, _, _) = w1.tick(months - pre);
+    let h1 = (hash_state(&w1), hash_settlements(&w1));
+    let towns = w1.peoples.settlements.len();
+    let mut w2 = World::generate(seed, size);
+    let mut left = months;
+    while left > 0 {
+        let step = left.min(180);
+        w2.tick(step);
+        left -= step;
+    }
+    let h2 = (hash_state(&w2), hash_settlements(&w2));
+    let secs = t0.elapsed().as_secs_f64();
+    let finite = {
+        let f = &w1.fields;
+        f.height.iter().all(|v| v.is_finite())
+            && f.tmean.iter().all(|v| v.is_finite())
+            && f.precip.iter().all(|v| v.is_finite())
+            && f.discharge.iter().all(|v| v.is_finite())
+            && f.fertility.iter().all(|v| v.is_finite())
+    };
+    println!(
+        " towns {dawn}→{towns} · {} events in the final decade · {:.0}s for both runs ({:.0} mo/s)",
+        tail_evs.len(),
+        secs,
+        (2 * months) as f64 / secs
+    );
+
+    if reports.is_some() {
+        c.must(
+            "every era lane on the table",
+            missing.is_empty(),
+            if missing.is_empty() { format!("{} lanes", lanes.len()) } else { format!("missing {}", missing.join(" ")) },
+            "M65: a gate over a partial suite proves nothing — run report.sh",
+        );
+        c.want(
+            "composed reports are fresh",
+            oldest <= 6.0,
+            format!("oldest {:.1}h", oldest),
+            "M65: stale rows compose stale verdicts — rerun the suite within 6h",
+        );
+    }
+    c.must(
+        "the suite composes clean",
+        tf == 0,
+        format!("{tf} fail · {tw} warn · {tp} pass"),
+        "M65: every composed lane 0 FAIL — held rows hold the era, by design",
+    );
+    // The wasm audit's staleness law is content, not clock: its recorded
+    // subject sha256 must equal the shipped binary's bytes today. Judged
+    // only when the audit recorded a subject and sha256sum can answer.
+    let mut audit_fresh = true;
+    if let (Some(sha), Some(dir)) = (&audit_sha, &reports) {
+        let shipped = format!("{dir}/../web/js/wasm/calliope_bg.wasm");
+        if std::path::Path::new(&shipped).is_file() {
+            if let Ok(out) = std::process::Command::new("sha256sum").arg(&shipped).output() {
+                if out.status.success() {
+                    let now = String::from_utf8_lossy(&out.stdout)
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or("")
+                        .to_string();
+                    audit_fresh = now == *sha;
+                    c.must(
+                        "the wasm audit speaks for shipped bytes",
+                        audit_fresh,
+                        if audit_fresh { "same bytes".into() } else { "STALE AUDIT".into() },
+                        "E6.6: audit subject sha256 = shipped wasm — rerun scripts/wasm-audit.sh after a rebuild",
+                    );
+                }
+            }
+        }
+    }
+    c.must(
+        "replay identity at era scale",
+        h1 == h2,
+        if h1 == h2 { "identical".into() } else { "DIVERGED".into() },
+        &format!("ADR-0003: {years}y under two chunkings ⇒ one state, one town ledger"),
+    );
+    c.must(
+        "fields finite after the centuries",
+        finite,
+        if finite { "all finite".into() } else { "NaN/inf".into() },
+        "M65: height·tmean·precip·discharge·fertility carry no poison",
+    );
+    c.must(
+        "towns endure",
+        towns >= 1,
+        format!("{dawn}→{towns}"),
+        "M65: three centuries leave a living map, not a wiped one",
+    );
+    c.want(
+        "the chronicle still speaks",
+        !tail_evs.is_empty(),
+        format!("{} events / final decade", tail_evs.len()),
+        "M65: an old world keeps making history",
+    );
+    let sealed = tf == 0 && missing.is_empty() && audit_fresh && h1 == h2 && finite && towns >= 1;
+    c.must(
+        "era I seals",
+        sealed,
+        if sealed { "SEALED".into() } else { "HELD OPEN".into() },
+        "M65 gate: the deep earth closes only over a clean composed suite",
+    );
+    c.print();
+}
+
+// ================================================================ compute (M67)
+
+/// The compute lane's report — see the module docs in compute.rs. The
+/// CPU rows (exactness against the exact-EDT referee, once-per-world
+/// cost) run on any build; the GPU rows join when the binary carries
+/// the `gpu` feature *and* the machine offers a compute-capable adapter
+/// (report.sh sources a software Vulkan when headless, so the WGSL leg
+/// executes in CI instead of being claimed). No adapter is a skip, not
+/// a fail — the harness stays self-contained.
+fn cmd_compute(size: usize, seeds: Vec<i64>) {
+    use calliope::compute;
+    header("COMPUTE", &format!("M67 lane · size {size}"));
+
+    let mut c = Checks::default();
+
+    #[cfg(feature = "gpu")]
+    let mut gpu: Option<(wgpu::Instance, compute::ComputeLane)> = {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
+        match pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        })) {
+            Some(adapter) if compute::adapter_supported(&adapter) => {
+                let info = adapter.get_info();
+                println!(" adapter: {:?} · {} · {:?}", info.backend, info.name, info.device_type);
+                match pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)) {
+                    Ok((device, queue)) => Some((instance, compute::ComputeLane::new(device, queue))),
+                    Err(e) => {
+                        println!(" adapter present but no device ({e}) — gpu rows skipped, not failed");
+                        None
+                    }
+                }
+            }
+            Some(_) => {
+                println!(" adapter lacks compute downlevel — gpu rows skipped, not failed");
+                None
+            }
+            None => {
+                println!(" no gpu adapter on this machine — gpu rows skipped, not failed");
+                None
+            }
+        }
+    };
+    #[cfg(not(feature = "gpu"))]
+    println!(" built without the `gpu` feature — gpu rows skipped, not failed");
+
+    // ---- bring-up contract on the fixture (the lane's own handshake) ----
+    #[cfg(feature = "gpu")]
+    if let Some((_i, lane)) = gpu.as_mut() {
+        let (fw, fh) = (96usize, 64usize);
+        let fix = compute::fixture(fw, fh);
+        match pollster::block_on(compute::coast_contract(lane, &fix, fw, fh)) {
+            Ok(r) => {
+                println!(
+                    " fixture {}×{}: gpu {:.1} ms · cpu twin {:.1} ms · {} cells",
+                    fw, fh, r.gpu_ms, r.cpu_ms, r.cells
+                );
+                c.must(
+                    "lane fixture contract",
+                    r.matched,
+                    if r.matched { "byte-parity".into() } else { format!("{} diverge", r.mismatches) },
+                    "M67 gate: WGSL kernel and CPU twin are one law — executed on a device and compared",
+                );
+            }
+            Err(e) => c.must(
+                "lane fixture contract",
+                false,
+                "error".into(),
+                &format!("M67 gate: the lane must execute — {e}"),
+            ),
+        }
+    }
+
+    // ---- real worlds: parity (gpu) · exactness and cost (always) --------
+    let mut worst_err = 0.0f64;
+    let mut worst_share = 0.0f64;
+    let mut worst_ms = 0.0f64;
+    for &seed in &seeds {
+        let w = World::generate(seed, size);
+        let hf: Vec<f32> = w.fields.height.iter().map(|&v| v as f32).collect();
+        let land: Vec<bool> = hf.iter().map(|&v| v >= 0.0).collect();
+
+        let t0 = Instant::now();
+        let seeds0 = compute::coast_seeds(&hf, size, size);
+        let cpu = compute::jfa_cpu(seeds0.clone(), size, size);
+        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+
+        // The referee compares exact integers: the JFA's squared distance
+        // to its chosen seed against the exact EDT's square. Comparing
+        // rounded f32 distances instead counts precision noise as misses
+        // (measured: 1–2% phantom "off" cells with zero real error).
+        let edt = compute::exact_edt_sq(&land, size, size);
+        let mut max_err = 0.0f64;
+        let mut off = 0usize;
+        let mut sea = 0usize;
+        for i in 0..size * size {
+            if land[i] {
+                continue;
+            }
+            sea += 1;
+            let s = cpu[i];
+            let jfa_d2 = if s == compute::NONE {
+                f64::INFINITY
+            } else {
+                let (x, y) = ((i % size) as f64, (i / size) as f64);
+                let (sx, sy) = ((s as usize % size) as f64, (s as usize / size) as f64);
+                (sx - x) * (sx - x) + (sy - y) * (sy - y)
+            };
+            if jfa_d2 != edt[i] {
+                off += 1;
+                let err = (jfa_d2.sqrt() - edt[i].sqrt()).abs();
+                if err > max_err {
+                    max_err = err;
+                }
+            }
+        }
+        let share = if sea == 0 { 0.0 } else { off as f64 / sea as f64 };
+        println!(
+            " seed {seed}: coast law cpu {ms:.0} ms · max |jfa−exact| {max_err:.3} cells · {} of {} sea cells miss ({})",
+            off, sea, pct(share)
+        );
+
+        #[cfg(feature = "gpu")]
+        if let Some((_i, lane)) = gpu.as_mut() {
+            match pollster::block_on(compute::coast_seeds_gpu(lane, &seeds0, size as u32, size as u32)) {
+                Ok(g) => {
+                    let n = g.iter().zip(&cpu).filter(|(a, b)| a != b).count();
+                    c.must(
+                        &format!("seed {seed} gpu/cpu parity"),
+                        n == 0,
+                        if n == 0 { "agree".into() } else { format!("{n} diverge") },
+                        "M67 gate: GPU and CPU walk one seed field on a real world",
+                    );
+                }
+                Err(e) => c.must(
+                    &format!("seed {seed} gpu/cpu parity"),
+                    false,
+                    "error".into(),
+                    &format!("M67 gate: the gpu leg must execute — {e}"),
+                ),
+            }
+        }
+
+        worst_err = worst_err.max(max_err);
+        worst_share = worst_share.max(share);
+        worst_ms = worst_ms.max(ms);
+    }
+
+    c.band("jfa max err cells", worst_err, format!("{worst_err:.3} cells"));
+    c.band("jfa wrong cell share", worst_share, pct(worst_share));
+    c.band("coast law cpu ms", worst_ms, format!("{worst_ms:.0} ms"));
+    c.print();
+}
+
 fn main() {
-    let a: Vec<String> = std::env::args().collect();
+    let mut a: Vec<String> = std::env::args().collect();
+    // The one flag the harness knows: `terrain --explain` (M61) — pulled
+    // out before positional parsing so the strict parser stays strict.
+    let explain = a.iter().any(|s| s == "--explain");
+    a.retain(|s| s != "--explain");
+    // `gate --reports <dir>` (M65) — same treatment: the pair is lifted
+    // out whole before the positional parser sees the argument list.
+    let mut reports: Option<String> = None;
+    if let Some(i) = a.iter().position(|s| s == "--reports") {
+        reports = a.get(i + 1).cloned();
+        a.drain(i..a.len().min(i + 2));
+        if reports.is_none() {
+            eprintln!("error: --reports needs a directory");
+            std::process::exit(2);
+        }
+    }
     let cmd = a.get(1).map(|s| s.as_str()).unwrap_or("help");
     // strictly positional: a malformed argument aborts loudly instead of
     // silently falling back (a stray "--size" once cost a 12345² world).
@@ -8684,7 +10138,7 @@ fn main() {
     };
 
     match cmd {
-        "terrain" => cmd_terrain(num(2, 12345), sized(3, 512)),
+        "terrain" => cmd_terrain(num(2, 12345), sized(3, 512), explain),
         "climate" => cmd_climate(num(2, 12345), sized(3, 512)),
         "hydro" => cmd_hydro(num(2, 12345), sized(3, 512)),
         "resources" => cmd_resources(num(2, 12345), sized(3, 512)),
@@ -8804,6 +10258,14 @@ fn main() {
             println!("pos={pos:016x} bits={bits:016x} form={form:016x}");
         }
         "era" => cmd_era(sized(2, 256), num(3, 60) as usize, num(4, 16) as usize, num(5, 12345)),
+        "atlas" => {
+            let size = sized(2, 512);
+            let mut seeds: Vec<i64> = a.get(3..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 90210];
+            }
+            cmd_atlas(size, seeds);
+        }
         "patina" => {
             let size = sized(2, 512);
             let years = num(3, 300) as usize;
@@ -8813,13 +10275,24 @@ fn main() {
             }
             cmd_patina(size, years, seeds);
         }
+        "gate" => cmd_gate(sized(2, 512), num(3, 300) as usize, num(4, 12345), reports),
+        "compute" => {
+            let size = sized(2, 512);
+            let mut seeds: Vec<i64> = a.get(3..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 90210];
+            }
+            cmd_compute(size, seeds);
+        }
         _ => {
-            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean> [args]");
+            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean|atlas|gate|compute> [args]");
             println!("  terrain|climate|hydro|resources  <seed=12345> <size=512>");
             println!("  civ <seed> <size> <years=120> · economy <seed> <size> <years=80> · telling <seed> <size> <years=150>");
             println!("  determinism <seed> <size> <months=120> · bench · perf <size=512> <seeds…> · sweep <size> <years> <seeds…>");
             println!("  properties <size=512> <years=60> <seeds…> · era <size=256> <years=60> <n=16> <base=12345>");
             println!("  patina <size=512> <years=300> <seeds…> · systems <seed=12345> <size=512> <years=150>");
+            println!("  gate <size=512> <years=300> <seed=12345> [--reports <dir>]  — the Era I gate (M65)");
+            println!("  compute <size=512> <seeds…>  — the M67 lane: JFA coast law vs exact EDT, GPU leg when built with --features gpu");
         }
     }
 }

@@ -194,7 +194,11 @@ fn wind_dx(y: usize, rows: usize) -> isize {
 /// Run the longshore-drift pass on the final pre-widen height field.
 /// Mutates `h` (deposition raises seabed to `DEPOSIT_H`) and returns
 /// the ledger. Pure function of `h` — no seed, no clock.
-pub fn drift(h: &mut Array2<f64>) -> Coast {
+/// `keep_open` marks cells the walk must never aggrade — M31 outburst
+/// channels. A spillway that still drains flushes drift sand off its
+/// own mouth: sustained outflow beats longshore supply there, so the
+/// breach stays open the way a river keeps its inlet through a spit.
+pub fn drift(h: &mut Array2<f64>, keep_open: &Array2<bool>) -> Coast {
     let (rows, cols) = h.dim();
     if rows < 16 || cols < 16 {
         return Coast {
@@ -236,7 +240,7 @@ pub fn drift(h: &mut Array2<f64>) -> Coast {
         let mut seeds: Vec<(f64, usize, usize)> = Vec::new();
         for y in BORDER..rows - BORDER {
             for x in BORDER..cols - BORDER {
-                if pre_lab.lab[[y, x]] != pre_main {
+                if pre_lab.lab[[y, x]] != pre_main || keep_open[[y, x]] {
                     continue;
                 }
                 let d = h[[y, x]];
@@ -367,7 +371,7 @@ pub fn drift(h: &mut Array2<f64>) -> Coast {
         let mut cand: Vec<(f64, usize, usize)> = Vec::new();
         for y in BORDER..rows - BORDER {
             for x in BORDER..cols - BORDER {
-                if lab.lab[[y, x]] != main {
+                if lab.lab[[y, x]] != main || keep_open[[y, x]] {
                     continue;
                 }
                 let conv = -(dqy_dy[[y, x]] + dqx_dx[[y, x]]);

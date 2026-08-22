@@ -9,6 +9,9 @@ export const LAYER_ID = {
   precip: 4,
   hydro: 5,
   fertility: 6,
+  geology: 7,
+  soils: 8,
+  landform: 9,
 };
 
 export const FIELDS = [
@@ -25,10 +28,11 @@ export const FIELDS = [
   { name: "strahler", dtype: "uint8", units: "stream order, 0 off-river", gpu: true },
   { name: "flags", dtype: "uint8", units: "CellFlags bits", gpu: true },
   { name: "territory", dtype: "int16", units: "owner realm, −1 wild", gpu: false },
-  { name: "rock", dtype: "uint8", units: "rock province id (M18)", gpu: false },
-  { name: "soil", dtype: "uint8", units: "soil order id (M51)", gpu: false },
+  { name: "rock", dtype: "uint8", units: "rock province id (M18)", gpu: true },
+  { name: "soil", dtype: "uint8", units: "soil order id (M51)", gpu: true },
   { name: "upwelling", dtype: "float32", units: "0..1 coastal upwelling (M47)", gpu: false },
   { name: "aquifer", dtype: "float32", units: "m depth to water table (M54)", gpu: false },
+  { name: "landform", dtype: "uint8", units: "landform vocabulary id (M60)", gpu: true },
 ];
 
 export const EVENT_KINDS = [
@@ -74,3 +78,56 @@ export const BIOMES = [
 ];
 
 export const GOODS = ["bananas", "blackberries", "blueberries", "brick", "cattle", "clay", "cloth", "coal", "copper", "deer", "dyes", "elk", "fish", "furs", "gems", "gold", "grain", "grapes", "hides", "horse", "iron", "jewelry", "leather", "marble", "mithril", "pig", "pottery", "salt", "sheep", "silver", "spices", "stone", "strawberries", "timber", "tools", "weapons", "wine", "wool"];
+
+export const LANDFORMS = ["open sea", "raised beach", "ria", "skerry field", "fjord", "moraine", "drumlin", "esker", "spillway", "outwash plain", "patterned ground", "tidal flat", "estuary", "delta plain", "spit", "barrier island", "lagoon", "oasis", "springline", "glacial trough", "karst", "mountain", "hills", "plateau", "valley", "plain", "shore"];
+
+export const ROCKS = [
+  { id: 0, name: "shield", stone: "granite", color: [197, 116, 115] },
+  { id: 1, name: "basin", stone: "limestone", color: [122, 158, 196] },
+  { id: 2, name: "fold belt", stone: "marble", color: [156, 124, 176] },
+  { id: 3, name: "volcanic", stone: "basalt", color: [172, 81, 56] },
+];
+
+export const SOILS = [
+  { id: 0, name: "none", color: [24, 36, 54] },
+  { id: 1, name: "lithosol", color: [141, 137, 130] },
+  { id: 2, name: "podzol", color: [164, 158, 172] },
+  { id: 3, name: "cambisol", color: [166, 128, 87] },
+  { id: 4, name: "chernozem", color: [77, 60, 48] },
+  { id: 5, name: "laterite", color: [187, 91, 54] },
+  { id: 6, name: "andosol", color: [104, 82, 76] },
+  { id: 7, name: "gley", color: [111, 134, 143] },
+  { id: 8, name: "aridisol", color: [212, 186, 138] },
+  { id: 9, name: "fluvisol", color: [148, 152, 94] },
+  { id: 10, name: "loess", color: [226, 199, 133] },
+];
+
+export const LANDFORM_COLORS = [
+  [14, 25, 42],
+  [214, 191, 150],
+  [95, 152, 178],
+  [130, 170, 186],
+  [58, 110, 160],
+  [148, 124, 158],
+  [170, 146, 186],
+  [196, 168, 200],
+  [124, 108, 170],
+  [186, 178, 200],
+  [156, 176, 192],
+  [168, 162, 122],
+  [108, 160, 148],
+  [98, 168, 108],
+  [222, 204, 146],
+  [232, 216, 162],
+  [86, 178, 190],
+  [70, 160, 84],
+  [110, 196, 168],
+  [132, 150, 196],
+  [150, 150, 134],
+  [138, 106, 82],
+  [172, 140, 96],
+  [190, 158, 106],
+  [136, 158, 92],
+  [196, 184, 128],
+  [72, 118, 152],
+];

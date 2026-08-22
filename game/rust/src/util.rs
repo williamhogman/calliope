@@ -98,6 +98,7 @@ pub fn all_bands() -> impl Iterator<Item = &'static Band> {
         .chain(crate::currents::BANDS)
         .chain(crate::tides::BANDS)
         .chain(crate::coast::BANDS)
+        .chain(crate::erosion::BANDS)
         .chain(crate::naming::BANDS)
         .chain(crate::culture::BANDS)
         .chain(crate::trade::BANDS)
@@ -109,6 +110,7 @@ pub fn all_bands() -> impl Iterator<Item = &'static Band> {
         .chain(crate::economy::BANDS)
         .chain(crate::settlements::BANDS)
         .chain(crate::systems::BANDS)
+        .chain(crate::compute::BANDS)
 }
 
 /// Look one band up by name; an unknown name is a programmer error.

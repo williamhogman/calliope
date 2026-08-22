@@ -73,6 +73,26 @@ async def main():
         check("boot to engine ready", t_ready, f"{t_ready:.1f} s")
         check("ready to first frame", max(0.0, t_frame - t_ready), f"{t_frame - t_ready:.2f} s")
 
+        # ---------------- M67 compute-lane verdict ----------------
+        # Bring-up records the verdict right after engine creation; give it
+        # a moment, then read it. The shipped wasm carries no device
+        # executor (ADR-0027) — every browser path records the CPU twin as
+        # the law, so the defined outcome is a cpu-twin verdict. DEGRADED
+        # is reserved for the device-client era; it, or a never-resolved
+        # probe, is a failure.
+        cstat = "not probed"
+        for _ in range(20):
+            cstat = await page.evaluate("window.__calliope.computeStatus ? window.__calliope.computeStatus() : 'not probed (stale page)'")
+            if cstat != "not probed":
+                break
+            await asyncio.sleep(0.5)
+        info.append(f"compute lane: {cstat}")
+        must(
+            "compute lane verdict",
+            not cstat.startswith("DEGRADED") and cstat != "not probed",
+            cstat if len(cstat) <= 40 else cstat[:37] + "…",
+        )
+
         # ---------------- E10.7 long-task audit ----------------
         # 100 months at speed 3 (3 months/s), exactly as a player runs it.
         await page.evaluate("""() => {

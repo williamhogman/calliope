@@ -10,6 +10,12 @@ import {
   TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, ELEV_ARID_GRAD, SEA_GRAD,
   HYDRO_GRAD, FERT_GRAD, gradient, hash2,
 } from "../palette.js";
+// M63 — deep-earth lens swatches, generated from the Rust atlas tables:
+// the CPU fallback paints with the same colors the GPU palette texture holds.
+import { ROCKS, SOILS, LANDFORM_COLORS } from "../gen/constants.js";
+
+const ROCK_RGB = ROCKS.map((r) => r.color);
+const SOIL_RGB = SOILS.map((s) => s.color);
 
 // ---- satellite base palette -----------------------------------------------
 // Land colour derives from continuous fields (moisture, warmth, soil, height)
@@ -67,43 +73,70 @@ export function buildShade(R) {
   R.shade = sh;
 }
 
-// Chamfer distance (cells) from every sea cell to the nearest land —
-// powers the engraved coastal vignette (M7.1) on the CPU path.
+// The coast law (M67, ADR-0027) — distance in cells from every sea cell
+// to the nearest land, powering the engraved coastal vignette (M7.1) on
+// the CPU path. This is the JS twin of compute.rs's integer jump-flood:
+// seeds are cell indices, distances exact integer squares, ties break
+// toward the smaller index — the same law the WGSL kernel and the Rust
+// CPU twin execute, so all three paths ring the same shore. Any edit
+// here edits compute.rs and coastdist.wgsl too.
+const JFA_NONE = 0xffffffff;
+
 function coastDistance(R) {
   const W = R.w, H = R.h;
   const hgt = R.world.arrays.height;
-  const INF = 1e9;
-  const d = new Float32Array(W * H);
-  for (let i = 0; i < W * H; i++) d[i] = hgt[i] >= 0 ? 0 : INF;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const i = y * W + x;
-      if (d[i] === 0) continue;
-      let best = d[i];
-      if (x > 0) best = Math.min(best, d[i - 1] + 1);
-      if (y > 0) {
-        best = Math.min(best, d[i - W] + 1);
-        if (x > 0) best = Math.min(best, d[i - W - 1] + 1.4);
-        if (x < W - 1) best = Math.min(best, d[i - W + 1] + 1.4);
+  const n = W * H;
+  let src = new Uint32Array(n).fill(JFA_NONE);
+  let dst = new Uint32Array(n);
+  for (let i = 0; i < n; i++) if (hgt[i] >= 0) src[i] = i;
+  // the one stride schedule: next_pow2(max(W,H))/2 … 1 — compute::jfa_strides
+  let p = 1;
+  while (p < Math.max(W, H)) p <<= 1;
+  for (let s = p >> 1; s >= 1; s >>= 1) {
+    for (let y = 0; y < H; y++) {
+      const yr = y * W;
+      for (let x = 0; x < W; x++) {
+        const i = yr + x;
+        let best = src[i];
+        let bd = 0;
+        if (best !== JFA_NONE) {
+          const dx = (best % W) - x, dy = ((best / W) | 0) - y;
+          bd = dx * dx + dy * dy;
+        }
+        for (let oy = -1; oy <= 1; oy++) {
+          const ny = y + oy * s;
+          if (ny < 0 || ny >= H) continue;
+          for (let ox = -1; ox <= 1; ox++) {
+            if (ox === 0 && oy === 0) continue;
+            const nx = x + ox * s;
+            if (nx < 0 || nx >= W) continue;
+            const cand = src[ny * W + nx];
+            if (cand === JFA_NONE) continue;
+            const dx = (cand % W) - x, dy = ((cand / W) | 0) - y;
+            const d = dx * dx + dy * dy;
+            if (best === JFA_NONE || d < bd || (d === bd && cand < best)) {
+              best = cand;
+              bd = d;
+            }
+          }
+        }
+        dst[i] = best;
       }
-      d[i] = best;
+    }
+    const t = src; src = dst; dst = t;
+  }
+  // finalize — compute::finalize: land 0, sea √(exact integer square)
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const sd = src[i];
+    if (sd === JFA_NONE) out[i] = 1e9;
+    else if (sd === i) out[i] = 0;
+    else {
+      const dx = (sd % W) - (i % W), dy = ((sd / W) | 0) - ((i / W) | 0);
+      out[i] = Math.sqrt(dx * dx + dy * dy);
     }
   }
-  for (let y = H - 1; y >= 0; y--) {
-    for (let x = W - 1; x >= 0; x--) {
-      const i = y * W + x;
-      if (d[i] === 0) continue;
-      let best = d[i];
-      if (x < W - 1) best = Math.min(best, d[i + 1] + 1);
-      if (y < H - 1) {
-        best = Math.min(best, d[i + W] + 1);
-        if (x < W - 1) best = Math.min(best, d[i + W + 1] + 1.4);
-        if (x > 0) best = Math.min(best, d[i + W - 1] + 1.4);
-      }
-      d[i] = best;
-    }
-  }
-  return d;
+  return out;
 }
 
 // True-colour composite: what a survey satellite would see in high summer.
@@ -448,7 +481,10 @@ export function composite(R, state) {
   if (layer === "political") R._polDirty = false;
 
   const W = R.w, H = R.h;
-  const { height, tmean, precip, discharge, fertility, flags, strahler } = R.world.arrays;
+  const {
+    height, tmean, precip, discharge, fertility, flags, strahler,
+    rock, soil, landform,
+  } = R.world.arrays;
   if (!R._img || R._img.width !== W || R._img.height !== H) {
     R._img = R.octx.createImageData(W, H);
   }
@@ -572,6 +608,39 @@ export function composite(R, state) {
         if (sea) { r = 20; g = 33; b = 52; }
         else if (lake) { r = 46; g = 95; b = 143; }
         else [r, g, b] = FERT_GRAD(fertility ? fertility[i] : 0);
+      } else if (layer === "geology") {
+        // M63 — rock province; the geology continues under the sea, dimmed
+        // and cooled toward the abyss like an offshore hatch on a printed map
+        const c = ROCK_RGB[rock ? rock[i] : 0] || [128, 128, 128];
+        if (sea) {
+          const deep = Math.min(1, -h / 0.9) * 0.6;
+          r = (c[0] * 0.55 + 5) * (1 - deep) + 18 * deep;
+          g = (c[1] * 0.55 + 10) * (1 - deep) + 28 * deep;
+          b = (c[2] * 0.55 + 23) * (1 - deep) + 48 * deep;
+        } else {
+          r = c[0]; g = c[1]; b = c[2];
+        }
+      } else if (layer === "soils") {
+        // M63 — soil order; no profile under open water
+        if (sea) { r = 20; g = 32; b = 50; }
+        else if (lake) { r = 74; g = 128; b = 168; }
+        else {
+          const c = SOIL_RGB[soil ? soil[i] : 0] || [128, 128, 128];
+          r = c[0]; g = c[1]; b = c[2];
+        }
+      } else if (layer === "landform") {
+        // M63 — the vocabulary lens: open sea stays dark, shore-water
+        // words keep their swatch, damped by the water they stand in
+        const id = landform ? landform[i] : 0;
+        if (id === 0) { r = 14; g = 25; b = 42; }
+        else {
+          const c = LANDFORM_COLORS[id] || [128, 128, 128];
+          if (isWater) {
+            r = c[0] * 0.62 + 5; g = c[1] * 0.62 + 13; b = c[2] * 0.62 + 26;
+          } else {
+            r = c[0]; g = c[1]; b = c[2];
+          }
+        }
       } else { // hydro
         if (sea) { r = 14; g = 28; b = 48; }
         else if (lake) { r = 46; g = 95; b = 143; }

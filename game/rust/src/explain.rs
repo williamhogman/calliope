@@ -12,11 +12,15 @@
 
 use serde_json::{json, Value};
 
-use crate::ids::SettlementId;
+use crate::agriculture::SoilOrder;
 use crate::climate;
+use crate::constants::METRES_PER_UNIT;
 use crate::economy::{base_value, demand_weight};
+use crate::ids::SettlementId;
+use crate::landform;
 use crate::resources::Good;
 use crate::society;
+use crate::state::CellFlags;
 use crate::world::World;
 
 /// Entry point: JSON ledger for (`kind`, `key`), or `{}` when unknown.
@@ -27,6 +31,7 @@ pub fn explain(world: &World, kind: &str, key: &str) -> String {
             .ok()
             .and_then(|id| explain_settlement(world, SettlementId(id))),
         "good" => explain_good(world, key),
+        "cell" => explain_cell(world, key),
         _ => None,
     };
     v.unwrap_or_else(|| json!({})).to_string()
@@ -261,5 +266,145 @@ fn explain_good(world: &World, key: &str) -> Option<Value> {
         ],
         "total": price,
         "total_label": "Price today",
+    }))
+}
+
+// ------------------------------------------------------------------- cell
+
+/// M61 — "why is this here": the causal chain that built one cell, deep
+/// time forward. Every row reads *recorded* generation state — the rock
+/// province the plates dealt (M18), the ice ledger's own grids (M29–M35),
+/// the river/sediment/aquifer ledgers (M54/M59), the soil order (M51) —
+/// never a re-derivation. Stages are ordered 0 stone · 1 ice · 2 water ·
+/// 3 soil · 4 landform, and the final row is always the stored landform
+/// word (M60): the chain must end on the map's own vocabulary, exactly.
+fn explain_cell(world: &World, key: &str) -> Option<Value> {
+    let (ys, xs) = key.split_once(',')?;
+    let y = ys.trim().parse::<usize>().ok()?;
+    let x = xs.trim().parse::<usize>().ok()?;
+    let (h, w) = world.fields.height.dim();
+    if y >= h || x >= w {
+        return None;
+    }
+
+    let row = |s: u8, k: &str, l: &str, d: String| json!({ "s": s, "k": k, "l": l, "d": d });
+    let mut chain: Vec<Value> = Vec::new();
+
+    // -- stage 0 · stone: the province the plate history dealt (M16–M19)
+    let (rl, rd) = match world.fields.rock[[y, x]] {
+        0 => ("Shield", "the old craton floor — basement rock worn low over deep time"),
+        1 => ("Basin", "layered sediments — old sea-floors and river loads stacked and lifted dry"),
+        2 => ("Fold belt", "collision country — the crust buckled into ranges where plates met"),
+        _ => ("Volcanic province", "fire country — rock born of eruptions along the old plate seams"),
+    };
+    chain.push(row(0, "stone", rl, rd.to_string()));
+
+    // -- stage 1 · ice: the long winter's ledger, entry by entry (M29–M35)
+    let ice = &world.ice;
+    let thick = ice.thickness[[y, x]] as f64;
+    if thick > 0.0 {
+        chain.push(row(1, "ice", "Under the sheet",
+            format!("ice stood {:.0} m thick here at the glacial maximum", thick)));
+    }
+    let carved_m = ice.carved[[y, x]] as f64 * METRES_PER_UNIT;
+    if carved_m >= 10.0 {
+        chain.push(row(1, "ice", "Ice-carved",
+            format!("the ice ground this floor about {:.0} m deeper", carved_m)));
+    }
+    if ice.till[[y, x]] > 0.05 {
+        chain.push(row(1, "ice", "Till country",
+            "the melting sheet dropped its ground-up rock here as till".to_string()));
+    }
+    let ow = ice.outwash[[y, x]];
+    if ow >= 0.45 {
+        chain.push(row(1, "ice", "Outwash",
+            if ow >= 0.9 {
+                "meltwater braided over this ground and planed it into gravel".to_string()
+            } else {
+                "a meltwater apron — sand and gravel spread flat below the old margin".to_string()
+            }));
+    }
+    if ice.loess[[y, x]] > 0.05 {
+        chain.push(row(1, "ice", "Loess mantle",
+            "wind lifted glacial dust off the outwash plains and laid it here in drifts".to_string()));
+    }
+    if ice.modern[[y, x]] > 0.0 {
+        chain.push(row(1, "ice", "Glacier today",
+            "snowfall still outruns the melt on these heights".to_string()));
+    }
+
+    // -- stage 2 · water: rivers, lakes, silt, the sea, the table (M54/M59)
+    let height = world.fields.height[[y, x]] as f64;
+    let flags = CellFlags::from_bits_truncate(world.fields.flags[[y, x]]);
+    if height < 0.0 {
+        chain.push(row(2, "water", "The sea",
+            format!("{:.0} m of water stand over this ground", -height * METRES_PER_UNIT)));
+    } else {
+        if flags.contains(CellFlags::RIVER) {
+            let order = world.fields.strahler[[y, x]];
+            let flow = world.fields.discharge[[y, x]];
+            let (wl, wd) = if flags.contains(CellFlags::SEASONAL) {
+                ("Wadi", format!("a seasonal river — roaring in the rains, dry the rest (order {})", order))
+            } else if flags.contains(CellFlags::BRAIDED) {
+                ("Braided river", format!("the river splits and rejoins over its own gravel (order {} · flow {:.0})", order, flow))
+            } else {
+                ("River", format!("running water crosses this cell (order {} · flow {:.0})", order, flow))
+            };
+            chain.push(row(2, "water", wl, wd));
+        }
+        if flags.contains(CellFlags::SALT) {
+            chain.push(row(2, "water", "Salt basin",
+                "rivers die here and leave their salt — no way out to the sea".to_string()));
+        } else if flags.contains(CellFlags::LAKE) {
+            chain.push(row(2, "water", "Lake",
+                "standing fresh water fills this hollow".to_string()));
+        }
+        let silt_m = world.sediment.depth[[y, x]] as f64 * METRES_PER_UNIT;
+        if world.sediment.delta[[y, x]] {
+            chain.push(row(2, "water", "Fan-built",
+                "this ground is new — the river raised it grain by grain at its mouth".to_string()));
+        } else if silt_m >= 1.0 {
+            chain.push(row(2, "water", "Silt-laid",
+                format!("the river left about {:.0} m of fill here in flood", silt_m)));
+        }
+        let table = world.fields.aquifer[[y, x]] as f64;
+        if !flags.contains(CellFlags::LAKE) {
+            if table <= 0.5 {
+                chain.push(row(2, "water", "Water at the surface",
+                    "the water table daylights here".to_string()));
+            } else {
+                chain.push(row(2, "water", "The water table",
+                    format!("fresh water stands about {:.0} m down", table)));
+            }
+        }
+    }
+
+    // -- stage 3 · soil: what all of the above weathered into (M51/M52)
+    if height >= 0.0 {
+        let so = SoilOrder::from_code(world.fields.soil[[y, x]]);
+        if so != SoilOrder::None {
+            let fert = so.fertility();
+            let label = {
+                let n = so.name();
+                let mut c = n.chars();
+                match c.next() {
+                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                    None => String::new(),
+                }
+            };
+            chain.push(row(3, "soil", &label,
+                format!("bears {:.1}× the yield of plain brown earth", fert)));
+        }
+    }
+
+    // -- stage 4 · landform: the terminal word, verbatim from the lane (M60)
+    let lf = world.fields.landform[[y, x]] as usize;
+    let word = landform::NAMES.get(lf).copied().unwrap_or("open sea");
+    chain.push(row(4, "landform", word,
+        "the one word the map keeps for everything above".to_string()));
+
+    Some(json!({
+        "title": "Why is this here",
+        "chain": chain,
     }))
 }

@@ -3,85 +3,85 @@
 ========================================================================
 kind           count dawn-known    rich   finite reserve mo  min dist
 bananas            5       5 100%    0.89        0     renews       20c
-blueberries        8       8 100%    0.86        0     renews       67c
-strawberries      12      12 100%    0.89        0     renews       64c
-blackberries       7       7 100%    0.82        0     renews       52c
+blueberries        8       8 100%    0.86        0     renews       68c
+strawberries      11      11 100%    0.90        0     renews       64c
+blackberries       7       7 100%    0.82        0     renews       48c
 cattle             4       4 100%    0.84        0     renews       74c
-sheep             28      28 100%    0.86        0     renews       50c
-horse              7       7 100%    0.89        0     renews       39c
-pig                2       2 100%    0.87        0     renews       37c
-deer               5       5 100%    0.88        0     renews       70c
+sheep             28      28 100%    0.86        0     renews       61c
+horse              7       7 100%    0.89        0     renews       42c
+pig                2       2 100%    0.87        0     renews       44c
+deer               5       5 100%    0.88        0     renews       69c
 elk                6       6 100%    0.95        0     renews       23c
-fish               4       4 100%    0.89        0     renews       49c
-timber             9       9 100%    0.90        0     renews       43c
-stone              7       4 57%    0.85        0     renews       73c
-coal              17       4 24%    0.86       17       1282       56c
+fish               4       4 100%    0.89        0     renews       91c
+timber             9       9 100%    0.90        0     renews       46c
+stone              7       4 57%    0.85        0     renews       64c
+coal              18       4 22%    0.86       18       1293       66c
 copper             5       0  0%    0.90        5       1424       48c
-iron               4       1 25%    0.92        4       1475       83c
-silver             5       0  0%    0.77        5        818       53c
-gold               3       0  0%    0.88        3        675       88c
-mithril            1       0  0%    0.57        1       1844       77c
-salt              10       5 50%    0.94        9       1502       54c
-furs               3       3 100%    0.95        0     renews       67c
-grapes             2       2 100%    0.89        0     renews       38c
-spices             2       2 100%    0.95        0     renews       38c
-dyes               1       1 100%    0.96        0     renews       52c
+iron               4       1 25%    0.92        4       1475       84c
+silver             5       0  0%    0.77        5        818       56c
+gold               3       0  0%    0.88        3        675       79c
+mithril            1       0  0%    0.57        1       1844       78c
+salt              10       5 50%    0.92        9       1502       45c
+furs               3       3 100%    0.95        0     renews       80c
+grapes             2       2 100%    0.89        0     renews       45c
+spices             3       3 100%    0.95        0     renews       17c
+dyes               2       2 100%    0.93        0     renews       59c
 clay               4       4 100%    0.88        0     renews       44c
-marble             2       1 50%    0.83        2       1993       88c
-gems               2       0  0%    0.82        2        732       67c
+marble             2       1 50%    0.83        2       1993       78c
+gems               2       0  0%    0.82        2        732       74c
 
-total deposits: 165 · 1.41 per 1000 land cells
-mineral seams hidden at dawn: 41 of 56 (73.2%)
+total deposits: 167 · 1.41 per 1000 land cells
+mineral seams hidden at dawn: 42 of 57 (73.7%)
 
-ore homes (M19): gold 3/3 · silver 5/5 · copper 5/5 · iron 4/4 · coal 17/17 · gems 2/2 · marble 0/2
+ore homes (M19): gold 3/3 · silver 5/5 · copper 5/5 · iron 4/4 · coal 18/18 · gems 2/2 · marble 0/2
 
 soil orders (M51 · clorpt):
 order           cells    share mean fert     curve depth m
-lithosol        28167    24.4%     0.016      0.35    0.15
-podzol           8102     7.0%     0.022      0.70    0.60
-cambisol        20241    17.5%     0.223      1.00    1.00
-chernozem        2961     2.6%     0.402      1.35    1.60
-laterite         5598     4.8%     0.116      0.60    2.40
-andosol          3061     2.7%     0.250      1.20    0.90
-gley             1596     1.4%     0.175      0.85    1.10
-aridisol        30346    26.3%     0.038      0.45    0.35
-fluvisol         5913     5.1%     0.352      1.30    1.80
-loess            9464     8.2%     0.265      1.45    2.20
+lithosol        27958    24.0%     0.016      0.35    0.15
+podzol           8141     7.0%     0.022      0.70    0.60
+cambisol        20257    17.4%     0.225      1.00    1.00
+chernozem        2938     2.5%     0.406      1.35    1.60
+laterite         5575     4.8%     0.118      0.60    2.40
+andosol          3097     2.7%     0.251      1.20    0.90
+gley             1770     1.5%     0.186      0.85    1.10
+aridisol        30260    26.0%     0.038      0.45    0.35
+fluvisol         6795     5.8%     0.367      1.30    1.80
+loess            9564     8.2%     0.268      1.45    2.20
 curve-vs-measured rank correlation over 10 orders: ρ = 0.93
 
-M52 delivered soils · top-decile cut fert 0.338 (baseline 10.0%)
-fluvisol         5913 cells ·   2582 in top decile (43.7%) · x4.37
-loess            9464 cells ·   2512 in top decile (26.5%) · x2.65
+M52 delivered soils · top-decile cut fert 0.349 (baseline 10.0%)
+fluvisol         6795 cells ·   3029 in top decile (44.6%) · x4.46
+loess            9564 cells ·   2402 in top decile (25.1%) · x2.51
 
 M52 delivery upgrade · shipped soil vs the profile it buried:
-fluvisol       5427 farmable cells · x1.26 · buried: podzol 420 · cambisol 1515 · chernozem 294 · laterite 1157 · andosol 409 · gley 576 · aridisol 1056
-loess          9293 farmable cells · x1.47 · buried: podzol 869 · cambisol 1785 · chernozem 307 · andosol 702 · gley 93 · aridisol 5537
+fluvisol       6303 farmable cells · x1.26 · buried: podzol 453 · cambisol 1734 · chernozem 300 · laterite 1190 · andosol 495 · gley 778 · aridisol 1353
+loess          9410 farmable cells · x1.47 · buried: podzol 874 · cambisol 1780 · chernozem 331 · andosol 716 · gley 104 · aridisol 5605
 
 M53 crop packages against the ground they stand on:
 package       cells   drainage    depth m
-wheat         21102      0.652       1.31
-rice           3381      0.596       1.92
-maize         10903      0.659       1.39
-pastoral      39665      0.641       0.71
-wildland      40398      0.807       0.42
-mean drainage under wheat 0.652 · under rice 0.596
+wheat         21282      0.649       1.32
+rice           3716      0.573       1.89
+maize         11255      0.655       1.40
+pastoral      39906      0.640       0.72
+wildland      40196      0.807       0.41
+mean drainage under wheat 0.649 · under rice 0.573
 
 order          edaphic     farmed     cells
-lithosol         0.098       1.7%     28167
-podzol           0.626       5.2%      8102
-cambisol         1.000      82.9%     20241
-chernozem        1.129      87.2%      2961
-laterite         0.822      68.7%      5598
-andosol          1.068      81.9%      3061
-gley             0.828      32.5%      1596
-aridisol         0.325       1.0%     30346
-fluvisol         0.912      72.4%      5913
-loess            1.186      38.8%      9464
+lithosol         0.098       1.6%     27958
+podzol           0.626       5.2%      8141
+cambisol         1.000      83.0%     20257
+chernozem        1.129      88.3%      2938
+laterite         0.822      69.5%      5575
+andosol          1.068      80.8%      3097
+gley             0.828      35.4%      1770
+aridisol         0.325       0.9%     30260
+fluvisol         0.912      73.3%      6795
+loess            1.186      38.9%      9564
 edaphic-vs-farmed rank correlation over 10 orders: ρ = 0.77
 
 ---- checks ----------------------------------------------------------
 [PASS] deposits per 1000 land cells                   1.41   (sweet 1–6 · hard 0.5–12)
-[PASS] mineral hidden share at dawn                  73.2%   (sweet 45–85% — leave an age of prospectors)
+[PASS] mineral hidden share at dawn                  73.7%   (sweet 45–85% — leave an age of prospectors)
 [PASS] essential kinds all present               0 missing   (everything except mithril/bananas should place)
 [PASS] gold placed                                     yes   (a world without gold has a dull late game)
 [PASS] mithril placed                                  yes   (the legendary seam should exist somewhere)
@@ -89,27 +89,27 @@ edaphic-vs-farmed rank correlation over 10 orders: ρ = 0.77
 [PASS] salt sources ≥2                                  10   (M14.2 floor: one source is a monopoly, not an economy)
 [PASS] pans known at dawn                           1 of 1   (a salt pan is plain to see — never hidden, never exhausted)
 [PASS] goods table agrees with closure flags 38 rows consistent   (M14.1: one declaration point — flags derive-checked against GOODS)
-[PASS] ore seams in home province           36 of 38 (94.7%)   (M19 gate: geology says where ore sits — ≥90% pooled)
-[PASS] lithosol share                       28167 of 115449 (24.4%)   (M51: the steep and the frozen carry no profile)
-[PASS] podzol share                         8102 of 115449 (7.0%)   (M51: cool conifer country leaches acid)
-[PASS] cambisol share                       20241 of 115449 (17.5%)   (M51: the temperate brown earth is the ordinary case)
-[PASS] chernozem share                      2961 of 115449 (2.6%)   (M51: black earth is rare and continental)
-[PASS] laterite share                       5598 of 115449 (4.8%)   (M51: the hot wet tropics weather deep and poor)
-[PASS] andosol share                        3061 of 115449 (2.7%)   (M51: ash country tracks the volcanic province)
-[PASS] gley share                           1596 of 115449 (1.4%)   (M51: valley floors and cold flats pond)
-[PASS] aridisol share                       30346 of 115449 (26.3%)   (M51: the dry share tracks the desert share)
-[PASS] fluvisol share                       5913 of 115449 (5.1%)   (M52: the alluvial belt is a ribbon, not a region)
-[PASS] loess share                          9464 of 115449 (8.2%)   (M52: the dust apron reaches far but not everywhere)
+[PASS] ore seams in home province           37 of 39 (94.9%)   (M19 gate: geology says where ore sits — ≥90% pooled)
+[PASS] lithosol share                       27958 of 116355 (24.0%)   (M51: the steep and the frozen carry no profile)
+[PASS] podzol share                         8141 of 116355 (7.0%)   (M51: cool conifer country leaches acid)
+[PASS] cambisol share                       20257 of 116355 (17.4%)   (M51: the temperate brown earth is the ordinary case)
+[PASS] chernozem share                      2938 of 116355 (2.5%)   (M51: black earth is rare and continental)
+[PASS] laterite share                       5575 of 116355 (4.8%)   (M51: the hot wet tropics weather deep and poor)
+[PASS] andosol share                        3097 of 116355 (2.7%)   (M51: ash country tracks the volcanic province)
+[PASS] gley share                           1770 of 116355 (1.5%)   (M51: valley floors and cold flats pond)
+[PASS] aridisol share                       30260 of 116355 (26.0%)   (M51: the dry share tracks the desert share)
+[PASS] fluvisol share                       6795 of 116355 (5.8%)   (M52: the alluvial belt is a ribbon, not a region)
+[PASS] loess share                          9564 of 116355 (8.2%)   (M52: the dust apron reaches far but not everywhere)
 [PASS] soil fertility rank correlation      ρ 0.93 over 10 orders   (M51: the order's curve must order the farms)
-[PASS] alluvium enrichment                  2582 of 5913 in top decile (43.7%) — x4.37 chance   (M52: floodplain soil must land in the best tenth of the map)
-[PASS] alluvium order present                   5913 cells   (M52: every world has a floodplain and a dust belt)
-[PASS] loess order present                      9464 cells   (M52: every world has a floodplain and a dust belt)
-[PASS] alluvium upgrade                     x1.26 over the buried profile on 5427 farmable cells   (M52: silt must out-farm the profile the river buried)
-[PASS] loess upgrade                        x1.47 over the buried profile on 9293 farmable cells   (M52: the dust must out-farm the profile it blanketed)
-[PASS] paddy wet-soil enrichment            rice takes 32.2% of grain on wet profiles (4798 cells) vs 9.6% everywhere — x3.37   (M53: rice takes the wet ground wheat refuses)
-[PASS] grain does not root in rock          474 of 35386 grain cells on <0.35 m profiles   (M53: the depth term must close the skeletal soils to the plough)
+[PASS] alluvium enrichment                  3029 of 6795 in top decile (44.6%) — x4.46 chance   (M52: floodplain soil must land in the best tenth of the map)
+[PASS] alluvium order present                   6795 cells   (M52: every world has a floodplain and a dust belt)
+[PASS] loess order present                      9564 cells   (M52: every world has a floodplain and a dust belt)
+[PASS] alluvium upgrade                     x1.26 over the buried profile on 6303 farmable cells   (M52: silt must out-farm the profile the river buried)
+[PASS] loess upgrade                        x1.47 over the buried profile on 9410 farmable cells   (M52: the dust must out-farm the profile it blanketed)
+[PASS] paddy wet-soil enrichment            rice takes 33.8% of grain on wet profiles (5609 cells) vs 10.3% everywhere — x3.30   (M53: rice takes the wet ground wheat refuses)
+[PASS] grain does not root in rock          441 of 36253 grain cells on <0.35 m profiles   (M53: the depth term must close the skeletal soils to the plough)
 [PASS] crop soil suitability correlation    ρ 0.77 over 10 orders   (M53: the edaphic table must predict what gets farmed)
-[PASS] every land cell carries a soil order 0 bare of 115449 land cells   (M51: the classifier is total over land — no cell falls through the ladder)
-[PASS] chernozem confined to its climate window 2961 of 2961 in window · 2961 under grass/woodland (100.0%)   (M51 gate: black earth only where humus outlasts the summer and rain never flushes the profile)
-[PASS] andosol sits on volcanic parent rock 3061 of 3061 on volcanic province   (M51: ash soils cannot exist off the ash)
+[PASS] every land cell carries a soil order 0 bare of 116355 land cells   (M51: the classifier is total over land — no cell falls through the ladder)
+[PASS] chernozem confined to its climate window 2938 of 2938 in window · 2938 under grass/woodland (100.0%)   (M51 gate: black earth only where humus outlasts the summer and rain never flushes the profile)
+[PASS] andosol sits on volcanic parent rock 3097 of 3097 on volcanic province   (M51: ash soils cannot exist off the ash)
 CHECKS: 32 pass · 0 warn · 0 fail

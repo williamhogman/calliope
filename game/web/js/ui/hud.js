@@ -14,6 +14,8 @@ import {
   selection, popRev, popSeries,
 } from "./state.js";
 import { LAYERS, OVERLAYS, EVENT_FAMILIES, FALLBACK_MONTHS, fmt, dateOf } from "./config.js";
+// M63 — deep-earth legend vocabulary, generated from the Rust atlas tables.
+import { ROCKS, SOILS, LANDFORMS, LANDFORM_COLORS } from "../gen/constants.js";
 import { I } from "./icons.js";
 import { each } from "./list.js";
 import { trapFocus, roveTabs } from "./focus.js";
@@ -147,6 +149,34 @@ function LegendPop() {
     if (l === "precip") return gradLegend(PRECIP_GRAD, 0, 3000, "arid", "3000 mm");
     if (l === "hydro") return gradLegend(HYDRO_GRAD, 0, 1, "trickle", "torrent");
     if (l === "fertility") return gradLegend(FERT_GRAD, 0, 1, "barren", "black earth");
+    // M63 — the deep-earth lenses read their legends from the same
+    // generated tables the shader's palette texture is built from.
+    if (l === "geology") {
+      return html`<div class="legend">
+        ${ROCKS.map((r) => html`<div class="legend-item">
+          <span class="swatch" style=${`background:rgb(${r.color.join(",")})`}></span>
+          <span>${r.name} \u00b7 quarries ${r.stone}</span>
+        </div>`)}
+      </div><div class="pop-note">Rock provinces \u2014 the stone a town is built from, dimmed where it runs under the sea.</div>`;
+    }
+    if (l === "soils") {
+      return html`<div class="legend">
+        ${SOILS.filter((s) => s.id !== 0).map((s) => html`<div class="legend-item">
+          <span class="swatch" style=${`background:rgb(${s.color.join(",")})`}></span>
+          <span>${s.name}</span>
+        </div>`)}
+      </div><div class="pop-note">Soil orders \u2014 what a spade turns over, and what the fields can carry.</div>`;
+    }
+    if (l === "landform") {
+      return html`<div class="legend">
+        ${LANDFORMS.map((n, i) => ({ n, i }))
+          .filter((e) => e.i !== 0)
+          .map((e) => html`<div class="legend-item">
+            <span class="swatch" style=${`background:rgb(${LANDFORM_COLORS[e.i].join(",")})`}></span>
+            <span>${e.n}</span>
+          </div>`)}
+      </div><div class="pop-note">The atlas's own words for the ground \u2014 the vocabulary the namer and the explainer share.</div>`;
+    }
     return "";
   };
   return html`<div class="pop pop-legend" role="dialog" aria-label="Legend"
@@ -181,15 +211,17 @@ function LensStrip(a) {
     <div class="lens-strip">
       <div role="tablist" aria-label="Map lens" style="display:contents"
         ref=${(el) => roveTabs(el)}>
-        ${LAYERS.map(
-          ([id, label, tip], i) => html`<button
+        ${LAYERS.map(([id, label, tip], i) => {
+          // 1..9 then 0 — the eleventh lens keeps its tab, loses the key
+          const key = i < 9 ? String(i + 1) : i === 9 ? "0" : null;
+          return html`<button
             class=${() => "lens" + (layer() === id ? " active" : "")}
             role="tab" aria-selected=${() => String(layer() === id)}
-            title=${`${tip} (${i + 1})`}
+            title=${key ? `${tip} (${key})` : tip}
             onClick=${() => a.setLayer(id)}>
-            <span class="lens-key">${i + 1}</span><span class="lens-label">${label}</span>
-          </button>`
-        )}
+            ${key ? html`<span class="lens-key">${key}</span>` : ""}<span class="lens-label">${label}</span>
+          </button>`;
+        })}
       </div>
       <span class="lens-sep"></span>
       <button class=${() => "lens lens-tool" + (overlaysOpen() ? " active" : "")}

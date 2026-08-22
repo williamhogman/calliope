@@ -12,6 +12,10 @@ export const LAYERS = [
   ["precip", "Rainfall", "Where the clouds break"],
   ["hydro", "Hydrology", "Rivers, lakes and their power"],
   ["fertility", "Fertility", "Where fields will feed a city"],
+  // M63 — the deep-earth lenses: the stack the explain chain narrates
+  ["geology", "Geology", "The rock provinces and their stone"],
+  ["soils", "Soils", "What a spade turns over"],
+  ["landform", "Landform", "The ground in the atlas's own words"],
 ];
 
 export const OVERLAYS = [

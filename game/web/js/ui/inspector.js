@@ -108,12 +108,15 @@ function CellView(a, sel) {
     month(); // temperature is seasonal
     return a.inspectCell(sel.x, sel.y);
   });
+  // M61 — "why is this here": the engine's provenance chain for this
+  // cell, deep time forward (stone → ice → water → soil → landform).
+  const why = useExplain(a, () => ({ kind: "cell", id: `${sel.y},${sel.x}` }));
   return () => {
     const i = info();
     if (!i) return "";
     return html`<div class="insp-body">
       <div class="insp-head">
-        <span class="insp-kicker">${i.isWater ? "waters" : "land"} \u00b7 ${i.x}; ${i.y}</span>
+        <span class="insp-kicker">${i.landform || (i.isWater ? "waters" : "land")} \u00b7 ${i.x}; ${i.y}</span>
         <span class="insp-name">${i.place || i.biome}</span>
         ${i.place ? html`<span class="insp-sub">${i.biome}</span>` : ""}
       </div>
@@ -132,6 +135,17 @@ function CellView(a, sel) {
       ${(i.notes || []).map((n) => html`<div class="insp-note">\u263c ${n}</div>`)}
       ${i.resources.map((r) => html`<div class="insp-note res">\u25c6 ${r.name}
         <span class="dim">(${r.abundance}${r.requires ? `, requires ${r.requires}` : ""})</span></div>`)}
+      ${() => {
+        const ch = why();
+        if (!ch || !ch.chain) return "";
+        return html`<div class="insp-chain">
+          <div class="chain-t">${ch.title || "Why is this here"}</div>
+          ${ch.chain.map((e) => html`<div class="chain-row">
+            <span class=${`chain-k k-${e.k}`}>${e.k}</span>
+            <span class="chain-b"><b>${e.l}</b> <span class="dim">\u2014 ${e.d}</span></span>
+          </div>`)}
+        </div>`;
+      }}
       <div class="insp-line dim wind">${i.wind}</div>
     </div>`;
   };

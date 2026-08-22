@@ -3,6 +3,7 @@
 // everything here answers "what is at this place?".
 
 import { world, month } from "./ui/state.js";
+import { LANDFORMS } from "./gen/constants.js";
 
 let ctx = null;
 export function initInspect(c) {
@@ -207,6 +208,9 @@ export function inspectCell(cx, cy) {
     flow: Math.round(discharge[i]),
     isWater,
     frozen,
+    // M60 — the ground names itself: the engine's landform word for
+    // this cell, straight off the wire lane (LANDFORMS is index-aligned).
+    landform: w.arrays.landform != null ? (LANDFORMS[w.arrays.landform[i]] || null) : null,
     resources: resources.slice(0, 3),
     territory,
     folk,

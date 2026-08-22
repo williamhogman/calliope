@@ -201,6 +201,178 @@ pub fn make_word(rng: &mut Pcg64Mcg, style: &str, taken: &mut HashSet<String>) -
     coin(rng, style, taken).word
 }
 
+// ================================================================ M62
+// Geomorphic toponymy — place names tell the truth about the ground.
+// The landform lane (M60) says what a cell IS in one word; here each
+// tongue keeps its own generic for the grounds it has words for, and a
+// town takes that generic as the tail of its name: a fjord town's name
+// says fjord, in that culture's tongue. Real toponymy works exactly
+// this way (research/14): -dal/-dale on valley floors, -vik on bays,
+// -ah on the oases — the map is a gazetteer of what the namers saw.
+
+/// Every toponymic class a tongue can keep a generic for — the audit
+/// walks these to know a tongue's full closer vocabulary (M3.1 + M62).
+pub const CLASSES: [&str; 12] = [
+    "fjord", "isle", "delta", "shore", "oasis", "spring", "dale", "karst", "fell", "hill",
+    "moor", "plain",
+];
+
+/// The toponymic class a landform code names, or None when the ground
+/// carries no naming tradition (open country, patterned frost ground,
+/// sea floors — towns never stand there anyway).
+pub fn landform_class(code: u8) -> Option<&'static str> {
+    use crate::landform as lf;
+    Some(match code {
+        lf::FJORD | lf::RIA => "fjord",
+        lf::SKERRY => "isle",
+        lf::DELTA | lf::ESTUARY | lf::TIDEFLAT => "delta",
+        lf::SPIT | lf::BARRIER | lf::SHORE | lf::RAISED => "shore",
+        lf::OASIS => "oasis",
+        lf::SPRING => "spring",
+        lf::TROUGH | lf::VALLEY | lf::SPILLWAY => "dale",
+        lf::KARST => "karst",
+        lf::MOUNTAIN => "fell",
+        lf::HILLS | lf::MORAINE | lf::DRUMLIN | lf::ESKER => "hill",
+        lf::PLATEAU => "moor",
+        lf::PLAIN | lf::OUTWASH => "plain",
+        _ => return None,
+    })
+}
+
+/// Each tongue's generics per toponymic class: (suffix, gloss). An empty
+/// slice means the tongue has no word for that ground — the namer falls
+/// back to a plain coined name, honestly, rather than borrow a word its
+/// people never needed.
+pub fn landform_generics(style: &str, class: &str) -> &'static [(&'static str, &'static str)] {
+    match (style, class) {
+        // old tongue: long-voweled, elvish; land words are old and heavy
+        ("old", "fell") => &[("orod", "mountain"), ("ath", "height")],
+        ("old", "hill") => &[("amon", "hill")],
+        ("old", "dale") => &[("nan", "vale")],
+        ("old", "plain") => &[("ard", "open land")],
+        ("old", "moor") => &[("dor", "high country")],
+        ("old", "shore") => &[("falas", "shore")],
+        ("old", "fjord") => &[("lond", "narrow haven")],
+        ("old", "isle") => &[("ys", "isle")],
+        ("old", "delta") => &[("ethir", "river-mouth")],
+        ("old", "oasis") | ("old", "spring") => &[("eithel", "well-spring")],
+        ("old", "karst") => &[("fela", "cave-land")],
+
+        // hellenic: classical compounds
+        ("hellenic", "fell") => &[("oros", "mountain")],
+        ("hellenic", "hill") => &[("lophos", "hill")],
+        ("hellenic", "dale") => &[("aulon", "glen")],
+        ("hellenic", "plain") => &[("pedion", "plain")],
+        ("hellenic", "moor") => &[("plaka", "tableland")],
+        ("hellenic", "shore") => &[("yra", "shore")],
+        ("hellenic", "fjord") => &[("kolpos", "deep gulf")],
+        ("hellenic", "isle") => &[("nesos", "island")],
+        ("hellenic", "delta") => &[("stoma", "river-mouth")],
+        ("hellenic", "oasis") | ("hellenic", "spring") => &[("krene", "fountain")],
+        ("hellenic", "karst") => &[("antron", "cavern")],
+
+        // nordic: the hard compounds the real North stamps on every map
+        ("nordic", "fell") => &[("fell", "mountain"), ("berg", "rock")],
+        ("nordic", "hill") => &[("haug", "mound")],
+        ("nordic", "dale") => &[("dal", "valley")],
+        ("nordic", "plain") => &[("voll", "field")],
+        ("nordic", "moor") => &[("vidda", "high moor")],
+        ("nordic", "shore") => &[("strand", "shore"), ("vik", "bay")],
+        ("nordic", "fjord") => &[("fjord", "fjord"), ("vik", "bay")],
+        ("nordic", "isle") => &[("holm", "islet"), ("oy", "island")],
+        ("nordic", "delta") => &[("eyr", "gravel-mouth")],
+        ("nordic", "oasis") | ("nordic", "spring") => &[("kelda", "well-spring")],
+        ("nordic", "karst") => &[("gjel", "gorge")],
+
+        // arid: caravan country — the water words matter most
+        ("arid", "fell") => &[("jabal", "mountain")],
+        ("arid", "hill") => &[("dun", "hill")],
+        ("arid", "dale") => &[("wadi", "dry valley")],
+        ("arid", "plain") => &[("sahl", "plain")],
+        ("arid", "moor") => &[("hamra", "stone plateau")],
+        ("arid", "shore") => &[("sif", "shore")],
+        ("arid", "fjord") => &[("khawr", "inlet")],
+        ("arid", "isle") => &[("jazir", "island")],
+        ("arid", "delta") => &[("masab", "river-mouth")],
+        ("arid", "oasis") => &[("waha", "oasis"), ("ah", "oasis")],
+        ("arid", "spring") => &[("ain", "spring")],
+        ("arid", "karst") => &[("kahf", "cave")],
+
+        // sylvan: soft lowland English, wood-country words
+        ("sylvan", "fell") => &[("tor", "crag")],
+        ("sylvan", "hill") => &[("knoll", "knoll")],
+        ("sylvan", "dale") => &[("dell", "dale"), ("hollow", "hollow")],
+        ("sylvan", "plain") => &[("lea", "meadow")],
+        ("sylvan", "moor") => &[("moor", "moor")],
+        ("sylvan", "shore") => &[("hythe", "landing")],
+        ("sylvan", "fjord") => &[("firth", "firth")],
+        ("sylvan", "isle") => &[("eyot", "river-isle")],
+        ("sylvan", "delta") => &[("carr", "fen-wood")],
+        ("sylvan", "oasis") | ("sylvan", "spring") => &[("well", "well")],
+        ("sylvan", "karst") => &[("delve", "cave-delve")],
+
+        // steppe: horse-country Turkic/Mongolic shapes
+        ("steppe", "fell") => &[("tau", "mountain"), ("dag", "peak")],
+        ("steppe", "hill") => &[("tepe", "hill")],
+        ("steppe", "dale") => &[("sai", "ravine")],
+        ("steppe", "plain") => &[("gan", "plain")],
+        ("steppe", "moor") => &[("yayla", "high pasture")],
+        ("steppe", "shore") => &[("yar", "steep bank")],
+        ("steppe", "fjord") => &[("bogaz", "narrows")],
+        ("steppe", "isle") => &[("aral", "island")],
+        ("steppe", "delta") => &[("uzen", "river-mouth")],
+        ("steppe", "oasis") => &[("kuduk", "well"), ("bulak", "spring")],
+        ("steppe", "spring") => &[("bulak", "spring")],
+        ("steppe", "karst") => &[("ungur", "cave")],
+
+        _ => &[],
+    }
+}
+
+/// Coin a settlement name whose tail is the tongue's own generic for the
+/// ground it stands on. Returns None when the tongue has no word for
+/// that landform — the caller keeps (or plainly coins) a name instead of
+/// borrowing vocabulary the people never had. The etymology reads back
+/// every part, generic included: "Frostfjord — 'the frost fjord'".
+pub fn coin_for_landform(
+    rng: &mut Pcg64Mcg,
+    style: &str,
+    landform: u8,
+    taken: &mut HashSet<String>,
+) -> Option<Coined> {
+    let class = landform_class(landform)?;
+    let gens = landform_generics(style, class);
+    if gens.is_empty() {
+        return None;
+    }
+    let b = bank(style);
+    for _ in 0..96 {
+        let (p, pg) = b.pre[zipf_idx(rng, b.pre.len())];
+        let (g, gg) = gens[rng.gen_range(0..gens.len())];
+        let mut w = String::from(p);
+        let mut ety = format!("the {}", pg);
+        if rng.gen::<f64>() < 0.30 {
+            let (m, mg) = b.mid[zipf_idx(rng, b.mid.len())];
+            w.push_str(m);
+            ety = format!("the {} {}", pg, mg);
+        }
+        w.push_str(g);
+        ety.push(' ');
+        ety.push_str(gg);
+        if !taken.contains(&w) {
+            taken.insert(w.clone());
+            return Some(Coined { word: w, ety });
+        }
+    }
+    // uniqueness fallback: the numeral sits inside, the generic stays
+    // terminal — the name must still say what the ground is.
+    let (p, pg) = b.pre[0];
+    let (g, gg) = gens[0];
+    let w = format!("{}{}{}", p, taken.len(), g);
+    taken.insert(w.clone());
+    Some(Coined { word: w, ety: format!("the {} {}", pg, gg) })
+}
+
 fn templates(kind: &str) -> &'static [&'static str] {
     match kind {
         "ocean" => &["The {w} Ocean", "The {w} Deep"],
@@ -301,6 +473,7 @@ pub fn name_features(
     height: &Array2<f32>,
     sealevel: &crate::sealevel::SeaLevel,
     ice: &crate::ice::Ice,
+    delta: &Array2<bool>,
     biomes: &Array2<u8>,
     rivers: &Array2<bool>,
     lakes: &Array2<bool>,
@@ -686,7 +859,7 @@ pub fn name_features(
     // firths and strands read straight off the landform grid (the
     // sea-level history made visible). Minted last so every elder name
     // above keeps its draw from the stream.
-    let lf = crate::landform::classify(height, sealevel, ice);
+    let lf = crate::landform::classify(height, sealevel, ice, delta);
     let skerry = lf.mapv(|t| t == crate::landform::SKERRY);
     let lab = ndimage::label(&skerry, true);
     let comps = ndimage::top_components(&lab, 5.0 * sc, 5);

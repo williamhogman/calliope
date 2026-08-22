@@ -23,6 +23,18 @@ const EMPTY = {
 export async function createGpu(canvas, { forceGl = false } = {}) {
   const { Orbital } = await loadEngine();
   const orbital = forceGl ? await Orbital.create_gl(canvas) : await Orbital.create(canvas);
+  // M67 — record the compute lane's verdict: the CPU twin is the law on
+  // every browser path (the shipped wasm carries no device executor; the
+  // kernel is proven natively on lavapipe each suite run — ADR-0027). The
+  // verdict lands in compute_status() for the HUD and the browser probe.
+  // Guarded so a stale wasm build (predating the lane) still boots;
+  // Promise.resolve absorbs both the sync form and older async builds.
+  if (typeof orbital.compute_bringup === "function") {
+    Promise.resolve(orbital.compute_bringup()).then(
+      (s) => console.log("[calliope] compute lane: " + s),
+      (e) => console.warn("[calliope] compute bring-up failed:", e),
+    );
+  }
   return new GpuEngine(canvas, orbital);
 }
 
@@ -50,6 +62,13 @@ class GpuEngine {
 
   backend() {
     return this.orbital.backend();
+  }
+
+  // M67 — the compute lane's verdict string, for the HUD and the probe.
+  computeStatus() {
+    return typeof this.orbital.compute_status === "function"
+      ? this.orbital.compute_status()
+      : "not probed (stale engine build)";
   }
 
   setWorld(world) {
