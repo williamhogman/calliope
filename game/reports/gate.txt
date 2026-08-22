@@ -6,9 +6,9 @@
  lane                          pass  warn  fail     age
  assay.txt                        1     0     0    0.0h
  atlas.txt                       13     0     0    0.2h
- bench.txt                        3     1     1    0.2h
- browser.txt                      7     0     0    0.0h
- build.txt                        0     1     0    0.3h
+ bench.txt                        4     1     0    0.2h
+ browser.txt                      6     1     0    0.0h
+ build.txt                        0     1     0    0.4h
  civ-12345.txt                   69     3     0    0.3h
  civ-777.txt                     66     3     1    0.3h
  climate-12345.txt               19     1     0    0.3h
@@ -16,21 +16,21 @@
  climate-90210.txt               19     1     0    0.3h
  coastjs.txt                      4     0     0    0.1h
  compile.txt                      1     0     0    0.1h
- compute.txt                      7     0     0    0.1h
+ compute.txt                      6     1     0    0.1h
  determinism.txt                  3     0     0    0.3h
  earth-wasm.txt                   2     0     0    0.1h
  earth.txt                       51     0     0    0.2h
  economy-12345.txt               46     1     0    0.3h
- era.txt                          8     1     0    0.2h
+ era.txt                          8     1     0    0.3h
  hydro-12345.txt                 24     1     0    0.3h
  hydro-777.txt                   24     1     0    0.3h
  hydro-90210.txt                 24     1     0    0.3h
  moddag.txt                       1     0     0    0.0h
  ocean-meta.txt                   9     0     0    0.2h
  ocean.txt                       15     0     0    0.2h
- patina.txt                       9     1     0    0.2h
- perf.txt                         9     4     0    0.2h
- properties.txt                  72     6     0    0.2h
+ patina.txt                       0     0     0    0.2h
+ perf.txt                         8     5     0    0.2h
+ properties.txt                  72     6     0    0.3h
  resources-12345.txt             32     0     0    0.3h
  resources-777.txt               32     0     0    0.3h
  resources-90210.txt             32     0     0    0.3h
@@ -42,23 +42,22 @@
  terrain-90210.txt               76     0     0    0.2h
  wasm-audit.txt                   2     0     0       -
  wasm.txt                         0     1     0    0.1h
- TOTAL                          882    31     2
+ TOTAL                          871    33     1
 
  held rows (each holds the era open):
-   bench.txt · [FAIL] pack bytes per cell                     26.0 B/cell   (sweet ≤24 · hard ≤26 (5×u16 + 4×u8-quantized + 7×u8 raw = 21 B/cell + header — M60's landform word rides a raw byte lane))
    civ-777.txt · [FAIL] the dry-frontier veto is load-bearing 0 town(s) on ground the veto refused (3 dry without · 3 with)   (M55 gate: the veto-lifted run must stand ≥1 town on waterless ground beyond its founder's terminal well reach — ground the real run provably refused)
 
  structural leg: seed 12345 · 3600 months · chunkings 240/120 vs 180
- towns 16→96 · 833 events in the final decade · 51s for both runs (141 mo/s)
+ towns 16→96 · 833 events in the final decade · 54s for both runs (132 mo/s)
 
 ---- checks ----------------------------------------------------------
 [PASS] every era lane on the table                38 lanes   (M65: a gate over a partial suite proves nothing — run report.sh)
-[PASS] composed reports are fresh              oldest 0.3h   (M65: stale rows compose stale verdicts — rerun the suite within 6h)
-[FAIL] the suite composes clean             2 fail · 31 warn · 882 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
-[PASS] the wasm audit speaks for shipped bytes     same bytes   (E6.6: audit subject sha256 = shipped wasm — rerun scripts/wasm-audit.sh after a rebuild)
+[PASS] composed reports are fresh              oldest 0.4h   (M65: stale rows compose stale verdicts — rerun the suite within 6h)
+[FAIL] the suite composes clean             1 fail · 33 warn · 871 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
+[FAIL] the wasm audit speaks for shipped bytes    STALE AUDIT   (E6.6: audit subject sha256 = shipped wasm — rerun scripts/wasm-audit.sh after a rebuild)
 [PASS] replay identity at era scale              identical   (ADR-0003: 300y under two chunkings ⇒ one state, one town ledger)
 [PASS] fields finite after the centuries        all finite   (M65: height·tmean·precip·discharge·fertility carry no poison)
 [PASS] towns endure                                  16→96   (M65: three centuries leave a living map, not a wiped one)
 [PASS] the chronicle still speaks           833 events / final decade   (M65: an old world keeps making history)
 [FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
-CHECKS: 7 pass · 0 warn · 2 fail
+CHECKS: 6 pass · 0 warn · 3 fail
