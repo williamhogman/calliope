@@ -4,5 +4,5 @@
  calliope_bg.wasm: 3514164 bytes = 3.35 MiB
 
 ---- checks ----------------------------------------------------------
-[WARN] wasm binary size                                    3.35 MiB   (sweet ≤3.2 MiB · hard ≤4.0 — E6 lean-binary budget)
+[WARN] wasm binary size                                    3.35 MiB   (sweet ≤3.0 MiB · hard ≤3.4 — E6.4 lean-binary budget)
 CHECKS: see row above
