@@ -13,6 +13,23 @@
 
 use wasm_bindgen::prelude::*;
 
+/// The Orbital upload contract (M69): `set_world` takes one slice per
+/// `gpu true` row of the field registry, in pack order. The names and
+/// their order are declared once, in `pack::GPU_UPLOAD_ORDER`, and the
+/// registry judges that list in a `const` assertion there; this
+/// assertion pins the *signature's arity* to the same list, so a grid
+/// whose `gpu` flag moves is a build break here rather than a
+/// browser-side arity error on the call `gpu.js` derives from the
+/// generated `FIELDS` table. One law, no hand-mirrored second list.
+const SET_WORLD_ARITY: usize = 11;
+const _: () = assert!(
+    SET_WORLD_ARITY == crate::pack::GPU_UPLOAD_ORDER.len(),
+    "set_world's parameter list has drifted from the registry's gpu rows (pack.rs)"
+);
+
+
+
+
 const SHADER: &str = r#"
 struct Uni {
   cam:  vec4<f32>,  // world-cell bounds of the viewport: left, right, top, bottom
@@ -711,10 +728,13 @@ impl Orbital {
     #[allow(clippy::too_many_arguments)]
     /// Upload the world grids. Parameter order is the field registry's
     /// pack order filtered to `gpu: true` (E2.2) — the JS caller derives
-    /// its argument list from the generated `FIELDS` table, so this
-    /// signature and the registry cannot drift apart.
+    /// its argument list from the generated `FIELDS` table, and
+    /// `pack::GPU_UPLOAD_ORDER` (with `SET_WORLD_ARITY` above) holds this
+    /// signature to the same table in `const` assertions, so the two
+    /// cannot drift apart.
     pub fn set_world(
         &mut self,
+
         w: u32,
         h: u32,
         height: &[f32],
