@@ -10337,7 +10337,7 @@ fn main() {
             if seeds.is_empty() {
                 seeds = vec![12345, 777, 90210];
             }
-            cmd_compute(size, seeds);
+            cmd_compute(size, seeds, golden);
         }
         _ => {
             println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean|atlas|gate|compute> [args]");
@@ -10347,7 +10347,7 @@ fn main() {
             println!("  properties <size=512> <years=60> <seeds…> · era <size=256> <years=60> <n=16> <base=12345>");
             println!("  patina <size=512> <years=300> <seeds…> · systems <seed=12345> <size=512> <years=150>");
             println!("  gate <size=512> <years=300> <seed=12345> [--reports <dir>]  — the Era I gate (M65)");
-            println!("  compute <size=512> <seeds…>  — the M67 lane: JFA coast law vs exact EDT, GPU leg when built with --features gpu");
+            println!("  compute <size=512> <seeds…> [--golden <file>]  — the M67 lane: JFA coast law vs exact EDT, GPU leg when built with --features gpu; --golden writes the seed-field referee for the JS twin");
         }
     }
 }
