@@ -336,6 +336,51 @@ macro_rules! field_registry {
     };
 }
 
+/// `str == str` at compile time — `PartialEq` for `&str` is not const.
+const fn str_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// True iff `names` is exactly the registry's `gpu true` rows, in pack
+/// order (E2.2). The one caller is `render::SET_WORLD_GRIDS`, whose list
+/// is the `set_world` signature itself: a positional wasm-bindgen
+/// boundary cannot be generated from the table, so instead the table
+/// *judges* it — in a `const` assertion, so a grid whose `gpu` flag moves
+/// without its slice is a build break, never a browser-side arity error.
+pub const fn gpu_order_is(names: &[&str]) -> bool {
+    let mut i = 0; // registry cursor
+    let mut j = 0; // candidate cursor
+    while i < FIELD_SPECS.len() {
+        if FIELD_SPECS[i].gpu {
+            if j >= names.len() || !str_eq(FIELD_SPECS[i].name, names[j]) {
+                return false;
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    j == names.len()
+}
+
+/// The registry's gpu-true row names, in pack order — the upload order
+/// (E2.2). Runtime view of the same law `gpu_order_is` proves at compile
+/// time; the harness prints it so the report names what it judged.
+pub fn gpu_order() -> Vec<&'static str> {
+    FIELD_SPECS.iter().filter(|f| f.gpu).map(|f| f.name).collect()
+}
+
+
 field_registry! {
     height:    F32, units "rel. elevation (0 = sea)",        hash true,  gpu true,  wire u16;
     tmean:     F32, units "°C annual mean",                  hash false, gpu true,  wire u16;
