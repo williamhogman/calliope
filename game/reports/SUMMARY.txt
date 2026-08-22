@@ -1,5 +1,5 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-22 04:29 UTC
+mode: full · size: 512 · generated: 2026-08-22 04:31 UTC
 
 totals: 887 pass · 29 warn · 3 fail
 
@@ -128,5 +128,5 @@ totals: 887 pass · 29 warn · 3 fail
    all checks pass
 
 -- wasm.txt
-[WARN] wasm binary size                                    3.35 MiB   (sweet ≤3.2 MiB · hard ≤4.0 — E6 lean-binary budget)
+[WARN] wasm binary size                                    3.35 MiB   (sweet ≤3.0 MiB · hard ≤3.4 — E6.4 lean-binary budget)
 
