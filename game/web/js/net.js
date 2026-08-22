@@ -81,7 +81,28 @@ export function unpack(buf) {
   }
   const arrays = {};
   for (const a of header.arrays) {
-    if (a.q) {
+    if (a.bits !== undefined && a.bits < 8) {
+      // M70 bit lane — a categorical byte grid packed LSB-first at the
+      // sub-byte width its live maximum earns. Expand it back to the full
+      // Uint8Array the rest of the client has always seen; the values are
+      // exact, this lane loses nothing.
+      const src = new Uint8Array(buf, base + a.offset, a.nbytes);
+      const cells = a.shape[0] * a.shape[1];
+      const bits = a.bits;
+      const mask = (1 << bits) - 1;
+      const out = new Uint8Array(cells);
+      let acc = 0, have = 0, p = 0;
+      for (let i = 0; i < cells; i++) {
+        while (have < bits) {
+          acc |= (src[p++] || 0) << have;
+          have += 8;
+        }
+        out[i] = acc & mask;
+        acc >>>= bits;
+        have -= bits;
+      }
+      arrays[a.name] = out;
+    } else if (a.q) {
       // quantized wire (E3.4) — u16 or u8 depending on the field's lane;
       // dequantize to the field's true float32. Read through a byte view so
       // a u8 lane can leave the following u16 section at an odd offset.
@@ -104,9 +125,18 @@ export function unpack(buf) {
     } else {
       const Ctor = DTYPES[a.dtype];
       if (!Ctor) throw new Error(`unknown dtype ${a.dtype}`);
-      arrays[a.name] = new Ctor(buf, base + a.offset, a.nbytes / Ctor.BYTES_PER_ELEMENT);
+      const need = base + a.offset;
+      arrays[a.name] =
+        need % Ctor.BYTES_PER_ELEMENT === 0
+          ? new Ctor(buf, need, a.nbytes / Ctor.BYTES_PER_ELEMENT)
+          : new Ctor(
+              buf.slice(need, need + a.nbytes),
+              0,
+              a.nbytes / Ctor.BYTES_PER_ELEMENT,
+            );
     }
   }
+
   // territory rides the header as RLE (E3.5); expand to the grid the
   // renderer and picker expect.
   if (header.territory) {
