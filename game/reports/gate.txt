@@ -53,3 +53,16 @@
    compute.txt · [FAIL] gpu-flavor build broken                           (M67 gate: the lane must build — cargo build --features gpu failed)
 
  structural leg: seed 12345 · 3600 months · chunkings 240/120 vs 180
+ towns 16→96 · 833 events in the final decade · 32s for both runs (224 mo/s)
+
+---- checks ----------------------------------------------------------
+[PASS] every era lane on the table                38 lanes   (M65: a gate over a partial suite proves nothing — run report.sh)
+[PASS] composed reports are fresh              oldest 0.2h   (M65: stale rows compose stale verdicts — rerun the suite within 6h)
+[FAIL] the suite composes clean             6 fail · 29 warn · 870 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
+[PASS] the wasm audit speaks for shipped bytes     same bytes   (E6.6: audit subject sha256 = shipped wasm — rerun scripts/wasm-audit.sh after a rebuild)
+[PASS] replay identity at era scale              identical   (ADR-0003: 300y under two chunkings ⇒ one state, one town ledger)
+[PASS] fields finite after the centuries        all finite   (M65: height·tmean·precip·discharge·fertility carry no poison)
+[PASS] towns endure                                  16→96   (M65: three centuries leave a living map, not a wiped one)
+[PASS] the chronicle still speaks           833 events / final decade   (M65: an old world keeps making history)
+[FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
+CHECKS: 7 pass · 0 warn · 2 fail
