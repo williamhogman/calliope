@@ -211,13 +211,16 @@ WASM="../web/js/wasm/calliope_bg.wasm"
     echo " calliope_bg.wasm: $BYTES bytes = $MIB MiB"
     echo
     echo "---- checks ----------------------------------------------------------"
+    # One law, one set of numbers: these bands are E6.4's (the canonical
+    # statement, banded in build.txt by build.sh) — this row used to carry
+    # a looser 3.2/4.0 copy, the silent-fork shape ADR-0026 closed for code.
     ROW=$(awk "BEGIN{printf \"%-48s %7s MiB\", \"wasm binary size\", \"$MIB\"}")
-    if awk "BEGIN{exit !($MIB <= 3.2)}"; then
-      echo "[PASS] $ROW   (sweet ≤3.2 MiB · hard ≤4.0 — E6 lean-binary budget)"
-    elif awk "BEGIN{exit !($MIB <= 4.0)}"; then
-      echo "[WARN] $ROW   (sweet ≤3.2 MiB · hard ≤4.0 — E6 lean-binary budget)"
+    if awk "BEGIN{exit !($MIB <= 3.0)}"; then
+      echo "[PASS] $ROW   (sweet ≤3.0 MiB · hard ≤3.4 — E6.4 lean-binary budget)"
+    elif awk "BEGIN{exit !($MIB <= 3.4)}"; then
+      echo "[WARN] $ROW   (sweet ≤3.0 MiB · hard ≤3.4 — E6.4 lean-binary budget)"
     else
-      echo "[FAIL] $ROW   (sweet ≤3.2 MiB · hard ≤4.0 — E6 lean-binary budget)"
+      echo "[FAIL] $ROW   (sweet ≤3.0 MiB · hard ≤3.4 — E6.4 lean-binary budget)"
     fi
     echo "CHECKS: see row above"
   else

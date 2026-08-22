@@ -82,14 +82,16 @@ the era files are binding; this ledger only records completion.
   and cave tags for later chronicle/ruin hooks. M20 landed the first
   karst pass; this is its deepening. Touches geo.rs, hydrology.rs,
   biomes.rs.
-- GPU erosion compute pass (displaced from the original M57 slot):
-  port stream-power incision and talus from `erosion.rs` to a wgpu
-  compute shader on the full-resolution height texture, same implicit
-  Braun–Willett relaxation toward each cell's D8 receiver, with a CPU
-  fallback that must byte-match the GPU path under a fixed-point
-  readback contract; gates on `diagnose bench` inside the generation
-  budget and `diagnose determinism` across both paths. Feeds the M67
-  compute-lane hardening.
+- The coast law's third executor answers a gate (discovered building
+  M67): the JS port of the integer JFA in `render/compositor.js` is the
+  one executor no harness holds — the WGSL kernel and the Rust twin
+  prove byte-parity on lavapipe every suite run, but the wasm-less
+  browser path is a hand-mirrored copy, the exact fork shape
+  ADR-0026/0027 exist to kill. Export the fixture's golden seed field
+  from the Rust twin and run the JS port against it under bun as its
+  own suite lane (byte-equal or FAIL); real-world spot checks fold into
+  the standing lens-parity item's probe. Touches report.sh (new lane),
+  scripts (golden export), render/compositor.js.
 - River Forms II (displaced from the original M58 slot): meanders,
   oxbows, terraces and braids from valley slope and sediment load — a
   Howard–Knutson sinuosity model (migration velocity ∝ curvature) on
