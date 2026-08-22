@@ -1,10 +1,10 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-22 06:15 UTC
+mode: full · size: 512 · generated: 2026-08-22 07:22 UTC
 
-totals: 877 pass · 29 warn · 8 fail
+totals: 889 pass · 31 warn · 4 fail
 
 -- assay.txt
-[FAIL] property lane broken                              (M15: a law found its counterexample — read above)
+   all checks pass
 
 -- atlas.txt
    all checks pass
@@ -41,13 +41,13 @@ totals: 877 pass · 29 warn · 8 fail
 [WARN] forest share of land                          20.3%   (sweet 25–60% · hard 15–75%)
 
 -- coastjs.txt
-[FAIL] coast-js lane runs                                (M67 gate: the JS twin must be executable — no bun on PATH or no golden field exported)
+   all checks pass
 
 -- compile.txt
-[FAIL] a target fails to compile                         (M65 firewall: fix the build, then believe the assay)
+   all checks pass
 
 -- compute.txt
-[FAIL] gpu-flavor build broken                           (M67 gate: the lane must build — cargo build --features gpu failed)
+   all checks pass
 
 -- determinism.txt
    all checks pass
@@ -65,7 +65,7 @@ totals: 877 pass · 29 warn · 8 fail
 [WARN] landform oatmeal floor                       0.0015   (M64: the landform mix differs between worlds — the closest pair stays distinct)
 
 -- gate.txt
-[FAIL] the suite composes clean             6 fail · 29 warn · 870 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
+[FAIL] the suite composes clean             2 fail · 31 warn · 882 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
 [FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
 
 -- hydro-12345.txt
@@ -90,8 +90,10 @@ totals: 877 pass · 29 warn · 8 fail
 [WARN] ruins per century (after y100)                17.67   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-[WARN] stage fertility ms                   136 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] tick rate year 100                   177 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   150 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage settlements ms                 260 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         2529 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 100                   132 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)

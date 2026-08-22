@@ -1,37 +1,8 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · COMPILE                   every target, one gate
 ========================================================================
-     --> src/bin/diagnose.rs:9640:48
-      |
- 9640 |         calliope::pack::gpu_order_is(calliope::render::SET_WORLD_GRIDS)
-      |                                                ^^^^^^ could not find `render` in `calliope`
-      |
- note: found an item that was configured out
-     --> /dev-server/game/rust/src/lib.rs:42:9
-      |
-   41 | #[cfg(target_arch = "wasm32")]
-      |       ---------------------- the item is gated behind the `wasm32` feature
-   42 | pub mod render;
-      |         ^^^^^^
- 
- error[E0433]: failed to resolve: could not find `render` in `calliope`
-     --> src/bin/diagnose.rs:9641:35
-      |
- 9641 |             && order == calliope::render::SET_WORLD_GRIDS.to_vec(),
-      |                                   ^^^^^^ could not find `render` in `calliope`
-      |
- note: found an item that was configured out
-     --> /dev-server/game/rust/src/lib.rs:42:9
-      |
-   41 | #[cfg(target_arch = "wasm32")]
-      |       ---------------------- the item is gated behind the `wasm32` feature
-   42 | pub mod render;
-      |         ^^^^^^
- 
- For more information about this error, try `rustc --explain E0433`.
- error: could not compile `calliope` (bin "diagnose" test) due to 2 previous errors
- error: could not compile `calliope` (bin "diagnose") due to 2 previous errors
+ lib · bins · tests: every target compiles
 
 ---- checks ----------------------------------------------------------
-[FAIL] a target fails to compile                         (M65 firewall: fix the build, then believe the assay)
+[PASS] every target compiles                             (M65 firewall: a build break names itself, never masquerades as a failed law)
 CHECKS: see row above
