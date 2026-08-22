@@ -1,3 +1,7 @@
+//! Landform — the last stage of the fixed pipeline (rock → ice →
+//! water → soil → **landform**, ADR-0026): it names what the earlier
+//! stages made, and writes nothing back.
+//!
 //! M26 — drowned and raised coasts: the sea-level history (M25) leaves
 //! a legible vocabulary of coastal landforms.
 //!

@@ -1,8 +1,12 @@
-//! Terrain generation — port of geo.py (itself ported from geo.hy),
-//! grown into a plate-and-plume model: continental bulges broken by
-//! low-frequency plate noise, volcanic island arcs riding the deep
-//! ocean, archipelago shoal-fields, and hotspot chains whose islands
-//! sink with age. Every pass is deterministic in the seed.
+//! Terrain generation — the *rock* stage of the fixed pipeline
+//! (**rock** → ice → water → soil → landform, ADR-0026): everything
+//! downstream reads the relief this module raises. Port of geo.py
+//! (itself ported from geo.hy), grown into a plate-and-plume model:
+//! continental bulges broken by low-frequency plate noise, volcanic
+//! island arcs riding the deep ocean, archipelago shoal-fields, and
+//! hotspot chains whose islands sink with age. Every pass is
+//! deterministic in the seed; the neighbour vocabulary it needs comes
+//! from `grid`, never a local copy.
 
 use ndarray::Array2;
 use rand::Rng;

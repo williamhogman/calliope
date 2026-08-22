@@ -1,10 +1,14 @@
-//! Erosion — the carved land. Raw tectonic noise gives mountains their
-//! bones; erosion gives them their faces. Three processes, run in the
-//! order nature runs them: thermal collapse knocks the impossible
-//! spikes down to talus slopes, rivers cut valleys with the stream
-//! power they actually carry, and soil creep softens what remains.
-//! Everything is deterministic — no randomness, pure functions of the
-//! heightfield — so the same seed still carves the same world.
+//! Erosion — the carved land, sitting between rock and ice in the
+//! fixed pipeline (rock → **soil's carving** → …, ADR-0026): it reads
+//! the raw tectonic relief and hands the ice stage mountains with
+//! faces. Three processes, run in the order nature runs them: thermal
+//! collapse knocks the impossible spikes down to talus slopes, rivers
+//! cut valleys with the stream power they actually carry, and soil
+//! creep softens what remains. Everything is deterministic — no
+//! randomness, pure functions of the heightfield — so the same seed
+//! still carves the same world. Flow routing comes from `grid` (M66):
+//! the same fill, the same descent, the same drainage sort hydrology
+//! uses — one lattice law, not two copies of it.
 //!
 //! M59 — the sediment budget: what the river detaches it must also
 //! carry, and what it cannot carry it must lay down. Every fluvial
