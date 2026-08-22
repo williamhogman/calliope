@@ -130,7 +130,8 @@ seams found by ground (M57): 60 mineral seams, visibility 0.12..2.89 · median d
 claim pressure (M58): 8 standing claims over 5 crowns — 8:"gems" 3.00 · 8:"gold" 3.00 · 8:"silver" 3.00 · 11:"iron" 3.00 · 15:"iron" 3.00 · 20:"copper" 3.00
 the desert's best hour (M57): peak arid-dry offer 13.78 at (363,175) in month 600 (pull 28.00 · provision 0.20) against the best watered site ever seen, 30.45
 counterfactual (M55): with wells of unlimited reach, 1 towns stand on waterless arid ground (real run: 1)
-  cf dry town at (71,215): table 63 m · founder's terminal well reach 12 m · REFUSED by the real veto
+  cf dry town at (71,215) founded by month 1080: table 63 m · founder's well reach then 12 m (terminal 12 m) · REFUSED by the real veto
+  cf dry town at (55,224) founded by month 1320: table 22 m · founder's well reach then 12 m (terminal 0 m) · REFUSED by the real veto
 the desert's offer (M56): best arid-dry site 11.29 vs best watered site 20.03 · best ore pull 0.00 · caravan-provisioned 25185/27488 arid-dry cells (best 1.00)
   best offer cell (68,150): held 11.97 · pull 0.00 · provision 1.00 · table 11 m · upkeep 0.67 · offer 11.29
   best pull cell (33,447): held -1.82 · pull 0.00 · provision 0.00 · table 11 m · upkeep 0.68 · offer -1000000000.00
@@ -206,6 +207,6 @@ the desert's offer (M56): best arid-dry site 11.29 vs best watered site 20.03 ·
 [PASS] the bared ground is found first      median month 68 bared vs 276 middling vs 607 buried   (M57 gate: prospecting yield rises with how much basement the ground shows, so bared country must give up its seams earlier than buried country)
 [PASS] every claim stands on a dark forge   0 of 8 claims unbacked   (M58 gate: claim pressure is unmet demand — each claim must be backed by a town of that realm whose market area holds no seam of the ore)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
-[PASS] the dry-frontier veto is load-bearing 1 town(s) on ground the veto refused (1 dry without · 1 with)   (M55 gate: the veto-lifted run must stand ≥1 town on waterless ground beyond its founder's terminal well reach — ground the real run provably refused)
+[PASS] the dry-frontier veto is load-bearing 2 town(s) on ground the veto refused (1 dry without · 1 with)   (M55 gate: the veto-lifted run must stand ≥1 town on waterless ground deeper than its founder's well reach at the founding — the instant the real run's veto ran and refused it)
 [PASS] names tell the truth about the ground 100% (107 of 107 eligible towns)   (M62 gate: ≥90% of towns whose tongue has a generic for their landform carry it as the name's tail (worn names count through their recorded source))
 CHECKS: 69 pass · 3 warn · 0 fail

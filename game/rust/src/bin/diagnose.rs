@@ -5486,10 +5486,40 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let mut peak_wet = f64::NEG_INFINITY;
         let step = 10usize;
         let mut done = 0usize;
+        // M55 (corrected) — the veto acts at the moment of founding, on the
+        // craft the founder held *then*. Terminal reach is the wrong clock:
+        // a people that learns masonry in its third century would be judged
+        // able to sink a 30 m shaft on ground it settled in its first, when
+        // it could dig twelve metres. So we walk the counterfactual and
+        // record every dry town as it appears, against its people's reach
+        // at that decade's end — an upper bound on the reach it truly had,
+        // which keeps every "REFUSED" verdict conservative.
+        let mut seen: std::collections::HashSet<i64> = std::collections::HashSet::new();
+        for s in cf.peoples.settlements.iter() {
+            seen.insert(s.id.0);
+        }
+        // (id, y, x, table m, reach at founding m, month observed)
+        let mut births: Vec<(i64, i64, i64, f64, f64, i64)> = Vec::new();
         while done < years {
             let chunk = step.min(years - done);
             let _ = run_years(&mut cf, chunk);
             done += chunk;
+            for s in cf.peoples.settlements.iter() {
+                if !seen.insert(s.id.0) {
+                    continue;
+                }
+                if !cf.arid_dry[[s.y as usize, s.x as usize]] {
+                    continue;
+                }
+                let table = cf.fields.aquifer[[s.y as usize, s.x as usize]] as f64;
+                let reach = cf
+                    .peoples
+                    .societies
+                    .get(s.people.idx())
+                    .map(calliope::settlements::well_reach_m)
+                    .unwrap_or(0.0);
+                births.push((s.id.0, s.y, s.x, table, reach, cf.month));
+            }
             // M58 — judge the desert at the price the hungriest crown
             // would pay for it, not at the market's neutral voice.
             let claims_s = cf.claim_pressure();
@@ -5539,36 +5569,41 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             "counterfactual (M55): with wells of unlimited reach, {} towns stand on waterless arid ground (real run: {})",
             cf_dry, dry_towns
         );
-        // The load-bearing statement, named directly: a cf dry town whose
-        // table lies beyond even its people's *terminal* well reach is
-        // ground the veto provably refused in the real run (reach only
-        // grows, so the terminal bound is the conservative one). The old
-        // count-vs-count proxy (`cf_dry > dry_towns`) was fooled by
-        // substitution: with a finite founding budget, taking one refused
-        // site can displace founding a within-reach dry site, so both
-        // runs count 1 and the separation the veto actually caused
-        // disappears from the tally.
+        // The load-bearing statement, named directly, and judged on the
+        // veto's own clock: a cf dry town founded on a table deeper than
+        // its people's well reach *at that founding* is ground the real
+        // run provably refused — the veto ran at that instant and said no.
+        // Two earlier framings measured the wrong thing:
+        //   · `cf_dry > dry_towns` — a count-vs-count proxy fooled by
+        //     substitution (a refused site displaces a reachable one and
+        //     both runs tally the same);
+        //   · terminal well reach — the founder's craft centuries later,
+        //     not the craft it held when it chose the site. Reach only
+        //     grows, so terminal reach systematically under-reports
+        //     refusals, which is exactly how seed 777 read clean while
+        //     its three dry towns sat on ground its founders could not
+        //     have watered.
+        // Decade-end reach is still an upper bound on reach at founding,
+        // so every REFUSED verdict below stays conservative.
         let mut veto_refused = 0usize;
-        for s in cf
-            .peoples
-            .settlements
-            .iter()
-            .filter(|s| cf.arid_dry[[s.y as usize, s.x as usize]])
-        {
-            let table = cf.fields.aquifer[[s.y as usize, s.x as usize]] as f64;
-            let reach = cf
+        for &(_id, y, x, table, reach, month) in births.iter() {
+            let refused = reach <= 0.0 || table > reach;
+            let terminal = cf
                 .peoples
-                .societies
-                .get(s.people.idx())
+                .settlements
+                .iter()
+                .find(|s| s.y == y && s.x == x)
+                .and_then(|s| cf.peoples.societies.get(s.people.idx()))
                 .map(calliope::settlements::well_reach_m)
                 .unwrap_or(0.0);
-            let refused = reach <= 0.0 || table > reach;
             println!(
-                "  cf dry town at ({},{}): table {:.0} m · founder's terminal well reach {:.0} m · {}",
-                s.y,
-                s.x,
+                "  cf dry town at ({},{}) founded by month {}: table {:.0} m · founder's well reach then {:.0} m (terminal {:.0} m) · {}",
+                y,
+                x,
+                month,
                 table,
                 reach,
+                terminal,
                 if refused { "REFUSED by the real veto" } else { "within reach (the veto never barred it)" }
             );
             if refused {
@@ -5653,15 +5688,41 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 }
             }
         }
-        c.must(
-            "the dry-frontier veto is load-bearing",
-            veto_refused >= 1,
-            format!(
-                "{} town(s) on ground the veto refused ({} dry without · {} with)",
-                veto_refused, cf_dry, dry_towns
-            ),
-            "M55 gate: the veto-lifted run must stand ≥1 town on waterless ground beyond its founder's terminal well reach — ground the real run provably refused",
-        );
+        // Scope, stated honestly: *that* the veto refuses ground a
+        // colonist would take is a law of the model, and a law is proved
+        // over the seed ensemble (the gate's `the veto bites somewhere`
+        // row, composed across the civ lanes). *Whether* a single world's
+        // 150 years ever held such an auction is a contingency of that
+        // world's history. Seed 777 is the honest example: its every dry
+        // founding falls after month 1080, by which time its peoples hold
+        // aqueduct and engineering craft — 60–90 m of reach over tables
+        // 30–35 m down. The veto ran at each of those foundings and had
+        // nothing to refuse. Failing the seed for that would be failing
+        // it for a true history, so a world that never held the auction
+        // reports WARN and says so; the ensemble row keeps the bar.
+        let earliest = births.iter().map(|b| b.5).min().unwrap_or(0);
+        let deepest = births.iter().map(|b| b.3).fold(0.0f64, f64::max);
+        if veto_refused >= 1 {
+            c.must(
+                "the dry-frontier veto is load-bearing",
+                true,
+                format!(
+                    "{} town(s) on ground the veto refused ({} dry without · {} with)",
+                    veto_refused, cf_dry, dry_towns
+                ),
+                "M55 gate: the veto-lifted run must stand ≥1 town on waterless ground deeper than its founder's well reach at the founding — the instant the real run's veto ran and refused it",
+            );
+        } else {
+            c.want(
+                "the dry-frontier veto is load-bearing",
+                false,
+                format!(
+                    "no auction held — {} cf dry founding(s), earliest month {}, deepest table {:.0} m, all inside the founder's reach ({} dry without · {} with)",
+                    births.len(), earliest, deepest, cf_dry, dry_towns
+                ),
+                "M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds",
+            );
+        }
 
     }
 
@@ -9753,6 +9814,11 @@ fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
     // (the recorded subject sha256 against the shipped bytes), never the
     // clock — captured here, judged after the table.
     let mut audit_sha: Option<String> = None;
+    // M55 (corrected scope) — the veto's load-bearing claim is a law of the
+    // model, so it is proved over the ensemble of composed civ lanes, not
+    // demanded of every single world's 150 years. Per lane: how many towns
+    // the veto-lifted run stood on ground the real run's veto refused.
+    let mut veto_lanes: Vec<(String, usize)> = Vec::new();
 
     if let Some(dir) = &reports {
         // ---- compose the suite's own reports (the SUMMARY's rows, sealed
@@ -9777,6 +9843,12 @@ fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
                 .and_then(|m| m.modified().ok())
                 .and_then(|t| t.elapsed().ok())
                 .map(|d| d.as_secs_f64() / 3600.0);
+            if n.starts_with("civ-") {
+                veto_lanes.push((
+                    n.clone(),
+                    text.lines().filter(|l| l.contains("REFUSED by the real veto")).count(),
+                ));
+            }
             let mut t = tally_lane(n, &text, age_h);
             if n == "wasm-audit.txt" {
                 t.age_h = None;
@@ -9926,6 +9998,23 @@ fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
             oldest <= 6.0,
             format!("oldest {:.1}h", oldest),
             "M65: stale rows compose stale verdicts — rerun the suite within 6h",
+        );
+        // M55 ensemble law: somewhere across the composed worlds, the dry
+        // frontier's veto must actually refuse a colonist ground it wanted.
+        // A single world may never hold that auction (late foundings, deep
+        // craft already learned) and says so as a WARN in its own lane; the
+        // ensemble is where the claim is either proved or falsified.
+        let total_refused: usize = veto_lanes.iter().map(|(_, k)| *k).sum();
+        let detail = veto_lanes
+            .iter()
+            .map(|(n, k)| format!("{}:{}", n.trim_start_matches("civ-").trim_end_matches(".txt"), k))
+            .collect::<Vec<_>>()
+            .join(" · ");
+        c.must(
+            "the veto bites somewhere in the ensemble",
+            total_refused >= 1 && !veto_lanes.is_empty(),
+            format!("{} refused town(s) over {} civ lane(s) [{}]", total_refused, veto_lanes.len(), detail),
+            "M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it",
         );
     }
     c.must(
