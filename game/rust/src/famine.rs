@@ -32,10 +32,13 @@ impl World {
         // because the spread is latitude-shaped the same threshold means
         // the same thing in the tropics and on the steppe.
         let rows = self.fields.tmean.dim().0 as f64;
+        // the year's rain, taken once and held: the pass moves populations
+        // while it reads, so the sky is copied out before the walk begins.
+        let dp_year = self.with_year_weather(year, |_, dp| dp.clone());
         let dry = |x: i64, y: i64| -> f64 {
             let lat = (-90.0 + (y as f64) * 180.0 / (rows - 1.0)).abs();
             let sigma = crate::climate::anomaly_amp_p(lat).max(1e-6);
-            self.with_year_weather(year, |_, dp| dp[[y as usize, x as usize]] / sigma)
+            dp_year[[y as usize, x as usize]] / sigma
         };
         let mut migrations: Vec<(usize, i64)> = Vec::new();
         let mut worst = 0.0f64;
