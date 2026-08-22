@@ -9950,11 +9950,23 @@ fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
 /// (report.sh sources a software Vulkan when headless, so the WGSL leg
 /// executes in CI instead of being claimed). No adapter is a skip, not
 /// a fail — the harness stays self-contained.
-fn cmd_compute(size: usize, seeds: Vec<i64>) {
+fn cmd_compute(size: usize, seeds: Vec<i64>, golden: Option<String>) {
     use calliope::compute;
     header("COMPUTE", &format!("M67 lane · size {size}"));
 
     let mut c = Checks::default();
+    // `--golden <path>`: the twin's seed field written out as the third
+    // executor's referee. The JS port in render/compositor.js is the one
+    // executor no device holds; `scripts/coast-js-parity.mjs` replays
+    // this file under bun and demands byte-equality (ADR-0026/0027 — one
+    // law, three executors, no hand-mirrored fork).
+    let mut golden_cases: Vec<(String, usize, usize, Vec<f32>, Vec<u32>)> = Vec::new();
+    if golden.is_some() {
+        let (fw, fh) = (96usize, 64usize);
+        let fix = compute::fixture(fw, fh);
+        let fs = compute::jfa_cpu(compute::coast_seeds(&fix, fw, fh), fw, fh);
+        golden_cases.push(("fixture".into(), fw, fh, fix, fs));
+    }
 
     #[cfg(feature = "gpu")]
     let mut gpu: Option<(wgpu::Instance, compute::ComputeLane)> = {
