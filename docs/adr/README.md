@@ -85,9 +85,10 @@ input, never simulation) and held through fifty phases without a
 superseding record; the calibration against Earth's own numbers (M64)
 and the era gate ran on worlds built from the sketch. The GPU-erosion
 reopening (displaced from the original M57 slot by operator re-scoping)
-is **not** silently dropped: its spec is preserved in
-`../roadmap-500/STATUS.md`'s Ready queue and scheduled as M67's first
-client — a deferral on the record, not a decision. ADR-0003 was
+was deferred on the record through the Ready queue and closed by M67 as
+ADR-0027: simulation truth never moves to a device — the compute lane
+exists for display-side derived state, and erosion is not its client.
+ADR-0003 was
 reaffirmed at era scale by the gate's structural leg (300 years under
 two tick chunkings, one state) and ADR-0025's native↔wasm ledger
 identity. The gate's verdict is live, not ceremonial: it composes every
