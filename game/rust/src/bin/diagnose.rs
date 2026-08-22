@@ -5032,7 +5032,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let sample_years: Vec<i64> = (1..=32).collect();
         let (mut dp_n, mut dp_s, mut yl_n, mut yl_s) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
         let (mut dq_n, mut dq_s, mut fl_n, mut fl_s) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
-        let (mut pred_s, mut clamped, mut out_of_band) = (0.0f64, 0usize, 0usize);
+        let (mut pred_s, mut pred_n, mut clamped, mut out_of_band) = (0.0f64, 0.0f64, 0usize, 0usize);
         let mut pairs: Vec<(f64, f64)> = Vec::new();
         for &yr in &sample_years {
             for &(y, x) in &cells {
@@ -5040,7 +5040,8 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 let t = w.fields.tmean[[y, x]] as f64;
                 let p = w.fields.precip[[y, x]] as f64;
                 let irr = w.irrigable(y, x);
-                let (dp, dq) = w.with_year_sky(yr, |_, dp, dq| (dp[[y, x]], dq[[y, x]]));
+                let (dt_here, dp, dq) =
+                    w.with_year_sky(yr, |dt, dp, dq| (dt[[y, x]], dp[[y, x]], dq[[y, x]]));
                 let yf = w.year_yield(yr, y, x);
                 let ff = w.year_flow_factor(yr, y, x);
                 if !(calliope::agriculture::YIELD_FLOOR + 1e-9..calliope::agriculture::YIELD_CEIL - 1e-9)
@@ -5051,25 +5052,29 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 if !(0.34..=2.21).contains(&ff) {
                     out_of_band += 1;
                 }
-                // the linear prediction: the crop curve's own local rain
-                // elasticity (a ±1 % central difference — a derivative, not
-                // a second evaluation of the year) times the year's rain
-                // anomaly. Watered ground drinks the catchment lane.
+                // the linear prediction: the crop curve's own local
+                // sensitivities — a ±1 % central difference in rain and a
+                // ±0.1 °C one in warmth, derivatives of the very curves the
+                // world plants by — carried by the year's two anomalies.
+                // Watered ground drinks the catchment lane, not the cloud.
                 let rain = if irr { calliope::climate::FLOW_ANOM_GAIN * dq } else { dp };
                 let base = calliope::agriculture::climatic_score(pack, t, p, irr);
-                let elas = if base > 1e-9 {
-                    let up = calliope::agriculture::climatic_score(pack, t, p * 1.01, irr);
-                    let dn = calliope::agriculture::climatic_score(pack, t, p * 0.99, irr);
-                    (up - dn) / (0.02 * base)
+                let pred = if base > 1e-9 {
+                    let pu = calliope::agriculture::climatic_score(pack, t, p * 1.01, irr);
+                    let pd = calliope::agriculture::climatic_score(pack, t, p * 0.99, irr);
+                    let tu = calliope::agriculture::climatic_score(pack, t + 0.1, p, irr);
+                    let td = calliope::agriculture::climatic_score(pack, t - 0.1, p, irr);
+                    ((pu - pd) / (0.02 * base)) * rain + ((tu - td) / (0.2 * base)) * dt_here
                 } else {
                     0.0
                 };
-                pred_s += (elas * rain).powi(2);
+                pred_s += pred * pred;
+                pred_n += pred;
                 dp_n += dp; dp_s += dp * dp;
                 yl_n += yf - 1.0; yl_s += (yf - 1.0).powi(2);
                 dq_n += dq; dq_s += dq * dq;
                 fl_n += ff - 1.0; fl_s += (ff - 1.0).powi(2);
-                pairs.push((rain, yf - 1.0));
+                pairs.push((pred, yf - 1.0));
             }
         }
         let n = (cells.len() * sample_years.len()) as f64;
@@ -5078,7 +5083,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let sd_dq = sd(dq_n, dq_s);
         let sd_yield = sd(yl_n, yl_s);
         let sd_flow = sd(fl_n, fl_s);
-        let sd_pred = (pred_s / n).sqrt();
+        let sd_pred = sd(pred_n, pred_s);
         println!();
         println!("M72 · the year that was — {} farmed cells × {} years", cells.len(), sample_years.len());
         println!(
@@ -5093,7 +5098,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             "harvest variance tracks the sky",
             harvest_err <= 0.15 && sd_yield > 1e-4,
             format!("σ {:.4} vs predicted {:.4} ({:+.1}%)", sd_yield, sd_pred, 100.0 * (sd_yield / sd_pred.max(1e-12) - 1.0)),
-            "M72: the year's harvest spread matches the crop curves' own rain elasticity within 15%",
+            "M72: the year's harvest spread matches the crop curves' own linearized sensitivity to the year's sky within 15%",
         );
         // the rivers move with their catchments, at the declared gain
         let flow_pred = calliope::climate::FLOW_ANOM_GAIN * sd_dq;
@@ -5117,10 +5122,10 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         }
         let rho = cov / (vx.sqrt() * vy.sqrt()).max(1e-12);
         c.must(
-            "wet years feed, dry years starve",
+            "the harvest follows the curves",
             rho >= 0.80,
             format!("ρ {:.3}", rho),
-            "M72: the harvest factor rises with the year's rain (Pearson ρ ≥ 0.80 over farmed ground)",
+            "M72: the realized harvest factor tracks the crop curves' own linearized response to the year's sky (Pearson ρ ≥ 0.80)",
         );
         c.must(
             "the year is bounded, not deleted",
