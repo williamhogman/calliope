@@ -38,6 +38,7 @@ if [ "$MODE" = "quick" ]; then
   PATINA="512 200 12345"
   PERF="512 12345 777"
   OCEAN="12345 777 31337"
+  COMPUTE="512 12345"
 else
   SEEDS=(12345 777 90210)
   CIV_YEARS=150
@@ -50,6 +51,7 @@ else
   PATINA="512 300 12345 777 90210"
   PERF="512 12345 777 90210"
   OCEAN="12345 777 31337 90210 555"
+  COMPUTE="512 12345 777 90210"
 fi
 
 run() { # run <outfile> <diagnose args...>
