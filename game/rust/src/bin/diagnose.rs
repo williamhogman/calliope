@@ -4406,7 +4406,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let mut b: Vec<u8> = Vec::new();
         for v in w.fields.discharge.iter() { b.extend_from_slice(&v.to_le_bytes()); }
         for v in w.fields.strahler.iter() { b.push(*v); }
-        for v in w.fields.lakes.iter() { b.push(*v as u8); }
+        for v in w.fields.flags.iter() { b.push(*v); }
         (w.fields.discharge.dim(), fnv(&b))
     };
     header("CIVILIZATION", &format!("seed {} · {}x{} · {}y", seed, w.width, size, years));
@@ -5039,7 +5039,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 let pack = calliope::agriculture::CropPackage::from_code(w.fields.crops[[y, x]]);
                 let t = w.fields.tmean[[y, x]] as f64;
                 let p = w.fields.precip[[y, x]] as f64;
-                let irr = w.near_fresh[[y, x]];
+                let irr = w.irrigable(y, x);
                 let (dp, dq) = w.with_year_sky(yr, |_, dp, dq| (dp[[y, x]], dq[[y, x]]));
                 let yf = w.year_yield(yr, y, x);
                 let ff = w.year_flow_factor(yr, y, x);
@@ -5133,7 +5133,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             let mut b: Vec<u8> = Vec::new();
             for v in w.fields.discharge.iter() { b.extend_from_slice(&v.to_le_bytes()); }
             for v in w.fields.strahler.iter() { b.push(*v); }
-            for v in w.fields.lakes.iter() { b.push(*v as u8); }
+            for v in w.fields.flags.iter() { b.push(*v); }
             (w.fields.discharge.dim(), fnv(&b))
         };
         c.must(

@@ -1304,6 +1304,12 @@ impl World {
         })
     }
 
+    /// M72 — whether this cell stands within reach of fresh water, and so
+    /// drinks the river's year rather than the cloud's.
+    pub fn irrigable(&self, y: usize, x: usize) -> bool {
+        self.near_fresh[[y, x]]
+    }
+
     /// M72 — what the year did to this cell's harvest: the crop package
     /// standing here, scored through `agriculture::climatic_score` at the
     /// mean and at mean-plus-anomaly. Watered ground reads the catchment
