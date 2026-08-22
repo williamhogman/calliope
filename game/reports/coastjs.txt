@@ -3,9 +3,9 @@
 ========================================================================
  golden: /tmp/calliope-coast-golden.bin · 4 case(s) · 7913563 B
  fixture: 96×64 · js 14 ms · 0 of 6144 cells diverge
- seed 12345: 640×512 · js 545 ms · 0 of 327680 cells diverge
- seed 777: 640×512 · js 590 ms · 0 of 327680 cells diverge
- seed 90210: 640×512 · js 605 ms · 0 of 327680 cells diverge
+ seed 12345: 640×512 · js 426 ms · 0 of 327680 cells diverge
+ seed 777: 640×512 · js 409 ms · 0 of 327680 cells diverge
+ seed 90210: 640×512 · js 429 ms · 0 of 327680 cells diverge
 
 ---- checks ----------------------------------------------------------
 [PASS] fixture js/rust seed parity               byte-parity   (M67 gate: the JS port of the coast law walks the same seed field as the Rust twin — one law, three executors)
