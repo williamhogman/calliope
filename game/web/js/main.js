@@ -52,6 +52,10 @@ window.__calliope = {
   // E10.7 probe hooks: the long-task audit drives playback like a player
   playPause, setSpeed,
   gpuBackend: () => (renderer.gpu ? renderer.gpu.backend() : "cpu"),
+  // M67 probe hook: the compute lane's bring-up verdict (or the CPU
+  // compositor's standing answer when no engine came up at all).
+  computeStatus: () =>
+    renderer.gpu ? renderer.gpu.computeStatus() : "cpu-twin (no engine: CPU compositor path)",
 };
 
 // ---------- modules ----------
