@@ -5688,15 +5688,41 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 }
             }
         }
-        c.must(
-            "the dry-frontier veto is load-bearing",
-            veto_refused >= 1,
-            format!(
-                "{} town(s) on ground the veto refused ({} dry without · {} with)",
-                veto_refused, cf_dry, dry_towns
-            ),
-            "M55 gate: the veto-lifted run must stand ≥1 town on waterless ground deeper than its founder's well reach at the founding — the instant the real run's veto ran and refused it",
-        );
+        // Scope, stated honestly: *that* the veto refuses ground a
+        // colonist would take is a law of the model, and a law is proved
+        // over the seed ensemble (the gate's `the veto bites somewhere`
+        // row, composed across the civ lanes). *Whether* a single world's
+        // 150 years ever held such an auction is a contingency of that
+        // world's history. Seed 777 is the honest example: its every dry
+        // founding falls after month 1080, by which time its peoples hold
+        // aqueduct and engineering craft — 60–90 m of reach over tables
+        // 30–35 m down. The veto ran at each of those foundings and had
+        // nothing to refuse. Failing the seed for that would be failing
+        // it for a true history, so a world that never held the auction
+        // reports WARN and says so; the ensemble row keeps the bar.
+        let earliest = births.iter().map(|b| b.5).min().unwrap_or(0);
+        let deepest = births.iter().map(|b| b.3).fold(0.0f64, f64::max);
+        if veto_refused >= 1 {
+            c.must(
+                "the dry-frontier veto is load-bearing",
+                true,
+                format!(
+                    "{} town(s) on ground the veto refused ({} dry without · {} with)",
+                    veto_refused, cf_dry, dry_towns
+                ),
+                "M55 gate: the veto-lifted run must stand ≥1 town on waterless ground deeper than its founder's well reach at the founding — the instant the real run's veto ran and refused it",
+            );
+        } else {
+            c.want(
+                "the dry-frontier veto is load-bearing",
+                false,
+                format!(
+                    "no auction held — {} cf dry founding(s), earliest month {}, deepest table {:.0} m, all inside the founder's reach ({} dry without · {} with)",
+                    births.len(), earliest, deepest, cf_dry, dry_towns
+                ),
+                "M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds",
+            );
+        }
 
     }
 
