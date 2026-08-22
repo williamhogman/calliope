@@ -10161,6 +10161,16 @@ fn main() {
             std::process::exit(2);
         }
     }
+    // `compute --golden <path>` (M67 follow-on) — same lift-out treatment.
+    let mut golden: Option<String> = None;
+    if let Some(i) = a.iter().position(|s| s == "--golden") {
+        golden = a.get(i + 1).cloned();
+        a.drain(i..a.len().min(i + 2));
+        if golden.is_none() {
+            eprintln!("error: --golden needs a file path");
+            std::process::exit(2);
+        }
+    }
     let cmd = a.get(1).map(|s| s.as_str()).unwrap_or("help");
     // strictly positional: a malformed argument aborts loudly instead of
     // silently falling back (a stray "--size" once cost a 12345² world).
