@@ -127,6 +127,13 @@ export function coastSeedField(hgt, W, H) {
     }
     const t = src; src = dst; dst = t;
   }
+  return src;
+}
+
+function coastDistance(R) {
+  const W = R.w, H = R.h;
+  const n = W * H;
+  const src = coastSeedField(R.world.arrays.height, W, H);
   // finalize — compute::finalize: land 0, sea √(exact integer square)
   const out = new Float32Array(n);
   for (let i = 0; i < n; i++) {
