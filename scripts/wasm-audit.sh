@@ -68,7 +68,7 @@ L2=$(lvl "$TOP_PCT" 8.0 12.0)
   printf '[%s] %-36s %14s   (%s)\n' "$L1" "twin speaks for the shipped binary" "Δ ${DELTA}%" \
     "E6.6: |twin − names − release| ≤3% sweet · ≤6% hard of release — beyond that the audit reads a different build"
   printf '[%s] %-36s %14s   (%s)\n' "$L2" "no single item dominates the twin" "${TOP_PCT}%" \
-    "E6.6: heaviest item ≤8% sweet · ≤12% hard — today's worst is the ~4.7% tick shim; a jump names a new monster: ${TOP_LABEL}"
+    "E6.6: heaviest item ≤8% sweet · ≤12% hard — today's worst is the ~3.4% dawn stage; a jump names a new monster: ${TOP_LABEL}"
   P=0; W=0; F=0
   for l in "$L1" "$L2"; do
     case "$l" in PASS) P=$((P+1));; WARN) W=$((W+1));; FAIL) F=$((F+1));; esac
