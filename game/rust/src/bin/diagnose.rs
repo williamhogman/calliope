@@ -5569,36 +5569,41 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             "counterfactual (M55): with wells of unlimited reach, {} towns stand on waterless arid ground (real run: {})",
             cf_dry, dry_towns
         );
-        // The load-bearing statement, named directly: a cf dry town whose
-        // table lies beyond even its people's *terminal* well reach is
-        // ground the veto provably refused in the real run (reach only
-        // grows, so the terminal bound is the conservative one). The old
-        // count-vs-count proxy (`cf_dry > dry_towns`) was fooled by
-        // substitution: with a finite founding budget, taking one refused
-        // site can displace founding a within-reach dry site, so both
-        // runs count 1 and the separation the veto actually caused
-        // disappears from the tally.
+        // The load-bearing statement, named directly, and judged on the
+        // veto's own clock: a cf dry town founded on a table deeper than
+        // its people's well reach *at that founding* is ground the real
+        // run provably refused — the veto ran at that instant and said no.
+        // Two earlier framings measured the wrong thing:
+        //   · `cf_dry > dry_towns` — a count-vs-count proxy fooled by
+        //     substitution (a refused site displaces a reachable one and
+        //     both runs tally the same);
+        //   · terminal well reach — the founder's craft centuries later,
+        //     not the craft it held when it chose the site. Reach only
+        //     grows, so terminal reach systematically under-reports
+        //     refusals, which is exactly how seed 777 read clean while
+        //     its three dry towns sat on ground its founders could not
+        //     have watered.
+        // Decade-end reach is still an upper bound on reach at founding,
+        // so every REFUSED verdict below stays conservative.
         let mut veto_refused = 0usize;
-        for s in cf
-            .peoples
-            .settlements
-            .iter()
-            .filter(|s| cf.arid_dry[[s.y as usize, s.x as usize]])
-        {
-            let table = cf.fields.aquifer[[s.y as usize, s.x as usize]] as f64;
-            let reach = cf
+        for &(_id, y, x, table, reach, month) in births.iter() {
+            let refused = reach <= 0.0 || table > reach;
+            let terminal = cf
                 .peoples
-                .societies
-                .get(s.people.idx())
+                .settlements
+                .iter()
+                .find(|s| s.y == y && s.x == x)
+                .and_then(|s| cf.peoples.societies.get(s.people.idx()))
                 .map(calliope::settlements::well_reach_m)
                 .unwrap_or(0.0);
-            let refused = reach <= 0.0 || table > reach;
             println!(
-                "  cf dry town at ({},{}): table {:.0} m · founder's terminal well reach {:.0} m · {}",
-                s.y,
-                s.x,
+                "  cf dry town at ({},{}) founded by month {}: table {:.0} m · founder's well reach then {:.0} m (terminal {:.0} m) · {}",
+                y,
+                x,
+                month,
                 table,
                 reach,
+                terminal,
                 if refused { "REFUSED by the real veto" } else { "within reach (the veto never barred it)" }
             );
             if refused {
