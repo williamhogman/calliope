@@ -353,11 +353,11 @@ const fn str_eq(a: &str, b: &str) -> bool {
 }
 
 /// True iff `names` is exactly the registry's `gpu true` rows, in pack
-/// order (E2.2). The one caller is `render::SET_WORLD_GRIDS`, whose list
-/// is the `set_world` signature itself: a positional wasm-bindgen
-/// boundary cannot be generated from the table, so instead the table
-/// *judges* it — in a `const` assertion, so a grid whose `gpu` flag moves
-/// without its slice is a build break, never a browser-side arity error.
+/// order (E2.2). Its caller is `GPU_UPLOAD_ORDER` below: a positional
+/// wasm-bindgen boundary cannot be generated from the table, so the
+/// table *judges* it — in a `const` assertion, so a grid whose `gpu`
+/// flag moves surfaces as a build break, never a browser-side arity
+/// error on a call `gpu.js` derives from the generated `FIELDS` table.
 pub const fn gpu_order_is(names: &[&str]) -> bool {
     let mut i = 0; // registry cursor
     let mut j = 0; // candidate cursor
@@ -373,12 +373,27 @@ pub const fn gpu_order_is(names: &[&str]) -> bool {
     j == names.len()
 }
 
+/// The grids Orbital uploads, in `render::set_world`'s parameter order
+/// (M69) — which is the registry's `gpu true` rows in pack order, and
+/// the assertion below is what makes that a fact rather than a comment.
+/// `render.rs` is compiled only for wasm32, so the list lives here where
+/// every build sees it; render.rs pins its own arity to this length.
+pub const GPU_UPLOAD_ORDER: &[&str] = &[
+    "height", "tmean", "tamp", "precip", "discharge", "fertility", "strahler", "flags", "rock",
+    "soil", "landform",
+];
+const _: () = assert!(
+    gpu_order_is(GPU_UPLOAD_ORDER),
+    "the Orbital upload list has drifted from the field registry's gpu rows"
+);
+
 /// The registry's gpu-true row names, in pack order — the upload order
 /// (E2.2). Runtime view of the same law `gpu_order_is` proves at compile
 /// time; the harness prints it so the report names what it judged.
 pub fn gpu_order() -> Vec<&'static str> {
     FIELD_SPECS.iter().filter(|f| f.gpu).map(|f| f.name).collect()
 }
+
 
 
 field_registry! {
