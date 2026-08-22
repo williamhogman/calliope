@@ -9941,6 +9941,153 @@ fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
     c.print();
 }
 
+// ================================================================ compute (M67)
+
+/// The compute lane's report — see the module docs in compute.rs. The
+/// CPU rows (exactness against the exact-EDT referee, once-per-world
+/// cost) run on any build; the GPU rows join when the binary carries
+/// the `gpu` feature *and* the machine offers a compute-capable adapter
+/// (report.sh sources a software Vulkan when headless, so the WGSL leg
+/// executes in CI instead of being claimed). No adapter is a skip, not
+/// a fail — the harness stays self-contained.
+fn cmd_compute(size: usize, seeds: Vec<i64>) {
+    use calliope::compute;
+    header("COMPUTE", &format!("M67 lane · size {size}"));
+
+    let mut c = Checks::default();
+
+    #[cfg(feature = "gpu")]
+    let mut gpu: Option<(wgpu::Instance, compute::ComputeLane)> = {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
+        match pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        })) {
+            Some(adapter) if compute::ComputeLane::adapter_supported(&adapter) => {
+                let info = adapter.get_info();
+                println!(" adapter: {:?} · {} · {:?}", info.backend, info.name, info.device_type);
+                match pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None)) {
+                    Ok((device, queue)) => Some((instance, compute::ComputeLane::new(device, queue))),
+                    Err(e) => {
+                        println!(" adapter present but no device ({e}) — gpu rows skipped, not failed");
+                        None
+                    }
+                }
+            }
+            Some(_) => {
+                println!(" adapter lacks compute downlevel — gpu rows skipped, not failed");
+                None
+            }
+            None => {
+                println!(" no gpu adapter on this machine — gpu rows skipped, not failed");
+                None
+            }
+        }
+    };
+    #[cfg(not(feature = "gpu"))]
+    println!(" built without the `gpu` feature — gpu rows skipped, not failed");
+
+    // ---- bring-up contract on the fixture (the lane's own handshake) ----
+    #[cfg(feature = "gpu")]
+    if let Some((_i, lane)) = gpu.as_mut() {
+        let (fw, fh) = (96usize, 64usize);
+        let fix = compute::fixture(fw, fh);
+        match pollster::block_on(compute::coast_contract(lane, &fix, fw, fh)) {
+            Ok(r) => {
+                println!(
+                    " fixture {}×{}: gpu {:.1} ms · cpu twin {:.1} ms · {} cells",
+                    fw, fh, r.gpu_ms, r.cpu_ms, r.cells
+                );
+                c.must(
+                    "lane fixture contract",
+                    r.matched,
+                    if r.matched { "byte-parity".into() } else { format!("{} diverge", r.mismatches) },
+                    "M67 gate: WGSL kernel and CPU twin are one law — executed on a device and compared",
+                );
+            }
+            Err(e) => c.must(
+                "lane fixture contract",
+                false,
+                "error".into(),
+                &format!("M67 gate: the lane must execute — {e}"),
+            ),
+        }
+    }
+
+    // ---- real worlds: parity (gpu) · exactness and cost (always) --------
+    let mut worst_err = 0.0f64;
+    let mut worst_share = 0.0f64;
+    let mut worst_ms = 0.0f64;
+    for &seed in &seeds {
+        let w = World::generate(seed, size);
+        let hf: Vec<f32> = w.fields.height.iter().map(|&v| v as f32).collect();
+        let land: Vec<bool> = hf.iter().map(|&v| v >= 0.0).collect();
+
+        let t0 = Instant::now();
+        let seeds0 = compute::coast_seeds(&hf, size, size);
+        let cpu = compute::jfa_cpu(seeds0.clone(), size, size);
+        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        let d = compute::finalize(&cpu, size, size);
+
+        let edt = compute::exact_edt_sq(&land, size, size);
+        let mut max_err = 0.0f64;
+        let mut off = 0usize;
+        let mut sea = 0usize;
+        for i in 0..size * size {
+            if land[i] {
+                continue;
+            }
+            sea += 1;
+            let err = (d[i] as f64 - edt[i].sqrt()).abs();
+            if err > 1e-6 {
+                off += 1;
+            }
+            if err > max_err {
+                max_err = err;
+            }
+        }
+        let share = if sea == 0 { 0.0 } else { off as f64 / sea as f64 };
+        println!(
+            " seed {seed}: coast law cpu {ms:.0} ms · max |jfa−exact| {max_err:.3} cells · {} of {} sea cells off ({})",
+            off, sea, pct(share)
+        );
+
+        #[cfg(feature = "gpu")]
+        if let Some((_i, lane)) = gpu.as_mut() {
+            match pollster::block_on(compute::coast_seeds_gpu(lane, &seeds0, size as u32, size as u32)) {
+                Ok(g) => {
+                    let n = g.iter().zip(&cpu).filter(|(a, b)| a != b).count();
+                    c.must(
+                        &format!("seed {seed} gpu/cpu parity"),
+                        n == 0,
+                        if n == 0 { "agree".into() } else { format!("{n} diverge") },
+                        "M67 gate: GPU and CPU walk one seed field on a real world",
+                    );
+                }
+                Err(e) => c.must(
+                    &format!("seed {seed} gpu/cpu parity"),
+                    false,
+                    "error".into(),
+                    &format!("M67 gate: the gpu leg must execute — {e}"),
+                ),
+            }
+        }
+
+        worst_err = worst_err.max(max_err);
+        worst_share = worst_share.max(share);
+        worst_ms = worst_ms.max(ms);
+    }
+
+    c.band("jfa max err cells", worst_err, format!("{worst_err:.3} cells"));
+    c.band("jfa wrong cell share", worst_share, pct(worst_share));
+    c.band("coast law cpu ms", worst_ms, format!("{worst_ms:.0} ms"));
+    c.print();
+}
+
 fn main() {
     let mut a: Vec<String> = std::env::args().collect();
     // The one flag the harness knows: `terrain --explain` (M61) — pulled
