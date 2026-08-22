@@ -1430,7 +1430,13 @@ struct RunLog {
     /// M72 — where and when each famine struck: (month, x, y). The famine
     /// pass no longer rolls a private die, so every one of these must be
     /// answerable by the year's own realized rain (SPI ≤ −1 at that cell).
-    famine_sites: Vec<(i64, i64, i64)>,
+    famine_sites: Vec<(i64, i64, i64, i64)>,
+    /// M72 — the eligible pool: every rain-fed farming town-year that
+    /// *could* have starved (the famine pass's own predicate), as
+    /// (year, x, y). Without the pool a famine list proves only that the
+    /// hungry were dry; with it we can measure whether dryness governs
+    /// hunger — the dose-response the causal claim actually rests on.
+    famine_pool: Vec<(i64, i64, i64)>,
     placeholders: usize,
     empties: usize,
     /// events that speak a god's name — festivals, omens, war-oaths (M3.5)
@@ -1474,7 +1480,25 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
     let mut n_realms = w.peoples.realms.len();
     let mut prev_peoples = w.peoples.peoples.iter().filter(|p| p.alive).count();
     for yr in 1..=years {
+        let m0 = w.month;
         let (evs, _founded, _dep) = w.tick(12);
+        // M72 — the eligible pool for this year's harvest verdict: the
+        // famine pass's own predicate (rain-fed wheat or maize, off the
+        // river, more than 90 souls), read once per year. Sampled at the
+        // year's close rather than mid-pass, so a town the famine itself
+        // pushed under the floor still counts as having been at risk.
+        if let Some(fm) = (m0..w.month).find(|m| m.rem_euclid(12) == 7) {
+            let fyear = fm / 12;
+            for s in &w.peoples.settlements {
+                let pack = w.fields.crops[[s.y as usize, s.x as usize]];
+                let rainfed = (pack == calliope::agriculture::CropPackage::Wheat.code()
+                    || pack == calliope::agriculture::CropPackage::Maize.code())
+                    && !s.river;
+                if rainfed && s.pop > 90 {
+                    log.famine_pool.push((fyear, s.x, s.y));
+                }
+            }
+        }
         for e in &evs {
             *log.census.entry(e.k.name().to_string()).or_default() += 1;
             if god_names.iter().any(|g| e.text.contains(g.as_str())) {
@@ -1495,7 +1519,16 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
                 "war" => log.wars += 1,
                 "famine" => {
                     log.famines += 1;
-                    log.famine_sites.push((e.m, e.x, e.y));
+                    // the toll, read off the telling: the first number in
+                    // a famine line is its dead. Severity is the dose the
+                    // threshold model actually modulates.
+                    let dead: i64 = e
+                        .text
+                        .split(|ch: char| !ch.is_ascii_digit())
+                        .find(|t| !t.is_empty())
+                        .and_then(|t| t.parse().ok())
+                        .unwrap_or(0);
+                    log.famine_sites.push((e.m, e.x, e.y, dead));
                 }
                 "tech" | "society" => log.arc.push((e.m, e.text.clone())),
                 _ => {}
@@ -5030,7 +5063,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     if !log.famine_sites.is_empty() {
         let rows = w.fields.tmean.dim().0 as f64;
         let mut zs: Vec<f64> = Vec::with_capacity(log.famine_sites.len());
-        for &(m, x, y) in &log.famine_sites {
+        for &(m, x, y, _) in &log.famine_sites {
             let year = m / 12;
             let lat = (-90.0 + (y as f64) * 180.0 / (rows - 1.0)).abs();
             let sigma = calliope::climate::anomaly_amp_p(lat).max(1e-6);
@@ -5062,6 +5095,136 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             format!("mean SPI {:.2}", mean_z),
             "M72: the mean famine year sits at or beyond moderate drought",
         );
+
+        // ---- dose-response: dryness governs hunger, it does not merely
+        // accompany it. Every eligible town-year (the famine pass's own
+        // predicate) is binned by the SPI it actually stood in, and the
+        // share that starved is read off per bin. If rain governs, the
+        // share is zero above the threshold and climbs as the bins dry.
+        let spi_of = |year: i64, x: i64, y: i64| -> f64 {
+            let lat = (-90.0 + (y as f64) * 180.0 / (rows - 1.0)).abs();
+            let sigma = calliope::climate::anomaly_amp_p(lat).max(1e-6);
+            w.with_year_sky(year, |_, dp, _| dp[[y as usize, x as usize]]) / sigma
+        };
+        let struck: BTreeSet<(i64, i64, i64)> =
+            log.famine_sites.iter().map(|&(m, x, y, _)| (m / 12, x, y)).collect();
+        // bins, driest first: ≤−2 (extreme), (−2,−1] (moderate), (−1,0], >0
+        let edges = [-2.0f64, -1.0, 0.0];
+        let names = ["SPI ≤ −2", "−2 < SPI ≤ −1", "−1 < SPI ≤ 0", "SPI > 0"];
+        let mut tot = [0usize; 4];
+        let mut hit = [0usize; 4];
+        for &(year, x, y) in &log.famine_pool {
+            let z = spi_of(year, x, y);
+            let b = if z <= edges[0] {
+                0
+            } else if z <= edges[1] {
+                1
+            } else if z <= edges[2] {
+                2
+            } else {
+                3
+            };
+            tot[b] += 1;
+            if struck.contains(&(year, x, y)) {
+                hit[b] += 1;
+            }
+        }
+        let rate = |b: usize| if tot[b] == 0 { 0.0 } else { hit[b] as f64 / tot[b] as f64 };
+        println!(
+            "  dose-response over {} eligible town-years — {}",
+            log.famine_pool.len(),
+            (0..4)
+                .map(|b| format!("{} {:.0}% ({}/{})", names[b], 100.0 * rate(b), hit[b], tot[b]))
+                .collect::<Vec<_>>()
+                .join(" · ")
+        );
+        let wet_clean = hit[2] + hit[3] == 0;
+        c.must(
+            "no town starves in a year that was not dry",
+            wet_clean,
+            format!("{} famines above SPI −1 of {} wet-side town-years", hit[2] + hit[3], tot[2] + tot[3]),
+            "M72: the drought threshold is a hard boundary on hunger — above SPI −1 the harvest verdict never starves anyone",
+        );
+        // The verdict is a *threshold* law: below SPI −1 the harvest fails,
+        // full stop, so incidence saturates at 100% in both dry bins and
+        // carries no dose. The dose the law actually modulates is severity
+        // — the shortfall runs from SPI −1 to −2 and the toll rides it —
+        // so the dose-response is measured in the dead, not in the count.
+        let mut sev: Vec<(f64, f64)> = Vec::new(); // (shortfall, dead)
+        let (mut dead_b0, mut n_b0, mut dead_b1, mut n_b1) = (0.0f64, 0usize, 0.0f64, 0usize);
+        for &(m, x, y, dead) in &log.famine_sites {
+            let z = spi_of(m / 12, x, y);
+            let shortfall = (((-z) - (-calliope::famine::DROUGHT_Z)) / (-calliope::famine::DROUGHT_Z)).min(1.0);
+            sev.push((shortfall, dead as f64));
+            if z <= edges[0] {
+                dead_b0 += dead as f64;
+                n_b0 += 1;
+            } else {
+                dead_b1 += dead as f64;
+                n_b1 += 1;
+            }
+        }
+        let mean_b0 = if n_b0 == 0 { 0.0 } else { dead_b0 / n_b0 as f64 };
+        let mean_b1 = if n_b1 == 0 { 0.0 } else { dead_b1 / n_b1 as f64 };
+        let ns = sev.len() as f64;
+        let (msx, msy) = (
+            sev.iter().map(|p| p.0).sum::<f64>() / ns,
+            sev.iter().map(|p| p.1).sum::<f64>() / ns,
+        );
+        let (mut cov, mut vx, mut vy) = (0.0, 0.0, 0.0);
+        for (a, b) in &sev {
+            cov += (a - msx) * (b - msy);
+            vx += (a - msx).powi(2);
+            vy += (b - msy).powi(2);
+        }
+        let rho_sev = cov / (vx.sqrt() * vy.sqrt()).max(1e-12);
+        println!(
+            "  severity dose — mean dead {:.1} at SPI ≤ −2 ({} famines) vs {:.1} at −2..−1 ({}) · ρ(shortfall, dead) {:.3}",
+            mean_b0, n_b0, mean_b1, n_b1, rho_sev
+        );
+        c.must(
+            "hunger climbs with the drought",
+            n_b0 > 0 && n_b1 > 0 && mean_b0 > mean_b1 && rho_sev > 0.0,
+            format!("{:.1} dead at SPI ≤ −2 vs {:.1} at −2..−1 · ρ {:.3}", mean_b0, mean_b1, rho_sev),
+            "M72: the toll rises with the depth of the drought — the threshold decides whether, the shortfall decides how hard",
+        );
+
+        // ---- the placebo: the same towns, the same years' worth of sky,
+        // but the wrong year. If hunger were a property of *place* (bad
+        // ground, a thin margin) rather than of the *year's* rain, these
+        // shuffled skies would look just as dry as the real ones. They
+        // must not: the real famine years are drought-selected, the
+        // counterfactual ones are the world's ordinary base rate.
+        // Deterministic offsets, no die.
+        let horizon = (years as i64).max(1);
+        let mut cf_dry = 0usize;
+        let mut cf_n = 0usize;
+        for (i, &(m, x, y, _)) in log.famine_sites.iter().enumerate() {
+            let year = m / 12;
+            for k in 1..=4i64 {
+                let alt = ((year + k * 7 + i as i64 * 3).rem_euclid(horizon)).max(1);
+                if alt == year {
+                    continue;
+                }
+                cf_n += 1;
+                if spi_of(alt, x, y) <= calliope::famine::DROUGHT_Z {
+                    cf_dry += 1;
+                }
+            }
+        }
+        let cf_rate = if cf_n == 0 { 1.0 } else { cf_dry as f64 / cf_n as f64 };
+        println!(
+            "  counterfactual sky — the same {} hungry cells under {} wrong-year skies: {:.0}% would have been dry (real 100%)",
+            log.famine_sites.len(),
+            cf_n,
+            100.0 * cf_rate
+        );
+        c.must(
+            "the year, not the place, makes the famine",
+            cf_rate <= 0.50,
+            format!("{:.0}% of wrong-year skies dry vs 100% of the real ones", 100.0 * cf_rate),
+            "M72: swap the year and the drought mostly vanishes — hunger is selected by the realized sky, not by the cell",
+        );
     }
 
 
@@ -5084,7 +5247,10 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let (mut dp_n, mut dp_s, mut yl_n, mut yl_s) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
         let (mut dq_n, mut dq_s, mut fl_n, mut fl_s) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
         let (mut pred_s, mut pred_n, mut clamped, mut out_of_band) = (0.0f64, 0.0f64, 0usize, 0usize);
+        let (mut ex_s, mut ex_n) = (0.0f64, 0.0f64);
+        let (mut sign_ok, mut sign_n) = (0usize, 0usize);
         let mut pairs: Vec<(f64, f64)> = Vec::new();
+        let mut ex_pairs: Vec<(f64, f64)> = Vec::new();
         for &yr in &sample_years {
             for &(y, x) in &cells {
                 let pack = calliope::agriculture::CropPackage::from_code(w.fields.crops[[y, x]]);
@@ -5103,13 +5269,35 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 if !(0.34..=2.21).contains(&ff) {
                     out_of_band += 1;
                 }
-                // the linear prediction: the crop curve's own local
-                // sensitivities — a ±1 % central difference in rain and a
-                // ±0.1 °C one in warmth, derivatives of the very curves the
-                // world plants by — carried by the year's two anomalies.
                 // Watered ground drinks the catchment lane, not the cloud.
                 let rain = if irr { calliope::climate::FLOW_ANOM_GAIN * dq } else { dp };
                 let base = calliope::agriculture::climatic_score(pack, t, p, irr);
+                // (a) the *exact* prediction: the crop curves re-scored here,
+                // in the harness, from the raw mean fields and the year's two
+                // anomalies — the same law, an independent evaluation path.
+                // This is what the harvest must equal: the curves' full
+                // nonlinear response, gaussian curvature and trapezoid kinks
+                // and all, not a tangent line drawn at the mean.
+                let exact = if base > 1e-9 {
+                    let now = calliope::agriculture::climatic_score(
+                        pack,
+                        t + dt_here,
+                        (p * (1.0 + rain)).max(0.0),
+                        irr,
+                    );
+                    (now / base).clamp(
+                        calliope::agriculture::YIELD_FLOOR,
+                        calliope::agriculture::YIELD_CEIL,
+                    ) - 1.0
+                } else {
+                    0.0
+                };
+                // (b) the *linear* model: a ±1 % central difference in rain
+                // and a ±0.1 °C one in warmth, carried by the year's
+                // anomalies. Kept as the direction lane only — at σ ≈ 12 %
+                // rain swings a tangent line cannot price the curves'
+                // concavity, and measuring magnitude against it measured the
+                // linearization, not the world.
                 let pred = if base > 1e-9 {
                     let pu = calliope::agriculture::climatic_score(pack, t, p * 1.01, irr);
                     let pd = calliope::agriculture::climatic_score(pack, t, p * 0.99, irr);
@@ -5119,13 +5307,22 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 } else {
                     0.0
                 };
+                if pred.abs() >= 0.01 {
+                    sign_n += 1;
+                    if pred.signum() == (yf - 1.0).signum() || (yf - 1.0).abs() < 1e-12 {
+                        sign_ok += 1;
+                    }
+                }
                 pred_s += pred * pred;
                 pred_n += pred;
+                ex_s += exact * exact;
+                ex_n += exact;
                 dp_n += dp; dp_s += dp * dp;
                 yl_n += yf - 1.0; yl_s += (yf - 1.0).powi(2);
                 dq_n += dq; dq_s += dq * dq;
                 fl_n += ff - 1.0; fl_s += (ff - 1.0).powi(2);
                 pairs.push((pred, yf - 1.0));
+                ex_pairs.push((exact, yf - 1.0));
             }
         }
         let n = (cells.len() * sample_years.len()) as f64;
@@ -5135,21 +5332,42 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let sd_yield = sd(yl_n, yl_s);
         let sd_flow = sd(fl_n, fl_s);
         let sd_pred = sd(pred_n, pred_s);
+        let sd_exact = sd(ex_n, ex_s);
+        let pearson = |v: &Vec<(f64, f64)>| -> f64 {
+            let (mx, my): (f64, f64) = (
+                v.iter().map(|p| p.0).sum::<f64>() / v.len() as f64,
+                v.iter().map(|p| p.1).sum::<f64>() / v.len() as f64,
+            );
+            let (mut cov, mut vx, mut vy) = (0.0, 0.0, 0.0);
+            for (a, b) in v {
+                cov += (a - mx) * (b - my);
+                vx += (a - mx).powi(2);
+                vy += (b - my).powi(2);
+            }
+            cov / (vx.sqrt() * vy.sqrt()).max(1e-12)
+        };
+        let rho_exact = pearson(&ex_pairs);
+        let rho_lin = pearson(&pairs);
         println!();
         println!("M72 · the year that was — {} farmed cells × {} years", cells.len(), sample_years.len());
         println!(
-            "  rain anomaly σ {:.4} · catchment σ {:.4} · harvest σ {:.4} (predicted {:.4}) · flow σ {:.4}",
-            sd_dp, sd_dq, sd_yield, sd_pred, sd_flow,
+            "  rain anomaly σ {:.4} · catchment σ {:.4} · harvest σ {:.4} (curves {:.4} · tangent {:.4}) · flow σ {:.4}",
+            sd_dp, sd_dq, sd_yield, sd_exact, sd_pred, sd_flow,
+        );
+        println!(
+            "  ρ against the curves {:.4} · against the tangent {:.4} · direction agrees {}/{} where the tangent calls a ≥1% move",
+            rho_exact, rho_lin, sign_ok, sign_n,
         );
 
-        // the harvest moves, and it moves the way the crop curves say it
-        // should: measured spread against the curves' own linearization.
-        let harvest_err = if sd_pred > 1e-9 { (sd_yield / sd_pred - 1.0).abs() } else { 1.0 };
+        // the harvest moves, and it moves exactly as the crop curves say:
+        // the harness re-scores the same law from the raw fields and the
+        // year's sky, and the world's realized spread must equal it.
+        let harvest_err = if sd_exact > 1e-9 { (sd_yield / sd_exact - 1.0).abs() } else { 1.0 };
         c.must(
             "harvest variance tracks the sky",
-            harvest_err <= 0.15 && sd_yield > 1e-4,
-            format!("σ {:.4} vs predicted {:.4} ({:+.1}%)", sd_yield, sd_pred, 100.0 * (sd_yield / sd_pred.max(1e-12) - 1.0)),
-            "M72: the year's harvest spread matches the crop curves' own linearized sensitivity to the year's sky within 15%",
+            harvest_err <= 0.01 && sd_yield > 1e-4,
+            format!("σ {:.4} vs curves {:.4} ({:+.2}%)", sd_yield, sd_exact, 100.0 * (sd_yield / sd_exact.max(1e-12) - 1.0)),
+            "M72: the year's harvest spread equals the crop curves re-scored at the year's own sky, within 1%",
         );
         // the rivers move with their catchments, at the declared gain
         let flow_pred = calliope::climate::FLOW_ANOM_GAIN * sd_dq;
@@ -5160,23 +5378,21 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             format!("σ {:.4} vs {:.2}× catchment σ {:.4} ({:+.1}%)", sd_flow, calliope::climate::FLOW_ANOM_GAIN, flow_pred, 100.0 * (sd_flow / flow_pred.max(1e-12) - 1.0)),
             "M72: the year's flow spread is the catchment anomaly times the declared gain, within 15%",
         );
-        // sign and strength: wet years feed, dry years starve
-        let (mx, my): (f64, f64) = (
-            pairs.iter().map(|p| p.0).sum::<f64>() / n,
-            pairs.iter().map(|p| p.1).sum::<f64>() / n,
-        );
-        let (mut cov, mut vx, mut vy) = (0.0, 0.0, 0.0);
-        for (a, b) in &pairs {
-            cov += (a - mx) * (b - my);
-            vx += (a - mx).powi(2);
-            vy += (b - my).powi(2);
-        }
-        let rho = cov / (vx.sqrt() * vy.sqrt()).max(1e-12);
         c.must(
             "the harvest follows the curves",
-            rho >= 0.80,
-            format!("ρ {:.3}", rho),
-            "M72: the realized harvest factor tracks the crop curves' own linearized response to the year's sky (Pearson ρ ≥ 0.80)",
+            rho_exact >= 0.999,
+            format!("ρ {:.4} (tangent model {:.3})", rho_exact, rho_lin),
+            "M72: the realized harvest factor is the crop curves' own response to the year's sky (Pearson ρ ≥ 0.999 against an independent re-scoring)",
+        );
+        // and the direction is first-order right: where the tangent calls a
+        // move worth ≥1%, the world moves that way. Magnitude is the curves'
+        // to price; sign is the derivative's, and it must not be wrong.
+        let sign_rate = if sign_n == 0 { 0.0 } else { sign_ok as f64 / sign_n as f64 };
+        c.must(
+            "wet years feed, dry years starve",
+            sign_rate >= 0.95 && sign_n > 1000,
+            format!("{:.1}% of {} called moves go the derivative's way", 100.0 * sign_rate, sign_n),
+            "M72: the sign of the harvest response matches the crop curves' own derivatives on the year's anomalies",
         );
         c.must(
             "the year is bounded, not deleted",
