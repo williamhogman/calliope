@@ -89,6 +89,51 @@ run "ocean-meta.txt" ocean "$SIZE" $OCEAN --metamorphic
 # the pack-v2 lens round-trip — proved at its Rust source.
 run "atlas.txt" atlas "$SIZE" "${SEEDS[@]}"
 
+# ---- the compute lane (M67, ADR-0027) --------------------------------------
+# The GPU leg must EXECUTE, not be claimed: a second diagnose flavor
+# carries the native wgpu backend in its own target dir (same doctrine
+# as the assay profile — two flavors never share one rlib path) and is
+# pointed at mesa's software Vulkan adapter (lavapipe) so the WGSL
+# kernel runs and is byte-compared even on a headless box. If the
+# adapter can't be sourced the lane still reports: the CPU twin is the
+# law either way, and the report names which legs spoke.
+echo "== building diagnose (gpu flavor) =="
+if command -v cargo >/dev/null 2>&1; then
+  GPU_BUILD=(cargo build --release --bin diagnose --features alloc-count,gpu --quiet)
+else
+  GPU_BUILD=(nix shell nixpkgs#rustc nixpkgs#cargo -c cargo build --release --bin diagnose --features alloc-count,gpu --quiet)
+fi
+if CARGO_TARGET_DIR=target/gpu "${GPU_BUILD[@]}"; then
+  ICD=""
+  VKLIB=""
+  if command -v nix >/dev/null 2>&1; then
+    for p in $(nix build --no-link --print-out-paths nixpkgs#mesa 2>/dev/null); do
+      [ -f "$p/share/vulkan/icd.d/lvp_icd.x86_64.json" ] && ICD="$p/share/vulkan/icd.d/lvp_icd.x86_64.json"
+    done
+    for p in $(nix build --no-link --print-out-paths nixpkgs#vulkan-loader 2>/dev/null); do
+      [ -d "$p/lib" ] && VKLIB="$p/lib"
+    done
+  fi
+  echo "-- diagnose compute $COMPUTE -> compute.txt"
+  if [ -n "$ICD" ] && [ -n "$VKLIB" ]; then
+    VK_ICD_FILENAMES="$ICD" LD_LIBRARY_PATH="$VKLIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+      ./target/gpu/release/diagnose compute $COMPUTE > "$OUT/compute.txt"
+  else
+    ./target/gpu/release/diagnose compute $COMPUTE > "$OUT/compute.txt"
+  fi
+else
+  {
+    echo "========================================================================"
+    echo " CALLIOPE DIAGNOSTIC · COMPUTE                      M67 lane"
+    echo "========================================================================"
+    echo
+    echo "---- checks ----------------------------------------------------------"
+    echo "[FAIL] gpu-flavor build broken                           (M67 gate: the lane must build — cargo build --features gpu failed)"
+    echo "CHECKS: 0 pass · 0 warn · 1 fail"
+  } > "$OUT/compute.txt"
+fi
+
+
 # ---- M22/M27 deep-earth replay across runtimes ------------------------------
 # The same seed and months must yield one seismic ledger (M22) and one
 # deep-earth identity line — plates, rock, seismic, volcanism, sealevel,
