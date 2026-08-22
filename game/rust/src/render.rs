@@ -411,59 +411,12 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
 }
 "#;
 
-/// Chamfer distance (in cells) from every sea cell to the nearest land.
-fn coast_distance(height: &[f32], w: usize, h: usize) -> Vec<f32> {
-    const INF: f32 = 1e9;
-    let mut d = vec![0.0f32; w * h];
-    for i in 0..w * h {
-        d[i] = if height[i] >= 0.0 { 0.0 } else { INF };
-    }
-    for y in 0..h {
-        for x in 0..w {
-            let i = y * w + x;
-            if d[i] == 0.0 {
-                continue;
-            }
-            let mut best = d[i];
-            if x > 0 {
-                best = best.min(d[i - 1] + 1.0);
-            }
-            if y > 0 {
-                best = best.min(d[i - w] + 1.0);
-                if x > 0 {
-                    best = best.min(d[i - w - 1] + 1.4);
-                }
-                if x < w - 1 {
-                    best = best.min(d[i - w + 1] + 1.4);
-                }
-            }
-            d[i] = best;
-        }
-    }
-    for y in (0..h).rev() {
-        for x in (0..w).rev() {
-            let i = y * w + x;
-            if d[i] == 0.0 {
-                continue;
-            }
-            let mut best = d[i];
-            if x < w - 1 {
-                best = best.min(d[i + 1] + 1.0);
-            }
-            if y < h - 1 {
-                best = best.min(d[i + w] + 1.0);
-                if x < w - 1 {
-                    best = best.min(d[i + w + 1] + 1.4);
-                }
-                if x > 0 {
-                    best = best.min(d[i + w - 1] + 1.4);
-                }
-            }
-            d[i] = best;
-        }
-    }
-    d
-}
+// Coast distance moved to `compute::coast_distance` (M67, ADR-0027): the
+// two-pass chamfer this file carried — and compositor.js copied — is now
+// one integer jump-flood law shared by the WGSL kernel, the CPU twin and
+// the JS fallback. `set_world` uploads the twin's output; byte-parity
+// with the GPU leg is proven natively by `diagnose compute` every suite
+// run and at bring-up on WebGPU clients.
 
 #[wasm_bindgen]
 pub struct Orbital {
@@ -484,6 +437,9 @@ pub struct Orbital {
     cfg_h: u32,
     srgb: f32,
     backend: &'static str,
+    /// M67 — whether this adapter can run the compute lane at all
+    /// (WebGL2 downlevel has no compute shaders; WebGPU always does).
+    compute_ok: bool,
 }
 
 /// Device descriptor with every requested limit clamped to what the adapter
@@ -586,6 +542,26 @@ impl Orbital {
         self.backend.to_string()
     }
 
+    /// M67 — the compute lane's current verdict, for the HUD and the
+    /// browser probe: "not probed", "cpu-twin (no compute: …)",
+    /// "gpu: contract byte-parity ok (…)" or "DEGRADED to cpu-twin: …".
+    pub fn compute_status(&self) -> String {
+        crate::compute::wasm_status()
+    }
+
+    /// M67 — run the lane's bring-up contract: on a compute-capable
+    /// adapter, execute the fixture on the GPU and hold it byte-for-byte
+    /// against the CPU twin; otherwise record that the twin is the law.
+    /// Resolves to the status string it also stores for `compute_status`.
+    pub fn compute_bringup(&self) -> js_sys::Promise {
+        let ok = self.compute_ok;
+        let device = self.device.clone();
+        let queue = self.queue.clone();
+        wasm_bindgen_futures::future_to_promise(async move {
+            Ok(JsValue::from_str(&crate::compute::wasm_bringup(ok, device, queue).await))
+        })
+    }
+
     fn finish(
         instance: wgpu::Instance,
         surface: wgpu::Surface<'static>,
@@ -599,6 +575,9 @@ impl Orbital {
         device.on_uncaptured_error(Box::new(|e| {
             web_sys::console::error_1(&format!("wgpu uncaptured: {e}").into());
         }));
+
+        // M67 — the lane's capability is the adapter's, recorded once here.
+        let compute_ok = crate::compute::ComputeLane::adapter_supported(&adapter);
 
         let caps = surface.get_capabilities(&adapter);
         let format = caps.formats[0];
@@ -696,6 +675,7 @@ impl Orbital {
             cfg_h: 0,
             srgb,
             backend,
+            compute_ok,
         })
     }
 
@@ -770,7 +750,7 @@ impl Orbital {
             }
         }
         let dlog = (1.0 + dmax).ln().max(1e-6);
-        let coast = coast_distance(height, w as usize, h as usize);
+        let coast = crate::compute::coast_distance(height, w as usize, h as usize);
         let mut misc = vec![0.0f32; n * 4];
         // river strength: Strahler order sets channel weight — creeks stay
         // threads, 7th-order mainstems read as broad valley rivers
