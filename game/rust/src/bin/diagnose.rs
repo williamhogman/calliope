@@ -10035,28 +10035,36 @@ fn cmd_compute(size: usize, seeds: Vec<i64>, golden: Option<String>) {
     let mut worst_share = 0.0f64;
     let mut worst_ms = 0.0f64;
     for &seed in &seeds {
-        let w = World::generate(seed, size);
-        let hf: Vec<f32> = w.fields.height.iter().map(|&v| v as f32).collect();
+        let world = World::generate(seed, size);
+        // The shipped grid is WIDER than `size`: ocean margins widen every
+        // world to `fields.width` columns (ADR: M-widen), and render.rs
+        // rings the coast on that grid. The lane's first cut walked
+        // `size × size` — a truncated window of the real world, self-
+        // consistent but not the field production computes. Measure the
+        // grid the engine actually uploads.
+        let gw = world.width;
+        let gh = size;
+        let hf: Vec<f32> = world.fields.height.iter().map(|&v| v as f32).collect();
+        assert_eq!(hf.len(), gw * gh, "height grid is not width×size");
         let land: Vec<bool> = hf.iter().map(|&v| v >= 0.0).collect();
 
         let t0 = Instant::now();
-        let seeds0 = compute::coast_seeds(&hf, size, size);
-        let cpu = compute::jfa_cpu(seeds0.clone(), size, size);
+        let seeds0 = compute::coast_seeds(&hf, gw, gh);
+        let cpu = compute::jfa_cpu(seeds0.clone(), gw, gh);
         let ms = t0.elapsed().as_secs_f64() * 1000.0;
         if golden.is_some() {
-            golden_cases.push((format!("seed {seed}"), size, size, hf.clone(), cpu.clone()));
+            golden_cases.push((format!("seed {seed}"), gw, gh, hf.clone(), cpu.clone()));
         }
-
 
         // The referee compares exact integers: the JFA's squared distance
         // to its chosen seed against the exact EDT's square. Comparing
         // rounded f32 distances instead counts precision noise as misses
         // (measured: 1–2% phantom "off" cells with zero real error).
-        let edt = compute::exact_edt_sq(&land, size, size);
+        let edt = compute::exact_edt_sq(&land, gw, gh);
         let mut max_err = 0.0f64;
         let mut off = 0usize;
         let mut sea = 0usize;
-        for i in 0..size * size {
+        for i in 0..gw * gh {
             if land[i] {
                 continue;
             }
@@ -10065,8 +10073,8 @@ fn cmd_compute(size: usize, seeds: Vec<i64>, golden: Option<String>) {
             let jfa_d2 = if s == compute::NONE {
                 f64::INFINITY
             } else {
-                let (x, y) = ((i % size) as f64, (i / size) as f64);
-                let (sx, sy) = ((s as usize % size) as f64, (s as usize / size) as f64);
+                let (x, y) = ((i % gw) as f64, (i / gw) as f64);
+                let (sx, sy) = ((s as usize % gw) as f64, (s as usize / gw) as f64);
                 (sx - x) * (sx - x) + (sy - y) * (sy - y)
             };
             if jfa_d2 != edt[i] {
