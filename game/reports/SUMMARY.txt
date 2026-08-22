@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-22 12:24 UTC
+mode: full · size: 512 · generated: 2026-08-22 16:01 UTC
 
-totals: 894 pass · 31 warn · 0 fail
+totals: 898 pass · 34 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -13,7 +13,7 @@ totals: 894 pass · 31 warn · 0 fail
 [WARN] median tick payload                          7622 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
-   all checks pass
+[WARN] worst long task                                    521 ms   (E10.7: single worst main-thread stall (ms); headless baseline 220)
 
 -- build.txt
 [WARN] wasm binary size                              3515909 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
@@ -46,7 +46,7 @@ totals: 894 pass · 31 warn · 0 fail
    all checks pass
 
 -- compute.txt
-   all checks pass
+[WARN] coast law cpu ms                             145 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
 
 -- determinism.txt
    all checks pass
@@ -88,9 +88,10 @@ totals: 894 pass · 31 warn · 0 fail
 [WARN] ruins per century (after y100)                17.67   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-[WARN] stage fertility ms                   148 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] gen total ms                         2733 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 100                   109 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   175 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage settlements ms                 254 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         2739 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 100                   105 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
