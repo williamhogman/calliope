@@ -1,47 +1,26 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · ASSAY                    M15 property proofs
 ========================================================================
-    Compiling getrandom v0.2.17
-    Compiling wait-timeout v0.2.1
-    Compiling rand_core v0.6.4
-    Compiling rand_core v0.9.5
-    Compiling rand_pcg v0.3.1
-    Compiling rand_xorshift v0.4.0
-    Compiling rand v0.9.5
-    Compiling ndarray v0.16.1
-    Compiling tempfile v3.27.0
-    Compiling serde_derive v1.0.229
-    Compiling serde_repr v0.1.21
-    Compiling rusty-fork v0.3.1
-    Compiling wasm-bindgen-macro-support v0.2.127
-    Compiling ppv-lite86 v0.2.21
-    Compiling enum-map-derive v0.17.0
-    Compiling strum_macros v0.26.4
-    Compiling rand_chacha v0.3.1
-    Compiling rand_chacha v0.9.0
-    Compiling proptest v1.11.0
-    Compiling rand v0.8.7
-    Compiling enum-map v2.7.3
-    Compiling smallvec v1.15.2
-    Compiling strum v0.26.3
-    Compiling wasm-bindgen-macro v0.2.127
-    Compiling calliope v1.0.0 (/dev-server/game/rust)
- error[E0425]: cannot find value `GPU_UPLOAD_ORDER` in module `calliope::pack`
-     --> src/bin/diagnose.rs:9640:54
-      |
- 9640 |         calliope::pack::gpu_order_is(calliope::pack::GPU_UPLOAD_ORDER)
-      |                                                      ^^^^^^^^^^^^^^^^ not found in `calliope::pack`
- 
- error[E0425]: cannot find value `GPU_UPLOAD_ORDER` in module `calliope::pack`
-     --> src/bin/diagnose.rs:9641:41
-      |
- 9641 |             && order == calliope::pack::GPU_UPLOAD_ORDER.to_vec(),
-      |                                         ^^^^^^^^^^^^^^^^ not found in `calliope::pack`
- 
- For more information about this error, try `rustc --explain E0425`.
- error: could not compile `calliope` (bin "diagnose") due to 2 previous errors
- warning: build failed, waiting for other jobs to finish...
+ test ontology_is_a_rooted_forest ... ok
+ test deeper_wells_never_close_ground ... ok
+ test garbage_never_validates ... ok
+ test recipes_close_over_the_ontology ... ok
+ test requires_names_real_arts ... ok
+ test well_reach_climbs_with_the_craft ... ok
+ test shocks_respect_clamp_and_direction ... ok
+ test the_dry_frontier_opens_exactly_at_well_reach ... ok
+ test sea_ice_masks_are_winter_arcs ... ok
+ test a_new_route_never_widens_a_spread ... ok
+ test prices_stay_clamped_and_finite ... ok
+ test more_supply_never_raises_a_price ... ok
+ test extraction_books_balance ... ok
+ test renormalization_is_drift_free ... ok
+ test pristine_pack_validates ... ok
+ test truncation_never_validates ... ok
+ test bit_flips_never_panic ... ok
+ test placement_respects_the_land ... ok
+ test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.24s
 
 ---- checks ----------------------------------------------------------
-[FAIL] property lane broken                              (M15: a law found its counterexample — read above)
+[PASS] property lanes green                              (18 proofs — M15)
 CHECKS: see row above
