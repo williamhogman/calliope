@@ -5486,10 +5486,40 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let mut peak_wet = f64::NEG_INFINITY;
         let step = 10usize;
         let mut done = 0usize;
+        // M55 (corrected) — the veto acts at the moment of founding, on the
+        // craft the founder held *then*. Terminal reach is the wrong clock:
+        // a people that learns masonry in its third century would be judged
+        // able to sink a 30 m shaft on ground it settled in its first, when
+        // it could dig twelve metres. So we walk the counterfactual and
+        // record every dry town as it appears, against its people's reach
+        // at that decade's end — an upper bound on the reach it truly had,
+        // which keeps every "REFUSED" verdict conservative.
+        let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        for s in cf.peoples.settlements.iter() {
+            seen.insert(s.id.0 as u32);
+        }
+        // (id, y, x, table m, reach at founding m, month observed)
+        let mut births: Vec<(u32, i64, i64, f64, f64, i64)> = Vec::new();
         while done < years {
             let chunk = step.min(years - done);
             let _ = run_years(&mut cf, chunk);
             done += chunk;
+            for s in cf.peoples.settlements.iter() {
+                if !seen.insert(s.id.0 as u32) {
+                    continue;
+                }
+                if !cf.arid_dry[[s.y as usize, s.x as usize]] {
+                    continue;
+                }
+                let table = cf.fields.aquifer[[s.y as usize, s.x as usize]] as f64;
+                let reach = cf
+                    .peoples
+                    .societies
+                    .get(s.people.idx())
+                    .map(calliope::settlements::well_reach_m)
+                    .unwrap_or(0.0);
+                births.push((s.id.0 as u32, s.y, s.x, table, reach, cf.month));
+            }
             // M58 — judge the desert at the price the hungriest crown
             // would pay for it, not at the market's neutral voice.
             let claims_s = cf.claim_pressure();
