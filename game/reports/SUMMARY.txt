@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-22 09:25 UTC
+mode: full · size: 512 · generated: 2026-08-22 12:24 UTC
 
-totals: 878 pass · 33 warn · 3 fail
+totals: 894 pass · 31 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -13,7 +13,7 @@ totals: 878 pass · 33 warn · 3 fail
 [WARN] median tick payload                          7622 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
-[WARN] worst long task                                    526 ms   (E10.7: single worst main-thread stall (ms); headless baseline 220)
+   all checks pass
 
 -- build.txt
 [WARN] wasm binary size                              3515909 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
@@ -27,7 +27,7 @@ totals: 878 pass · 33 warn · 3 fail
 [WARN] events per year                                57.4   (sweet 2–48 · hard 0.5–100)
 [WARN] median town spacing                           48 km   (M2.5: market-town band ~15–30 km in settled cores)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
-[FAIL] the dry-frontier veto is load-bearing 0 town(s) on ground the veto refused (3 dry without · 3 with)   (M55 gate: the veto-lifted run must stand ≥1 town on waterless ground beyond its founder's terminal well reach — ground the real run provably refused)
+[WARN] the dry-frontier veto is load-bearing no auction held — 4 cf dry founding(s), earliest month 1080, deepest table 35 m, all inside the founder's reach (3 dry without · 3 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
 
 -- climate-12345.txt
 [WARN] forest share of land                          23.4%   (sweet 25–60% · hard 15–75%)
@@ -46,7 +46,7 @@ totals: 878 pass · 33 warn · 3 fail
    all checks pass
 
 -- compute.txt
-[WARN] coast law cpu ms                             125 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
+   all checks pass
 
 -- determinism.txt
    all checks pass
@@ -64,8 +64,7 @@ totals: 878 pass · 33 warn · 3 fail
 [WARN] landform oatmeal floor                       0.0015   (M64: the landform mix differs between worlds — the closest pair stays distinct)
 
 -- gate.txt
-[FAIL] the suite composes clean             1 fail · 33 warn · 871 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
-[FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
+   all checks pass
 
 -- hydro-12345.txt
 [WARN] oasis share of arid land %                    25.7%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
@@ -86,14 +85,12 @@ totals: 878 pass · 33 warn · 3 fail
    all checks pass
 
 -- patina.txt
-   all checks pass
+[WARN] ruins per century (after y100)                17.67   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-[WARN] stage fertility ms                   194 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage naming ms                      128 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
-[WARN] stage settlements ms                 322 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2989 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 100                   119 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   148 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] gen total ms                         2733 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 100                   109 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
