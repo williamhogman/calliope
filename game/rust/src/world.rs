@@ -1269,7 +1269,7 @@ impl World {
         if stale {
             let (rows, cols) = self.fields.tmean.dim();
             let (dt, dp) = climate::year_anomaly(&self.variability, rows, cols, year);
-            let dq = crate::ndimage::gaussian_filter(&dp, CATCHMENT_SIGMA);
+            let dq = crate::ndimage::gaussian_filter(&dp, climate::CATCHMENT_SIGMA);
             *slot = Some((year, dt, dp, dq));
         }
         let (_, dt, dp, dq) = slot.as_ref().unwrap();
@@ -1303,7 +1303,7 @@ impl World {
     /// single dry cell cannot empty a trunk river.
     pub fn year_flow_factor(&self, year: i64, y: usize, x: usize) -> f64 {
         self.with_year_sky(year, |_, _, dq| {
-            (1.0 + FLOW_ANOM_GAIN * dq[[y, x]]).clamp(FLOW_FACTOR_MIN, FLOW_FACTOR_MAX)
+            (1.0 + climate::FLOW_ANOM_GAIN * dq[[y, x]]).clamp(climate::FLOW_FACTOR_MIN, climate::FLOW_FACTOR_MAX)
         })
     }
 
@@ -1318,7 +1318,7 @@ impl World {
         let t = self.fields.tmean[[y, x]] as f64;
         let p = self.fields.precip[[y, x]] as f64;
         self.with_year_sky(year, |dt, dp, dq| {
-            let rain = if irrigated { FLOW_ANOM_GAIN * dq[[y, x]] } else { dp[[y, x]] };
+            let rain = if irrigated { climate::FLOW_ANOM_GAIN * dq[[y, x]] } else { dp[[y, x]] };
             agriculture::year_yield_factor(pack, t, p, dt[[y, x]], rain, irrigated)
         })
     }

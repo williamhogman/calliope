@@ -633,6 +633,21 @@ pub const ANOM_FBM_SIGMA: f64 = 0.2076;
 /// failure of the rains is famine's verdict (M2.6), not the sky's noise.
 pub const ANOM_P_FLOOR: f64 = -0.85;
 
+/// M72 — how far the rain anomaly is smeared before the rivers read it.
+/// A 4 km cell's cloud is not a catchment: what a trunk river carries is
+/// the year averaged over its basin, so the flow lane reads the rain
+/// field through a gaussian of roughly basin scale (~24 km 1σ).
+pub const CATCHMENT_SIGMA: f64 = 6.0;
+/// M72 — how strongly the catchment-integrated rain anomaly moves flow.
+/// Rainfall-runoff is elastic, not proportional: a wet year swells rivers
+/// by more than its rain surplus once soils saturate (elasticity ~1.5–2.5
+/// in the empirical literature; the conservative end is taken here).
+pub const FLOW_ANOM_GAIN: f64 = 1.5;
+/// M72 — the year's flow multiplier is bounded: rivers rise and fall, they
+/// do not vanish or become a different river.
+pub const FLOW_FACTOR_MIN: f64 = 0.35;
+pub const FLOW_FACTOR_MAX: f64 = 2.20;
+
 /// 1σ of the year-to-year temperature swing at this latitude, °C.
 pub fn anomaly_amp_t(lat_abs: f64) -> f64 {
     ANOM_T_EQ + (ANOM_T_POLE - ANOM_T_EQ) * (lat_abs.abs() / 90.0).clamp(0.0, 1.0).powf(ANOM_LAT_POW)
