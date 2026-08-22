@@ -1480,7 +1480,25 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
     let mut n_realms = w.peoples.realms.len();
     let mut prev_peoples = w.peoples.peoples.iter().filter(|p| p.alive).count();
     for yr in 1..=years {
+        let m0 = w.month;
         let (evs, _founded, _dep) = w.tick(12);
+        // M72 — the eligible pool for this year's harvest verdict: the
+        // famine pass's own predicate (rain-fed wheat or maize, off the
+        // river, more than 90 souls), read once per year. Sampled at the
+        // year's close rather than mid-pass, so a town the famine itself
+        // pushed under the floor still counts as having been at risk.
+        if let Some(fm) = (m0..w.month).find(|m| m.rem_euclid(12) == 7) {
+            let fyear = fm / 12;
+            for s in &w.peoples.settlements {
+                let pack = w.fields.crops[[s.y as usize, s.x as usize]];
+                let rainfed = (pack == calliope::agriculture::CropPackage::Wheat.code()
+                    || pack == calliope::agriculture::CropPackage::Maize.code())
+                    && !s.river;
+                if rainfed && s.pop > 90 {
+                    log.famine_pool.push((fyear, s.x, s.y));
+                }
+            }
+        }
         for e in &evs {
             *log.census.entry(e.k.name().to_string()).or_default() += 1;
             if god_names.iter().any(|g| e.text.contains(g.as_str())) {
