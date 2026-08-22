@@ -2,9 +2,9 @@
  CALLIOPE DIAGNOSTIC · ATLAS                        size 512 · 3 seeds · M63
 ========================================================================
  arid column sweep (60 mm · 24 °C): 101 elevations · max hue 43° at h=0.00 · 0 in green band
- seed  12345: pack 7543008 B · max ids rock 3 soil 10 landform 26 · hash 34d07c5c40aa73b3
- seed    777: pack 7542876 B · max ids rock 3 soil 10 landform 26 · hash bf7618c9fc35f52d
- seed  90210: pack 7543220 B · max ids rock 3 soil 10 landform 26 · hash 9371c57ea3bc9a40
+ seed  12345: pack 8526284 B · max ids rock 3 soil 10 landform 26 · hash 34d07c5c40aa73b3
+ seed    777: pack 8526152 B · max ids rock 3 soil 10 landform 26 · hash bf7618c9fc35f52d
+ seed  90210: pack 8526496 B · max ids rock 3 soil 10 landform 26 · hash 9371c57ea3bc9a40
 
 ---- checks ----------------------------------------------------------
 [PASS] palettes cover their vocabularies    4+11+27 swatches   (M63: rock, soil, landform lenses — one distinct swatch per word)

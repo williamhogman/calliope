@@ -1,7 +1,7 @@
 ========================================================================
- CALLIOPE DIAGNOSTIC · COMPUTE                      M67 lane
+ CALLIOPE DIAGNOSTIC · COAST-JS                     M67 third executor
 ========================================================================
 
 ---- checks ----------------------------------------------------------
-[FAIL] gpu-flavor build broken                           (M67 gate: the lane must build — cargo build --features gpu failed)
+[FAIL] coast-js lane runs                                (M67 gate: the JS twin must be executable — no bun on PATH or no golden field exported)
 CHECKS: 0 pass · 0 warn · 1 fail
