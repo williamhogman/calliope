@@ -1652,6 +1652,18 @@ impl World {
                 seat[s.realm.0] = i;
             }
         }
+        // M72 — the year's harvest verdict per town, drawn before the loop
+        // because it reads the whole world (crops, climate, the year's sky)
+        // while the loop holds the settlements mutably. One entry per town,
+        // in town order: the multiplier this year's weather puts on the
+        // ground each town farms.
+        let year_now = month_abs.div_euclid(12);
+        let year_harvest: Vec<f64> = self
+            .peoples
+            .settlements
+            .iter()
+            .map(|s| self.year_yield(year_now, s.y as usize, s.x as usize))
+            .collect();
         for (si, s) in self.peoples.settlements.iter_mut().enumerate() {
             let md = mods.get(s.people.idx()).cloned().unwrap_or_default();
             let (y, x) = (s.y as usize, s.x as usize);
@@ -1681,6 +1693,10 @@ impl World {
                 md.kaplan,
                 md.capacity,
             );
+            // M72: the year that was. Capacity is what the land feeds *this
+            // year*, not what it feeds on average — the same crop curves,
+            // scored against the sky the year actually delivered.
+            k *= year_harvest[si];
             // M2.3: market towns import grain — the web of trade lifts K,
             // and the fat head of the rank-size curve lives in the hubs.
             k *= 1.0 + 0.26 * (s.connections.min(8) as f64);
