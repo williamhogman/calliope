@@ -13,24 +13,20 @@
 
 use wasm_bindgen::prelude::*;
 
-/// The grids `set_world` takes, in the order of its parameter list (M69).
-///
-/// A wasm-bindgen signature cannot be generated from the field registry —
-/// it is positional by construction — so the registry judges it instead:
-/// the `const` assertion below fails the *build* if these names are not
-/// exactly the registry's `gpu true` rows in pack order. Before this, a
-/// flag flipped in `pack.rs` surfaced only in the browser, as an arity
-/// mismatch on a call the JS side derives from the generated `FIELDS`
-/// table (`gpu.js`). One law, two executors, no hand-mirrored list that
-/// can drift in silence.
-pub const SET_WORLD_GRIDS: &[&str] = &[
-    "height", "tmean", "tamp", "precip", "discharge", "fertility", "strahler", "flags", "rock",
-    "soil", "landform",
-];
+/// The Orbital upload contract (M69): `set_world` takes one slice per
+/// `gpu true` row of the field registry, in pack order. The names and
+/// their order are declared once, in `pack::GPU_UPLOAD_ORDER`, and the
+/// registry judges that list in a `const` assertion there; this
+/// assertion pins the *signature's arity* to the same list, so a grid
+/// whose `gpu` flag moves is a build break here rather than a
+/// browser-side arity error on the call `gpu.js` derives from the
+/// generated `FIELDS` table. One law, no hand-mirrored second list.
+const SET_WORLD_ARITY: usize = 11;
 const _: () = assert!(
-    crate::pack::gpu_order_is(SET_WORLD_GRIDS),
-    "set_world's grid list has drifted from the field registry's gpu rows (pack.rs)"
+    SET_WORLD_ARITY == crate::pack::GPU_UPLOAD_ORDER.len(),
+    "set_world's parameter list has drifted from the registry's gpu rows (pack.rs)"
 );
+
 
 
 
