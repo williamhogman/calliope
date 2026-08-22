@@ -85,6 +85,16 @@ pub struct Fields {
     /// dawn post-widen, folded into `hash_state` and the deep-earth
     /// identity line, never ticked. `NONE` survives only on open sea.
     pub landform: Array2<u8>,
+    /// M44/M68 — the drift's coast form per cell (`coast::OPEN` /
+    /// `SPIT` / `BARRIER` / `LAGOON`). Written by `coast::drift` at the
+    /// glacial stage into the ledger's own buffer and handed here at the
+    /// dawn, post-widen: from then on this is the grid's only home, and
+    /// it ships through the registry like every other declared field.
+    pub coastform: Array2<u8>,
+    /// M59/M68 — net deposition depth per cell (floodplain + lake +
+    /// delta fan), in height units. Same story as `coastform`: the
+    /// erosion pass fills the ledger's buffer, the dawn hands it here.
+    pub silt: Array2<f32>,
     /// Influence-map territory: owner REALM per cell, −1 wilderness
     /// (M4.1, realm axis per ADR-0018).
     pub territory: Array2<i16>,

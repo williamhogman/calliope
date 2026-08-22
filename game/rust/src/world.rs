@@ -684,7 +684,7 @@ impl GenBuilder {
         // price the anchorage from this one field.
         let mut shelter = settlements::shelter_score(
             &height,
-            &self.coastform.as_ref().expect("glacial stage ran").form,
+            &self.coastform.as_ref().expect("glacial stage ran").form_gen,
         );
         // M59 — the harbor pays for the river's load: where fan silt
         // lies in the 5×5 anchorage window shelter_score itself reads,
@@ -710,7 +710,7 @@ impl GenBuilder {
                             }
                             let (ny, nx) = (ny as usize, nx as usize);
                             if height[[ny, nx]] < 0.0 {
-                                silt = silt.max(sed.depth[[ny, nx]]);
+                                silt = silt.max(sed.depth_gen[[ny, nx]]);
                             }
                         }
                     }
@@ -958,6 +958,10 @@ impl GenBuilder {
                 // M47 — placeholder like territory: the upwelling shore is
                 // solved at the dawn, off the final post-widen coastline.
                 upwelling: Array2::from_elem((1, 1), 0.0f32),
+                // M68 — placeholders: the drift and sediment ledgers own
+                // their grids until the dawn hands them over post-widen.
+                coastform: Array2::from_elem((1, 1), 0u8),
+                silt: Array2::from_elem((1, 1), 0.0f32),
                 // M60 — placeholder like upwelling: the vocabulary is
                 // classified at the dawn, post-widen (widen never touches it).
                 landform: Array2::from_elem((1, 1), 0u8),
@@ -1110,7 +1114,7 @@ impl GenBuilder {
         );
         crate::landform::stamp_coastforms(
             &mut world.fields.landform,
-            &world.coastform.form,
+            &world.fields.coastform,
             &world.fields.height,
         );
         {
@@ -1335,6 +1339,12 @@ impl World {
         // M59 — the sediment books ride along: no river ever reached
         // the margins, so their footprint there is exactly zero.
         self.sediment.widen(pad);
+        // M68 — the handover: both grids reach their registry home at
+        // full shipped width, and the ledgers keep only what is theirs
+        // (the deposit record, the mouth books, the delta mask). One
+        // grid, one owner — nothing hand-mirrored beside the registry.
+        self.fields.coastform = std::mem::take(&mut self.coastform.form_gen);
+        self.fields.silt = std::mem::take(&mut self.sediment.depth_gen);
         for p in self
             .ice
             .cirques
@@ -3087,7 +3097,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             self.ice.hash(),
             self.permafrost.hash(),
             self.tides.hash(),
-            self.coastform.hash(),
+            self.coastform.hash(&self.fields.coastform),
             self.sediment.footprint_hash(),
         )
     }

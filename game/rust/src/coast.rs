@@ -109,8 +109,11 @@ pub const LAGOON: u8 = 3;
 /// agree, raw f64 bits diverge). Never hash raw f64 derived from the
 /// height field.
 pub struct Coast {
-    /// OPEN / SPIT / BARRIER / LAGOON per cell.
-    pub form: Array2<u8>,
+    /// OPEN / SPIT / BARRIER / LAGOON per cell — owned only until the
+    /// dawn hands it to `fields.coastform` (M68: one home per grid, the
+    /// field registry). Post-dawn readers take `world.fields.coastform`;
+    /// the rename is the compile-time guard against a stale reader.
+    pub form_gen: Array2<u8>,
     /// (y, x, pre-drift height as f32 bits), in deposition order.
     pub deposits: Vec<(u32, u32, u32)>,
 }
@@ -118,17 +121,17 @@ pub struct Coast {
 impl Coast {
     pub fn empty() -> Self {
         Coast {
-            form: Array2::zeros((0, 0)),
+            form_gen: Array2::zeros((0, 0)),
             deposits: Vec::new(),
         }
     }
 
     /// FNV-1a over the form grid and the deposit ledger — joins
     /// `hash_state` and the deep-earth identity line.
-    pub fn hash(&self) -> u64 {
+    pub fn hash(&self, form: &Array2<u8>) -> u64 {
         let mut b: Vec<u8> =
-            Vec::with_capacity(self.form.len() + self.deposits.len() * 12);
-        b.extend_from_slice(self.form.as_slice().expect("form grid is contiguous"));
+            Vec::with_capacity(form.len() + self.deposits.len() * 12);
+        b.extend_from_slice(form.as_slice().expect("form grid is contiguous"));
         for &(y, x, h) in &self.deposits {
             b.extend_from_slice(&y.to_le_bytes());
             b.extend_from_slice(&x.to_le_bytes());
@@ -141,7 +144,7 @@ impl Coast {
     /// split into its constituents, so a cross-runtime divergence names
     /// the part it lives in — deposit positions, pre-height bits, or
     /// the form grid.
-    pub fn debug_parts(&self) -> (u64, u64, u64) {
+    pub fn debug_parts(&self, form_grid: &Array2<u8>) -> (u64, u64, u64) {
         let mut pos: Vec<u8> = Vec::with_capacity(self.deposits.len() * 8);
         let mut bits: Vec<u8> = Vec::with_capacity(self.deposits.len() * 4);
         for &(y, x, h) in &self.deposits {
@@ -149,22 +152,22 @@ impl Coast {
             pos.extend_from_slice(&x.to_le_bytes());
             bits.extend_from_slice(&h.to_le_bytes());
         }
-        let form = fnv1a64(self.form.as_slice().expect("form grid is contiguous"));
+        let form = fnv1a64(form_grid.as_slice().expect("form grid is contiguous"));
         (fnv1a64(&pos), fnv1a64(&bits), form)
     }
 
     /// Ride the ocean-margin widening: margins are open sea (no form),
     /// deposit coordinates shift into shipped map space.
     pub fn widen(&mut self, pad: usize) {
-        if pad == 0 || self.form.is_empty() {
+        if pad == 0 || self.form_gen.is_empty() {
             return;
         }
-        let (h, w) = self.form.dim();
+        let (h, w) = self.form_gen.dim();
         let p = pad as isize;
-        self.form = Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
+        self.form_gen = Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
             let xi = x as isize - p;
             if xi >= 0 && (xi as usize) < w {
-                self.form[[y, xi as usize]]
+                self.form_gen[[y, xi as usize]]
             } else {
                 OPEN
             }
@@ -202,7 +205,7 @@ pub fn drift(h: &mut Array2<f64>, keep_open: &Array2<bool>) -> Coast {
     let (rows, cols) = h.dim();
     if rows < 16 || cols < 16 {
         return Coast {
-            form: Array2::zeros((rows, cols)),
+            form_gen: Array2::zeros((rows, cols)),
             deposits: Vec::new(),
         };
     }
@@ -472,7 +475,7 @@ pub fn drift(h: &mut Array2<f64>, keep_open: &Array2<bool>) -> Coast {
         }
     }
 
-    Coast { form, deposits }
+    Coast { form_gen: form, deposits }
 }
 
 /// The largest water component's label — the world ocean.

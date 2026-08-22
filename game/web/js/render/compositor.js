@@ -80,11 +80,13 @@ export function buildShade(R) {
 // toward the smaller index — the same law the WGSL kernel and the Rust
 // CPU twin execute, so all three paths ring the same shore. Any edit
 // here edits compute.rs and coastdist.wgsl too.
-const JFA_NONE = 0xffffffff;
+export const JFA_NONE = 0xffffffff;
 
-function coastDistance(R) {
-  const W = R.w, H = R.h;
-  const hgt = R.world.arrays.height;
+// The seed field IS the law (integers end to end), so it is also the
+// object the parity lane holds this port against: `scripts/coast-js-
+// parity.mjs` replays a golden field exported from the Rust twin and
+// demands byte-equality. Distances are a rendering of it.
+export function coastSeedField(hgt, W, H) {
   const n = W * H;
   let src = new Uint32Array(n).fill(JFA_NONE);
   let dst = new Uint32Array(n);
@@ -125,6 +127,13 @@ function coastDistance(R) {
     }
     const t = src; src = dst; dst = t;
   }
+  return src;
+}
+
+function coastDistance(R) {
+  const W = R.w, H = R.h;
+  const n = W * H;
+  const src = coastSeedField(R.world.arrays.height, W, H);
   // finalize — compute::finalize: land 0, sea √(exact integer square)
   const out = new Float32Array(n);
   for (let i = 0; i < n; i++) {

@@ -359,7 +359,7 @@ fn explain_cell(world: &World, key: &str) -> Option<Value> {
             chain.push(row(2, "water", "Lake",
                 "standing fresh water fills this hollow".to_string()));
         }
-        let silt_m = world.sediment.depth[[y, x]] as f64 * METRES_PER_UNIT;
+        let silt_m = world.fields.silt[[y, x]] as f64 * METRES_PER_UNIT;
         if world.sediment.delta[[y, x]] {
             chain.push(row(2, "water", "Fan-built",
                 "this ground is new — the river raised it grain by grain at its mouth".to_string()));

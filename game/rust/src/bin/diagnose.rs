@@ -331,9 +331,9 @@ fn hash_state(w: &World) -> u64 {
     // M43 — the tide field is state: the shore's breath holds still.
     s.push_str(&format!("T{:016x}\n", w.tides.hash()));
     // M44 — the drift ledger is state: the grown shore holds still.
-    s.push_str(&format!("S{:016x}\n", w.coastform.hash()));
+    s.push_str(&format!("S{:016x}\n", w.coastform.hash(&w.fields.coastform)));
     // M59 — the sediment books are state: the budget holds still.
-    s.push_str(&format!("D{:016x}\n", w.sediment.hash()));
+    s.push_str(&format!("D{:016x}\n", w.sediment.hash(&w.fields.silt)));
     // M45 — the shelter field is state: the anchorage reading holds still.
     {
         let mut sb: Vec<u8> = Vec::with_capacity(w.shelter.len() * 4);
@@ -1251,7 +1251,7 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
             w.tick(step);
             left -= step;
         }
-        (w.seismic.hash(), w.ice.hash(), w.currents.hash(), w.tides.hash(), w.coastform.hash())
+        (w.seismic.hash(), w.ice.hash(), w.currents.hash(), w.tides.hash(), w.coastform.hash(&w.fields.coastform))
     };
     let ((ha, ia, ca, ta, oa), (hb, ib, cb, tb, ob)) = (hash_after(240), hash_after(12));
     println!();
@@ -1876,7 +1876,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
         calliope::landform::stamp_patterned(&mut regen, &w.permafrost.pattern, hgt);
         calliope::landform::stamp_tidal(&mut regen, &w.tides, hgt, &w.fields.flags);
         calliope::landform::stamp_delta(&mut regen, &w.sediment.delta, hgt);
-        calliope::landform::stamp_coastforms(&mut regen, &w.coastform.form, hgt);
+        calliope::landform::stamp_coastforms(&mut regen, &w.fields.coastform, hgt);
         {
             let water = hgt.mapv(|h| h < 0.0);
             let rivers = w.fields.flags.mapv(|f| f & CellFlags::RIVER.bits() != 0);
@@ -2000,7 +2000,8 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
 
         // ---- longshore drift (M44) ----------------------------------
         {
-            let cf = &w.coastform;
+            let cf = &w.fields.coastform;
+            let ledger = &w.coastform;
             let mut n_spit = 0usize;
             let mut n_bar = 0usize;
             let mut n_lag = 0usize;
@@ -2008,7 +2009,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             let mut coastal_water = 0usize;
             for y in 0..gh {
                 for x in 0..gw {
-                    match cf.form[[y, x]] {
+                    match cf[[y, x]] {
                         calliope::coast::SPIT => {
                             n_spit += 1;
                             if hgt[[y, x]] < 0.0 { misread += 1; }
@@ -2037,7 +2038,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             // chains per class: 8-connected components of the form grid
             let chains = |class: u8| -> usize {
                 let mask = ndarray::Array2::from_shape_fn((gh, gw), |(y, x)| {
-                    cf.form[[y, x]] == class
+                    cf[[y, x]] == class
                 });
                 calliope::ndimage::label(&mask, true).n
             };
@@ -2045,7 +2046,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             let bar_chains = chains(calliope::coast::BARRIER);
             println!(
                 "longshore drift (M44): spit cells {} in {} chains · barrier cells {} in {} chains · lagoon cells {} · deposits {}",
-                n_spit, spit_chains, n_bar, bar_chains, n_lag, cf.deposits.len()
+                n_spit, spit_chains, n_bar, bar_chains, n_lag, ledger.deposits.len()
             );
             let share = 100.0 * (n_spit + n_bar + n_lag) as f64 / coastal_water.max(1) as f64;
             c.band("coastform share of coastal cells %", share, format!("{:.2} %", share));
@@ -2060,11 +2061,11 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             );
             c.must(
                 "deposit ledger matches the grown ground (M44)",
-                cf.deposits.len() == n_spit + n_bar,
-                format!("{} deposits vs {} formed cells", cf.deposits.len(), n_spit + n_bar),
+                ledger.deposits.len() == n_spit + n_bar,
+                format!("{} deposits vs {} formed cells", ledger.deposits.len(), n_spit + n_bar),
                 "M44: every deposited cell is a spit or barrier cell, and nothing else is",
             );
-            let shallow = cf.deposits.iter().all(|&(_, _, b)| {
+            let shallow = ledger.deposits.iter().all(|&(_, _, b)| {
                 let d = f32::from_bits(b) as f64;
                 d < 0.0 && d > calliope::coast::BAR_FLOOR
             });
@@ -2106,7 +2107,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             );
             // the grid is the ledger's footprint: Σdepth re-summed
             // independently must match the on-map share of the books
-            let grid_sum: f64 = sed.depth.iter().map(|&v| v as f64).sum();
+            let grid_sum: f64 = w.fields.silt.iter().map(|&v| v as f64).sum();
             let on_map = sed.settled + sed.delta_fill;
             let drift = (grid_sum - on_map).abs() / det;
             c.must(
@@ -2173,7 +2174,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             // bit, cells with silt shoal by exactly 1/(1+k·depth). The
             // widening seam is skipped: the raw recompute sees margin
             // ocean where the pre-widen call saw the grid edge.
-            let raw = calliope::settlements::shelter_score(&w.fields.height, &w.coastform.form);
+            let raw = calliope::settlements::shelter_score(&w.fields.height, &w.fields.coastform);
             let pad = w.size / 8;
             let (sh_r, sh_c) = raw.dim();
             let mut n_silted = 0usize;
@@ -2195,7 +2196,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
                             }
                             let (ny, nx) = (ny as usize, nx as usize);
                             if w.fields.height[[ny, nx]] < 0.0 {
-                                silt = silt.max(sed.depth[[ny, nx]]);
+                                silt = silt.max(w.fields.silt[[ny, nx]]);
                             }
                         }
                     }
@@ -7567,23 +7568,27 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         c.must(&format!("unpack layout sound ({})", seed), ok_layout,
             format!("{} arrays", entries.len()), "M8.1: offsets contiguous, sizes exact");
 
-        // decode every section exactly the way the client does and compare
+        // decode every section exactly the way the client does and compare.
+        // M68 — the lookup comes from the registry itself (`field_decls`),
+        // not a hand-written name→grid map: a grid registered in pack.rs is
+        // a grid this gate judges, and there is no second list to drift.
+        let decls = w.field_decls();
+        let decl = |name: &str| -> &calliope::pack::FieldDecl<'_> {
+            decls
+                .iter()
+                .find(|d| d.name == name)
+                .expect("packed section is a registry field")
+        };
         let f32_grid = |name: &str| -> &ndarray::Array2<f32> {
-            match name {
-                "height" => &w.fields.height, "tmean" => &w.fields.tmean, "tamp" => &w.fields.tamp,
-                "precip" => &w.fields.precip, "pamp" => &w.fields.pamp, "discharge" => &w.fields.discharge,
-                "flow_amp" => &w.fields.flow_amp, "fertility" => &w.fields.fertility,
-                "upwelling" => &w.fields.upwelling, "aquifer" => &w.fields.aquifer,
-                other => unreachable!("unknown f32 field {other}"),
+            match &decl(name).data {
+                calliope::pack::FieldData::F32(a) => a,
+                _ => unreachable!("{name} is not an f32 field"),
             }
         };
         let u8_grid = |name: &str| -> &ndarray::Array2<u8> {
-            match name {
-                "biomes" => &w.fields.biomes, "crops" => &w.fields.crops,
-                "strahler" => &w.fields.strahler, "flags" => &w.fields.flags,
-                "rock" => &w.fields.rock, "soil" => &w.fields.soil,
-                "landform" => &w.fields.landform,
-                other => unreachable!("unknown u8 field {other}"),
+            match &decl(name).data {
+                calliope::pack::FieldData::U8(a) => a,
+                _ => unreachable!("{name} is not a u8 field"),
             }
         };
         let mut ok_data = true;
@@ -7830,13 +7835,13 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         let plain: Vec<bool> = (0..rows * cols).map(|i| {
             let (y, x) = (i / cols, i % cols);
             if water[[y, x]] { return false; }
-            let m = w.sediment.depth[[y, x]] as f64 * mpu;
+            let m = w.fields.silt[[y, x]] as f64 * mpu;
             m >= 10.0
         }).collect();
         for y in 0..rows {
             for x in 0..cols {
                 if water[[y, x]] { continue; }
-                let m = w.sediment.depth[[y, x]] as f64 * mpu;
+                let m = w.fields.silt[[y, x]] as f64 * mpu;
                 if m >= 1.0 { fp_ladder[0] += 1; }
                 if m >= 5.0 { fp_ladder[1] += 1; }
                 if m >= 10.0 { fp_ladder[2] += 1; }
@@ -9950,11 +9955,23 @@ fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
 /// (report.sh sources a software Vulkan when headless, so the WGSL leg
 /// executes in CI instead of being claimed). No adapter is a skip, not
 /// a fail — the harness stays self-contained.
-fn cmd_compute(size: usize, seeds: Vec<i64>) {
+fn cmd_compute(size: usize, seeds: Vec<i64>, golden: Option<String>) {
     use calliope::compute;
     header("COMPUTE", &format!("M67 lane · size {size}"));
 
     let mut c = Checks::default();
+    // `--golden <path>`: the twin's seed field written out as the third
+    // executor's referee. The JS port in render/compositor.js is the one
+    // executor no device holds; `scripts/coast-js-parity.mjs` replays
+    // this file under bun and demands byte-equality (ADR-0026/0027 — one
+    // law, three executors, no hand-mirrored fork).
+    let mut golden_cases: Vec<(String, usize, usize, Vec<f32>, Vec<u32>)> = Vec::new();
+    if golden.is_some() {
+        let (fw, fh) = (96usize, 64usize);
+        let fix = compute::fixture(fw, fh);
+        let fs = compute::jfa_cpu(compute::coast_seeds(&fix, fw, fh), fw, fh);
+        golden_cases.push(("fixture".into(), fw, fh, fix, fs));
+    }
 
     #[cfg(feature = "gpu")]
     let mut gpu: Option<(wgpu::Instance, compute::ComputeLane)> = {
@@ -10023,24 +10040,36 @@ fn cmd_compute(size: usize, seeds: Vec<i64>) {
     let mut worst_share = 0.0f64;
     let mut worst_ms = 0.0f64;
     for &seed in &seeds {
-        let w = World::generate(seed, size);
-        let hf: Vec<f32> = w.fields.height.iter().map(|&v| v as f32).collect();
+        let world = World::generate(seed, size);
+        // The shipped grid is WIDER than `size`: ocean margins widen every
+        // world to `fields.width` columns (ADR: M-widen), and render.rs
+        // rings the coast on that grid. The lane's first cut walked
+        // `size × size` — a truncated window of the real world, self-
+        // consistent but not the field production computes. Measure the
+        // grid the engine actually uploads.
+        let gw = world.width;
+        let gh = size;
+        let hf: Vec<f32> = world.fields.height.iter().map(|&v| v as f32).collect();
+        assert_eq!(hf.len(), gw * gh, "height grid is not width×size");
         let land: Vec<bool> = hf.iter().map(|&v| v >= 0.0).collect();
 
         let t0 = Instant::now();
-        let seeds0 = compute::coast_seeds(&hf, size, size);
-        let cpu = compute::jfa_cpu(seeds0.clone(), size, size);
+        let seeds0 = compute::coast_seeds(&hf, gw, gh);
+        let cpu = compute::jfa_cpu(seeds0.clone(), gw, gh);
         let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        if golden.is_some() {
+            golden_cases.push((format!("seed {seed}"), gw, gh, hf.clone(), cpu.clone()));
+        }
 
         // The referee compares exact integers: the JFA's squared distance
         // to its chosen seed against the exact EDT's square. Comparing
         // rounded f32 distances instead counts precision noise as misses
         // (measured: 1–2% phantom "off" cells with zero real error).
-        let edt = compute::exact_edt_sq(&land, size, size);
+        let edt = compute::exact_edt_sq(&land, gw, gh);
         let mut max_err = 0.0f64;
         let mut off = 0usize;
         let mut sea = 0usize;
-        for i in 0..size * size {
+        for i in 0..gw * gh {
             if land[i] {
                 continue;
             }
@@ -10049,8 +10078,8 @@ fn cmd_compute(size: usize, seeds: Vec<i64>) {
             let jfa_d2 = if s == compute::NONE {
                 f64::INFINITY
             } else {
-                let (x, y) = ((i % size) as f64, (i / size) as f64);
-                let (sx, sy) = ((s as usize % size) as f64, (s as usize / size) as f64);
+                let (x, y) = ((i % gw) as f64, (i / gw) as f64);
+                let (sx, sy) = ((s as usize % gw) as f64, (s as usize / gw) as f64);
                 (sx - x) * (sx - x) + (sy - y) * (sy - y)
             };
             if jfa_d2 != edt[i] {
@@ -10063,13 +10092,13 @@ fn cmd_compute(size: usize, seeds: Vec<i64>) {
         }
         let share = if sea == 0 { 0.0 } else { off as f64 / sea as f64 };
         println!(
-            " seed {seed}: coast law cpu {ms:.0} ms · max |jfa−exact| {max_err:.3} cells · {} of {} sea cells miss ({})",
+            " seed {seed}: grid {gw}×{gh} · coast law cpu {ms:.0} ms · max |jfa−exact| {max_err:.3} cells · {} of {} sea cells miss ({})",
             off, sea, pct(share)
         );
 
         #[cfg(feature = "gpu")]
         if let Some((_i, lane)) = gpu.as_mut() {
-            match pollster::block_on(compute::coast_seeds_gpu(lane, &seeds0, size as u32, size as u32)) {
+            match pollster::block_on(compute::coast_seeds_gpu(lane, &seeds0, gw as u32, gh as u32)) {
                 Ok(g) => {
                     let n = g.iter().zip(&cpu).filter(|(a, b)| a != b).count();
                     c.must(
@@ -10096,6 +10125,35 @@ fn cmd_compute(size: usize, seeds: Vec<i64>) {
     c.band("jfa max err cells", worst_err, format!("{worst_err:.3} cells"));
     c.band("jfa wrong cell share", worst_share, pct(worst_share));
     c.band("coast law cpu ms", worst_ms, format!("{worst_ms:.0} ms"));
+
+    // ---- the golden export (the JS twin's referee) ----------------------
+    if let Some(path) = golden.as_ref() {
+        let mut buf: Vec<u8> = Vec::new();
+        buf.extend_from_slice(b"CJFA");
+        buf.extend_from_slice(&(golden_cases.len() as u32).to_le_bytes());
+        for (name, w, h, hgt, sf) in &golden_cases {
+            buf.extend_from_slice(&(name.len() as u32).to_le_bytes());
+            buf.extend_from_slice(name.as_bytes());
+            buf.extend_from_slice(&(*w as u32).to_le_bytes());
+            buf.extend_from_slice(&(*h as u32).to_le_bytes());
+            for v in hgt {
+                buf.extend_from_slice(&v.to_le_bytes());
+            }
+            for v in sf {
+                buf.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        match std::fs::write(path, &buf) {
+            Ok(()) => println!(
+                " golden: {} case(s) · {} B -> {path}",
+                golden_cases.len(),
+                buf.len()
+            ),
+            Err(e) => {
+                c.must("golden export written", false, "error".into(), &format!("M67: the JS parity lane needs its referee — {e}"));
+            }
+        }
+    }
     c.print();
 }
 
@@ -10113,6 +10171,16 @@ fn main() {
         a.drain(i..a.len().min(i + 2));
         if reports.is_none() {
             eprintln!("error: --reports needs a directory");
+            std::process::exit(2);
+        }
+    }
+    // `compute --golden <path>` (M67 follow-on) — same lift-out treatment.
+    let mut golden: Option<String> = None;
+    if let Some(i) = a.iter().position(|s| s == "--golden") {
+        golden = a.get(i + 1).cloned();
+        a.drain(i..a.len().min(i + 2));
+        if golden.is_none() {
+            eprintln!("error: --golden needs a file path");
             std::process::exit(2);
         }
     }
@@ -10254,7 +10322,7 @@ fn main() {
             let seed = num(2, 777);
             let size = sized(3, 512);
             let w = World::generate(seed, size);
-            let (pos, bits, form) = w.coastform.debug_parts();
+            let (pos, bits, form) = w.coastform.debug_parts(&w.fields.coastform);
             println!("pos={pos:016x} bits={bits:016x} form={form:016x}");
         }
         "era" => cmd_era(sized(2, 256), num(3, 60) as usize, num(4, 16) as usize, num(5, 12345)),
@@ -10282,7 +10350,7 @@ fn main() {
             if seeds.is_empty() {
                 seeds = vec![12345, 777, 90210];
             }
-            cmd_compute(size, seeds);
+            cmd_compute(size, seeds, golden);
         }
         _ => {
             println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean|atlas|gate|compute> [args]");
@@ -10292,7 +10360,7 @@ fn main() {
             println!("  properties <size=512> <years=60> <seeds…> · era <size=256> <years=60> <n=16> <base=12345>");
             println!("  patina <size=512> <years=300> <seeds…> · systems <seed=12345> <size=512> <years=150>");
             println!("  gate <size=512> <years=300> <seed=12345> [--reports <dir>]  — the Era I gate (M65)");
-            println!("  compute <size=512> <seeds…>  — the M67 lane: JFA coast law vs exact EDT, GPU leg when built with --features gpu");
+            println!("  compute <size=512> <seeds…> [--golden <file>]  — the M67 lane: JFA coast law vs exact EDT, GPU leg when built with --features gpu; --golden writes the seed-field referee for the JS twin");
         }
     }
 }

@@ -125,8 +125,12 @@ pub struct Sediment {
     /// Every sea mouth that received ≥ MOUTH_MIN of load, ledger order
     /// (ascending flat index of the mouth cell at first registration).
     pub mouths: Vec<Mouth>,
-    /// Net deposition depth per cell (floodplain + lake + fan fill).
-    pub depth: Array2<f32>,
+    /// Net deposition depth per cell (floodplain + lake + fan fill) —
+    /// owned only until the dawn hands it to `fields.silt` (M68: one
+    /// home per grid, the field registry). Post-dawn readers take
+    /// `world.fields.silt`; the rename guards stale readers at compile
+    /// time.
+    pub depth_gen: Array2<f32>,
     /// Fan-built cells that ended above the tideline: new delta land.
     pub delta: Array2<bool>,
 }
@@ -139,7 +143,7 @@ impl Sediment {
             delta_fill: 0.0,
             abyssal: 0.0,
             mouths: Vec::new(),
-            depth: Array2::zeros(dim),
+            depth_gen: Array2::zeros(dim),
             delta: Array2::from_elem(dim, false),
         }
     }
@@ -147,15 +151,15 @@ impl Sediment {
     /// Ocean margins east and west (cf. `Coast::widen`): grids gain
     /// zeroed columns, mouth coordinates shift east by `pad`.
     pub fn widen(&mut self, pad: usize) {
-        if pad == 0 || self.depth.is_empty() {
+        if pad == 0 || self.depth_gen.is_empty() {
             return;
         }
-        let (h, w) = self.depth.dim();
+        let (h, w) = self.depth_gen.dim();
         let p = pad as isize;
-        self.depth = Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
+        self.depth_gen = Array2::from_shape_fn((h, w + 2 * pad), |(y, x)| {
             let xi = x as isize - p;
             if xi >= 0 && (xi as usize) < w {
-                self.depth[[y, xi as usize]]
+                self.depth_gen[[y, xi as usize]]
             } else {
                 0.0
             }
@@ -177,8 +181,8 @@ impl Sediment {
     /// measured on seed 777 it diverges native↔wasm by ulps while the
     /// wire-precision world (pack bytes, towns, routes, features) is
     /// identical. The identity line carries `footprint_hash` instead.
-    pub fn hash(&self) -> u64 {
-        let mut b: Vec<u8> = Vec::with_capacity(self.depth.len() * 4 + self.delta.len() + 64);
+    pub fn hash(&self, depth: &Array2<f32>) -> u64 {
+        let mut b: Vec<u8> = Vec::with_capacity(depth.len() * 4 + self.delta.len() + 64);
         for v in [self.detached, self.settled, self.delta_fill, self.abyssal] {
             b.extend_from_slice(&v.to_bits().to_le_bytes());
         }
@@ -189,7 +193,7 @@ impl Sediment {
             b.extend_from_slice(&m.area.to_bits().to_le_bytes());
             b.extend_from_slice(&m.fan.to_le_bytes());
         }
-        for v in self.depth.iter() {
+        for v in depth.iter() {
             b.extend_from_slice(&v.to_bits().to_le_bytes());
         }
         for &v in self.delta.iter() {
@@ -341,7 +345,7 @@ fn fluvial_pass(h: &mut Array2<f64>, sed: &mut Sediment) {
             let dep = l.min(room.max(0.0));
             if dep > 0.0 {
                 h[[y, x]] += dep;
-                sed.depth[[y, x]] += dep as f32;
+                sed.depth_gen[[y, x]] += dep as f32;
                 sed.settled += dep;
                 l -= dep;
             }
@@ -366,7 +370,7 @@ fn fluvial_pass(h: &mut Array2<f64>, sed: &mut Sediment) {
                 let dep = ((l - cap) * DEP_K).min(headroom);
                 if dep > 0.0 {
                     h[[y, x]] += dep;
-                    sed.depth[[y, x]] += dep as f32;
+                    sed.depth_gen[[y, x]] += dep as f32;
                     sed.settled += dep;
                     l -= dep;
                 }
@@ -415,7 +419,7 @@ fn fluvial_pass(h: &mut Array2<f64>, sed: &mut Sediment) {
             let fill = (DELTA_TOP - h[[y, x]]).min(remaining);
             if fill > 0.0 {
                 h[[y, x]] += fill;
-                sed.depth[[y, x]] += fill as f32;
+                sed.depth_gen[[y, x]] += fill as f32;
                 sed.delta_fill += fill;
                 remaining -= fill;
                 fan_cells += 1;
