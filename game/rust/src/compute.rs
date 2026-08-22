@@ -269,10 +269,27 @@ pub const BANDS: &[Band] = &[
     Band { name: "coast law cpu ms", sweet: (0.0, 120.0), hard: (0.0, 400.0), target: "sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55)" },
 ];
 
-/// The wgpu side — compiled wherever wgpu exists: always on wasm (the
-/// renderer's dependency), natively only under the `gpu` feature (the
-/// harness leg).
+/// Whether an adapter can run the lane at all (WebGL2 downlevel has no
+/// compute shaders; every real WebGPU/Vulkan path does). Compiled
+/// wherever wgpu exists — the wasm renderer records capability even
+/// though it carries no device executor (see the lane note below).
 #[cfg(any(target_arch = "wasm32", feature = "gpu"))]
+pub fn adapter_supported(adapter: &wgpu::Adapter) -> bool {
+    adapter
+        .get_downlevel_capabilities()
+        .flags
+        .contains(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+}
+
+/// The wgpu side — the native harness leg only (`feature = "gpu"`).
+/// The wasm renderer carries wgpu for Orbital but NOT the lane executor:
+/// linking it cost a measured +108 KB of wgpu/naga compute paths
+/// (3.35 → 3.45 MiB, breaching the E6.4 hard band) for a leg whose
+/// output no pixel consumes — production truth is the CPU twin on every
+/// browser path, and the kernel is proven on lavapipe every suite run.
+/// The first per-frame device client (Era II's sky) ships the executor
+/// and pays its weight as part of that phase (ADR-0027).
+#[cfg(feature = "gpu")]
 mod lane {
     use super::*;
     use std::collections::HashMap;
@@ -325,15 +342,6 @@ mod lane {
     }
 
     impl ComputeLane {
-        /// Whether an adapter can run the lane at all (WebGL2 downlevel
-        /// has no compute shaders; every real WebGPU/Vulkan path does).
-        pub fn adapter_supported(adapter: &wgpu::Adapter) -> bool {
-            adapter
-                .get_downlevel_capabilities()
-                .flags
-                .contains(wgpu::DownlevelFlags::COMPUTE_SHADERS)
-        }
-
         pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
             ComputeLane { device, queue, pipelines: HashMap::new() }
         }
