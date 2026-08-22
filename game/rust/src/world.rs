@@ -65,6 +65,27 @@ impl Dirty {
 
 
 
+/// M72 — one row per famine, written by the harvest verdict as it strikes.
+/// Diagnostics-only observation; never hashed, never packed.
+#[derive(Clone, Copy, Debug)]
+pub struct FamineRow {
+    /// absolute month of the verdict
+    pub m: i64,
+    pub x: i64,
+    pub y: i64,
+    /// souls the pass weighed before it took its toll
+    pub pop: i64,
+    /// the standardized rain anomaly the pass read at this cell
+    pub z: f64,
+    /// the shortfall it derived from that anomaly (0 at SPI −1, 1 at −2)
+    pub shortfall: f64,
+    /// the granary factor its people's craft earned (1.0 or 0.75)
+    pub granary: f64,
+    /// the toll: struck = dead + walked
+    pub hit: i64,
+    pub dead: i64,
+}
+
 pub struct World {
     pub seed: i64,
     pub size: usize,  // grid rows (the generated square base)
@@ -177,6 +198,14 @@ pub struct World {
         std::sync::Mutex<Option<(i64, Array2<f64>, Array2<f64>, Array2<f64>)>>,
     /// Last year grain was shock-priced by famine, to spike at most once a year.
     pub(crate) grain_shock_year: i64,
+    /// M72 — the harvest verdict's own ledger: one row per famine, written
+    /// by the pass as it strikes. Diagnostics-only observation of state the
+    /// pass already computed (souls at risk, the standardized shortfall it
+    /// read, the toll it took) — it changes no behaviour, is never hashed,
+    /// never packed. Without it a severity gate can only reconstruct the
+    /// dose from prose; with it the dose is measured at the mechanism.
+    pub famine_ledger: Vec<FamineRow>,
+
     /// pub since M55: diagnostics weigh dry ground against watered ground.
     pub site_score: Array2<f64>,
     food_grid: Array2<f64>,
@@ -1025,6 +1054,7 @@ impl GenBuilder {
             variability: Perlin3::new(seed + 7717),
             year_weather: std::sync::Mutex::new(None),
             grain_shock_year: -1,
+            famine_ledger: Vec::new(),
             site_score: founded.site_score,
             food_grid: founded.food_grid,
             near_fresh: founded.near_fresh,

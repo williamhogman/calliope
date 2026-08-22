@@ -84,6 +84,20 @@ impl World {
             let dead = (hit as f64 * 0.55) as i64;
             let walked = hit - dead;
             self.peoples.settlements[i].pop = (pop - hit).max(30);
+            // M72 — the pass's own ledger row: the numbers it actually used,
+            // observed where they are computed. No behaviour rides on this.
+            self.famine_ledger.push(crate::world::FamineRow {
+                m: month_abs,
+                x,
+                y,
+                pop,
+                z,
+                shortfall,
+                granary,
+                hit,
+                dead,
+            });
+
             // the hungry walk to the nearest kin-town outside the blight —
             // ring search over the bucket grid (E5.3), same winner as the
             // old full scan: nearest by (distance², index)
