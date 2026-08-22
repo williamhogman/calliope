@@ -165,8 +165,6 @@ pub struct World {
     /// E5.8 — reused serialization scratch for the tick payload; keeps its
     /// high-water capacity so `tick_json` stops paying growth reallocations.
     pub(crate) wire_buf: Vec<u8>,
-    /// Deterministic drought field over (space × year) — the famine die (M2.6).
-    pub(crate) drought: Perlin3,
     /// M71 — the interannual variability field over (space × year): its own
     /// stream, so the sky's noise and the famine die never share a draw.
     pub(crate) variability: Perlin3,
@@ -1024,7 +1022,6 @@ impl GenBuilder {
             dirty: Dirty::default(),
             sent: SentCache::default(),
             wire_buf: Vec::new(),
-            drought: Perlin3::new(seed + 4444),
             variability: Perlin3::new(seed + 7717),
             year_weather: std::sync::Mutex::new(None),
             grain_shock_year: -1,

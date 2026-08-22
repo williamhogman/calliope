@@ -15,7 +15,7 @@ pub const DROUGHT_Z: f64 = -1.0;
 impl World {
     /// M2.6 — the harvest verdict. Once a year, in the eighth month, every
     /// rain-fed farming town faces the sky it actually got: a deterministic
-    /// drought field (seeded noise over space × year) decides where the rains
+    /// standardized rain anomaly (SPI over the M71 sky) decides where the rains
     /// failed. Failure starves, spikes grain, and sends folk down the roads.
     /// Floodplains irrigate, paddies flood, herders walk to the grass and
     /// fishers never planted — only wheat and maize under open sky can fail.
