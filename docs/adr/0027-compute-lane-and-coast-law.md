@@ -59,11 +59,18 @@ have seen from where it was written:
   exact Euclidean distance transform (Felzenszwalb–Huttenlocher, the
   harness-only referee) and runs the GPU leg on lavapipe in the suite
   (`report.sh` builds a gpu-flavored diagnose in its own target dir —
-  the assay-profile doctrine — and sources the adapter via nix). In the
-  browser, bring-up executes the fixture kernel on the real adapter and
-  publishes the verdict to the probe. Referee comparisons are exact
-  integers on both sides — comparing rounded f32 distances counted 1–2%
-  phantom misses with zero real error.
+  the assay-profile doctrine — and sources the adapter via nix). Referee
+  comparisons are exact integers on both sides — comparing rounded f32
+  distances counted 1–2% phantom misses with zero real error.
+- **The shipped wasm carries no device executor.** Linking the browser
+  bring-up executor measured +108 KB of wgpu/naga compute paths
+  (3.35 → 3.45 MiB, ~214 new linked items), breaching the E6.4 hard
+  band (≤3.4 MiB) for a leg whose output no pixel consumes — the
+  uploaded texture is the twin's on every path. Browser bring-up
+  therefore records capability and the twin-is-law verdict only; the
+  lane's device side compiles under the native `gpu` feature alone. The
+  first per-frame device client (Era II's sky is the expected customer)
+  ships the executor and pays its weight inside that phase's budget.
 - **Production truth stays on the CPU twin.** The texture render.rs
   uploads is always the twin's output — equal to the GPU's wherever the
   contract holds, present even where no adapter exists. A per-frame
@@ -91,6 +98,11 @@ have seen from where it was written:
 - **Browser-only bring-up as the lane's proof** — rejected: headless CI
   has no WebGPU; a contract that executes only on developer machines is
   a claim. The native lavapipe leg makes the kernel run every suite.
+- **Ship the browser executor now** — rejected by measurement: +108 KB
+  of shipped weight (past the E6.4 hard band) to defend a dispatch path
+  that production never takes today. Defense-in-depth on real adapters
+  becomes load-bearing exactly when a client consumes device output —
+  land the weight with that client, not before.
 - **Keep the chamfer as the law, JFA on GPU only** — rejected: two laws
   again, the exact fork ADR-0026 closed; and the chamfer's radial error
   is the visible artifact the JFA removes.

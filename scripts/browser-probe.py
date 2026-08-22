@@ -74,11 +74,12 @@ async def main():
         check("ready to first frame", max(0.0, t_frame - t_ready), f"{t_frame - t_ready:.2f} s")
 
         # ---------------- M67 compute-lane verdict ----------------
-        # The bring-up contract runs async after engine creation; give it a
-        # moment, then read the verdict. Every defined outcome is a PASS
-        # (gpu byte-parity, or the CPU twin recorded as the law on an
-        # adapterless path); only DEGRADED — the contract executed and
-        # diverged — or a never-resolved probe is a failure.
+        # Bring-up records the verdict right after engine creation; give it
+        # a moment, then read it. The shipped wasm carries no device
+        # executor (ADR-0027) — every browser path records the CPU twin as
+        # the law, so the defined outcome is a cpu-twin verdict. DEGRADED
+        # is reserved for the device-client era; it, or a never-resolved
+        # probe, is a failure.
         cstat = "not probed"
         for _ in range(20):
             cstat = await page.evaluate("window.__calliope.computeStatus ? window.__calliope.computeStatus() : 'not probed (stale page)'")
