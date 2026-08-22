@@ -10087,13 +10087,13 @@ fn cmd_compute(size: usize, seeds: Vec<i64>, golden: Option<String>) {
         }
         let share = if sea == 0 { 0.0 } else { off as f64 / sea as f64 };
         println!(
-            " seed {seed}: coast law cpu {ms:.0} ms · max |jfa−exact| {max_err:.3} cells · {} of {} sea cells miss ({})",
+            " seed {seed}: grid {gw}×{gh} · coast law cpu {ms:.0} ms · max |jfa−exact| {max_err:.3} cells · {} of {} sea cells miss ({})",
             off, sea, pct(share)
         );
 
         #[cfg(feature = "gpu")]
         if let Some((_i, lane)) = gpu.as_mut() {
-            match pollster::block_on(compute::coast_seeds_gpu(lane, &seeds0, size as u32, size as u32)) {
+            match pollster::block_on(compute::coast_seeds_gpu(lane, &seeds0, gw as u32, gh as u32)) {
                 Ok(g) => {
                     let n = g.iter().zip(&cpu).filter(|(a, b)| a != b).count();
                     c.must(
