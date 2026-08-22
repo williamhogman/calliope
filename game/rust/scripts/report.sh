@@ -97,6 +97,7 @@ run "atlas.txt" atlas "$SIZE" "${SEEDS[@]}"
 # kernel runs and is byte-compared even on a headless box. If the
 # adapter can't be sourced the lane still reports: the CPU twin is the
 # law either way, and the report names which legs spoke.
+GOLDEN="${TMPDIR:-/tmp}/calliope-coast-golden.bin"
 echo "== building diagnose (gpu flavor) =="
 if command -v cargo >/dev/null 2>&1; then
   GPU_BUILD=(cargo build --release --bin diagnose --features alloc-count,gpu --quiet)
