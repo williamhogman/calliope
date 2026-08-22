@@ -729,11 +729,12 @@ impl Orbital {
     /// Upload the world grids. Parameter order is the field registry's
     /// pack order filtered to `gpu: true` (E2.2) — the JS caller derives
     /// its argument list from the generated `FIELDS` table, and
-    /// `SET_WORLD_GRIDS` holds this signature to the same table in a
-    /// `const` assertion, so the two cannot drift apart.
+    /// `pack::GPU_UPLOAD_ORDER` (with `SET_WORLD_ARITY` above) holds this
+    /// signature to the same table in `const` assertions, so the two
+    /// cannot drift apart.
     pub fn set_world(
-
         &mut self,
+
         w: u32,
         h: u32,
         height: &[f32],
