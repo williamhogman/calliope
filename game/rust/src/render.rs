@@ -574,7 +574,7 @@ impl Orbital {
         }));
 
         // M67 — the lane's capability is the adapter's, recorded once here.
-        let compute_ok = crate::compute::ComputeLane::adapter_supported(&adapter);
+        let compute_ok = crate::compute::adapter_supported(&adapter);
 
         let caps = surface.get_capabilities(&adapter);
         let format = caps.formats[0];
