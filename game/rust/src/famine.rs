@@ -7,10 +7,15 @@ use crate::resources;
 use crate::society;
 use crate::world::{Event, EventKind, World};
 
+/// The standardized rainfall anomaly at which a year counts as a failed
+/// one: SPI −1, moderate drought (McKee 1993). Shortfall runs from here
+/// to SPI −2, extreme drought, where it saturates.
+pub const DROUGHT_Z: f64 = -1.0;
+
 impl World {
     /// M2.6 — the harvest verdict. Once a year, in the eighth month, every
     /// rain-fed farming town faces the sky it actually got: a deterministic
-    /// drought field (seeded noise over space × year) decides where the rains
+    /// standardized rain anomaly (SPI over the M71 sky) decides where the rains
     /// failed. Failure starves, spikes grain, and sends folk down the roads.
     /// Floodplains irrigate, paddies flood, herders walk to the grass and
     /// fishers never planted — only wheat and maize under open sky can fail.
@@ -20,9 +25,20 @@ impl World {
             return events;
         }
         let year = month_abs / 12;
+        // M72 — one sky. The failed year is no longer a private die: it is
+        // *the year's own rain*, read as a standardized anomaly (SPI, McKee
+        // 1993) against the interannual spread this latitude actually
+        // carries. z ≤ −1 is meteorological drought anywhere on Earth, and
+        // because the spread is latitude-shaped the same threshold means
+        // the same thing in the tropics and on the steppe.
+        let rows = self.fields.tmean.dim().0 as f64;
+        // the year's rain, taken once and held: the pass moves populations
+        // while it reads, so the sky is copied out before the walk begins.
+        let dp_year = self.with_year_weather(year, |_, dp| dp.clone());
         let dry = |x: i64, y: i64| -> f64 {
-            self.drought
-                .fbm(x as f64 * 0.045, y as f64 * 0.045, year as f64 * 0.83, 2)
+            let lat = (-90.0 + (y as f64) * 180.0 / (rows - 1.0)).abs();
+            let sigma = crate::climate::anomaly_amp_p(lat).max(1e-6);
+            dp_year[[y as usize, x as usize]] / sigma
         };
         let mut migrations: Vec<(usize, i64)> = Vec::new();
         let mut worst = 0.0f64;
@@ -44,11 +60,12 @@ impl World {
             if !rainfed || pop <= 90 {
                 continue;
             }
-            let d = dry(x, y);
-            if d >= -0.30 {
+            let z = dry(x, y);
+            if z >= DROUGHT_Z {
                 continue;
             }
-            let shortfall = (((-d) - 0.30) / 0.30).min(1.0);
+            // saturates at SPI −2, the conventional edge of extreme drought
+            let shortfall = (((-z) - (-DROUGHT_Z)) / (-DROUGHT_Z)).min(1.0);
             worst = worst.max(shortfall);
             // granaries (pottery) blunt a failed year
             let granary = if self
@@ -72,7 +89,7 @@ impl World {
             // old full scan: nearest by (distance², index)
             let target = town_buckets.nearest(x as f64, y as f64, |j| {
                 let o = &self.peoples.settlements[j];
-                j != i && o.people == culture && !(dry(o.x, o.y) < -0.30)
+                j != i && o.people == culture && !(dry(o.x, o.y) < DROUGHT_Z)
             });
             let text = if let Some((j, _)) = target {
                 migrations.push((j, walked));
