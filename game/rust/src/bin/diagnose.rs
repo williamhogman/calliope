@@ -9999,6 +9999,23 @@ fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
             format!("oldest {:.1}h", oldest),
             "M65: stale rows compose stale verdicts — rerun the suite within 6h",
         );
+        // M55 ensemble law: somewhere across the composed worlds, the dry
+        // frontier's veto must actually refuse a colonist ground it wanted.
+        // A single world may never hold that auction (late foundings, deep
+        // craft already learned) and says so as a WARN in its own lane; the
+        // ensemble is where the claim is either proved or falsified.
+        let total_refused: usize = veto_lanes.iter().map(|(_, k)| *k).sum();
+        let detail = veto_lanes
+            .iter()
+            .map(|(n, k)| format!("{}:{}", n.trim_start_matches("civ-").trim_end_matches(".txt"), k))
+            .collect::<Vec<_>>()
+            .join(" · ");
+        c.must(
+            "the veto bites somewhere in the ensemble",
+            total_refused >= 1 && !veto_lanes.is_empty(),
+            format!("{} refused town(s) over {} civ lane(s) [{}]", total_refused, veto_lanes.len(), detail),
+            "M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it",
+        );
     }
     c.must(
         "the suite composes clean",
