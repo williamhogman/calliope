@@ -2000,7 +2000,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
 
         // ---- longshore drift (M44) ----------------------------------
         {
-            let cf = &w.coastform;
+            let cf = &w.fields.coastform;
             let mut n_spit = 0usize;
             let mut n_bar = 0usize;
             let mut n_lag = 0usize;
@@ -2008,7 +2008,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             let mut coastal_water = 0usize;
             for y in 0..gh {
                 for x in 0..gw {
-                    match cf.form[[y, x]] {
+                    match cf[[y, x]] {
                         calliope::coast::SPIT => {
                             n_spit += 1;
                             if hgt[[y, x]] < 0.0 { misread += 1; }
@@ -2037,7 +2037,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
             // chains per class: 8-connected components of the form grid
             let chains = |class: u8| -> usize {
                 let mask = ndarray::Array2::from_shape_fn((gh, gw), |(y, x)| {
-                    cf.form[[y, x]] == class
+                    cf[[y, x]] == class
                 });
                 calliope::ndimage::label(&mask, true).n
             };
