@@ -10031,8 +10031,11 @@ fn cmd_compute(size: usize, seeds: Vec<i64>) {
         let seeds0 = compute::coast_seeds(&hf, size, size);
         let cpu = compute::jfa_cpu(seeds0.clone(), size, size);
         let ms = t0.elapsed().as_secs_f64() * 1000.0;
-        let d = compute::finalize(&cpu, size, size);
 
+        // The referee compares exact integers: the JFA's squared distance
+        // to its chosen seed against the exact EDT's square. Comparing
+        // rounded f32 distances instead counts precision noise as misses
+        // (measured: 1–2% phantom "off" cells with zero real error).
         let edt = compute::exact_edt_sq(&land, size, size);
         let mut max_err = 0.0f64;
         let mut off = 0usize;
@@ -10042,17 +10045,25 @@ fn cmd_compute(size: usize, seeds: Vec<i64>) {
                 continue;
             }
             sea += 1;
-            let err = (d[i] as f64 - edt[i].sqrt()).abs();
-            if err > 1e-6 {
+            let s = cpu[i];
+            let jfa_d2 = if s == compute::NONE {
+                f64::INFINITY
+            } else {
+                let (x, y) = ((i % size) as f64, (i / size) as f64);
+                let (sx, sy) = ((s as usize % size) as f64, (s as usize / size) as f64);
+                (sx - x) * (sx - x) + (sy - y) * (sy - y)
+            };
+            if jfa_d2 != edt[i] {
                 off += 1;
-            }
-            if err > max_err {
-                max_err = err;
+                let err = (jfa_d2.sqrt() - edt[i].sqrt()).abs();
+                if err > max_err {
+                    max_err = err;
+                }
             }
         }
         let share = if sea == 0 { 0.0 } else { off as f64 / sea as f64 };
         println!(
-            " seed {seed}: coast law cpu {ms:.0} ms · max |jfa−exact| {max_err:.3} cells · {} of {} sea cells off ({})",
+            " seed {seed}: coast law cpu {ms:.0} ms · max |jfa−exact| {max_err:.3} cells · {} of {} sea cells miss ({})",
             off, sea, pct(share)
         );
 
