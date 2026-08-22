@@ -5494,18 +5494,18 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // record every dry town as it appears, against its people's reach
         // at that decade's end — an upper bound on the reach it truly had,
         // which keeps every "REFUSED" verdict conservative.
-        let mut seen: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        let mut seen: std::collections::HashSet<i64> = std::collections::HashSet::new();
         for s in cf.peoples.settlements.iter() {
-            seen.insert(s.id.0 as u32);
+            seen.insert(s.id.0);
         }
         // (id, y, x, table m, reach at founding m, month observed)
-        let mut births: Vec<(u32, i64, i64, f64, f64, i64)> = Vec::new();
+        let mut births: Vec<(i64, i64, i64, f64, f64, i64)> = Vec::new();
         while done < years {
             let chunk = step.min(years - done);
             let _ = run_years(&mut cf, chunk);
             done += chunk;
             for s in cf.peoples.settlements.iter() {
-                if !seen.insert(s.id.0 as u32) {
+                if !seen.insert(s.id.0) {
                     continue;
                 }
                 if !cf.arid_dry[[s.y as usize, s.x as usize]] {
@@ -5518,7 +5518,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     .get(s.people.idx())
                     .map(calliope::settlements::well_reach_m)
                     .unwrap_or(0.0);
-                births.push((s.id.0 as u32, s.y, s.x, table, reach, cf.month));
+                births.push((s.id.0, s.y, s.x, table, reach, cf.month));
             }
             // M58 — judge the desert at the price the hungriest crown
             // would pay for it, not at the market's neutral voice.
