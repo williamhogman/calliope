@@ -31,7 +31,7 @@ impl World {
     }
 
     /// Pack v2 (E3.3–E3.6): `[u32 header_len][header json (padded to 4)][blob]`.
-    /// The header carries `pack: 2`, a CRC-32 of the blob (E3.6), and the
+    /// The header carries `pack: 3`, a CRC-32 of the blob (E3.6), and the
     /// territory grid as RLE instead of a raw section (E3.5); float grids
     /// ride as quantized u16 where the registry says so (E3.4). The blob is
     /// written once, straight from grid storage — no per-field temporary
@@ -108,12 +108,46 @@ impl World {
                     entry["dtype"] = json!("uint8");
                     entry["q"] = json!({ "scale": scale, "offset": lo, "xform": "linear" });
                 }
+                (FieldData::U8(a), Quant::Bits) => {
+                    // M70 — the bit lane: a categorical byte grid whose live
+                    // values never reach 256 does not owe the wire eight
+                    // bits. The width is *measured* from the field's own
+                    // range, exactly as quantization measures scale, so no
+                    // vocabulary size is assumed anywhere; values ride
+                    // exact (this is packing, not lossy quantization).
+                    let s = a.as_slice().expect("registry grids are contiguous");
+                    let hi = s.iter().copied().max().unwrap_or(0);
+                    let bits = (8 - hi.leading_zeros() as usize).max(1).min(8);
+
+                    if bits == 8 {
+                        FieldData::U8(a).write_into(&mut blob);
+                    } else {
+                        blob.reserve((s.len() * bits + 7) / 8);
+                        let mut acc: u32 = 0;
+                        let mut have = 0usize;
+                        for &v in s {
+                            acc |= (v as u32) << have;
+                            have += bits;
+                            while have >= 8 {
+                                blob.push((acc & 0xff) as u8);
+                                acc >>= 8;
+                                have -= 8;
+                            }
+                        }
+                        if have > 0 {
+                            blob.push((acc & 0xff) as u8);
+                        }
+                    }
+                    entry["dtype"] = json!("uint8");
+                    entry["bits"] = json!(bits);
+                }
                 (data, _) => data.write_into(&mut blob),
             }
             entry["offset"] = json!(offset);
             entry["nbytes"] = json!(blob.len() - offset);
             entries.push(entry);
         }
+
 
         let mut header = self.pack_meta();
         header["id"] = json!(format!("{}-{}", self.seed, self.size));
@@ -135,7 +169,7 @@ impl World {
 }
 
 /// Pack protocol version — the client refuses any other (E3.6).
-pub const PACK_VERSION: u32 = 2;
+pub const PACK_VERSION: u32 = 3;
 
 /// M15.7 — hostile-proof pack reader: everything the client's unpacker
 /// trusts, re-checked here with bounds instead of faith. Returns
@@ -203,12 +237,28 @@ pub fn validate_pack(bytes: &[u8]) -> Result<(usize, usize), String> {
             Some("uint8") => 1,
             other => return Err(format!("unknown dtype {other:?}")),
         };
-        let want = cells
-            .checked_mul(cell)
-            .ok_or_else(|| "nbytes overflows".to_string())?;
+        // M70 — a bit-lane entry claims a sub-byte width; its byte count is
+        // the ceiling of the bit run, and any width outside 1..=8 is a lie.
+        let want = match e.get("bits").and_then(Value::as_u64) {
+            Some(b) => {
+                if b == 0 || b > 8 || cell != 1 {
+                    return Err(format!("bad bit width {b}"));
+                }
+                cells
+                    .checked_mul(b as usize)
+                    .ok_or_else(|| "bit run overflows".to_string())?
+                    .checked_add(7)
+                    .ok_or_else(|| "bit run overflows".to_string())?
+                    / 8
+            }
+            None => cells
+                .checked_mul(cell)
+                .ok_or_else(|| "nbytes overflows".to_string())?,
+        };
         if nb != want {
             return Err(format!("nbytes {} disagrees with shape ({} expected)", nb, want));
         }
+
         if off != expected_off {
             return Err(format!("offset {} breaks contiguity (expected {})", off, expected_off));
         }
@@ -297,11 +347,16 @@ macro_rules! dtype_name {
 // field's live range; `u16sqrt` quantizes in sqrt-space (wide-dynamic-range
 // fields keep relative precision at the low end). The client dequantizes
 // back to float32 at the unpack edge, so everything downstream is unchanged.
+// `bits` is the lossless lane (M70): a categorical `u8` grid rides at the
+// sub-byte width its own live maximum earns, expanded back to a full byte
+// grid at the unpack edge.
+
 macro_rules! quant_mode {
     (raw) => { Quant::None };
     (u16) => { Quant::Linear };
     (u16sqrt) => { Quant::Sqrt };
     (u8) => { Quant::Linear8 };
+    (bits) => { Quant::Bits };
 }
 
 macro_rules! field_registry {
@@ -405,22 +460,22 @@ field_registry! {
     discharge: F32, units "flow accumulation (cells·rain)",  hash false, gpu true,  wire u16sqrt;
     flow_amp:  F32, units "signed seasonal swing −1..1",     hash true,  gpu false, wire u8;
     fertility: F32, units "0..1 arable index",               hash false, gpu true,  wire u16;
-    biomes:    U8,  units "biome id",                        hash true,  gpu false, wire raw;
-    crops:     U8,  units "crop package id",                 hash true,  gpu false, wire raw;
-    strahler:  U8,  units "stream order, 0 off-river",       hash true,  gpu true,  wire raw;
+    biomes:    U8,  units "biome id",                        hash true,  gpu false, wire bits;
+    crops:     U8,  units "crop package id",                 hash true,  gpu false, wire bits;
+    strahler:  U8,  units "stream order, 0 off-river",       hash true,  gpu true,  wire bits;
     flags:     U8,  units "CellFlags bits",                  hash true,  gpu true,  wire raw;
     territory: I16, units "owner realm, −1 wild",            hash false, gpu false, wire raw;
-    rock:      U8,  units "rock province id (M18)",          hash true,  gpu true,  wire raw;
-    soil:      U8,  units "soil order id (M51)",              hash true,  gpu true,  wire raw;
+    rock:      U8,  units "rock province id (M18)",          hash true,  gpu true,  wire bits;
+    soil:      U8,  units "soil order id (M51)",              hash true,  gpu true,  wire bits;
     upwelling: F32, units "0..1 coastal upwelling (M47)",    hash true,  gpu false, wire u8;
     aquifer:   F32, units "m depth to water table (M54)",    hash true,  gpu false, wire u8;
-    landform:  U8,  units "landform vocabulary id (M60)",    hash true,  gpu true,  wire raw;
+    landform:  U8,  units "landform vocabulary id (M60)",    hash true,  gpu true,  wire bits;
     // M68 — the era's last two hand-wired grids come home. Both are
     // already hashed by their ledgers (`Coast::hash`, `Sediment::hash`,
     // which read these very arrays), so the registry declares them
     // `hash false`: one grid, one hash, no double counting and no
     // churn in the replay identity the era sealed against.
-    coastform: U8,  units "coast form id (M44)",             hash false, gpu false, wire raw;
+    coastform: U8,  units "coast form id (M44)",             hash false, gpu false, wire bits;
     silt:      F32, units "deposition depth, height units",  hash false, gpu false, wire u16sqrt;
 }
 
@@ -436,6 +491,10 @@ pub enum Quant {
     /// Linear u8 over the field's live `[min, max]` span — normalized,
     /// overlay-only grids (E3.4).
     Linear8,
+    /// Exact sub-byte packing for categorical `u8` grids (M70): the width
+    /// is measured from the field's own live maximum, so the values ride
+    /// lossless and no vocabulary size is hard-coded anywhere.
+    Bits,
 }
 
 /// Borrowed grid storage behind a registry entry. Storage is f32 at rest

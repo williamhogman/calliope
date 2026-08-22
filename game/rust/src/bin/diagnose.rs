@@ -7538,7 +7538,7 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         c.must(&format!("route graph connected ({})", seed), comps <= 1,
             format!("{} comps", comps.max(1)), "M8.1: one world, one web");
 
-        // ---- P3: pack v2 round-trips — stable bytes, honest layout,
+        // ---- P3: pack v3 round-trips — stable bytes, honest layout,
         // valid crc, quantization inside ε, territory RLE exact (E3.3-E3.6)
         let p1 = w.pack();
         let p2 = w.pack();
@@ -7548,8 +7548,8 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
         let hdr: serde_json::Value = serde_json::from_slice(&p1[4..4 + hlen]).unwrap();
         let base = 4 + hlen;
         let crc = calliope::util::crc32(&p1[base..]);
-        c.must(&format!("pack v2 + crc32 ({})", seed),
-            hdr["pack"].as_u64() == Some(2) && hdr["crc32"].as_u64() == Some(crc as u64),
+        c.must(&format!("pack v3 + crc32 ({})", seed),
+            hdr["pack"].as_u64() == Some(calliope::pack::PACK_VERSION as u64) && hdr["crc32"].as_u64() == Some(crc as u64),
             format!("crc {:08x}", crc), "E3.6: stamped and checksummed");
         let entries = hdr["arrays"].as_array().unwrap();
         let mut ok_layout = true;
@@ -7560,7 +7560,12 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
             let nb = e["nbytes"].as_u64().unwrap() as usize;
             let shape: Vec<usize> = e["shape"].as_array().unwrap().iter().map(|v| v.as_u64().unwrap() as usize).collect();
             let cell = match e["dtype"].as_str().unwrap() { "float32" => 4, "uint16" | "int16" => 2, _ => 1 };
-            ok_layout &= off == expected_off && nb == shape[0] * shape[1] * cell;
+            // M70 — a bit-lane section is the ceiling of its bit run.
+            let want = match e.get("bits").and_then(|b| b.as_u64()) {
+                Some(b) => (shape[0] * shape[1] * b as usize + 7) / 8,
+                None => shape[0] * shape[1] * cell,
+            };
+            ok_layout &= off == expected_off && nb == want;
             expected_off = off + nb;
             total += nb;
         }
@@ -7623,7 +7628,31 @@ fn cmd_properties(size: usize, years: usize, seeds: Vec<i64>) {
                 match e["dtype"].as_str().unwrap() {
                     "uint8" => {
                         let grid = u8_grid(name);
-                        ok_data &= p1[off..off + nb].iter().zip(grid.iter()).all(|(&a, &b)| a == b);
+                        // M70 — the bit lane is lossless by construction, so
+                        // the gate decodes it exactly the way the client does
+                        // and demands equality, not tolerance.
+                        match e.get("bits").and_then(|b| b.as_u64()) {
+                            Some(bits) if bits < 8 => {
+                                let bits = bits as usize;
+                                let mask = (1u32 << bits) - 1;
+                                let (mut acc, mut have, mut pos) = (0u32, 0usize, off);
+                                let mut vals: Vec<u8> = Vec::with_capacity(grid.len());
+                                for _ in 0..grid.len() {
+                                    while have < bits {
+                                        acc |= (*p1.get(pos).unwrap_or(&0) as u32) << have;
+                                        pos += 1;
+                                        have += 8;
+                                    }
+                                    vals.push((acc & mask) as u8);
+                                    acc >>= bits;
+                                    have -= bits;
+                                }
+                                ok_data &= vals.iter().zip(grid.iter()).all(|(&a, &b)| a == b);
+                            }
+                            _ => {
+                                ok_data &= p1[off..off + nb].iter().zip(grid.iter()).all(|(&a, &b)| a == b);
+                            }
+                        }
                     }
                     "float32" => {
                         let grid = f32_grid(name);
