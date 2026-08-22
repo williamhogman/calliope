@@ -9628,6 +9628,23 @@ fn cmd_atlas(size: usize, seeds: Vec<i64>) {
         "M63: the deep-earth grids reach Orbital through the registry",
     );
 
+    // -- M69: the upload order is the registry's, not a hand-kept list.
+    // `render::set_world`'s positional signature is judged by a const
+    // assertion in the crate (a drifted flag is a build break); the row
+    // here reports the order the harness actually saw, so the report
+    // names the law instead of trusting it silently.
+    let order = calliope::pack::gpu_order();
+    println!(" gpu upload order ({}): {}", order.len(), order.join(" · "));
+    c.must(
+        "upload order = registry gpu rows",
+        calliope::pack::gpu_order_is(calliope::render::SET_WORLD_GRIDS)
+            && order == calliope::render::SET_WORLD_GRIDS.to_vec(),
+        format!("{} grids", order.len()),
+        "M69: set_world's parameter list is the field registry's gpu rows in pack order — no second list",
+    );
+
+
+
     // -- per seed: every id on the grid has a swatch (no magenta on the
     // map), and packing the world for the wire leaves the state hash
     // untouched — the lens toggle is pure presentation
