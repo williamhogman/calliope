@@ -12,6 +12,7 @@ pub mod chronicle;
 pub mod civ;
 pub mod climate;
 pub mod coast;
+pub mod compute;
 pub mod constants;
 pub mod culture;
 pub mod currents;
