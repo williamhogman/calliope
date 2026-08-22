@@ -5147,47 +5147,90 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         );
         // The verdict is a *threshold* law: below SPI −1 the harvest fails,
         // full stop, so incidence saturates at 100% in both dry bins and
-        // carries no dose. The dose the law actually modulates is severity
-        // — the shortfall runs from SPI −1 to −2 and the toll rides it —
-        // so the dose-response is measured in the dead, not in the count.
-        let mut sev: Vec<(f64, f64)> = Vec::new(); // (shortfall, dead)
-        let (mut dead_b0, mut n_b0, mut dead_b1, mut n_b1) = (0.0f64, 0usize, 0.0f64, 0usize);
-        for &(m, x, y, dead) in &log.famine_sites {
-            let z = spi_of(m / 12, x, y);
-            let shortfall = (((-z) - (-calliope::famine::DROUGHT_Z)) / (-calliope::famine::DROUGHT_Z)).min(1.0);
-            sev.push((shortfall, dead as f64));
-            if z <= edges[0] {
-                dead_b0 += dead as f64;
-                n_b0 += 1;
-            } else {
-                dead_b1 += dead as f64;
-                n_b1 += 1;
+        // carries no dose. The dose the law modulates is severity, and the
+        // honest measure of it is not a coarse two-bin mean of the dead —
+        // that reads town size, not drought — but the *per-capita* toll
+        // read against each famine's own shortfall depth, at the mechanism
+        // itself (the pass's ledger: souls at risk, the anomaly it read,
+        // the granary factor it applied, the toll it took).
+        let led = &w.famine_ledger;
+        // (a) the ledger is the harvest verdict, reproduced exactly.
+        let mut exact = 0usize;
+        for r in led {
+            let z_here = spi_of(r.m / 12, r.x, r.y);
+            let sf = (((-z_here) - (-calliope::famine::DROUGHT_Z)) / (-calliope::famine::DROUGHT_Z)).min(1.0);
+            let hit = ((r.pop as f64) * (0.05 + 0.16 * sf) * r.granary) as i64;
+            let dead = (hit as f64 * 0.55) as i64;
+            if (sf - r.shortfall).abs() < 1e-9 && hit == r.hit && dead == r.dead {
+                exact += 1;
             }
         }
-        let mean_b0 = if n_b0 == 0 { 0.0 } else { dead_b0 / n_b0 as f64 };
-        let mean_b1 = if n_b1 == 0 { 0.0 } else { dead_b1 / n_b1 as f64 };
-        let ns = sev.len() as f64;
-        let (msx, msy) = (
-            sev.iter().map(|p| p.0).sum::<f64>() / ns,
-            sev.iter().map(|p| p.1).sum::<f64>() / ns,
+        c.must(
+            "the toll is the shortfall's own arithmetic",
+            exact == led.len() && !led.is_empty(),
+            format!("{}/{} famines reproduced exactly from the year's SPI", exact, led.len()),
+            "M72: every toll re-derives from the realized rain at that cell — no residual, no die",
+        );
+        // (b) the dose, read continuously: per-capita toll against depth.
+        // Normalizing by the granary factor removes the craft's blunting,
+        // which is a property of the people, not of the sky.
+        let dose: Vec<(f64, f64)> = led
+            .iter()
+            .map(|r| (r.shortfall, (r.hit as f64) / (r.pop as f64) / r.granary))
+            .collect();
+        let nd = dose.len() as f64;
+        let (mdx, mdy) = (
+            dose.iter().map(|p| p.0).sum::<f64>() / nd,
+            dose.iter().map(|p| p.1).sum::<f64>() / nd,
         );
         let (mut cov, mut vx, mut vy) = (0.0, 0.0, 0.0);
-        for (a, b) in &sev {
-            cov += (a - msx) * (b - msy);
-            vx += (a - msx).powi(2);
-            vy += (b - msy).powi(2);
+        for (a, b) in &dose {
+            cov += (a - mdx) * (b - mdy);
+            vx += (a - mdx).powi(2);
+            vy += (b - mdy).powi(2);
         }
+        let slope = cov / vx.max(1e-12);
+        let intercept = mdy - slope * mdx;
         let rho_sev = cov / (vx.sqrt() * vy.sqrt()).max(1e-12);
+        // (c) monotone in depth across quartiles of the shortfall the world
+        // actually produced — a continuous dose, not two sparse SPI bins.
+        let mut byd = dose.clone();
+        byd.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        let q: Vec<f64> = (0..4)
+            .map(|k| {
+                let lo = k * byd.len() / 4;
+                let hi = ((k + 1) * byd.len() / 4).max(lo + 1).min(byd.len());
+                byd[lo..hi].iter().map(|p| p.1).sum::<f64>() / ((hi - lo) as f64)
+            })
+            .collect();
+        let monotone = q.windows(2).all(|p| p[1] > p[0]);
         println!(
-            "  severity dose — mean dead {:.1} at SPI ≤ −2 ({} famines) vs {:.1} at −2..−1 ({}) · ρ(shortfall, dead) {:.3}",
-            mean_b0, n_b0, mean_b1, n_b1, rho_sev
+            "  severity dose over {} famines — per-capita toll {:.4} + {:.4}·shortfall (law: 0.0500 + 0.1600) · ρ {:.4}",
+            led.len(),
+            intercept,
+            slope,
+            rho_sev
+        );
+        println!(
+            "  by shortfall quartile — {}",
+            q.iter().map(|v| format!("{:.3}", v)).collect::<Vec<_>>().join(" → ")
         );
         c.must(
             "hunger climbs with the drought",
-            n_b0 > 0 && n_b1 > 0 && mean_b0 > mean_b1 && rho_sev > 0.0,
-            format!("{:.1} dead at SPI ≤ −2 vs {:.1} at −2..−1 · ρ {:.3}", mean_b0, mean_b1, rho_sev),
-            "M72: the toll rises with the depth of the drought — the threshold decides whether, the shortfall decides how hard",
+            monotone
+                && rho_sev >= 0.99
+                && (slope - 0.16).abs() <= 0.02
+                && (intercept - 0.05).abs() <= 0.01,
+            format!(
+                "toll {:.4}+{:.4}·s · ρ {:.4} · quartiles {}",
+                intercept,
+                slope,
+                rho_sev,
+                q.iter().map(|v| format!("{:.3}", v)).collect::<Vec<_>>().join("<")
+            ),
+            "M72: the per-capita toll rises linearly with the depth of the drought and monotonically across its quartiles — the threshold decides whether, the shortfall decides how hard",
         );
+
 
         // ---- the placebo: the same towns, the same years' worth of sky,
         // but the wrong year. If hunger were a property of *place* (bad
