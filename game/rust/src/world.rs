@@ -345,6 +345,7 @@ impl GenBuilder {
         self.world.take().expect("generation not complete")
     }
 
+    #[inline(never)]
     fn stage_terrain(&mut self) {
         // M16/ADR-0024 — the deep past first: the plate-history sketch is
         // dealt before the land, and the land is drawn over it.
@@ -363,6 +364,7 @@ impl GenBuilder {
         self.timings.push(("terrain", now_ms() - t));
     }
 
+    #[inline(never)]
     fn stage_erosion(&mut self) {
         let te = now_ms();
         let height = self.height64.as_mut().unwrap();
@@ -377,6 +379,7 @@ impl GenBuilder {
     /// M28/M29 — the ice ages: cut the LGM footprint from the eroded
     /// land, then carve the relief the sheets left. Runs before climate
     /// so every downstream layer reads the glaciated world.
+    #[inline(never)]
     fn stage_glacial(&mut self) {
         let t = now_ms();
         let h = self.height64.as_mut().unwrap();
@@ -415,6 +418,7 @@ impl GenBuilder {
         self.ice = Some(ice);
     }
 
+    #[inline(never)]
     fn stage_climate(&mut self) {
         let t1 = now_ms();
         let height = self.height64.as_ref().unwrap();
@@ -462,6 +466,7 @@ impl GenBuilder {
         self.timings.push(("climate", now_ms() - t1));
     }
 
+    #[inline(never)]
     fn stage_hydrology(&mut self) {
         let t2 = now_ms();
         let hydro = hydrology::hydrology(
@@ -486,6 +491,7 @@ impl GenBuilder {
         self.timings.push(("hydrology", now_ms() - t2));
     }
 
+    #[inline(never)]
     fn stage_biomes(&mut self) {
         let t3 = now_ms();
         // M38 — the biome pass reads the frozen ground: the same
@@ -509,6 +515,7 @@ impl GenBuilder {
         self.timings.push(("biomes", now_ms() - t3));
     }
 
+    #[inline(never)]
     fn stage_fertility(&mut self) {
         let t4 = now_ms();
         // M51 — the basement is read here now, before the soil: the
@@ -596,6 +603,7 @@ impl GenBuilder {
         self.cont64 = None; // M38 — the biome pass was its last reader
     }
 
+    #[inline(never)]
     fn stage_naming(&mut self) {
         let t5 = now_ms();
         let (features, world_name) = naming::name_features(
@@ -616,6 +624,7 @@ impl GenBuilder {
         self.timings.push(("naming", now_ms() - t5));
     }
 
+    #[inline(never)]
     fn stage_resources(&mut self) {
         let t6 = now_ms();
         // M18 — the basement: shield, basin, fold belt, volcanic, read
@@ -637,6 +646,7 @@ impl GenBuilder {
         self.timings.push(("resources", now_ms() - t6));
     }
 
+    #[inline(never)]
     fn stage_dawn(&mut self) {
         let seed = self.seed;
         let size = self.size;

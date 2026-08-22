@@ -70,6 +70,7 @@
 //! advanced in tick time. The LGM shelf (sheets grounding on exposed
 //! shelf at lowstand) stays deliberately out of scope — land only.
 
+use crate::grid::N4;
 use ndarray::Array2;
 use std::collections::VecDeque;
 
