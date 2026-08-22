@@ -115,7 +115,6 @@ if CARGO_TARGET_DIR=target/gpu "${GPU_BUILD[@]}"; then
     done
   fi
   echo "-- diagnose compute $COMPUTE -> compute.txt"
-  GOLDEN="${TMPDIR:-/tmp}/calliope-coast-golden.bin"
   rm -f "$GOLDEN"
   if [ -n "$ICD" ] && [ -n "$VKLIB" ]; then
     VK_ICD_FILENAMES="$ICD" LD_LIBRARY_PATH="$VKLIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
@@ -134,6 +133,29 @@ else
     echo "CHECKS: 0 pass · 0 warn · 1 fail"
   } > "$OUT/compute.txt"
 fi
+
+# ---- the coast law's third executor (M67 follow-on, ADR-0027) --------------
+# WGSL kernel and Rust twin prove byte-parity on lavapipe above. The JS
+# port in render/compositor.js is the executor no device holds — so it
+# answers the same law against the golden seed field the run just wrote.
+# No golden (gpu-flavor build broken) or no bun is a FAIL, not a skip:
+# the field is exported by the CPU twin, which every build carries.
+echo "-- coast-js parity -> coastjs.txt"
+if command -v bun >/dev/null 2>&1 && [ -f "$GOLDEN" ]; then
+  bun ../../scripts/coast-js-parity.mjs "$GOLDEN" > "$OUT/coastjs.txt" || true
+else
+  {
+    echo "========================================================================"
+    echo " CALLIOPE DIAGNOSTIC · COAST-JS                     M67 third executor"
+    echo "========================================================================"
+    echo
+    echo "---- checks ----------------------------------------------------------"
+    echo "[FAIL] coast-js lane runs                                (M67 gate: the JS twin must be executable — no bun on PATH or no golden field exported)"
+    echo "CHECKS: 0 pass · 0 warn · 1 fail"
+  } > "$OUT/coastjs.txt"
+fi
+
+
 
 
 # ---- M22/M27 deep-earth replay across runtimes ------------------------------
