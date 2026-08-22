@@ -4399,6 +4399,16 @@ fn cmd_resources(seed: i64, size: usize) {
 
 fn cmd_civ(seed: i64, size: usize, years: usize) {
     let mut w = World::generate(seed, size);
+    // M72 — the routed river, as the dawn solved it. Every year's flow is
+    // a read-time multiplier; if a tick ever wrote back into the routing,
+    // these bits would move and the gate below would say so.
+    let river_dawn = {
+        let mut b: Vec<u8> = Vec::new();
+        for v in w.fields.discharge.iter() { b.extend_from_slice(&v.to_le_bytes()); }
+        for v in w.fields.strahler.iter() { b.push(*v); }
+        for v in w.fields.lakes.iter() { b.push(*v as u8); }
+        (w.fields.discharge.dim(), fnv(&b))
+    };
     header("CIVILIZATION", &format!("seed {} · {}x{} · {}y", seed, w.width, size, years));
     println!("world \"{}\" · {} peoples · {} realms · {} settlements at dawn", w.world_name, w.peoples.peoples.len(), w.peoples.realms.len(), w.peoples.settlements.len());
 
@@ -5003,6 +5013,135 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     if years >= 100 {
         let per_c = log.famines as f64 * 100.0 / years.max(1) as f64;
         c.band("famine events per century", per_c, format!("{:.1}", per_c));
+    }
+
+    // ---- M72: the year that was — one sky over harvest, flow and famine ----
+    {
+        let (rows, cols) = w.fields.tmean.dim();
+        // farmed ground only: the harvest lane has nothing to say about ice
+        // or open water, and averaging wildland in would dilute the signal.
+        let mut cells: Vec<(usize, usize)> = Vec::new();
+        for y in (2..rows).step_by(7) {
+            for x in (2..cols).step_by(7) {
+                let pack = calliope::agriculture::CropPackage::from_code(w.fields.crops[[y, x]]);
+                if pack != calliope::agriculture::CropPackage::Wildland {
+                    cells.push((y, x));
+                }
+            }
+        }
+        let sample_years: Vec<i64> = (1..=32).collect();
+        let (mut dp_n, mut dp_s, mut yl_n, mut yl_s) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+        let (mut dq_n, mut dq_s, mut fl_n, mut fl_s) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+        let (mut pred_s, mut clamped, mut out_of_band) = (0.0f64, 0usize, 0usize);
+        let mut pairs: Vec<(f64, f64)> = Vec::new();
+        for &yr in &sample_years {
+            for &(y, x) in &cells {
+                let pack = calliope::agriculture::CropPackage::from_code(w.fields.crops[[y, x]]);
+                let t = w.fields.tmean[[y, x]] as f64;
+                let p = w.fields.precip[[y, x]] as f64;
+                let irr = w.near_fresh[[y, x]];
+                let (dp, dq) = w.with_year_sky(yr, |_, dp, dq| (dp[[y, x]], dq[[y, x]]));
+                let yf = w.year_yield(yr, y, x);
+                let ff = w.year_flow_factor(yr, y, x);
+                if !(calliope::agriculture::YIELD_FLOOR + 1e-9..calliope::agriculture::YIELD_CEIL - 1e-9)
+                    .contains(&yf)
+                {
+                    clamped += 1;
+                }
+                if !(0.34..=2.21).contains(&ff) {
+                    out_of_band += 1;
+                }
+                // the linear prediction: the crop curve's own local rain
+                // elasticity (a ±1 % central difference — a derivative, not
+                // a second evaluation of the year) times the year's rain
+                // anomaly. Watered ground drinks the catchment lane.
+                let rain = if irr { calliope::climate::FLOW_ANOM_GAIN * dq } else { dp };
+                let base = calliope::agriculture::climatic_score(pack, t, p, irr);
+                let elas = if base > 1e-9 {
+                    let up = calliope::agriculture::climatic_score(pack, t, p * 1.01, irr);
+                    let dn = calliope::agriculture::climatic_score(pack, t, p * 0.99, irr);
+                    (up - dn) / (0.02 * base)
+                } else {
+                    0.0
+                };
+                pred_s += (elas * rain).powi(2);
+                dp_n += dp; dp_s += dp * dp;
+                yl_n += yf - 1.0; yl_s += (yf - 1.0).powi(2);
+                dq_n += dq; dq_s += dq * dq;
+                fl_n += ff - 1.0; fl_s += (ff - 1.0).powi(2);
+                pairs.push((rain, yf - 1.0));
+            }
+        }
+        let n = (cells.len() * sample_years.len()) as f64;
+        let sd = |sum: f64, sq: f64| (sq / n - (sum / n).powi(2)).max(0.0).sqrt();
+        let sd_dp = sd(dp_n, dp_s);
+        let sd_dq = sd(dq_n, dq_s);
+        let sd_yield = sd(yl_n, yl_s);
+        let sd_flow = sd(fl_n, fl_s);
+        let sd_pred = (pred_s / n).sqrt();
+        println!();
+        println!("M72 · the year that was — {} farmed cells × {} years", cells.len(), sample_years.len());
+        println!(
+            "  rain anomaly σ {:.4} · catchment σ {:.4} · harvest σ {:.4} (predicted {:.4}) · flow σ {:.4}",
+            sd_dp, sd_dq, sd_yield, sd_pred, sd_flow,
+        );
+
+        // the harvest moves, and it moves the way the crop curves say it
+        // should: measured spread against the curves' own linearization.
+        let harvest_err = if sd_pred > 1e-9 { (sd_yield / sd_pred - 1.0).abs() } else { 1.0 };
+        c.must(
+            "harvest variance tracks the sky",
+            harvest_err <= 0.15 && sd_yield > 1e-4,
+            format!("σ {:.4} vs predicted {:.4} ({:+.1}%)", sd_yield, sd_pred, 100.0 * (sd_yield / sd_pred.max(1e-12) - 1.0)),
+            "M72: the year's harvest spread matches the crop curves' own rain elasticity within 15%",
+        );
+        // the rivers move with their catchments, at the declared gain
+        let flow_pred = calliope::climate::FLOW_ANOM_GAIN * sd_dq;
+        let flow_err = if flow_pred > 1e-9 { (sd_flow / flow_pred - 1.0).abs() } else { 1.0 };
+        c.must(
+            "flow variance tracks the catchment",
+            flow_err <= 0.15 && sd_flow > 1e-4,
+            format!("σ {:.4} vs {:.2}× catchment σ {:.4} ({:+.1}%)", sd_flow, calliope::climate::FLOW_ANOM_GAIN, flow_pred, 100.0 * (sd_flow / flow_pred.max(1e-12) - 1.0)),
+            "M72: the year's flow spread is the catchment anomaly times the declared gain, within 15%",
+        );
+        // sign and strength: wet years feed, dry years starve
+        let (mx, my): (f64, f64) = (
+            pairs.iter().map(|p| p.0).sum::<f64>() / n,
+            pairs.iter().map(|p| p.1).sum::<f64>() / n,
+        );
+        let (mut cov, mut vx, mut vy) = (0.0, 0.0, 0.0);
+        for (a, b) in &pairs {
+            cov += (a - mx) * (b - my);
+            vx += (a - mx).powi(2);
+            vy += (b - my).powi(2);
+        }
+        let rho = cov / (vx.sqrt() * vy.sqrt()).max(1e-12);
+        c.must(
+            "wet years feed, dry years starve",
+            rho >= 0.80,
+            format!("ρ {:.3}", rho),
+            "M72: the harvest factor rises with the year's rain (Pearson ρ ≥ 0.80 over farmed ground)",
+        );
+        c.must(
+            "the year is bounded, not deleted",
+            out_of_band == 0,
+            format!("{} clamped harvests · {} flows out of band", clamped, out_of_band),
+            "M72: flow stays inside [0.35, 2.20]; a year moves a town, it does not erase one",
+        );
+        // and the map beneath it never moved
+        let river_now = {
+            let mut b: Vec<u8> = Vec::new();
+            for v in w.fields.discharge.iter() { b.extend_from_slice(&v.to_le_bytes()); }
+            for v in w.fields.strahler.iter() { b.push(*v); }
+            for v in w.fields.lakes.iter() { b.push(*v as u8); }
+            (w.fields.discharge.dim(), fnv(&b))
+        };
+        c.must(
+            "the river map does not move",
+            river_now == river_dawn,
+            format!("dawn {:016x} · year {} {:016x}", river_dawn.1, years, river_now.1),
+            "M72: order, discharge and the endorheic calls are the dawn's — the year is a read, never a write",
+        );
     }
 
     // ---- M24 disaster wiring: every fall told once, arcs that close ----
