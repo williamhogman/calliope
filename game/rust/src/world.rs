@@ -96,10 +96,6 @@ pub struct World {
     /// stand and isostatic row profile. Frozen prehistory (ADR-0024
     /// discipline): consumed at genesis, hashed, never ticked.
     pub sealevel: crate::sealevel::SeaLevel,
-    /// M26 — coastal landform tags (raised beach / ria / skerry), pure
-    /// derived state off the height field and the sea-level history.
-    /// Recomputed at the dawn, folded into `hash_state`, never ticked.
-    pub landform: ndarray::Array2<u8>,
     /// M28 — the LGM ice-sheet footprint: per-cell peak thickness and
     /// the ELA row profile. Frozen prehistory (ADR-0024): computed at
     /// the dawn from the final height field, hashed, never ticked.
@@ -126,11 +122,18 @@ pub struct World {
     /// tides and settlements all read the grown coast. Widened at the
     /// dawn, folded into `hash_state`, never ticked.
     pub coastform: crate::coast::Coast,
+    /// M59 — the sediment budget: the fluvial passes' closed books
+    /// (detached = settled + delta fill + abyssal) and their footprint
+    /// on the map — deposition depth, delta land, the mouth ledger.
+    /// Written at the erosion stage, widened at the dawn, folded into
+    /// `hash_state` and the deep-earth identity line, never ticked.
+    pub sediment: crate::erosion::Sediment,
     /// M45 — harbor shelter per cell: enclosure + fetch + the drift's
     /// forms, the coast read as sailors read it (settlements::
     /// shelter_score). Computed pre-widen at the dawn so founding and
     /// colony siting price the anchorage; exactly 0.0 off the coastal
-    /// band. Widened at the dawn, folded into `hash_state`, never ticked.
+    /// band, and since M59 shoaled where fan silt lies in the anchorage
+    /// window. Widened at the dawn, folded into `hash_state`, never ticked.
     pub shelter: ndarray::Array2<f32>,
     pub features: Vec<Feature>,
     pub routes: Vec<Route>,
@@ -187,8 +190,11 @@ pub struct World {
     /// purse); both change rarely, while colonisation asks for the field
     /// every month. Keyed on those inputs, so a hit returns exactly the
     /// grid a recompute would have produced — derived state only, never
-    /// hashed, never packed.
-    pub(crate) caravan_memo: std::cell::RefCell<Option<(u64, Array2<f32>)>>,
+    /// hashed, never packed. A Mutex, not a RefCell: the assay holds a
+    /// generated World in a `static OnceLock` (M15), which needs `Sync` —
+    /// a RefCell here broke that lane's *build* silently. Uncontended
+    /// lock, same bits either way.
+    pub(crate) caravan_memo: std::sync::Mutex<Option<(u64, Array2<f32>)>>,
 
     /// The coastal band (land within 2 cells of sea) — the ground the
     /// shelter field scores; pub so diagnostics read the same mask.
@@ -217,6 +223,7 @@ pub struct GenBuilder {
     sealevel: Option<crate::sealevel::SeaLevel>,
     ice: Option<crate::ice::Ice>,
     coastform: Option<crate::coast::Coast>,
+    sediment: Option<crate::erosion::Sediment>,
     height64: Option<Array2<f64>>,
     water: Option<Array2<bool>>,
     tmean64: Option<Array2<f64>>,
@@ -275,6 +282,7 @@ impl GenBuilder {
             sealevel: None,
             ice: None,
             coastform: None,
+            sediment: None,
             height64: None,
             water: None,
             tmean64: None,
@@ -358,7 +366,9 @@ impl GenBuilder {
     fn stage_erosion(&mut self) {
         let te = now_ms();
         let height = self.height64.as_mut().unwrap();
-        erosion::erode(height);
+        // M59 — the carve keeps books now: detachment, floodplain and
+        // lake settling, delta fans at the mouths, abyssal export.
+        self.sediment = Some(erosion::erode(height));
         let water = height.mapv(|h| h < 0.0);
         self.water = Some(water);
         self.timings.push(("erosion", now_ms() - te));
@@ -388,8 +398,16 @@ impl GenBuilder {
         // M44 — longshore drift: the last hand on the land before the
         // climate reads it. Waves walk sand along the windward shores;
         // spits hook off the headlands, offshore bars daylight into
-        // barriers, and lagoons close behind them.
-        self.coastform = Some(crate::coast::drift(h));
+        // barriers, and lagoons close behind them. M31's outburst
+        // channels stay breached: an outlet that still drains flushes
+        // the sand off its own mouth faster than the waves feed it.
+        let mut keep_open = ndarray::Array2::<bool>::from_elem(h.dim(), false);
+        for chain in &ice.spillways {
+            for &(y, x) in chain {
+                keep_open[[y as usize, x as usize]] = true;
+            }
+        }
+        self.coastform = Some(crate::coast::drift(h, &keep_open));
         self.timings.push(("coast", now_ms() - tg));
         // the carve moves the waterline: fjords drown, floors drop —
         // and the drift's new ground stands above it
@@ -584,6 +602,7 @@ impl GenBuilder {
             self.height.as_ref().unwrap(),
             self.sealevel.as_ref().unwrap(),
             self.ice.as_ref().unwrap(),
+            &self.sediment.as_ref().expect("erosion stage ran").delta,
             self.biome_map.as_ref().unwrap(),
             &self.hydro.as_ref().unwrap().rivers,
             &self.hydro.as_ref().unwrap().lakes,
@@ -653,10 +672,44 @@ impl GenBuilder {
         // on the same pre-widen grid the drift just shaped, before any
         // site is chosen. Founding, colony siting and harbour dues all
         // price the anchorage from this one field.
-        let shelter = settlements::shelter_score(
+        let mut shelter = settlements::shelter_score(
             &height,
             &self.coastform.as_ref().expect("glacial stage ran").form,
         );
+        // M59 — the harbor pays for the river's load: where fan silt
+        // lies in the 5×5 anchorage window shelter_score itself reads,
+        // the anchorage shoals — divide by 1 + SILT_SHOAL·depth of the
+        // deepest silt on still-standing water. Cells with no silt in
+        // reach keep their score bit-for-bit (founding, colony siting
+        // and harbour dues all price the shoaled reading).
+        {
+            let sed = self.sediment.as_ref().expect("erosion stage ran");
+            let (gh, gw) = shelter.dim();
+            for y in 0..gh {
+                for x in 0..gw {
+                    if shelter[[y, x]] <= 0.0 {
+                        continue;
+                    }
+                    let mut silt = 0.0f32;
+                    for dy in -2..=2isize {
+                        for dx in -2..=2isize {
+                            let ny = y as isize + dy;
+                            let nx = x as isize + dx;
+                            if ny < 0 || nx < 0 || ny >= gh as isize || nx >= gw as isize {
+                                continue;
+                            }
+                            let (ny, nx) = (ny as usize, nx as usize);
+                            if height[[ny, nx]] < 0.0 {
+                                silt = silt.max(sed.depth[[ny, nx]]);
+                            }
+                        }
+                    }
+                    if silt > 0.0 {
+                        shelter[[y, x]] /= 1.0 + crate::erosion::SILT_SHOAL * silt;
+                    }
+                }
+            }
+        }
         // M55 — springs and oases: where the solved table daylights at a
         // break in slope, and where arid ground stands over water within
         // root reach. Both derive from the frozen aquifer grid, so they
@@ -895,6 +948,9 @@ impl GenBuilder {
                 // M47 — placeholder like territory: the upwelling shore is
                 // solved at the dawn, off the final post-widen coastline.
                 upwelling: Array2::from_elem((1, 1), 0.0f32),
+                // M60 — placeholder like upwelling: the vocabulary is
+                // classified at the dawn, post-widen (widen never touches it).
+                landform: Array2::from_elem((1, 1), 0u8),
                 territory: Array2::from_elem((1, 1), -1),
                 peoples_map: Array2::from_elem((1, 1), -1),
             },
@@ -922,12 +978,12 @@ impl GenBuilder {
             deposits,
             plates,
             sealevel: self.sealevel.take().expect("sealevel generated"),
-            landform: ndarray::Array2::zeros((0, 0)),
             ice: self.ice.take().expect("glacial stage ran"),
             permafrost: crate::permafrost::Permafrost::empty(),
             currents: crate::currents::Currents::empty(),
             tides: crate::tides::Tides::empty(),
             coastform: self.coastform.take().expect("glacial stage ran"),
+            sediment: self.sediment.take().expect("erosion stage ran"),
             seismic: crate::seismic::Seismic::empty(),
             volcanism: crate::seismic::Volcanism::empty(),
             features,
@@ -952,7 +1008,7 @@ impl GenBuilder {
             arid_dry: founded.arid_dry,
             dry_site_score: founded.dry_site_score,
             dry_reach_override: None,
-            caravan_memo: std::cell::RefCell::new(None),
+            caravan_memo: std::sync::Mutex::new(None),
             coast: founded.coast,
             shelter,
             max_settlements: founded.max_settlements,
@@ -975,8 +1031,14 @@ impl GenBuilder {
         );
         // M26 — the coasts read their own history: raised beaches where
         // the land outran the sea, rias and skerries where the sea won.
-        world.landform =
-            crate::landform::classify(&world.fields.height, &world.sealevel, &world.ice);
+        // M59's fan-built delta plains are the river's fresh work, not
+        // the sea's record, and stay out of the raised-beach census.
+        world.fields.landform = crate::landform::classify(
+            &world.fields.height,
+            &world.sealevel,
+            &world.ice,
+            &world.sediment.delta,
+        );
         // M33 — the cold rim reads its own signature: permafrost extent
         // off the continentality-shifted MAAT, micro-texture where the
         // frozen flats sort themselves into polygons and stripes.
@@ -987,7 +1049,7 @@ impl GenBuilder {
             &world.fields.flags,
         );
         crate::landform::stamp_patterned(
-            &mut world.landform,
+            &mut world.fields.landform,
             &world.permafrost.pattern,
             &world.fields.height,
         );
@@ -1021,11 +1083,61 @@ impl GenBuilder {
         // coastal reading; the earlier stories keep precedence.
         world.tides = crate::tides::Tides::compute(&world.fields.height);
         crate::landform::stamp_tidal(
-            &mut world.landform,
+            &mut world.fields.landform,
             &world.tides,
             &world.fields.height,
             &world.fields.flags,
         );
+        // M60 — the full fold: the era's remaining stories join the one
+        // grid in precedence order (river fans, the drift's new coast,
+        // the dry country's water, the ice's dry valleys), then the
+        // generic relief vocabulary fills every untold land cell and
+        // open shore. After this block, NONE survives only on open sea.
+        crate::landform::stamp_delta(
+            &mut world.fields.landform,
+            &world.sediment.delta,
+            &world.fields.height,
+        );
+        crate::landform::stamp_coastforms(
+            &mut world.fields.landform,
+            &world.coastform.form,
+            &world.fields.height,
+        );
+        {
+            // The dry country's water re-read off the shipped grids: the
+            // same M55 law founding priced pre-widen, here solved on the
+            // final coordinates (margins are open ocean — no new springs).
+            let rivers = world
+                .fields
+                .flags
+                .mapv(|f| f & CellFlags::RIVER.bits() != 0);
+            let lakes = world
+                .fields
+                .flags
+                .mapv(|f| f & CellFlags::LAKE.bits() != 0);
+            let dry = crate::hydrology::springs_and_oases(
+                &world.fields.height,
+                &water_now,
+                &rivers,
+                &lakes,
+                &world.fields.aquifer,
+                &world.fields.biomes,
+                &world.fields.precip,
+            );
+            crate::landform::stamp_dry_water(
+                &mut world.fields.landform,
+                &dry.springs,
+                &dry.oases,
+                &world.fields.aquifer,
+                &world.fields.height,
+            );
+        }
+        crate::landform::stamp_trough(
+            &mut world.fields.landform,
+            &world.ice.carved,
+            &world.fields.height,
+        );
+        crate::landform::finish(&mut world.fields.landform, &world.fields.height);
         // M34 — the ice that remains: modern mountain glaciers wherever
         // today's climate keeps the annual mass balance positive. Since
         // M35 the balance is computed at the climate stage (hydrology
@@ -1038,6 +1150,50 @@ impl GenBuilder {
                     if world.ice.modern[[y, x]] > 0.0 {
                         world.fields.flags[[y, x]] |= CellFlags::GLACIER.bits();
                     }
+                }
+            }
+        }
+        // M62 — geomorphic toponymy. Only now does every cell carry its
+        // landform word, so only now can the dawn towns take names that
+        // tell the truth about the ground: a fjord town's name says
+        // fjord, in its own tongue. Where a tongue has no word for the
+        // ground, the plain coined name stands — no borrowed vocabulary.
+        // The registry and the dawn Found events follow the new names.
+        {
+            let mut rng62 = crate::util::rng(world.seed + 6200);
+            let styles: Vec<String> =
+                world.peoples.peoples.iter().map(|p| p.style.clone()).collect();
+            let mut renames: Vec<(i64, i64, String, String)> = Vec::new();
+            for s in world.peoples.settlements.iter_mut() {
+                let code = world.fields.landform[[s.y as usize, s.x as usize]];
+                let style = styles
+                    .get(s.namer.idx())
+                    .map(|st| st.as_str())
+                    .unwrap_or("old");
+                if let Some(c) =
+                    naming::coin_for_landform(&mut rng62, style, code, &mut world.taken)
+                {
+                    let old = std::mem::replace(&mut s.name, c.word.clone());
+                    s.ety = c.ety;
+                    renames.push((s.x, s.y, old, c.word));
+                }
+            }
+            for (x, y, _old, new) in &renames {
+                if let Some(id) =
+                    world.chronicle.registry.find_alive(EntityKind::Settlement, *x, *y)
+                {
+                    world.chronicle.registry.rename(id, new);
+                }
+            }
+            for ev in world.chronicle.events.iter_mut() {
+                if !matches!(ev.k, EventKind::Found) {
+                    continue;
+                }
+                if let Some((_, _, old, new)) =
+                    renames.iter().find(|r| r.0 == ev.x && r.1 == ev.y)
+                {
+                    ev.s = new.clone();
+                    ev.text = ev.text.replace(old.as_str(), new.as_str());
                 }
             }
         }
@@ -1166,6 +1322,9 @@ impl World {
         self.ice.melt_amp = grow(&self.ice.melt_amp, pad, |_, _| 0.0f32);
         // M44 — the drift ledger rides along: margins are open sea.
         self.coastform.widen(pad);
+        // M59 — the sediment books ride along: no river ever reached
+        // the margins, so their footprint there is exactly zero.
+        self.sediment.widen(pad);
         for p in self
             .ice
             .cirques
@@ -1759,14 +1918,15 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
         for &(y, x) in markets.iter() {
             mix(((y as u64) << 32) | x as u64);
         }
-        if let Some((k, grid)) = self.caravan_memo.borrow().as_ref() {
+        let mut memo = self.caravan_memo.lock().expect("caravan memo poisoned");
+        if let Some((k, grid)) = memo.as_ref() {
             if *k == key {
                 return grid.clone();
             }
         }
         let grid =
             trade::caravan_provision_budget(&self.trade, &markets, self.site_score.dim(), budget);
-        *self.caravan_memo.borrow_mut() = Some((key, grid.clone()));
+        *memo = Some((key, grid.clone()));
         grid
     }
 
@@ -1953,7 +2113,15 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
         } else {
             "hellenic".to_string()
         };
-        let coined = naming::coin(&mut self.rng, &style, &mut self.taken);
+        // M62 — the name's tail is the tongue's generic for the ground,
+        // when the tongue has one; otherwise a plain coined name.
+        let coined = naming::coin_for_landform(
+            &mut self.rng,
+            &style,
+            self.fields.landform[[y, x]],
+            &mut self.taken,
+        )
+        .unwrap_or_else(|| naming::coin(&mut self.rng, &style, &mut self.taken));
         let new_id = SettlementId(self.peoples.settlements.iter().map(|o| o.id.0).max().unwrap_or(-1) + 1);
         let mut s = Settlement {
             id: new_id,
@@ -2256,7 +2424,19 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                 continue;
             }
             let style = self.peoples.peoples[to.0].style.clone();
-            let coined = naming::coin(&mut self.rng, &style, &mut self.taken);
+            // M62 — the conqueror renames in its tongue, but the ground
+            // stays the ground: the new name keeps the landform generic.
+            let (sy, sx) = (
+                self.peoples.settlements[i].y as usize,
+                self.peoples.settlements[i].x as usize,
+            );
+            let coined = naming::coin_for_landform(
+                &mut self.rng,
+                &style,
+                self.fields.landform[[sy, sx]],
+                &mut self.taken,
+            )
+            .unwrap_or_else(|| naming::coin(&mut self.rng, &style, &mut self.taken));
             let old = self.peoples.settlements[i].name.clone();
             let people = self.peoples.peoples[to.0].people.clone();
             let (x, y) = (self.peoples.settlements[i].x, self.peoples.settlements[i].y);
@@ -2879,19 +3059,26 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
     /// IEEE-exact by construction; rock, volcanism and landform sit
     /// downstream of transcendental terrain and are printed so the
     /// wasm-replay leg can *measure* rather than assume their fate.
+    /// M59 measured that fate for raw f64: the sediment ledger's full
+    /// bit-width hash diverges native↔wasm by heightfield ulps (geo.rs
+    /// runs on host libm) while the wire-precision world is identical —
+    /// so the line carries the ledger's integer-robust footprint
+    /// (mouth cells + delta land) and the raw books stay under native
+    /// determinism in `hash_state`.
     pub fn earth_hash_line(&self) -> String {
         format!(
-            "plates={:016x} rock={:016x} seismic={:016x} volcanism={:016x} sealevel={:016x} landform={:016x} ice={:016x} permafrost={:016x} tides={:016x} coast={:016x}",
+            "plates={:016x} rock={:016x} seismic={:016x} volcanism={:016x} sealevel={:016x} landform={:016x} ice={:016x} permafrost={:016x} tides={:016x} coast={:016x} sediment={:016x}",
             self.plates.hash(),
             crate::util::fnv1a64(self.fields.rock.as_slice().expect("rock grid is contiguous")),
             self.seismic.hash(),
             self.volcanism.hash(),
             self.sealevel.hash(),
-            crate::landform::hash(&self.landform),
+            crate::landform::hash(&self.fields.landform),
             self.ice.hash(),
             self.permafrost.hash(),
             self.tides.hash(),
             self.coastform.hash(),
+            self.sediment.footprint_hash(),
         )
     }
 

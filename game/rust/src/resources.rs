@@ -839,6 +839,24 @@ impl Flows {
     }
 }
 
+/// M64 — the ground keeps what it grows, stated as a law: the kinds
+/// whose suitability mask is non-empty in this world. `place_resources`
+/// seats at least one deposit of every grounded kind (the widened M14.4
+/// rescue); absence is legal only when the ground itself is absent. The
+/// assay holds placement to exactly this list on arbitrary seeds.
+pub fn grounded_kinds(
+    biomes: &Array2<u8>,
+    height: &Array2<f32>,
+    rivers: &Array2<bool>,
+    lakes: &Array2<bool>,
+) -> Vec<Good> {
+    ALL_PLACEABLE
+        .iter()
+        .copied()
+        .filter(|&g| suitability(g, biomes, height, rivers, lakes).iter().any(|&m| m))
+        .collect()
+}
+
 /// Deposits thinned to local maxima — port of place_resources.
 pub fn place_resources(
     biomes: &Array2<u8>,
@@ -974,13 +992,16 @@ pub fn place_resources(
             }
         }
 
-        // M14.4 — the shore keeps what it grows: if a Coast good's mask
-        // exists but the threshold left it empty, the single best masked
-        // cell gets the ground. A world with a spice coast always has
-        // spices somewhere; a world without the biome stays honest.
-        if matches!(good.spec().place, Place::Coast(_))
-            && !deposits.iter().any(|d| d.r == good)
-        {
+        // M14.4/M64 — the ground keeps what it grows: if a good's mask
+        // exists but the threshold race minted nothing, the single best
+        // masked cell gets the ground. Born as a Coast-only rescue (a
+        // spice coast always has spices), widened to every kind when the
+        // M64 recalibration reshuffled the noise race and seed 12345 lost
+        // cattle entirely despite ample grassland — the same existence
+        // floor ADR-0013 grants minerals, extended to the living kinds.
+        // A world without the biome stays honest: an empty mask already
+        // skipped this good at the top of the loop.
+        if !deposits.iter().any(|d| d.r == good) {
             let mut best: Option<(f64, usize, usize)> = None;
             for y in 0..size {
                 for x in 0..size {

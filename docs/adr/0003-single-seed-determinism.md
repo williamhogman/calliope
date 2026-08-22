@@ -1,6 +1,9 @@
 # ADR-0003: Single-seed determinism with derived RNG streams
 
-- **Status:** Accepted (backfilled)
+- **Status:** Accepted (backfilled) · reaffirmed at the Era I gate
+  (M65): 300 years replayed under two tick chunkings to one state and
+  one town ledger (`diagnose gate` structural leg), cross-runtime
+  ledger identity per ADR-0025
 - **Date:** 2026-08 (decision predates ADR system)
 - **Touches:** `game/rust/src/util.rs`, every generation and tick module
 

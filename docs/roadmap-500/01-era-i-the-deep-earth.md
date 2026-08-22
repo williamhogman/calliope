@@ -247,23 +247,26 @@ in the parent file are binding; these specs expand them.
 - **Touches:** game/rust/src/hydrology.rs, game/rust/src/settlements.rs, game/rust/src/biomes.rs, game/rust/src/economy.rs
 - **Gate:** `diagnose civ` shows zero arid-biome settlements founded without qualifying water access (surface, spring, oasis, or well tech) across the full seed sweep.
 
-### M56 — Karst Country
-- **Intent:** Limestone country behaves like limestone country: rivers vanish, caves hollow, and the surface tells on the rock beneath.
-- **Build:** Add a karst pass triggered on limestone rock-province cells (M18) that generates sinkhole clusters via a Poisson-disk-seeded dissolution model scaled by precipitation, marks disappearing-river segments where a stream crosses into karst terrain and re-emerges downstream as a spring, and tags qualifying caves for later chronicle/ruin hooks.
-- **Touches:** game/rust/src/geo.rs, game/rust/src/hydrology.rs, game/rust/src/biomes.rs
-- **Gate:** `diagnose terrain` confirms karst features appear only on limestone provinces and disappearing-river mass-balances against its re-emergence point within 2% across the seed sweep.
+### M56 — The Caravan Frontier
+*(Re-scoped by operator direction 2026-08-21 — supersedes Karst Country, whose spec is preserved in STATUS.md's Ready queue; M20 already carries the first karst pass.)*
+- **Intent:** The desert is settled for what lies under it, not what grows on it: ore-led siting priced by the seam, the caravan lane that victuals it, and the metre-cost of lifting water.
+- **Build:** `trade::caravan_provision_budget` runs Dijkstra from every watered market town over the land cost grid (budget 120 ≈ 320 km) into a provisioning field; `DryFrontier::offer` prices an arid-dry camp by its seam pull and victualled subsistence rather than as a farm; well upkeep charges 0.06 score-units per metre of lift against the extractive yield, making the M55 craft ladder load-bearing (hand-dug ground marginal, qanat-era ground pays); all three wired into colonisation.
+- **Touches:** game/rust/src/trade.rs, game/rust/src/settlements.rs, game/rust/src/world.rs, game/rust/src/bin/diagnose.rs
+- **Gate:** the M55 dry-frontier counterfactual separates — the veto-lifted run founds strictly more waterless-arid towns than the real run — with no threshold moved and no outcome forced. Met at M58, where the demand term completed the pressure (1 · 0 on seed 12345).
 
-### M57 — GPU Erosion Compute Pass
-- **Intent:** Erosion finally runs at the resolution the render already promises, closing the gap research/01 flagged as the terrain stack's biggest hole.
-- **Build:** Port the stream-power incision and talus passes from `erosion.rs` to a wgpu compute shader operating on the full-resolution height texture, using the same implicit Braun-Willett relaxation toward each cell's D8 receiver so results stay unconditionally stable, with a CPU fallback path that must byte-match the GPU path bit-for-bit under a fixed-point readback contract.
-- **Touches:** game/rust/src/erosion.rs, game/rust/src/render.rs, new: game/rust/src/shaders/erosion.wgsl, game/rust/src/bin/diagnose.rs
-- **Gate:** `diagnose bench` shows the GPU erosion pass completing within the native generation budget, and `diagnose determinism` confirms GPU and CPU fallback paths produce an identical `hash_state`.
+### M57 — Outcrop Visibility
+*(Re-scoped by operator direction 2026-08-21 — supersedes the GPU erosion compute pass, whose spec is preserved in STATUS.md's Ready queue.)*
+- **Intent:** Prospecting stops treating every ground as equally legible: bare rock gives up its ore sooner than forest loam, which is why the dry countries were found at all.
+- **Build:** `prospecting::outcrop_visibility` is a pure function of the frozen ground — soil profile depth through `exp(-d/0.80 m)` normalised so temperate brown earth reads 1.0, times the standing biome's canopy openness (desert 1.00 … rainforest 0.20) — clamped 0.12–3.00, multiplying *discovery probability* in `World::prospect_and_deplete` and never a settlement's score; `Flows.found_m` stamps each seam's discovery month (bookkeeping only — never packed, never hashed).
+- **Touches:** game/rust/src/prospecting.rs, game/rust/src/world.rs, game/rust/src/bin/diagnose.rs
+- **Gate:** median discovery month strictly ordered across the seams' own visibility terciles (133 bared · 191 middling · 544 buried, seed 12345, horizon 1800) — bared country roughly four times sooner than buried.
 
-### M58 — River Forms II
-- **Intent:** Rivers stop reading as single-pixel lines and start showing the meanders, oxbows, terraces, and braids their slope and load actually produce.
-- **Build:** Extend `hydrology.rs` with a sinuosity model (Howard-Knutson migration-velocity-proportional-to-curvature) applied to low-slope reaches to generate meander belts and cutoff oxbow lakes, a terrace classification for valley-floor steps left by base-level fall, and a braided-channel flag where sediment load exceeds transport capacity on wide, gentle valley floors.
-- **Touches:** game/rust/src/hydrology.rs, game/rust/src/erosion.rs, game/rust/src/render.rs
-- **Gate:** `diagnose hydro` reports meander sinuosity index rising with decreasing valley slope (monotonic across slope deciles) and oxbow/braid counts within calibration bands across the seed sweep.
+### M58 — Claim Pressure
+*(Re-scoped by operator direction 2026-08-21 — supersedes River Forms II, whose spec is preserved in STATUS.md's Ready queue.)*
+- **Intent:** Demand, not price, sends states to claim unlivable ground: a crown that smelts a metal it owns no seam of goes and gets one.
+- **Build:** `economy::claim_pressure` accumulates idle craft per (realm, ore) wherever a market area holds the art, hands and fuel for a mineral recipe but no seam of its feedstock (cap 3.0); the pressure amplifies `resource_pull_for` on known seams of the wanted ore and extends the crown's victualling lane (+25% caravan budget per unit); colonisation computes pull and provisioning per realm, so each crown sites against its own hunger — no site score, food term or desert bonus is touched.
+- **Touches:** game/rust/src/economy.rs, game/rust/src/world.rs, game/rust/src/settlements.rs, game/rust/src/bin/diagnose.rs
+- **Gate:** every standing claim backed by a genuinely dark forge (0 of 39 unbacked, seed 12345/150y) and the M55 dry-frontier counterfactual separating end-to-end — 1 dry town without the veto · 0 with it.
 
 ### M59 — Sediment Budget
 - **Intent:** Eroded material has to go somewhere, and where it lands should grow deltas and silt harbors the way real rivers do.

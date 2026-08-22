@@ -182,8 +182,9 @@ function wireKeyboard() {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
     if (searchOpen()) return; // the omnibox owns the keys while open
     const k = e.key;
-    if (k >= "1" && k <= "7") {
-      const lens = LAYERS[Number(k) - 1];
+    if (k >= "0" && k <= "9") {
+      // 1..9 pick the first nine lenses, 0 the tenth (M63 grew the strip)
+      const lens = LAYERS[k === "0" ? 9 : Number(k) - 1];
       if (lens) { setLayer(lens[0]); ctx.markDirty(); }
     } else if (e.code === "Space") {
       e.preventDefault();

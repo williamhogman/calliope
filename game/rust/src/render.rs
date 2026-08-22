@@ -26,6 +26,8 @@ struct Uni {
 @group(0) @binding(2) var tClim:   texture_2d<f32>; // tmean, tamp, precip, fertility
 @group(0) @binding(3) var tMisc:   texture_2d<f32>; // discharge01, river, lake, coast/32
 @group(0) @binding(4) var tTint:   texture_2d<f32>; // political tint rgba8
+@group(0) @binding(5) var tEarth:  texture_2d<f32>; // rock, soil, landform ids /255 (M63)
+@group(0) @binding(6) var tPal:    texture_2d<f32>; // 256×3 palette rows: rock, soil, landform
 
 struct VOut {
   @builtin(position) pos: vec4<f32>,
@@ -110,10 +112,9 @@ fn fbm(p: vec2<f32>) -> f32 {
 }
 
 // ---- ramps (ported from palette.js) ------------------------------------------
-
-fn seg(v: f32, a: f32, b: f32, ca: vec3<f32>, cb: vec3<f32>) -> vec3<f32> {
-  return mix(ca, cb, clamp((v - a) / (b - a), 0.0, 1.0));
-}
+// `seg`, the hypsometric ramps and the cross-blend law arrive from the
+// generated atlas prelude (M63) — one table in atlas.rs feeds this
+// shader, the CPU fallback and the diagnostics gate alike.
 
 fn veg_ramp(v: f32) -> vec3<f32> {
   var c = seg(v, 0.0, 0.14, vec3<f32>(191.0, 168.0, 128.0), vec3<f32>(167.0, 148.0, 103.0));
@@ -121,28 +122,6 @@ fn veg_ramp(v: f32) -> vec3<f32> {
   if (v > 0.32) { c = seg(v, 0.32, 0.50, vec3<f32>(128.0, 128.0, 74.0), vec3<f32>(92.0, 106.0, 58.0)); }
   if (v > 0.50) { c = seg(v, 0.50, 0.72, vec3<f32>(92.0, 106.0, 58.0), vec3<f32>(55.0, 78.0, 44.0)); }
   if (v > 0.72) { c = seg(v, 0.72, 1.00, vec3<f32>(55.0, 78.0, 44.0), vec3<f32>(30.0, 54.0, 32.0)); }
-  return c / 255.0;
-}
-
-fn elev_ramp(v: f32) -> vec3<f32> {
-  var c = seg(v, 0.0, 0.15, vec3<f32>(77.0, 124.0, 68.0), vec3<f32>(125.0, 154.0, 82.0));
-  if (v > 0.15) { c = seg(v, 0.15, 0.30, vec3<f32>(125.0, 154.0, 82.0), vec3<f32>(176.0, 168.0, 107.0)); }
-  if (v > 0.30) { c = seg(v, 0.30, 0.45, vec3<f32>(176.0, 168.0, 107.0), vec3<f32>(140.0, 122.0, 91.0)); }
-  if (v > 0.45) { c = seg(v, 0.45, 0.62, vec3<f32>(140.0, 122.0, 91.0), vec3<f32>(152.0, 145.0, 138.0)); }
-  if (v > 0.62) { c = seg(v, 0.62, 0.80, vec3<f32>(152.0, 145.0, 138.0), vec3<f32>(201.0, 201.0, 201.0)); }
-  if (v > 0.80) { c = seg(v, 0.80, 1.00, vec3<f32>(201.0, 201.0, 201.0), vec3<f32>(244.0, 244.0, 244.0)); }
-  return c / 255.0;
-}
-
-// M7.4 — the dry-country hypsometric ladder: ochre lowlands through
-// rust-brown uplands to pale desert-varnish summits.
-fn elev_arid_ramp(v: f32) -> vec3<f32> {
-  var c = seg(v, 0.0, 0.15, vec3<f32>(163.0, 145.0, 99.0), vec3<f32>(185.0, 159.0, 104.0));
-  if (v > 0.15) { c = seg(v, 0.15, 0.30, vec3<f32>(185.0, 159.0, 104.0), vec3<f32>(199.0, 168.0, 110.0)); }
-  if (v > 0.30) { c = seg(v, 0.30, 0.45, vec3<f32>(199.0, 168.0, 110.0), vec3<f32>(178.0, 139.0, 97.0)); }
-  if (v > 0.45) { c = seg(v, 0.45, 0.62, vec3<f32>(178.0, 139.0, 97.0), vec3<f32>(152.0, 118.0, 92.0)); }
-  if (v > 0.62) { c = seg(v, 0.62, 0.80, vec3<f32>(152.0, 118.0, 92.0), vec3<f32>(206.0, 197.0, 188.0)); }
-  if (v > 0.80) { c = seg(v, 0.80, 1.00, vec3<f32>(206.0, 197.0, 188.0), vec3<f32>(246.0, 244.0, 240.0)); }
   return c / 255.0;
 }
 
@@ -295,19 +274,13 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
   let wadi_m = clamp(-misc.z, 0.0, 1.0);
   let water_m = max(1.0 - land_m, max(lake_m, salt_m));
 
-  // M7.5 — multi-directional oblique-weighted hillshade: four low suns
-  // (NW leading, N, W, SW filling) instead of one, so ridges running every
-  // direction carve; a Laplacian curvature accent etches ridgelines bright
-  // and valley floors dark (texture shading), all from the same four taps.
+  // M7.5/M63 — multi-directional oblique-weighted hillshade, from the
+  // shared shading library (shaders/hillshade.wgsl).
   let he = sample_h(p + vec2<f32>(1.0, 0.0));
   let hs = sample_h(p + vec2<f32>(0.0, 1.0));
   let hw = sample_h(p - vec2<f32>(1.0, 0.0));
   let hn = sample_h(p - vec2<f32>(0.0, 1.0));
-  let gx = (he - hw) * 0.5;
-  let gy = (hs - hn) * 0.5;
-  let mdow = (-gx - gy) * 0.62 + (-gy) * 0.24 + (-gx) * 0.24 + (gx - gy) * 0.08;
-  let curv = clamp((he + hs + hw + hn - 4.0 * h) * U.opts.y * 0.55, -0.10, 0.10);
-  let shade = clamp(1.0 + U.opts.y * mdow * 1.05 - curv, 0.58, 1.34);
+  let shade = mdow_shade(he, hs, hw, hn, h, U.opts.y);
 
   var col = vec3<f32>(0.0);
 
@@ -335,13 +308,9 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
     if (h < 0.0) {
       col = sea_ramp(min(1.0, -h / 0.75)) * vec3<f32>(0.9, 0.95, 1.0);
     } else {
-      // M7.4 — climate-blended hypsometry: wet country climbs through green,
-      // dry country through ochre, and the frozen lands grey toward firn
-      let arid = 1.0 - clamp((clim.z - 240.0) / 700.0, 0.0, 1.0);
-      var hyp = mix(elev_ramp(h), elev_arid_ramp(h), arid);
-      let chill = clamp((-2.0 - clim.x) / 14.0, 0.0, 1.0);
-      let polar = mix(vec3<f32>(0.60, 0.64, 0.69), vec3<f32>(0.93, 0.94, 0.96), clamp(h, 0.0, 1.0));
-      hyp = mix(hyp, polar, chill * 0.85);
+      // M7.4/M63 — climate-blended hypsometry from the atlas prelude:
+      // wet country climbs green, dry country ochre, frost greys to firn
+      let hyp = hypso(h, clim.z, clim.x);
       col = mix(hyp, vec3<f32>(74.0, 128.0, 168.0) / 255.0, lake_m);
       col = mix(col, vec3<f32>(198.0, 202.0, 196.0) / 255.0, salt_m);
     }
@@ -360,16 +329,50 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
       col = mix(col, vec3<f32>(46.0, 95.0, 143.0) / 255.0, lake_m);
       col = mix(col, vec3<f32>(176.0, 182.0, 178.0) / 255.0, salt_m);
     }
+  } else if (layer >= 7 && layer <= 9) {
+    // M63 — the deep-earth lenses: rock province, soil order, landform.
+    // Categorical ids sample at the cell (no bilinear across a boundary);
+    // the swatch comes from the palette texture built from atlas.rs.
+    let ei = clamp(vec2<i32>(floor(p)), vec2<i32>(0), vec2<i32>(size) - vec2<i32>(1));
+    let e = textureLoad(tEarth, ei, 0);
+    var id = e.r;
+    if (layer == 8) { id = e.g; }
+    if (layer == 9) { id = e.b; }
+    let pi = vec2<i32>(i32(round(id * 255.0)), layer - 7);
+    var base = textureLoad(tPal, pi, 0).rgb;
+    if (layer == 7) {
+      // geology continues under the sea: dimmed and cooled toward the
+      // abyss, the way printed maps hatch offshore provinces
+      let deep = clamp(-h / 0.9, 0.0, 1.0);
+      let submerged = mix(base * 0.55 + vec3<f32>(0.02, 0.04, 0.09),
+                          vec3<f32>(0.07, 0.11, 0.19), deep * 0.6);
+      base = mix(base, submerged, 1.0 - land_m);
+    } else if (layer == 8) {
+      // no soil profile under open water
+      base = mix(base, vec3<f32>(0.078, 0.125, 0.196), 1.0 - land_m);
+      base = mix(base, vec3<f32>(74.0, 128.0, 168.0) / 255.0, lake_m);
+    } else {
+      // landform: the open sea stays dark; shore-water words (ria,
+      // lagoon, estuary, fjord…) keep their swatch, damped by the water
+      if (id < 0.002) {
+        base = vec3<f32>(0.055, 0.098, 0.164);
+      } else {
+        let wetten = base * 0.62 + vec3<f32>(0.02, 0.05, 0.10);
+        base = mix(base, wetten, (1.0 - land_m) * 0.85);
+      }
+    }
+    col = base;
   } else {
     if (h < 0.0) { col = vec3<f32>(20.0, 33.0, 52.0) / 255.0; }
     else { col = mix(fert_ramp(clim.w), vec3<f32>(46.0, 95.0, 143.0) / 255.0, lake_m); }
     col = mix(col, vec3<f32>(176.0, 182.0, 178.0) / 255.0, salt_m * land_m);
   }
 
-  // hillshade on land (soft for the analytic climate layers, none for hydro)
+  // hillshade on land (soft for the analytic climate layers, none for
+  // hydro; the deep-earth lenses take full relief like elevation)
   if (U.anim.w > 0.5 && layer != 5) {
     var s = shade;
-    if (layer >= 3) { s = 1.0 + (shade - 1.0) * 0.45; }
+    if (layer >= 3 && layer <= 6) { s = 1.0 + (shade - 1.0) * 0.45; }
     col *= mix(s, 1.0, water_m);
   }
 
@@ -601,9 +604,18 @@ impl Orbital {
         let format = caps.formats[0];
         let srgb = if format.is_srgb() { 1.0 } else { 0.0 };
 
+        // M63 — the compiled source is three layers deep: the generated
+        // atlas prelude (ramps + cross-blend law, from atlas.rs tables),
+        // the shared shading library, then the orbital shader itself.
+        let wgsl = format!(
+            "{}\n{}\n{}",
+            crate::atlas::wgsl_ramps(),
+            include_str!("shaders/hillshade.wgsl"),
+            SHADER
+        );
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("orbital"),
-            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+            source: wgpu::ShaderSource::Wgsl(wgsl.into()),
         });
 
         let bind_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -623,6 +635,8 @@ impl Orbital {
                 tex_layout_entry(2),
                 tex_layout_entry(3),
                 tex_layout_entry(4),
+                tex_layout_entry(5),
+                tex_layout_entry(6),
             ],
         });
 
@@ -734,6 +748,9 @@ impl Orbital {
         fertility: &[f32],
         strahler: &[u8],
         flags: &[u8],
+        rock: &[u8],
+        soil: &[u8],
+        landform: &[u8],
     ) {
         let n = (w * h) as usize;
         self.world_w = w;
@@ -801,16 +818,31 @@ impl Orbital {
         }
 
 
+        // M63 — the deep-earth lens texture: rock, soil and landform ids
+        // packed one per channel, plus the palette rows they index.
+        let mut earth = vec![0u8; n * 4];
+        for i in 0..n {
+            earth[i * 4] = if i < rock.len() { rock[i] } else { 0 };
+            earth[i * 4 + 1] = if i < soil.len() { soil[i] } else { 0 };
+            earth[i * 4 + 2] = if i < landform.len() { landform[i] } else { 0 };
+            earth[i * 4 + 3] = 255;
+        }
+        let pal = crate::atlas::palette_texture();
+
         let t_height = self.make_tex(w, h, wgpu::TextureFormat::R32Float);
         let t_clim = self.make_tex(w, h, wgpu::TextureFormat::Rgba32Float);
         let t_misc = self.make_tex(w, h, wgpu::TextureFormat::Rgba32Float);
         let t_tint = self.make_tex(w, h, wgpu::TextureFormat::Rgba8Unorm);
+        let t_earth = self.make_tex(w, h, wgpu::TextureFormat::Rgba8Unorm);
+        let t_pal = self.make_tex(256, crate::atlas::PAL_ROWS as u32, wgpu::TextureFormat::Rgba8Unorm);
         self.upload(&t_height, bytemuck::cast_slice(height), w, h, 4);
         self.upload(&t_clim, bytemuck::cast_slice(&clim), w, h, 16);
         self.upload(&t_misc, bytemuck::cast_slice(&misc), w, h, 16);
         self.upload(&t_tint, &vec![0u8; n * 4], w, h, 4);
+        self.upload(&t_earth, &earth, w, h, 4);
+        self.upload(&t_pal, &pal, 256, crate::atlas::PAL_ROWS as u32, 4);
 
-        let views: Vec<wgpu::TextureView> = [&t_height, &t_clim, &t_misc, &t_tint]
+        let views: Vec<wgpu::TextureView> = [&t_height, &t_clim, &t_misc, &t_tint, &t_earth, &t_pal]
             .iter()
             .map(|t| t.create_view(&wgpu::TextureViewDescriptor::default()))
             .collect();
@@ -826,6 +858,8 @@ impl Orbital {
                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&views[1]) },
                 wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&views[2]) },
                 wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::TextureView(&views[3]) },
+                wgpu::BindGroupEntry { binding: 5, resource: wgpu::BindingResource::TextureView(&views[4]) },
+                wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::TextureView(&views[5]) },
             ],
         }));
         self.tint_tex = Some(t_tint);

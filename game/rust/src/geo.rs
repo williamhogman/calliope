@@ -226,4 +226,17 @@ pub const BANDS: &[Band] = &[
     Band { name: "ERA occupancy / seed", sweet: (0.45, 1.0), hard: (0.3, 1.0), target: "M8.3: seeds spread across the plates" },
     Band { name: "oatmeal min/mean ratio", sweet: (0.05, 1.0), hard: (0.02, 1.0), target: "M8.4: no two worlds are the same bowl" },
     Band { name: "oatmeal mean distance", sweet: (0.04, 0.75), hard: (0.02, 0.9), target: "M8.4: the family resembles, never repeats" },
+    // M64 — calibration vs Earth: the hypsographic curve. Kossinna's
+    // classic table puts ~71% of Earth's land below 1 km; mean land
+    // elevation runs 797 m (ETOPO1) to 840 m (Kossinna). The bands
+    // bracket Earth's family, not Earth's exact figure.
+    Band { name: "land below 1 km %", sweet: (55.0, 85.0), hard: (40.0, 93.0), target: "M64: Earth ≈71% of land under 1 km (Kossinna/Sverdrup hypsographic curve)" },
+    Band { name: "mean land elevation m", sweet: (400.0, 1300.0), hard: (200.0, 2000.0), target: "M64: Earth means 797–840 m (ETOPO1 / Kossinna)" },
+    // One seed is one continent, and Earth's continents scatter widely
+    // around the global figure (Australia ~330 m mean · Antarctica-free
+    // range up to ~950 m; % under 1 km runs ~50s to ~95 per continent).
+    // Per-seed rows answer to the continental spread; the sweep mean
+    // answers to the global curve above.
+    Band { name: "land below 1 km % (continent)", sweet: (45.0, 92.0), hard: (30.0, 97.0), target: "M64: one seed is one continent — Earth's continents run ~50–95% under 1 km" },
+    Band { name: "mean land elevation m (continent)", sweet: (300.0, 1400.0), hard: (150.0, 2200.0), target: "M64: Earth's continental means span ~330–950 m (Australia to Asia)" },
 ];

@@ -106,8 +106,11 @@ export class Orbital {
      * @param {Float32Array} fertility
      * @param {Uint8Array} strahler
      * @param {Uint8Array} flags
+     * @param {Uint8Array} rock
+     * @param {Uint8Array} soil
+     * @param {Uint8Array} landform
      */
-    set_world(w, h, height, tmean, tamp, precip, discharge, fertility, strahler, flags) {
+    set_world(w, h, height, tmean, tamp, precip, discharge, fertility, strahler, flags, rock, soil, landform) {
         const ptr0 = passArrayF32ToWasm0(height, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passArrayF32ToWasm0(tmean, wasm.__wbindgen_malloc);
@@ -124,7 +127,13 @@ export class Orbital {
         const len6 = WASM_VECTOR_LEN;
         const ptr7 = passArray8ToWasm0(flags, wasm.__wbindgen_malloc);
         const len7 = WASM_VECTOR_LEN;
-        wasm.orbital_set_world(this.__wbg_ptr, w, h, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6, ptr7, len7);
+        const ptr8 = passArray8ToWasm0(rock, wasm.__wbindgen_malloc);
+        const len8 = WASM_VECTOR_LEN;
+        const ptr9 = passArray8ToWasm0(soil, wasm.__wbindgen_malloc);
+        const len9 = WASM_VECTOR_LEN;
+        const ptr10 = passArray8ToWasm0(landform, wasm.__wbindgen_malloc);
+        const len10 = WASM_VECTOR_LEN;
+        wasm.orbital_set_world(this.__wbg_ptr, w, h, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6, ptr7, len7, ptr8, len8, ptr9, len9, ptr10, len10);
     }
 }
 if (Symbol.dispose) Orbital.prototype[Symbol.dispose] = Orbital.prototype.free;
@@ -2227,12 +2236,12 @@ function __wbg_get_imports() {
             arg0.writeTexture(arg1, arg2, arg3, arg4);
         }, arguments); },
         __wbindgen_cast_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1767, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Externref], shim_idx: 1768, ret: Result(Unit), inner_ret: Some(Result(Unit)) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h1d0b212072f5bde3);
             return ret;
         },
         __wbindgen_cast_0000000000000002: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 120, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [NamedExternref("GPUUncapturedErrorEvent")], shim_idx: 123, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen__convert__closures_____invoke__h6c9ea3abc93e4d4a);
             return ret;
         },

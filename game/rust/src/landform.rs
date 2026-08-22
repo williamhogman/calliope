@@ -51,6 +51,73 @@ pub const PATTERNED: u8 = 10;
 pub const TIDEFLAT: u8 = 11;
 /// M43 — an estuary mouth: a river meeting tidal water.
 pub const ESTUARY: u8 = 12;
+/// M59/M60 — a delta plain: fan-built land the river laid down where
+/// its transport capacity died at the sea.
+pub const DELTA: u8 = 13;
+/// M44/M60 — the drift-built coast: the hook rooted on the old shore,
+/// the offshore bar that grew to stand alone, and the quiet water the
+/// new ground pinched off.
+pub const SPIT: u8 = 14;
+pub const BARRIER: u8 = 15;
+pub const LAGOON: u8 = 16;
+/// M55/M60 — the dry country's water: arid ground standing over a
+/// table within root reach, and the line where the table daylights at
+/// a break in slope.
+pub const OASIS: u8 = 17;
+pub const SPRING: u8 = 18;
+/// M29/M60 — the U-valley the ice cut but the sea never took: carved
+/// ground that still stands above the waterline.
+pub const TROUGH: u8 = 19;
+/// Reserved for Karst Country II (Ready queue): no karst pass exists
+/// yet, so no cell may carry this tag until limestone country actually
+/// behaves like limestone country. Reserving the code point now keeps
+/// the wire contract stable when it lands.
+pub const KARST: u8 = 20;
+/// M60 — the generic relief vocabulary: every land cell the era's
+/// stories left untold resolves to a Hammond-style relief class read
+/// off the 5×5 (20 km) local relief window, so no ground is nameless.
+pub const MOUNTAIN: u8 = 21;
+pub const HILLS: u8 = 22;
+pub const PLATEAU: u8 = 23;
+pub const VALLEY: u8 = 24;
+pub const PLAIN: u8 = 25;
+/// M60 — open shore water: sea touching land that no coastal story
+/// (ria, skerry, fjord, lagoon, flat, estuary) claimed.
+pub const SHORE: u8 = 26;
+
+/// One name per code point, index-aligned — the single vocabulary the
+/// inspector, the namer and the diagnostics all read (M60: nobody
+/// guesses from raw scalars again). `NONE` on open water reads as the
+/// open sea; on land and shore it must never survive `finish`.
+pub const NAMES: [&str; 27] = [
+    "open sea",
+    "raised beach",
+    "ria",
+    "skerry field",
+    "fjord",
+    "moraine",
+    "drumlin",
+    "esker",
+    "spillway",
+    "outwash plain",
+    "patterned ground",
+    "tidal flat",
+    "estuary",
+    "delta plain",
+    "spit",
+    "barrier island",
+    "lagoon",
+    "oasis",
+    "springline",
+    "glacial trough",
+    "karst",
+    "mountain",
+    "hills",
+    "plateau",
+    "valley",
+    "plain",
+    "shore",
+];
 
 /// A drowned cell counts as a ria when land at least this tall stands
 /// within `WALL_R` cells — valley walls, not open flats.
@@ -59,7 +126,19 @@ const WALL_R: isize = 2;
 
 /// Classify every cell of the (possibly widened) grid. Rows map 1:1 to
 /// the sea-level row profile — the widen adds columns only.
-pub fn classify(height: &Array2<f32>, sl: &SeaLevel, ice: &crate::ice::Ice) -> Array2<u8> {
+///
+/// `delta` is M59's fan-built land: fresh deposition that post-dates
+/// the sea-level history. A delta plain stands at the tideline because
+/// the river filled it there *now* — reading `hv − dz < 0` on it would
+/// call every fan a raised beach wherever emergence exceeds one fill
+/// height. The classifier reads the sea's story only through ground
+/// the sea actually shaped.
+pub fn classify(
+    height: &Array2<f32>,
+    sl: &SeaLevel,
+    ice: &crate::ice::Ice,
+    delta: &Array2<bool>,
+) -> Array2<u8> {
     let (h, w) = height.dim();
     let mut out: Array2<u8> = Array2::zeros((h, w));
     // M29 — fjords first: a drowned cell the ice carved is a fjord no
@@ -86,7 +165,10 @@ pub fn classify(height: &Array2<f32>, sl: &SeaLevel, ice: &crate::ice::Ice) -> A
                 continue;
             }
             if hv >= 0.0 && h0 < 0.0 {
-                out[[y, x]] = RAISED;
+                // fan-built ground is the river's work, not the sea's
+                if !(delta.dim() == (h, w) && delta[[y, x]]) {
+                    out[[y, x]] = RAISED;
+                }
             } else if hv < 0.0 && h0 >= 0.0 {
                 // drowned ground: walls nearby make it a ria, open
                 // low relief makes it a skerry field
@@ -299,7 +381,264 @@ pub fn stamp_tidal(
     }
 }
 
+// ------------------------------------------------- M60: the full fold
+//
+// The era's remaining stories join the one grid, each writing only the
+// cells nobody claimed before it. Precedence is the order the dawn
+// calls them (world.rs): the sea's history and the ice's registries
+// first (classify), then frost (patterned), tide (flats/estuaries),
+// river (delta), drift (spit/barrier/lagoon), the dry country's water
+// (springs/oases), the ice's dry valleys (troughs) — and finally the
+// generic relief vocabulary fills every untold land cell and open
+// shore, so no ground is nameless (the M60 totality gate). One
+// exception to claim-if-untold: drift-*deposited* ground (spit,
+// barrier) overrides earlier claims, because on those cells the drift
+// is not a later story about existing ground — it is the ground's
+// origin (see stamp_coastforms).
 
+/// M59/M60 — the fan-built plains: land the river laid down where its
+/// transport capacity died. Earlier stories keep their cells.
+pub fn stamp_delta(out: &mut Array2<u8>, delta: &Array2<bool>, height: &Array2<f32>) {
+    let (h, w) = out.dim();
+    if delta.dim() != (h, w) || height.dim() != (h, w) {
+        return;
+    }
+    for y in 0..h {
+        for x in 0..w {
+            if out[[y, x]] == NONE && height[[y, x]] >= 0.0 && delta[[y, x]] {
+                out[[y, x]] = DELTA;
+            }
+        }
+    }
+}
+
+/// M44/M60 — the drift ledger: spits and barriers are the longshore
+/// current's new land, lagoons the world-ocean water that new ground
+/// pinched off.
+///
+/// SPIT and BARRIER overwrite whatever an earlier story claimed: the
+/// M44 deposit gate proves those form cells are exactly the cells the
+/// drift deposited — ground that did not exist before the current
+/// built it. A raised-beach or delta word there is a lie about the
+/// ground's origin (measured before this law, every spit and barrier
+/// cell on three seeds was claimed first by the sea-history or delta
+/// stories and the words never reached the map). LAGOON keeps the
+/// claim-if-untold rule: it names standing water, not built ground.
+pub fn stamp_coastforms(out: &mut Array2<u8>, form: &Array2<u8>, height: &Array2<f32>) {
+    let (h, w) = out.dim();
+    if form.dim() != (h, w) || height.dim() != (h, w) {
+        return;
+    }
+    for y in 0..h {
+        for x in 0..w {
+            let land = height[[y, x]] >= 0.0;
+            match form[[y, x]] {
+                crate::coast::SPIT if land => out[[y, x]] = SPIT,
+                crate::coast::BARRIER if land => out[[y, x]] = BARRIER,
+                crate::coast::LAGOON if !land && out[[y, x]] == NONE => out[[y, x]] = LAGOON,
+                _ => {}
+            }
+        }
+    }
+}
+
+/// M55/M60 — the dry country's water: the springline where the solved
+/// table daylights, the oasis where the desert's water actually
+/// gathers. M55's `oases` mask is a *reach* law — every arid cell a
+/// well can water, deliberately broad because founding prices it —
+/// but the landform word names the grove, not the reach: within the
+/// mask, OASIS stamps only where depth to the table is a local
+/// minimum over the masked 8-neighborhood — the low point the
+/// phreatophyte roots find first. Measured before this law, the
+/// shallow band alone painted 8–11k cells per world (whole discharge
+/// basins — that ground is sabkha/playa country, a word of its own in
+/// the Ready queue, not oasis); the low-point law leaves the ~10²
+/// pointlike groves an oasis actually is. The siting law reads the
+/// mask untouched; only the vocabulary narrows.
+pub fn stamp_dry_water(
+    out: &mut Array2<u8>,
+    springs: &Array2<bool>,
+    oases: &Array2<bool>,
+    aquifer: &Array2<f32>,
+    height: &Array2<f32>,
+) {
+    let (h, w) = out.dim();
+    if springs.dim() != (h, w)
+        || oases.dim() != (h, w)
+        || aquifer.dim() != (h, w)
+        || height.dim() != (h, w)
+    {
+        return;
+    }
+    for y in 0..h {
+        for x in 0..w {
+            if out[[y, x]] != NONE || height[[y, x]] < 0.0 {
+                continue;
+            }
+            if springs[[y, x]] {
+                out[[y, x]] = SPRING;
+                continue;
+            }
+            if !oases[[y, x]] {
+                continue;
+            }
+            let d = aquifer[[y, x]];
+            // STRICT local minimum of depth over masked neighbors: every
+            // masked neighbor sits strictly farther from the water (an
+            // isolated masked cell counts — the pointlike case). Strict,
+            // because the solve clamps daylighted basins to one flat
+            // depth: a `≤ + <` law stamps the entire rim band of every
+            // such basin (measured: ~5k ring cells per world), while
+            // ties failing outright leaves flat playa floors wordless
+            // (they are sabkha country, a Ready-queue word) and keeps
+            // the grove at the basin's one nearest approach.
+            let mut strict_min = true;
+            'nbrs: for dy in -1isize..=1 {
+                for dx in -1isize..=1 {
+                    if dy == 0 && dx == 0 {
+                        continue;
+                    }
+                    let ny = y as isize + dy;
+                    let nx = x as isize + dx;
+                    if ny < 0 || nx < 0 || ny >= h as isize || nx >= w as isize {
+                        continue;
+                    }
+                    let (ny, nx) = (ny as usize, nx as usize);
+                    if !oases[[ny, nx]] {
+                        continue;
+                    }
+                    if aquifer[[ny, nx]] <= d {
+                        strict_min = false;
+                        break 'nbrs;
+                    }
+                }
+            }
+            if strict_min {
+                out[[y, x]] = OASIS;
+            }
+        }
+    }
+}
+
+/// M29/M60 — the U-valleys: ground the ice carved at fjord depth that
+/// still stands above the waterline. The drowned ones became fjords in
+/// `classify`; these are their dry siblings.
+pub fn stamp_trough(out: &mut Array2<u8>, carved: &Array2<f32>, height: &Array2<f32>) {
+    let (h, w) = out.dim();
+    if carved.dim() != (h, w) || height.dim() != (h, w) {
+        return;
+    }
+    for y in 0..h {
+        for x in 0..w {
+            if out[[y, x]] == NONE
+                && height[[y, x]] >= 0.0
+                && carved[[y, x]] >= crate::ice::FJORD_MIN
+            {
+                out[[y, x]] = TROUGH;
+            }
+        }
+    }
+}
+
+/// The relief window: ±2 cells (a 20 km square at 4 km/cell) — the
+/// scale Hammond's landform classes read local relief at (~10–20 km
+/// neighborhoods over 300 m/90 m relief breaks).
+const RELIEF_R: isize = 2;
+/// Hammond's mountain break: ≥300 m of local relief.
+const MOUNTAIN_RELIEF: f32 = (300.0 / crate::constants::METRES_PER_UNIT) as f32;
+/// Hammond's hill break: ≥90 m of local relief.
+const HILLS_RELIEF: f32 = (90.0 / crate::constants::METRES_PER_UNIT) as f32;
+/// A plateau is high, flat ground: ≥1000 m elevation under hill-class
+/// relief.
+const PLATEAU_ELEV: f32 = (1000.0 / crate::constants::METRES_PER_UNIT) as f32;
+/// A valley is the floor of pronounced relief: the window climbs
+/// ≥160 m above the cell while the cell sits within 40 m of the
+/// window's floor, and the window itself carries ≥200 m of relief.
+const VALLEY_RELIEF: f32 = (200.0 / crate::constants::METRES_PER_UNIT) as f32;
+const VALLEY_FLOOR: f32 = (40.0 / crate::constants::METRES_PER_UNIT) as f32;
+const VALLEY_WALL: f32 = (160.0 / crate::constants::METRES_PER_UNIT) as f32;
+
+/// M60 — the totality pass: every land cell the era's stories left
+/// untold resolves to a generic relief class (valley first, so a
+/// mountain's floor says valley; then mountain, hills, plateau,
+/// plain), and every open-water cell touching land that no coastal
+/// story claimed reads as plain shore. After this pass, `NONE`
+/// survives only on open sea — the M60 gate's totality clause.
+pub fn finish(out: &mut Array2<u8>, height: &Array2<f32>) {
+    let (h, w) = out.dim();
+    if height.dim() != (h, w) {
+        return;
+    }
+    // Separable 5×5 window min/max: rows, then columns.
+    let mut rmin = Array2::from_elem((h, w), 0.0f32);
+    let mut rmax = Array2::from_elem((h, w), 0.0f32);
+    for y in 0..h {
+        for x in 0..w {
+            let mut lo = f32::INFINITY;
+            let mut hi = f32::NEG_INFINITY;
+            for dx in -RELIEF_R..=RELIEF_R {
+                let nx = x as isize + dx;
+                if nx < 0 || nx >= w as isize {
+                    continue;
+                }
+                let v = height[[y, nx as usize]];
+                lo = lo.min(v);
+                hi = hi.max(v);
+            }
+            rmin[[y, x]] = lo;
+            rmax[[y, x]] = hi;
+        }
+    }
+    for y in 0..h {
+        for x in 0..w {
+            if out[[y, x]] != NONE {
+                continue;
+            }
+            let hv = height[[y, x]];
+            if hv < 0.0 {
+                // open water: shore iff a 4-neighbor is land
+                let mut shore = false;
+                for (ny, nx) in [
+                    (y.wrapping_sub(1), x),
+                    (y + 1, x),
+                    (y, x.wrapping_sub(1)),
+                    (y, x + 1),
+                ] {
+                    if ny < h && nx < w && height[[ny, nx]] >= 0.0 {
+                        shore = true;
+                        break;
+                    }
+                }
+                if shore {
+                    out[[y, x]] = SHORE;
+                }
+                continue;
+            }
+            let mut lo = f32::INFINITY;
+            let mut hi = f32::NEG_INFINITY;
+            for dy in -RELIEF_R..=RELIEF_R {
+                let ny = y as isize + dy;
+                if ny < 0 || ny >= h as isize {
+                    continue;
+                }
+                lo = lo.min(rmin[[ny as usize, x]]);
+                hi = hi.max(rmax[[ny as usize, x]]);
+            }
+            let relief = hi - lo;
+            out[[y, x]] = if relief >= VALLEY_RELIEF && hv - lo <= VALLEY_FLOOR && hi - hv >= VALLEY_WALL {
+                VALLEY
+            } else if relief >= MOUNTAIN_RELIEF {
+                MOUNTAIN
+            } else if relief >= HILLS_RELIEF {
+                HILLS
+            } else if hv >= PLATEAU_ELEV {
+                PLATEAU
+            } else {
+                PLAIN
+            };
+        }
+    }
+}
 
 /// FNV-1a over the tag grid — joins `hash_state` so the classifier
 /// cannot drift silently between generations or runtimes.
@@ -318,4 +657,18 @@ use crate::util::Band;
 pub const BANDS: &[Band] = &[
     Band { name: "raised coast per stand", sweet: (70.0, 150.0), hard: (40.0, 250.0), target: "sweet 70–150 · hard 40–250 (share of coast per mean emergence, ≈1/coastal slope)" },
     Band { name: "drowned coast per stand", sweet: (60.0, 150.0), hard: (25.0, 300.0), target: "sweet 60–150 · hard 25–300 (share of coast per mean submergence)" },
+    Band { name: "oasis cells stay pointlike", sweet: (50.0, 800.0), hard: (10.0, 2000.0), target: "sweet 50–800 · hard 10–2000 (M60 gate: strict depth minima of the well-reach mask — groves, not basins; measured 228–305 ×5 seeds)" },
+    // M64 — calibration vs Earth: the coast census and the expressive
+    // range of the vocabulary itself. Earth's coast-type frequencies
+    // are shares of coastline LENGTH, so the census counts shoreline
+    // frontage — areal words only where they front the sea. Barrier
+    // islands alone front ~10% of Earth's open-ocean coast (Stutz &
+    // Pilkey 2011); spits and lagoons ride the same drift-built belt.
+    // The entropy/dominance/JSD floors keep any seed from collapsing
+    // to one bland word.
+    Band { name: "built belt share of coast %", sweet: (1.5, 30.0), hard: (0.3, 55.0), target: "M64: Earth's drift-built belt ≈10% of open coast by length (Stutz & Pilkey 2011) — frontage census" },
+    Band { name: "coast with a story %", sweet: (10.0, 90.0), hard: (2.0, 98.0), target: "M64: most coast frontage carries a named form; open shore is the remainder, not the rule" },
+    Band { name: "landform entropy floor", sweet: (1.0, 3.3), hard: (0.6, 3.3), target: "M64: worst seed keeps a mixed vocabulary (Shannon entropy over the 27 words; ln 27 ≈ 3.3)" },
+    Band { name: "dominant landform share", sweet: (0.15, 0.65), hard: (0.05, 0.85), target: "M64: no seed pinned to one word — the commonest landform stays under ~2/3 of land" },
+    Band { name: "landform oatmeal floor", sweet: (0.004, 1.0), hard: (0.0015, 1.0), target: "M64: the landform mix differs between worlds — the closest pair stays distinct" },
 ];

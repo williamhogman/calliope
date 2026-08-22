@@ -76,15 +76,25 @@ impl Perlin3 {
         let n100 = Self::grad(p[ba], xf - 1.0, yf, zf);
         let n010 = Self::grad(p[ab], xf, yf - 1.0, zf);
         let n110 = Self::grad(p[bb], xf - 1.0, yf - 1.0, zf);
+        let x00 = Self::lerp(n000, n100, u);
+        let x10 = Self::lerp(n010, n110, u);
+        let y0 = Self::lerp(x00, x10, v);
+        // z on a lattice plane (every integer-z octave of a constant-z
+        // field): lerp(y0, y1, 0.0) = y0 + 0.0·(y1−y0), so the upper-z
+        // corners are dead weight — skip 4 grads and 3 lerps. The only
+        // possible bit difference is the sign of an exact zero, and
+        // every consumer absorbs it: fbm accumulates with += (+0.0 plus
+        // ±0.0 is +0.0), ridged takes |n|, and the lone direct caller
+        // (geo.rs arc noise, z=2.5) never lands here.
+        if w == 0.0 {
+            return y0;
+        }
         let n001 = Self::grad(p[aa + 1], xf, yf, zf - 1.0);
         let n101 = Self::grad(p[ba + 1], xf - 1.0, yf, zf - 1.0);
         let n011 = Self::grad(p[ab + 1], xf, yf - 1.0, zf - 1.0);
         let n111 = Self::grad(p[bb + 1], xf - 1.0, yf - 1.0, zf - 1.0);
-        let x00 = Self::lerp(n000, n100, u);
-        let x10 = Self::lerp(n010, n110, u);
         let x01 = Self::lerp(n001, n101, u);
         let x11 = Self::lerp(n011, n111, u);
-        let y0 = Self::lerp(x00, x10, v);
         let y1 = Self::lerp(x01, x11, v);
         Self::lerp(y0, y1, w)
     }

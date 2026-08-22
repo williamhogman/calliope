@@ -3,9 +3,9 @@
 ========================================================================
  seed 777 · size 512 · 240 mo
  native: 7ef24fa665fbe366
- native: plates=3a1702958367cb09 rock=80257b755198e97e seismic=7ef24fa665fbe366 volcanism=6c98290a8bf1d0ca sealevel=f6c0489b18a8fc38 landform=1f90815fbb927c59 ice=c87d5e3b3c5446e1 permafrost=7d1c02da0c414065 tides=1e78fbc9972be4b6 coast=ad39b0a8e75c39b3
+ native: plates=3a1702958367cb09 rock=8f0c8b28f322db60 seismic=7ef24fa665fbe366 volcanism=4f0f4028315ca065 sealevel=f6c0489b18a8fc38 landform=382595b9836a3671 ice=b1d9a76f701a9236 permafrost=1d109e7a3a51ae76 tides=9d77416b52d29679 coast=495514c5e64da158 sediment=86936e6c78c5316c
  wasm:   7ef24fa665fbe366
- wasm:   plates=3a1702958367cb09 rock=80257b755198e97e seismic=7ef24fa665fbe366 volcanism=6c98290a8bf1d0ca sealevel=f6c0489b18a8fc38 landform=1f90815fbb927c59 ice=c87d5e3b3c5446e1 permafrost=7d1c02da0c414065 tides=1e78fbc9972be4b6 coast=ad39b0a8e75c39b3
+ wasm:   plates=3a1702958367cb09 rock=8f0c8b28f322db60 seismic=7ef24fa665fbe366 volcanism=4f0f4028315ca065 sealevel=f6c0489b18a8fc38 landform=382595b9836a3671 ice=b1d9a76f701a9236 permafrost=1d109e7a3a51ae76 tides=9d77416b52d29679 coast=495514c5e64da158 sediment=86936e6c78c5316c
 
 ---- checks ----------------------------------------------------------
 [PASS] seismic ledger agrees across runtimes        agree   (M22 gate: native and wasm replay one ledger)

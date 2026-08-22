@@ -271,6 +271,26 @@ fn placement_respects_the_land() {
                 "seed {seed}: only {n} {g} seams, floor is {min_n}"
             );
         }
+        // M64 — the ground keeps what it grows: every kind with eligible
+        // ground seats at least one deposit; absence is legal only when
+        // the ground itself is absent (no biome, no band, no shore).
+        {
+            let dim = w.fields.height.dim();
+            let rivers = ndarray::Array2::from_shape_fn(dim, |(y, x)| {
+                w.fields.flags[[y, x]] & 0b01 != 0
+            });
+            let lakes = ndarray::Array2::from_shape_fn(dim, |(y, x)| {
+                w.fields.flags[[y, x]] & 0b10 != 0
+            });
+            for g in calliope::resources::grounded_kinds(
+                &w.fields.biomes, &w.fields.height, &rivers, &lakes,
+            ) {
+                assert!(
+                    w.deposits.iter().any(|d| d.r == g),
+                    "seed {seed}: {g} has eligible ground but no deposit — the rescue slept"
+                );
+            }
+        }
         // M19 — deposits re-seated: pooled across the homed minerals,
         // at least 80% of seams sit in a home province (the floor pass
         // is province-blind, so per-good shares may dip; the pool holds).

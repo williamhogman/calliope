@@ -19,7 +19,7 @@ fn main() {
     println!("terrain    {:>6} ms", t.elapsed().as_millis());
 
     let t = Instant::now();
-    calliope::erosion::erode(&mut height);
+    let sediment = calliope::erosion::erode(&mut height);
     println!("erosion    {:>6} ms", t.elapsed().as_millis());
 
     // M28/M29/M30 — the glacial stage, mirroring the GenBuilder:
@@ -74,15 +74,31 @@ fn main() {
     let t = Instant::now();
     // M51/M52 — fertility reads the soil order, so the stage rehearsal
     // classifies the basement and the profile first, exactly as the
-    // generator does.
+    // generator does. Each sub-pass is timed on its own line so a cost
+    // regression in the stage names its kernel, not just its stage
+    // (E10.1 — the fertility stage owns five distinct kernels).
     let height32_pre = height.mapv(|x| x as f32);
     let rock_pre = calliope::rock::classify(seed, size, &plates, &height32_pre);
+    println!("  · rock       {:>6} ms", t.elapsed().as_millis());
+    let t2 = Instant::now();
     let soil_pre = agriculture::soil_genesis(
         &height, &tmean, &precip, &biome_map, &rock_pre,
         &hydro.rivers, &hydro.lakes, &hydro.discharge, &ice.till, &ice.loess,
     );
+    println!("  · soil       {:>6} ms", t2.elapsed().as_millis());
+    let t2 = Instant::now();
     let _fert = agriculture::fertility(&height, &tmean, &precip, &hydro.rivers, &hydro.lakes, &hydro.discharge, &ice.till, &ice.loess, &ice.outwash, &soil_pre);
+    println!("  · fert       {:>6} ms", t2.elapsed().as_millis());
+    let t2 = Instant::now();
+    let _crops = agriculture::crop_packages(&height, &tmean, &precip, &hydro.rivers, &hydro.lakes, &soil_pre);
+    println!("  · crops      {:>6} ms", t2.elapsed().as_millis());
+    let t2 = Instant::now();
+    let _aquifer = calliope::hydrology::water_table(
+        &height, &water, &hydro.rivers, &hydro.lakes, &hydro.discharge, &precip, &rock_pre,
+    );
+    println!("  · aquifer    {:>6} ms", t2.elapsed().as_millis());
     println!("fertility  {:>6} ms", t.elapsed().as_millis());
+
 
     // E3.2 — the human stages read the world's resting f32 grids.
     let height32 = height.mapv(|x| x as f32);
@@ -96,7 +112,7 @@ fn main() {
     // GenBuilder does.
     let sealevel = calliope::sealevel::generate(seed, height.dim().0.max(height.dim().1));
     let (features, world_name) = naming::name_features(
-        &height32, &sealevel, &ice, &biome_map, &hydro.rivers, &hydro.lakes, &discharge32, &tmean32, &precip32, seed,
+        &height32, &sealevel, &ice, &sediment.delta, &biome_map, &hydro.rivers, &hydro.lakes, &discharge32, &tmean32, &precip32, seed,
     );
     println!("naming     {:>6} ms · {} features · world {}", t.elapsed().as_millis(), features.len(), world_name);
 

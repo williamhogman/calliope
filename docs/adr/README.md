@@ -67,3 +67,26 @@ MADR-lite. See [`template.md`](template.md). Sections:
 | [0021](0021-goods-ontology-as-data.md) | The goods ontology as one declarative table | Accepted |
 | [0022](0022-hand-rolled-lattice-over-bevy-ecs.md) | Hand-rolled system lattice, not bevy_ecs | Accepted (renumbered from 0015) |
 | [0023](0023-no-sab-field-mirror.md) | No shared-memory field mirror; transferables stay the lane | Accepted (renumbered from 0015) |
+| [0024](0024-plate-history-sketch.md) | The plate-history sketch: deep past as input, never simulation | Accepted |
+| [0025](0025-cross-runtime-replay-identity.md) | Cross-runtime replay identity for gated ledgers | Accepted |
+
+## Era gates
+
+When an era of `../ROADMAP-500.md` reaches its gate phase, the decisions
+it opened are recorded closed here — so the index says not just what was
+decided but which chapter each decision belongs to.
+
+**Era I — The Deep Earth (M16–M65, gate: `diagnose gate`).** The era's
+two reopened questions closed as follows. The plate-history question —
+simulate the deep past or sketch it — closed as ADR-0024 (sketch as
+input, never simulation) and held through fifty phases without a
+superseding record; the calibration against Earth's own numbers (M64)
+and the era gate ran on worlds built from the sketch. The GPU-erosion
+reopening (displaced from the original M57 slot by operator re-scoping)
+is **not** silently dropped: its spec is preserved in
+`../roadmap-500/STATUS.md`'s Ready queue and scheduled as M67's first
+client — a deferral on the record, not a decision. ADR-0003 was
+reaffirmed at era scale by the gate's structural leg (300 years under
+two tick chunkings, one state) and ADR-0025's native↔wasm ledger
+identity. The gate's verdict is live, not ceremonial: it composes every
+suite lane and holds the era open on any standing [FAIL].

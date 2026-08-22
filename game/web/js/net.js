@@ -346,11 +346,12 @@ export function tickWorld(_id, months) {
 }
 
 // Term ledger for a derived quantity ("why is this so?"); null when the
-// engine has nothing to say about that entity.
+// engine has nothing to say about that entity. Ledgers carry `terms`;
+// the M61 cell-provenance answer carries `chain` instead.
 export async function explainWorld(kind, key) {
   const { json } = await call({ op: OP.EXPLAIN, kind, key, expect: currentStamp });
   const parsed = JSON.parse(json);
-  return parsed && parsed.terms ? parsed : null;
+  return parsed && (parsed.terms || parsed.chain) ? parsed : null;
 }
 
 // Generation stage timings in seconds — the debug side channel (E3.9);

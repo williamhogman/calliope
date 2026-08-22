@@ -10,6 +10,12 @@ import {
   TEMP_GRAD, PRECIP_GRAD, ELEV_LAND_GRAD, ELEV_ARID_GRAD, SEA_GRAD,
   HYDRO_GRAD, FERT_GRAD, gradient, hash2,
 } from "../palette.js";
+// M63 — deep-earth lens swatches, generated from the Rust atlas tables:
+// the CPU fallback paints with the same colors the GPU palette texture holds.
+import { ROCKS, SOILS, LANDFORM_COLORS } from "../gen/constants.js";
+
+const ROCK_RGB = ROCKS.map((r) => r.color);
+const SOIL_RGB = SOILS.map((s) => s.color);
 
 // ---- satellite base palette -----------------------------------------------
 // Land colour derives from continuous fields (moisture, warmth, soil, height)
@@ -448,7 +454,10 @@ export function composite(R, state) {
   if (layer === "political") R._polDirty = false;
 
   const W = R.w, H = R.h;
-  const { height, tmean, precip, discharge, fertility, flags, strahler } = R.world.arrays;
+  const {
+    height, tmean, precip, discharge, fertility, flags, strahler,
+    rock, soil, landform,
+  } = R.world.arrays;
   if (!R._img || R._img.width !== W || R._img.height !== H) {
     R._img = R.octx.createImageData(W, H);
   }
@@ -572,6 +581,39 @@ export function composite(R, state) {
         if (sea) { r = 20; g = 33; b = 52; }
         else if (lake) { r = 46; g = 95; b = 143; }
         else [r, g, b] = FERT_GRAD(fertility ? fertility[i] : 0);
+      } else if (layer === "geology") {
+        // M63 — rock province; the geology continues under the sea, dimmed
+        // and cooled toward the abyss like an offshore hatch on a printed map
+        const c = ROCK_RGB[rock ? rock[i] : 0] || [128, 128, 128];
+        if (sea) {
+          const deep = Math.min(1, -h / 0.9) * 0.6;
+          r = (c[0] * 0.55 + 5) * (1 - deep) + 18 * deep;
+          g = (c[1] * 0.55 + 10) * (1 - deep) + 28 * deep;
+          b = (c[2] * 0.55 + 23) * (1 - deep) + 48 * deep;
+        } else {
+          r = c[0]; g = c[1]; b = c[2];
+        }
+      } else if (layer === "soils") {
+        // M63 — soil order; no profile under open water
+        if (sea) { r = 20; g = 32; b = 50; }
+        else if (lake) { r = 74; g = 128; b = 168; }
+        else {
+          const c = SOIL_RGB[soil ? soil[i] : 0] || [128, 128, 128];
+          r = c[0]; g = c[1]; b = c[2];
+        }
+      } else if (layer === "landform") {
+        // M63 — the vocabulary lens: open sea stays dark, shore-water
+        // words keep their swatch, damped by the water they stand in
+        const id = landform ? landform[i] : 0;
+        if (id === 0) { r = 14; g = 25; b = 42; }
+        else {
+          const c = LANDFORM_COLORS[id] || [128, 128, 128];
+          if (isWater) {
+            r = c[0] * 0.62 + 5; g = c[1] * 0.62 + 13; b = c[2] * 0.62 + 26;
+          } else {
+            r = c[0]; g = c[1]; b = c[2];
+          }
+        }
       } else { // hydro
         if (sea) { r = 14; g = 28; b = 48; }
         else if (lake) { r = 46; g = 95; b = 143; }

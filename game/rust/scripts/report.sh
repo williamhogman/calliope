@@ -59,7 +59,8 @@ run() { # run <outfile> <diagnose args...>
 }
 
 for s in "${SEEDS[@]}"; do
-  run "terrain-$s.txt"   terrain   "$s" "$SIZE"
+  # --explain: the M61 provenance-chain gate rides every terrain run.
+  run "terrain-$s.txt"   terrain   "$s" "$SIZE" --explain
   run "climate-$s.txt"   climate   "$s" "$SIZE"
   run "hydro-$s.txt"     hydro     "$s" "$SIZE"
   run "resources-$s.txt" resources "$s" "$SIZE"
@@ -82,6 +83,9 @@ run "earth.txt" earth "$SIZE" "$CIV_YEARS" "${SEEDS[@]}"
 run "ocean.txt" ocean "$SIZE" $OCEAN
 # M50: the ocean stack answers a perturbation, not just a snapshot.
 run "ocean-meta.txt" ocean "$SIZE" $OCEAN --metamorphic
+# M63: the cartographic law — palettes, the no-green desert ladder, and
+# the pack-v2 lens round-trip — proved at its Rust source.
+run "atlas.txt" atlas "$SIZE" "${SEEDS[@]}"
 
 # ---- M22/M27 deep-earth replay across runtimes ------------------------------
 # The same seed and months must yield one seismic ledger (M22) and one
@@ -175,6 +179,38 @@ WASM="../web/js/wasm/calliope_bg.wasm"
 } > "$OUT/wasm.txt"
 echo "-- wasm size -> wasm.txt"
 
+# ---- compile firewall (M65, staged by the M59 finding) ----------------------
+# The M15 property lane kept hiding behind bin compile errors — a signature
+# change breaks stagetest.rs or the assay's own harness and the lane
+# reported [FAIL] for a law nobody disproved (three occurrences). Compile
+# every target first as its own named row, so a build break names itself
+# as a build break and the assay row can only ever fail as a counterexample.
+echo "-- compile firewall (cargo check --all-targets) -> compile.txt"
+{
+  echo "========================================================================"
+  echo " CALLIOPE DIAGNOSTIC · COMPILE                   every target, one gate"
+  echo "========================================================================"
+  if command -v cargo >/dev/null 2>&1; then
+    CHECK_CMD=(cargo check --all-targets --quiet)
+  else
+    CHECK_CMD=(nix shell nixpkgs#rustc nixpkgs#cargo -c cargo check --all-targets --quiet)
+  fi
+  if "${CHECK_CMD[@]}" > /tmp/compile-out.txt 2>&1; then
+    echo " lib · bins · tests: every target compiles"
+    echo
+    echo "---- checks ----------------------------------------------------------"
+    echo "[PASS] every target compiles                             (M65 firewall: a build break names itself, never masquerades as a failed law)"
+  else
+    tail -30 /tmp/compile-out.txt | sed 's/^/ /'
+    echo
+    echo "---- checks ----------------------------------------------------------"
+    echo "[FAIL] a target fails to compile                         (M65 firewall: fix the build, then believe the assay)"
+  fi
+  echo "CHECKS: see row above"
+} > "$OUT/compile.txt"
+
+
+
 # ---- the assay (M15) -------------------------------------------------------
 # Property-proofs over the resource path: ontology forest, placement laws,
 # price clamps, metamorphic market checks, conservation meters, hostile
@@ -258,6 +294,16 @@ if [ "${BROWSER:-1}" = "1" ] && command -v python3 >/dev/null 2>&1 \
 else
   echo "-- browser probe skipped (no dev server on :8080 or BROWSER=0)"
 fi
+
+# ---- the era gate (M65) -----------------------------------------------------
+# Runs last so it composes every report this run just wrote — the same
+# rows SUMMARY greps, sealed into one verdict — plus a 300-year structural
+# leg (60y in quick). One FAIL anywhere holds the era open, the honestly
+# held rows included: the gate exists to see them, never to scope past them.
+GATE_YEARS=300
+[ "$MODE" = "quick" ] && GATE_YEARS=60
+echo "-- era gate (compose + ${GATE_YEARS}y structural leg) -> gate.txt"
+"$BIN" gate "$SIZE" "$GATE_YEARS" 12345 --reports "$OUT" > "$OUT/gate.txt"
 
 # ---- perf history (E10.8) --------------------------------------------------
 # One dated row per run, append-only: drift across weeks stays visible even

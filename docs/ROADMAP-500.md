@@ -220,11 +220,11 @@ bar or staying dead. Eighteen quarters, then Forge I.
 **Q14 — The hidden water.**
 - M54 Aquifers and water tables from rock and rainfall
 - M55 Springs, wells, oases: dry-land settlement stops cheating; well techs gate deep water
-- M56 Karst: limestone country — sinkholes, caves, disappearing rivers
+- M56 The caravan frontier: extractive desert siting — camps priced by seam, victualled caravan reach, and the metre-cost of lifted water *(re-scoped 2026-08-21; Karst Country displaced to the Ready queue)*
 
-**Q15 — The sharpened knife.**
-- M57 GPU erosion compute pass (reopened from Later/research): stream-power at full resolution inside budget
-- M58 River forms II: meanders, oxbows, terraces, braids from valley slope and sediment load
+**Q15 — The claimed frontier.**
+- M57 Outcrop visibility: bare rock is legible ground — soil depth and canopy govern seam discovery, never a site's score *(re-scoped 2026-08-21; GPU erosion pass displaced to the Ready queue)*
+- M58 Claim pressure: a crown dark of a metal it smelts hears known seams louder and pays for longer lanes *(re-scoped 2026-08-21; River Forms II displaced to the Ready queue)*
 - M59 Sediment budget: deltas grow where the load lands; estuaries silt
 
 **Q16 — The explained cell.**

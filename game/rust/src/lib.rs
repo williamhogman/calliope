@@ -22,6 +22,7 @@ pub mod event;
 pub mod explain;
 pub mod famine;
 pub mod geo;
+pub mod grid;
 pub mod hydrology;
 pub mod ice;
 pub mod ids;
@@ -35,6 +36,7 @@ pub mod plates;
 pub mod politics;
 pub mod prospecting;
 
+pub mod atlas;
 #[cfg(target_arch = "wasm32")]
 pub mod render;
 pub mod resources;

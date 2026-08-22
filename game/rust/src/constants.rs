@@ -137,4 +137,8 @@ pub const LAYERS: &[(&str, u8)] = &[
     ("precip", 4),
     ("hydro", 5),
     ("fertility", 6),
+    // M63 — the deep-earth lenses read the stack that built the ground
+    ("geology", 7),
+    ("soils", 8),
+    ("landform", 9),
 ];

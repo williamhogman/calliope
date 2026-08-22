@@ -1308,6 +1308,19 @@ pub fn outwash(height: &mut Array2<f64>, ice: &mut Ice) {
     // Aprons: neighbours standing within OUT_APRON above a corridor are
     // planed down toward its floor. Reads come from the pre-pass
     // snapshot and writes are min()/max() — scan order cannot show.
+    // M31 — outburst channels are off-limits: the flood is the last
+    // hand on its own bed. The lakes drained *through* the retreating
+    // margin's plains, recutting them; planing a channel cell toward a
+    // sideways corridor floor would pit the staircase the carve built.
+    let mut channel = Array2::<bool>::from_elem((rows, cols), false);
+    for ch in &ice.spillways {
+        for &(y, x) in ch {
+            let (y, x) = (y as usize, x as usize);
+            if y < rows && x < cols {
+                channel[[y, x]] = true;
+            }
+        }
+    }
     for y in 0..rows {
         for x in 0..cols {
             if out[[y, x]] < 1.0 {
@@ -1323,6 +1336,9 @@ pub fn outwash(height: &mut Array2<f64>, ice: &mut Ice) {
                 let (ny, nx) = (ny as usize, nx as usize);
                 let hn = h0[[ny, nx]];
                 if hn <= hc || hn - hc > OUT_APRON || ice.thickness[[ny, nx]] > 0.0 {
+                    continue;
+                }
+                if channel[[ny, nx]] {
                     continue;
                 }
                 height[[ny, nx]] = height[[ny, nx]].min(hc + OUT_LIFT);

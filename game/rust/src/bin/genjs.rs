@@ -77,7 +77,47 @@ fn gen_constants() -> String {
 
     o.push_str("export const GOODS = ");
     let goods: Vec<String> = Good::iter().map(|g| format!("\"{}\"", g.name())).collect();
-    o.push_str(&format!("[{}];\n", goods.join(", ")));
+    o.push_str(&format!("[{}];\n\n", goods.join(", ")));
+
+    // M60 — the landform vocabulary, index-aligned with the `landform`
+    // wire lane: the inspector names ground with the engine's own words.
+    o.push_str("export const LANDFORMS = ");
+    let lf: Vec<String> = calliope::landform::NAMES.iter().map(|n| format!("\"{n}\"")).collect();
+    o.push_str(&format!("[{}];\n\n", lf.join(", ")));
+
+    // M63 — the deep-earth lens vocabulary: rock provinces with the stone
+    // their quarries cut, soil orders, and the swatches all three lenses
+    // paint with. Index-aligned with their wire lanes; the CPU compositor
+    // and the legends read these, the GPU reads the same tables as a
+    // palette texture — one source (atlas.rs), no drift.
+    o.push_str("export const ROCKS = [\n");
+    for (i, name) in calliope::rock::NAMES.iter().enumerate() {
+        let c = calliope::atlas::ROCK_COLORS[i];
+        o.push_str(&format!(
+            "  {{ id: {i}, name: \"{name}\", stone: \"{}\", color: [{}, {}, {}] }},\n",
+            calliope::rock::quarry(i as u8),
+            c[0], c[1], c[2]
+        ));
+    }
+    o.push_str("];\n\n");
+
+    o.push_str("export const SOILS = [\n");
+    for s in calliope::agriculture::SoilOrder::iter() {
+        let c = calliope::atlas::SOIL_COLORS[s.code() as usize];
+        o.push_str(&format!(
+            "  {{ id: {}, name: \"{}\", color: [{}, {}, {}] }},\n",
+            s.code(),
+            s.name(),
+            c[0], c[1], c[2]
+        ));
+    }
+    o.push_str("];\n\n");
+
+    o.push_str("export const LANDFORM_COLORS = [\n");
+    for c in calliope::atlas::LANDFORM_COLORS.iter() {
+        o.push_str(&format!("  [{}, {}, {}],\n", c[0], c[1], c[2]));
+    }
+    o.push_str("];\n");
 
     o
 }

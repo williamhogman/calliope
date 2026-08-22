@@ -579,6 +579,33 @@ input { font: inherit; color: inherit; }
 .insp-line { font-size: 11.5px; }
 .insp-line.wind { font-size: 10.5px; }
 
+/* M61 — the provenance chain: why is this here, deep time forward */
+.insp-chain {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.chain-t { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #8a8fa0; }
+.chain-row { display: flex; gap: 7px; align-items: baseline; }
+.chain-k {
+  flex: 0 0 52px;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: right;
+  opacity: 0.85;
+}
+.k-stone { color: #b0a08c; }
+.k-ice { color: #a8cbe0; }
+.k-water { color: #7fb4d9; }
+.k-soil { color: #b7c98f; }
+.k-landform { color: #d4a94a; }
+.chain-b { font-size: 11.5px; line-height: 1.4; color: #cfd6c9; }
+.chain-b .dim { margin-left: 3px; }
+
 .insp-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .ghost-btn {
   display: inline-flex;

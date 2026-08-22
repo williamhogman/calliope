@@ -1,33 +1,33 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TELLING                      seed 12345 · size 512 · 150y
 ========================================================================
-chronicle: 8593 entries over 150y (57.3/y)
-  ids on 100.0% · coords on 97.7% · legend layer on 2224/2224 loud entries
-cast: artifact 17+0† · civilization 3+1† · culture 14+0† · feature 94+0† · good 36+0† · person 18+202† · realm 14+16† · ruin 1+0† · settlement 99+1† · war 2+41† · world 1+0†
-epithets earned: 152  (Thalwydell "the Young", Orene "the Young", Khargol "the Unlucky", Skjalvik "the Old")
-artifacts: 17 wrought · 15 held · 2 lost
+chronicle: 8291 entries over 150y (55.3/y)
+  ids on 100.0% · coords on 97.8% · legend layer on 2268/2268 loud entries
+cast: artifact 17+0† · civilization 1+2† · culture 11+0† · feature 90+0† · good 36+0† · person 10+177† · realm 10+18† · ruin 1+0† · settlement 108+1† · war 0+34† · world 1+0†
+epithets earned: 149  (Tamimbar "the Young", Thalshade "the Young", Arikos "the Unlucky", Dzunachi "the Wise")
+artifacts: 17 wrought · 16 held · 1 lost
 
-stories sifted: 48 (bloody-circlet ×10 · empire-arc ×1 · high-noon ×1 · mine-curse ×10 · restoration ×3 · rivalry ×6 · roads-of ×7 · trials ×10)
-  424.0  The Trials of Oros  (y0–147, 12 beats)
-  314.0  The Trials of Bortau  (y43–149, 12 beats)
-  298.0  The Trials of Pelsyopia  (y51–149, 12 beats)
-  288.0  The Trials of Keshabek  (y0–149, 12 beats)
-  286.2  The Trials of Kalaia  (y65–150, 12 beats)
-  270.5  The Trials of Koropia  (y0–148, 12 beats)
-  268.5  The Trials of Fenwymere  (y0–145, 12 beats)
-  268.0  The Trials of Yewenshade  (y36–150, 12 beats)
+stories sifted: 48 (bloody-circlet ×10 · empire-arc ×2 · high-noon ×1 · mine-curse ×10 · rivalry ×5 · roads-of ×8 · tide-turned ×1 · trials ×10 · usurpation ×1)
+  401.2  The Trials of Mosswyhythe  (y66–149, 12 beats)
+  398.0  The Trials of Aldun  (y6–149, 12 beats)
+  391.9  The Trials of Azhamasab  (y56–149, 12 beats)
+  361.5  The Trials of Keshuyar  (y0–150, 12 beats)
+  351.5  The Trials of Kororos  (y69–145, 12 beats)
+  336.8  The Trials of Khamasab  (y59–150, 12 beats)
+  327.3  The Trials of Naxkayra  (y53–145, 12 beats)
+  325.5  The Trials of Thesstoma  (y0–149, 12 beats)
 
 ---- checks ----------------------------------------------------------
 [PASS] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
 [PASS] every carried id is valid                     0 bad   (ids index the registry)
-[PASS] events mappable (coords)                      97.7%   (most entries can fly the camera)
-[PASS] loud events carry a legend                2224/2224   (M6.9: two-layer telling on weight ≥ 3)
+[PASS] events mappable (coords)                      97.8%   (most entries can fly the camera)
+[PASS] loud events carry a legend                2268/2268   (M6.9: two-layer telling on weight ≥ 3)
 [PASS] closed entities carry a fate              0 unfated   (every ending is written)
 [PASS] stories per century                            32.0   (M6.5 gate: the sifter yields)
 [PASS] sifter deterministic                      identical   (same log ⇒ same stories)
 [PASS] no duplicate stories                         0 dups   (dedup bounds hold)
 [PASS] a reversal story found                          yes   (M6.7: fortunes turn on the record)
 [PASS] relics wrought                                   17   (M6.3: artifacts enter the world)
-[PASS] epithets earned                                 152   (M6.8: names are coined in the field)
-[PASS] chronicle unbounded                            8593   (no truncation: the full log persists)
+[PASS] epithets earned                                 149   (M6.8: names are coined in the field)
+[PASS] chronicle unbounded                            8291   (no truncation: the full log persists)
 CHECKS: 12 pass · 0 warn · 0 fail
