@@ -10043,6 +10043,10 @@ fn cmd_compute(size: usize, seeds: Vec<i64>, golden: Option<String>) {
         let seeds0 = compute::coast_seeds(&hf, size, size);
         let cpu = compute::jfa_cpu(seeds0.clone(), size, size);
         let ms = t0.elapsed().as_secs_f64() * 1000.0;
+        if golden.is_some() {
+            golden_cases.push((format!("seed {seed}"), size, size, hf.clone(), cpu.clone()));
+        }
+
 
         // The referee compares exact integers: the JFA's squared distance
         // to its chosen seed against the exact EDT's square. Comparing
