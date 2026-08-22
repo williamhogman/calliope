@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · MODULE DAG                       E11.8 lint
 ========================================================================
- scanned 49 modules · allowed world-importers: lib.rs world.rs systems.rs pack.rs snapshot.rs famine.rs prospecting.rs explain.rs
+ scanned 50 modules · allowed world-importers: lib.rs world.rs systems.rs pack.rs snapshot.rs famine.rs prospecting.rs explain.rs
 
 ---- checks ----------------------------------------------------------
 [PASS] leaf modules import event/state, never world    (E11.8: import DAG acyclic by check)

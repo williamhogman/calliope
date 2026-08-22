@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-22 03:24 UTC
+mode: full · size: 512 · generated: 2026-08-22 04:27 UTC
 
-totals: 879 pass · 29 warn · 3 fail
+totals: 886 pass · 29 warn · 4 fail
 
 -- assay.txt
    all checks pass
@@ -16,7 +16,7 @@ totals: 879 pass · 29 warn · 3 fail
    all checks pass
 
 -- build.txt
-[WARN] wasm binary size                              3511838 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
+[WARN] wasm binary size                              3514164 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
 
 -- civ-12345.txt
 [WARN] assimilation cadence                 0.7 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
@@ -42,6 +42,9 @@ totals: 879 pass · 29 warn · 3 fail
 -- compile.txt
    all checks pass
 
+-- compute.txt
+   all checks pass
+
 -- determinism.txt
    all checks pass
 
@@ -58,7 +61,8 @@ totals: 879 pass · 29 warn · 3 fail
 [WARN] landform oatmeal floor                       0.0015   (M64: the landform mix differs between worlds — the closest pair stays distinct)
 
 -- gate.txt
-[FAIL] the suite composes clean             1 fail · 29 warn · 872 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
+[FAIL] the suite composes clean             1 fail · 29 warn · 880 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
+[FAIL] the wasm audit speaks for shipped bytes    STALE AUDIT   (E6.6: audit subject sha256 = shipped wasm — rerun scripts/wasm-audit.sh after a rebuild)
 [FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
 
 -- hydro-12345.txt
@@ -83,8 +87,8 @@ totals: 879 pass · 29 warn · 3 fail
 [WARN] ruins per century (after y100)                17.67   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-[WARN] stage fertility ms                   113 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] tick rate year 100                   159 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   109 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] tick rate year 100                   163 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
