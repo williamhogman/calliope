@@ -2,13 +2,13 @@
  CALLIOPE DIAGNOSTIC · BENCH                        native release · alloc-count
 ========================================================================
  size    gen ms  pack bytes     cells  stage breakdown (ms)
-  320       929     2805220    128000  plates 40 · terrain 110 · erosion 72 · glacial 97 · coast 165 · climate 37 · hydrology 35 · biomes 1 · fertility 46 · naming 28 · resources 126 · settlements 111
-  512      2262     7174532    327680  plates 85 · terrain 244 · erosion 186 · glacial 265 · coast 276 · climate 81 · hydrology 93 · biomes 3 · fertility 114 · naming 76 · resources 323 · settlements 250
-  640      3292    11207596    512000  plates 129 · terrain 406 · erosion 314 · glacial 426 · coast 489 · climate 125 · hydrology 151 · biomes 5 · fertility 199 · naming 116 · resources 442 · settlements 287
-  768      5027    16136576    737280  plates 152 · terrain 466 · erosion 467 · glacial 665 · coast 712 · climate 251 · hydrology 277 · biomes 8 · fertility 300 · naming 208 · resources 666 · settlements 468
-512 generation: median of 5 samples · spread 2146–2331 ms (E5.9)
+  320      1315     2805220    128000  plates 46 · terrain 144 · erosion 111 · glacial 133 · coast 255 · climate 48 · hydrology 47 · biomes 2 · fertility 63 · naming 56 · resources 173 · settlements 157
+  512      2940     7174532    327680  plates 108 · terrain 323 · erosion 244 · glacial 384 · coast 447 · climate 102 · hydrology 127 · biomes 5 · fertility 172 · naming 104 · resources 474 · settlements 285
+  640      5295    11207596    512000  plates 194 · terrain 543 · erosion 430 · glacial 718 · coast 824 · climate 207 · hydrology 276 · biomes 13 · fertility 288 · naming 175 · resources 666 · settlements 533
+  768      6482    16136576    737280  plates 240 · terrain 767 · erosion 604 · glacial 782 · coast 928 · climate 236 · hydrology 338 · biomes 17 · fertility 371 · naming 268 · resources 897 · settlements 562
+512 generation: median of 5 samples · spread 2567–3392 ms (E5.9)
 
-tick throughput @512, towns 16→98: median 240-month window 234 ms = 1026 months/s (5 windows)
+tick throughput @512, towns 16→98: median 240-month window 290 ms = 829 months/s (5 windows)
 allocations: 53552 across window 0 = 223/month (E5.10, counting allocator)
 tick payload @512 over 100 y: median 7622 B · p90 40756 B · max 88614 B
   routes               106 ships ·   2425444 B total ·  22881 B/ship
@@ -34,8 +34,8 @@ tick payload @512 over 100 y: median 7622 B · p90 40756 B · max 88614 B
   deposits_hidden       90 ships ·       139 B total ·      1 B/ship
 
 ---- checks ----------------------------------------------------------
-[PASS] 512 generation time                         2262 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
-[PASS] tick rate                                 1026 mo/s   (sweet ≥100 mo/s · hard ≥25)
+[PASS] 512 generation time                         2940 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
+[PASS] tick rate                                  829 mo/s   (sweet ≥100 mo/s · hard ≥25)
 [PASS] pack bytes per cell                     21.9 B/cell   (sweet ≤24 · hard ≤26 (7×u16 + 4×u8-quantized + 1×u8 raw + 7 categorical grids on M70's measured-width bit lane ≈ 21.9 B/cell + header))
 [WARN] median tick payload                          7622 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 [PASS] allocations per month                        223/mo   (sweet ≤350 · hard ≤1500 (baseline 183/mo — deterministic per seed, E5.10))
