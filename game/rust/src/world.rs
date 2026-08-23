@@ -1397,6 +1397,10 @@ impl World {
     /// mean and at mean-plus-anomaly. Watered ground reads the catchment
     /// lane instead of the local rain — a canal is fed by the river's
     /// year, not by the cloud overhead.
+    ///
+    /// The irrigated branch reads the *published* flow law, clamp and all:
+    /// `year_flow_factor` is what `year_discharge` multiplies by, so a canal
+    /// can never be handed more water than the river is stated to carry.
     pub fn year_yield(&self, year: i64, y: usize, x: usize) -> f64 {
         let pack = agriculture::CropPackage::from_code(self.fields.crops[[y, x]]);
         let irrigated = self.near_fresh[[y, x]];
@@ -1404,11 +1408,18 @@ impl World {
         let p = self.fields.precip[[y, x]] as f64;
         let (dt, dp) = self.year_site_weather(year, y, x);
         let rain = if irrigated {
-            climate::FLOW_ANOM_GAIN * self.year_site_flow_anomaly(year, y, x)
+            self.year_site_flow_factor(year, y, x) - 1.0
         } else {
             dp
         };
         agriculture::year_yield_factor(pack, t, p, dt, rain, irrigated)
+    }
+
+    /// M72 — `year_flow_factor` at one cell without materializing the grid:
+    /// the same gain, the same clamp, over the per-site catchment reading.
+    pub fn year_site_flow_factor(&self, year: i64, y: usize, x: usize) -> f64 {
+        (1.0 + climate::FLOW_ANOM_GAIN * self.year_site_flow_anomaly(year, y, x))
+            .clamp(climate::FLOW_FACTOR_MIN, climate::FLOW_FACTOR_MAX)
     }
 
     pub fn generate(seed: i64, size: usize) -> World {
