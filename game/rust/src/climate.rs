@@ -695,6 +695,64 @@ pub fn year_anomaly(
     (dt, dp)
 }
 
+/// One cell of `year_anomaly`, for simulation consumers that only need the
+/// weather where people live. This is the same law as the full diagnostic
+/// grid; avoiding hundreds of thousands of unobserved cells is a material
+/// part of the tick budget once weather changes every year.
+#[inline]
+pub fn year_anomaly_at(
+    noise: &crate::noisegen::Perlin3,
+    rows: usize,
+    x: usize,
+    y: usize,
+    year: i64,
+) -> (f64, f64) {
+    let n = rows as f64;
+    let lat = (-90.0 + (y as f64) * 180.0 / (n - 1.0)).abs();
+    let dt = anomaly_draw(noise, x, y, year, 0.0) * anomaly_amp_t(lat) / ANOM_FBM_SIGMA;
+    let dp = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE)
+        * anomaly_amp_p(lat)
+        / ANOM_FBM_SIGMA)
+        .max(ANOM_P_FLOOR);
+    (dt, dp)
+}
+
+/// The separable Gaussian catchment reading at one cell. The arithmetic and
+/// reflect boundary are deliberately identical to `ndimage::gaussian_filter`:
+/// diagnostics may ask for the full field, while ticks pay only for inhabited
+/// cells and receive the same value bit-for-bit.
+pub fn catchment_anomaly_at(
+    noise: &crate::noisegen::Perlin3,
+    rows: usize,
+    cols: usize,
+    x: usize,
+    y: usize,
+    year: i64,
+) -> f64 {
+    let sigma = CATCHMENT_SIGMA;
+    let radius = (4.0 * sigma + 0.5) as isize;
+    let s2 = 2.0 * sigma * sigma;
+    let mut kernel: Vec<f64> = (-radius..=radius)
+        .map(|d| (-(d * d) as f64 / s2).exp())
+        .collect();
+    let sum: f64 = kernel.iter().sum();
+    for value in &mut kernel {
+        *value /= sum;
+    }
+
+    let mut out = 0.0;
+    for (jy, ky) in kernel.iter().enumerate() {
+        let yy = crate::ndimage::reflect(y as isize + jy as isize - radius, rows as isize);
+        let mut horizontal = 0.0;
+        for (jx, kx) in kernel.iter().enumerate() {
+            let xx = crate::ndimage::reflect(x as isize + jx as isize - radius, cols as isize);
+            horizontal += kx * year_anomaly_at(noise, rows, xx, yy, year).1;
+        }
+        out += ky * horizontal;
+    }
+    out
+}
+
 // ---------------------------------------------------------------- bands
 
 

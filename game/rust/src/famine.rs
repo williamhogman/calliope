@@ -32,14 +32,19 @@ impl World {
         // because the spread is latitude-shaped the same threshold means
         // the same thing in the tropics and on the steppe.
         let rows = self.fields.tmean.dim().0 as f64;
-        // the year's rain, taken once and held: the pass moves populations
-        // while it reads, so the sky is copied out before the walk begins.
-        let dp_year = self.with_year_weather(year, |_, dp| dp.clone());
-        let dry = |x: i64, y: i64| -> f64 {
-            let lat = (-90.0 + (y as f64) * 180.0 / (rows - 1.0)).abs();
-            let sigma = crate::climate::anomaly_amp_p(lat).max(1e-6);
-            dp_year[[y as usize, x as usize]] / sigma
-        };
+        // Read every inhabited point before populations move. Besides keeping
+        // the later mutation walk borrow-clean, this pays for each town's sky
+        // once and lets the kin search reuse the same standardized value.
+        let town_spi: Vec<f64> = self
+            .peoples
+            .settlements
+            .iter()
+            .map(|s| {
+                let lat = (-90.0 + (s.y as f64) * 180.0 / (rows - 1.0)).abs();
+                let sigma = crate::climate::anomaly_amp_p(lat).max(1e-6);
+                self.year_rain_anomaly_site(year, s.y as usize, s.x as usize) / sigma
+            })
+            .collect();
         let mut migrations: Vec<(usize, i64)> = Vec::new();
         let mut worst = 0.0f64;
         // settlement bucket grid for the kin-town search (E5.3) — positions
@@ -60,7 +65,7 @@ impl World {
             if !rainfed || pop <= 90 {
                 continue;
             }
-            let z = dry(x, y);
+            let z = town_spi[i];
             if z >= DROUGHT_Z {
                 continue;
             }
@@ -103,7 +108,7 @@ impl World {
             // old full scan: nearest by (distance², index)
             let target = town_buckets.nearest(x as f64, y as f64, |j| {
                 let o = &self.peoples.settlements[j];
-                j != i && o.people == culture && !(dry(o.x, o.y) < DROUGHT_Z)
+                j != i && o.people == culture && !(town_spi[j] < DROUGHT_Z)
             });
             let text = if let Some((j, _)) = target {
                 migrations.push((j, walked));
