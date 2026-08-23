@@ -5312,8 +5312,12 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 if !(0.34..=2.21).contains(&ff) {
                     out_of_band += 1;
                 }
-                // Watered ground drinks the catchment lane, not the cloud.
-                let rain = if irr { calliope::climate::FLOW_ANOM_GAIN * dq } else { dp };
+                // Watered ground drinks the catchment lane, not the cloud —
+                // and it drinks the *published* flow law, clamp included:
+                // `ff` is the very multiplier `year_discharge` applies, so a
+                // canal can never be fed more water than the river carries.
+                let _ = dq;
+                let rain = if irr { ff - 1.0 } else { dp };
                 let base = calliope::agriculture::climatic_score(pack, t, p, irr);
                 // (a) the *exact* prediction: the crop curves re-scored here,
                 // in the harness, from the raw mean fields and the year's two
