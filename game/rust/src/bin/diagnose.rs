@@ -4630,6 +4630,23 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // on the bluff beside it. ε = 0.02 (wire precision of the score).
         let mut took_best = 0usize;
         let mut missed = 0usize;
+        // M45 (founding-time leg): the honest contemporaneous occupancy.
+        // A founder could only be blamed for water that was free ON THE
+        // MONTH THE TOWN WAS BORN. The registry keeps every settlement's
+        // (since, until) interval and its anchor, and every death walks
+        // through the one kill path (M24), so ruins are already in this
+        // ledger — reconstructing who stood where at month `born` needs
+        // no guessing.
+        let hist: Vec<(i64, i64, i64, i64)> = w
+            .chronicle
+            .registry
+            .items
+            .iter()
+            .filter(|e| e.kind == calliope::entity::EntityKind::Settlement && e.x >= 0)
+            .map(|e| (e.x, e.y, e.since, e.until.unwrap_or(i64::MAX)))
+            .collect();
+        let mut took_best_born = 0usize;
+        let mut missed_born = 0usize;
         let spacing2 = calliope::settlements::MIN_TOWN_SPACING_CELLS
             * calliope::settlements::MIN_TOWN_SPACING_CELLS;
         for s in &harbours {
@@ -4639,6 +4656,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             }
             let (sy, sx) = (s.y as usize, s.x as usize);
             let mut best = 0.0f64;
+            let mut best_born = 0.0f64;
             let r = 14i64;
             for dy in -r..=r {
                 for dx in -r..=r {
@@ -4646,6 +4664,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     if ny < 0 || nx < 0 || ny >= rows as i64 || nx >= cols as i64 {
                         continue;
                     }
+                    let v = w.shelter[[ny as usize, nx as usize]] as f64;
                     // only TAKEABLE water counts against the siting: a
                     // cell inside another town's spacing ring was never
                     // this founder's to take — that water is commanded
@@ -4657,12 +4676,23 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                             ody * ody + odx * odx < spacing2
                         }
                     });
-                    if taken {
-                        continue;
-                    }
-                    let v = w.shelter[[ny as usize, nx as usize]] as f64;
-                    if v > best {
+                    if !taken && v > best {
                         best = v;
+                    }
+                    // contemporaneous ring: towns alive at s.born, minus
+                    // this town's own founding row.
+                    let taken_born = hist.iter().any(|&(ox, oy, since, until)| {
+                        !(ox == s.x && oy == s.y)
+                            && since <= s.born
+                            && until > s.born
+                            && {
+                                let ody = ny - oy;
+                                let odx = nx - ox;
+                                (ody * ody + odx * odx) < spacing2 as i64
+                            }
+                    });
+                    if !taken_born && v > best_born {
+                        best_born = v;
                     }
                 }
             }
@@ -4671,13 +4701,20 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             } else {
                 missed += 1;
                 println!(
-                    "    missed: {} sh={:.2} takeable-best={:.2} pop={:.0} at ({},{})",
-                    s.name, sh, best, s.pop, s.x, s.y
+                    "    missed: {} sh={:.2} takeable-best={:.2} (at founding m{} {:.2}) pop={:.0} at ({},{})",
+                    s.name, sh, best, s.born, best_born, s.pop, s.x, s.y
                 );
+            }
+            if sh + 0.02 >= best_born {
+                took_best_born += 1;
+            } else {
+                missed_born += 1;
             }
         }
         let well = on_top + took_best;
         let sited = well as f64 / harbours.len().max(1) as f64;
+        let well_born = on_top + took_best_born;
+        let sited_born = well_born as f64 / harbours.len().max(1) as f64;
         println!(
             "  siting: {} on top-quartile + {} took the best their coast offers = {} of {} well-sited ({:.0}%) · {} missed better water within 56 km",
             on_top,
@@ -4687,6 +4724,18 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             100.0 * sited,
             missed
         );
+        println!(
+            "  siting (founding-time occupancy): {} + {} = {} of {} ({:.0}%) · {} missed — terminal-set reading {:.0}%, gap {:+.0} pp",
+            on_top,
+            took_best_born,
+            well_born,
+            harbours.len(),
+            100.0 * sited_born,
+            missed_born,
+            100.0 * sited,
+            100.0 * (sited_born - sited)
+        );
+
         if !harbours.is_empty() {
             c.band("port shelter concentration", sited, pct(sited));
             c.must(
