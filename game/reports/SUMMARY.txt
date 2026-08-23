@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-23 02:22 UTC
+mode: full · size: 512 · generated: 2026-08-23 07:27 UTC
 
-totals: 934 pass · 30 warn · 3 fail
+totals: 926 pass · 31 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -64,8 +64,7 @@ totals: 934 pass · 30 warn · 3 fail
 [WARN] landform oatmeal floor                       0.0015   (M64: the landform mix differs between worlds — the closest pair stays distinct)
 
 -- gate.txt
-[FAIL] the suite composes clean             1 fail · 30 warn · 926 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
-[FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
+   all checks pass
 
 -- hydro-12345.txt
 [WARN] oasis share of arid land %                    25.7%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
@@ -86,12 +85,13 @@ totals: 934 pass · 30 warn · 3 fail
    all checks pass
 
 -- patina.txt
-[WARN] civ arcs completed per 300 y         5.0 (gold 10 · arcs 15)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
+   all checks pass
 
 -- perf.txt
-[WARN] stage fertility ms                   97 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[FAIL] tick rate year 0                     177 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[WARN] tick rate year 100                   103 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   167 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage settlements ms                 263 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         2648 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 100                   108 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
