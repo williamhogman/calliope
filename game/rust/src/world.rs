@@ -2274,6 +2274,15 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                     well_reach_m: reach,
                     provision: &prov_r,
                 };
+                let sea = settlements::HarbourEye {
+                    shelter: &self.shelter,
+                    trade: self
+                        .peoples
+                        .societies
+                        .get(parent.people.idx())
+                        .map(|so| society::mods_for(so).trade)
+                        .unwrap_or(1.0),
+                };
                 settlements::colony_site(
                     &self.site_score,
                     &pull_r,
@@ -2281,6 +2290,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                     &parent,
                     3600.0 * range * range,
                     &dry,
+                    &sea,
                 )
             };
             let Some((y, x)) = site else { continue };

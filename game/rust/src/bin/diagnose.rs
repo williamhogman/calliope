@@ -4657,6 +4657,8 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             let (sy, sx) = (s.y as usize, s.x as usize);
             let mut best = 0.0f64;
             let mut best_born = 0.0f64;
+            let mut best_born_at = (sy, sx);
+
             let r = 14i64;
             for dy in -r..=r {
                 for dx in -r..=r {
@@ -4693,7 +4695,9 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     });
                     if !taken_born && v > best_born {
                         best_born = v;
+                        best_born_at = (ny as usize, nx as usize);
                     }
+
                 }
             }
             if sh + 0.02 >= best {
@@ -4704,7 +4708,26 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     "    missed: {} sh={:.2} takeable-best={:.2} (at founding m{} {:.2}) pop={:.0} at ({},{})",
                     s.name, sh, best, s.born, best_born, s.pop, s.x, s.y
                 );
+                if std::env::var("CALLIOPE_PORTPROBE").is_ok() {
+                    let (by, bx) = best_born_at;
+                    let dd = ((by as f64 - sy as f64).powi(2)
+                        + (bx as f64 - sx as f64).powi(2))
+                    .sqrt();
+                    println!(
+                        "      probe: chosen score={:.2} sh={:.2} | best-water ({},{}) score={:.2} sh={:.2} d={:.1} arid={} land={}",
+                        w.site_score[[sy, sx]],
+                        sh,
+                        bx,
+                        by,
+                        w.site_score[[by, bx]],
+                        best_born,
+                        dd,
+                        w.arid_dry[[by, bx]],
+                        w.fields.height[[by, bx]] >= 0.0,
+                    );
+                }
             }
+
             if sh + 0.02 >= best_born {
                 took_best_born += 1;
             } else {
