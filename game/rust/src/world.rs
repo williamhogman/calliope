@@ -196,6 +196,11 @@ pub struct World {
     /// a catchment-sized neighbourhood — what the rivers carry that year.
     pub(crate) year_weather:
         std::sync::Mutex<Option<(i64, Array2<f64>, Array2<f64>, Array2<f64>)>>,
+    /// M72 tick-path memo: the exact full-grid law evaluated only at inhabited
+    /// cells. BTreeMap keeps lookup/order deterministic; the map turns over
+    /// with the year and is derived state, never hashed or packed.
+    pub(crate) year_site_weather:
+        std::sync::Mutex<Option<(i64, BTreeMap<(usize, usize), (f64, f64, Option<f64>)>)>>,
     /// Last year grain was shock-priced by famine, to spike at most once a year.
     pub(crate) grain_shock_year: i64,
     /// M72 — the harvest verdict's own ledger: one row per famine, written
@@ -1053,6 +1058,7 @@ impl GenBuilder {
             wire_buf: Vec::new(),
             variability: Perlin3::new(seed + 7717),
             year_weather: std::sync::Mutex::new(None),
+            year_site_weather: std::sync::Mutex::new(None),
             grain_shock_year: -1,
             famine_ledger: Vec::new(),
             site_score: founded.site_score,
@@ -1303,6 +1309,52 @@ impl World {
         f(dt, dp, dq)
     }
 
+    /// Exact annual weather at one inhabited cell, memoized for the year.
+    /// This is the simulation path; full grids remain available above for
+    /// diagnostics and map-wide inspection.
+    fn year_site_weather(&self, year: i64, y: usize, x: usize) -> (f64, f64) {
+        let mut slot = self.year_site_weather.lock().unwrap();
+        if slot.as_ref().is_none_or(|(cached_year, _)| *cached_year != year) {
+            *slot = Some((year, BTreeMap::new()));
+        }
+        let (_, sites) = slot.as_mut().unwrap();
+        let entry = sites.entry((y, x)).or_insert_with(|| {
+            let rows = self.fields.tmean.dim().0;
+            let (dt, dp) = climate::year_anomaly_at(&self.variability, rows, x, y, year);
+            (dt, dp, None)
+        });
+        (entry.0, entry.1)
+    }
+
+    fn year_site_flow_anomaly(&self, year: i64, y: usize, x: usize) -> f64 {
+        let mut slot = self.year_site_weather.lock().unwrap();
+        if slot.as_ref().is_none_or(|(cached_year, _)| *cached_year != year) {
+            *slot = Some((year, BTreeMap::new()));
+        }
+        let (_, sites) = slot.as_mut().unwrap();
+        let entry = sites.entry((y, x)).or_insert_with(|| {
+            let rows = self.fields.tmean.dim().0;
+            let (dt, dp) = climate::year_anomaly_at(&self.variability, rows, x, y, year);
+            (dt, dp, None)
+        });
+        if entry.2.is_none() {
+            let (rows, cols) = self.fields.tmean.dim();
+            entry.2 = Some(climate::catchment_anomaly_at(
+                &self.variability,
+                rows,
+                cols,
+                x,
+                y,
+                year,
+            ));
+        }
+        entry.2.unwrap_or(0.0)
+    }
+
+    pub(crate) fn year_rain_anomaly_site(&self, year: i64, y: usize, x: usize) -> f64 {
+        self.year_site_weather(year, y, x).1
+    }
+
     /// M71 — the mean temperature this cell actually saw in `year`:
     /// the climate mean plus that year's anomaly (°C).
     pub fn year_tmean(&self, year: i64, y: usize, x: usize) -> f64 {
@@ -1350,10 +1402,13 @@ impl World {
         let irrigated = self.near_fresh[[y, x]];
         let t = self.fields.tmean[[y, x]] as f64;
         let p = self.fields.precip[[y, x]] as f64;
-        self.with_year_sky(year, |dt, dp, dq| {
-            let rain = if irrigated { climate::FLOW_ANOM_GAIN * dq[[y, x]] } else { dp[[y, x]] };
-            agriculture::year_yield_factor(pack, t, p, dt[[y, x]], rain, irrigated)
-        })
+        let (dt, dp) = self.year_site_weather(year, y, x);
+        let rain = if irrigated {
+            climate::FLOW_ANOM_GAIN * self.year_site_flow_anomaly(year, y, x)
+        } else {
+            dp
+        };
+        agriculture::year_yield_factor(pack, t, p, dt, rain, irrigated)
     }
 
     pub fn generate(seed: i64, size: usize) -> World {
