@@ -617,6 +617,35 @@ impl DryFrontier<'_> {
     }
 }
 
+/// M45 — the harbour eye: what an anchorage is *worth* to the people
+/// looking at it. The dawn site score prices the cove at dawn rates
+/// (`4.5·sh + 4.5·sh³`), and that price is trade income — the gateway
+/// half of a coastal site, not its soil. A people that has mastered
+/// sail, the wheel, script and coin earns strictly more from the same
+/// water (`society::mods_for(..).trade` is that same multiplier, the
+/// one the economy already pays out on), so a colony sent out by a
+/// maritime power must read the cove at *its* rates, not at the dawn's.
+///
+/// The correction is the trade multiplier itself, not a new constant:
+/// the offer adds `(trade − 1)·(4.5·sh + 4.5·sh³)`, which is exactly
+/// zero for a dawn people (`trade = 1`) — dawn siting is untouched by
+/// construction — and grows only as the founder's own mastery grows.
+pub struct HarbourEye<'a> {
+    pub shelter: &'a Array2<f32>,
+    /// The founder's realized trade multiplier (1.0 at the dawn).
+    pub trade: f64,
+}
+
+impl HarbourEye<'_> {
+    fn premium(&self, y: usize, x: usize) -> f64 {
+        let sh = self.shelter[[y, x]] as f64;
+        if sh <= 0.0 {
+            return 0.0;
+        }
+        (self.trade - 1.0).max(0.0) * (4.5 * sh + 4.5 * sh * sh * sh)
+    }
+}
+
 /// Best colony site in the ring around a parent, clear of others. The outer
 /// edge of the ring widens as a people masters sail and star-charts.
 ///
@@ -632,6 +661,8 @@ pub fn colony_site(
     // M55 — the dry frontier: arid ground held back from the dawn, its
     // score restored for a people whose wells reach the table beneath.
     dry: &DryFrontier<'_>,
+    // M45 — the anchorage priced at the founder's own trade rates.
+    sea: &HarbourEye<'_>,
 ) -> Option<(usize, usize)> {
     let (rows, cols) = site_score.dim();
     let min_d2 = MIN_TOWN_SPACING_CELLS * MIN_TOWN_SPACING_CELLS;
@@ -639,10 +670,15 @@ pub fn colony_site(
     let mut found: Option<(usize, usize)> = None;
     for y in 0..rows {
         for x in 0..cols {
-            let s = dry.offer(site_score, pull, y, x);
+            let base = dry.offer(site_score, pull, y, x);
+            if base < -1e8 {
+                continue;
+            }
+            let s = base + sea.premium(y, x);
             if s <= 2.2 || s <= best {
                 continue;
             }
+
             let dyp = y as f64 - parent.y as f64;
             let dxp = x as f64 - parent.x as f64;
             let d2p = dyp * dyp + dxp * dxp;
