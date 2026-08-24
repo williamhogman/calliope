@@ -668,8 +668,20 @@ pub fn colony_site(
     let min_d2 = MIN_TOWN_SPACING_CELLS * MIN_TOWN_SPACING_CELLS;
     let mut best = f64::NEG_INFINITY;
     let mut found: Option<(usize, usize)> = None;
-    for y in 0..rows {
-        for x in 0..cols {
+    // E10.2 — the ring bound, hoisted out of the cell body. Every cell the
+    // old full-map scan visited outside `max_d2` was scored and then thrown
+    // away by the `d2p > max_d2` test below, which still stands unchanged:
+    // this only refuses to walk rows and columns that cannot satisfy it.
+    // `ceil` keeps the box a superset of the ring, so the exact test inside
+    // remains the only thing that decides membership — same accepted cells,
+    // same row-major order, same choice.
+    let reach = max_d2.max(0.0).sqrt().ceil() as isize;
+    let y0 = (parent.y as isize - reach).max(0) as usize;
+    let y1 = ((parent.y as isize + reach + 1).max(0) as usize).min(rows);
+    let x0 = (parent.x as isize - reach).max(0) as usize;
+    let x1 = ((parent.x as isize + reach + 1).max(0) as usize).min(cols);
+    for y in y0..y1 {
+        for x in x0..x1 {
             let base = dry.offer(site_score, pull, y, x);
             if base < -1e8 {
                 continue;
@@ -685,6 +697,7 @@ pub fn colony_site(
             if d2p < 64.0 || d2p > max_d2 {
                 continue;
             }
+
             let mut clear = true;
             for o in settlements {
                 let dy = y as f64 - o.y as f64;
