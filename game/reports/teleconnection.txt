@@ -4,61 +4,7 @@
 the tilted belts · cross-hemisphere trade-belt rain, forced vs counterfactual  (M75)
 
  seed        r(N,S) forced  r(N,S) osc=0   dN-S warm   dN-S cold   |resid| max   warm y  cold y
- 12345            -0.987          0.024       0.2721     -0.2174       5.6e-17      53      53
- 777              -0.953         -0.021       0.1405     -0.1546       5.6e-17      42      44
- 31337            -0.989         -0.033       0.2826     -0.2598       5.6e-17      49      55
- 90210            -0.994          0.100       0.3577     -0.3393       1.1e-16      48      59
- 555              -0.964         -0.042       0.1495     -0.1507       2.8e-17      51      45
 
 ---- checks ----------------------------------------------------------
-[PASS] the tilt is antisymmetric            |N + S| < 1e-12   (M75: a teleconnection tilts belts against each other — a term that wet both hemispheres would be a global wet year, not a see-saw)
-[PASS] the ITCZ is straddled, not tilted    0.0e0 at lat 0   (M75: the tilt is in the trades; the equator sits on the pivot)
-[PASS] the westerlies keep their own sky    0.0012 at lat 55   (M75: outside the trades the belt keeps the unforced variability M73 measured)
-[PASS] the tilt flips with the phase        +0.153 / -0.153 at lat 15   (M75: a warm phase and a cold phase must move the belt in opposite directions)
-[PASS] the belts speak across the equator · 12345     r = -0.987   (M75 gate: cross-hemisphere trade-belt rainfall correlation exceeds 0.3 in magnitude — and is negative, because a teleconnection tilts, it does not lift)
-[PASS] the tie is the oscillation's, not the map's · 12345 r = +0.024 with the index held at zero   (M75 counterfactual: remove the lean and the hemispheres must fall silent — otherwise the correlation was geography, not teleconnection)
-[PASS] the see-saw flips with the phase · 12345 warm +0.2721 · cold -0.2174   (M75 gate: the belt difference must change sign with the oscillation phase across a full period)
-[PASS] the flip is felt, not cosmetic · 12345 swing 0.4895 of the rain   (M75: a tilt too small to move a harvest is not a teleconnection)
-[PASS] both phases are lived in · 12345     53 warm · 53 cold years   (M75: a gate that only ever saw one phase proves half a law)
-[PASS] the tilt derives exactly · 12345     |forced - counterfactual - bias| max 5.6e-17   (M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding)
-[PASS] no poison enters the rain · 12345    0 non-finite · worst -0.618   (M2.6/M75: the tilt may not take the rains wholly away — that verdict is famine's)
-[PASS] the tilt replays · 12345                  identical   (ADR-0003: the tilted belts are a pure function of the seed and the year)
-[PASS] the lag is recoverable blind · 12345 4 mo (declared 4) · r = +0.997   (M76 gate: scanning every candidate lag 0-24 mo, the belt difference must correlate most strongly with the index at exactly the declared lag — the phase relation is in the world, not only in the constant)
-[PASS] the belts speak across the equator · 777     r = -0.953   (M75 gate: cross-hemisphere trade-belt rainfall correlation exceeds 0.3 in magnitude — and is negative, because a teleconnection tilts, it does not lift)
-[PASS] the tie is the oscillation's, not the map's · 777 r = -0.021 with the index held at zero   (M75 counterfactual: remove the lean and the hemispheres must fall silent — otherwise the correlation was geography, not teleconnection)
-[PASS] the see-saw flips with the phase · 777 warm +0.1405 · cold -0.1546   (M75 gate: the belt difference must change sign with the oscillation phase across a full period)
-[PASS] the flip is felt, not cosmetic · 777 swing 0.2951 of the rain   (M75: a tilt too small to move a harvest is not a teleconnection)
-[PASS] both phases are lived in · 777       42 warm · 44 cold years   (M75: a gate that only ever saw one phase proves half a law)
-[PASS] the tilt derives exactly · 777       |forced - counterfactual - bias| max 5.6e-17   (M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding)
-[PASS] no poison enters the rain · 777      0 non-finite · worst -0.445   (M2.6/M75: the tilt may not take the rains wholly away — that verdict is famine's)
-[PASS] the tilt replays · 777                    identical   (ADR-0003: the tilted belts are a pure function of the seed and the year)
-[PASS] the lag is recoverable blind · 777   4 mo (declared 4) · r = +0.987   (M76 gate: scanning every candidate lag 0-24 mo, the belt difference must correlate most strongly with the index at exactly the declared lag — the phase relation is in the world, not only in the constant)
-[PASS] the belts speak across the equator · 31337     r = -0.989   (M75 gate: cross-hemisphere trade-belt rainfall correlation exceeds 0.3 in magnitude — and is negative, because a teleconnection tilts, it does not lift)
-[PASS] the tie is the oscillation's, not the map's · 31337 r = -0.033 with the index held at zero   (M75 counterfactual: remove the lean and the hemispheres must fall silent — otherwise the correlation was geography, not teleconnection)
-[PASS] the see-saw flips with the phase · 31337 warm +0.2826 · cold -0.2598   (M75 gate: the belt difference must change sign with the oscillation phase across a full period)
-[PASS] the flip is felt, not cosmetic · 31337 swing 0.5424 of the rain   (M75: a tilt too small to move a harvest is not a teleconnection)
-[PASS] both phases are lived in · 31337     49 warm · 55 cold years   (M75: a gate that only ever saw one phase proves half a law)
-[PASS] the tilt derives exactly · 31337     |forced - counterfactual - bias| max 5.6e-17   (M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding)
-[PASS] no poison enters the rain · 31337    0 non-finite · worst -0.714   (M2.6/M75: the tilt may not take the rains wholly away — that verdict is famine's)
-[PASS] the tilt replays · 31337                  identical   (ADR-0003: the tilted belts are a pure function of the seed and the year)
-[PASS] the lag is recoverable blind · 31337 4 mo (declared 4) · r = +0.997   (M76 gate: scanning every candidate lag 0-24 mo, the belt difference must correlate most strongly with the index at exactly the declared lag — the phase relation is in the world, not only in the constant)
-[PASS] the belts speak across the equator · 90210     r = -0.994   (M75 gate: cross-hemisphere trade-belt rainfall correlation exceeds 0.3 in magnitude — and is negative, because a teleconnection tilts, it does not lift)
-[PASS] the tie is the oscillation's, not the map's · 90210 r = +0.100 with the index held at zero   (M75 counterfactual: remove the lean and the hemispheres must fall silent — otherwise the correlation was geography, not teleconnection)
-[PASS] the see-saw flips with the phase · 90210 warm +0.3577 · cold -0.3393   (M75 gate: the belt difference must change sign with the oscillation phase across a full period)
-[PASS] the flip is felt, not cosmetic · 90210 swing 0.6969 of the rain   (M75: a tilt too small to move a harvest is not a teleconnection)
-[PASS] both phases are lived in · 90210     48 warm · 59 cold years   (M75: a gate that only ever saw one phase proves half a law)
-[PASS] the tilt derives exactly · 90210     |forced - counterfactual - bias| max 1.1e-16   (M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding)
-[PASS] no poison enters the rain · 90210    0 non-finite · worst -0.749   (M2.6/M75: the tilt may not take the rains wholly away — that verdict is famine's)
-[PASS] the tilt replays · 90210                  identical   (ADR-0003: the tilted belts are a pure function of the seed and the year)
-[PASS] the lag is recoverable blind · 90210 4 mo (declared 4) · r = +0.999   (M76 gate: scanning every candidate lag 0-24 mo, the belt difference must correlate most strongly with the index at exactly the declared lag — the phase relation is in the world, not only in the constant)
-[PASS] the belts speak across the equator · 555     r = -0.964   (M75 gate: cross-hemisphere trade-belt rainfall correlation exceeds 0.3 in magnitude — and is negative, because a teleconnection tilts, it does not lift)
-[PASS] the tie is the oscillation's, not the map's · 555 r = -0.042 with the index held at zero   (M75 counterfactual: remove the lean and the hemispheres must fall silent — otherwise the correlation was geography, not teleconnection)
-[PASS] the see-saw flips with the phase · 555 warm +0.1495 · cold -0.1507   (M75 gate: the belt difference must change sign with the oscillation phase across a full period)
-[PASS] the flip is felt, not cosmetic · 555 swing 0.3002 of the rain   (M75: a tilt too small to move a harvest is not a teleconnection)
-[PASS] both phases are lived in · 555       51 warm · 45 cold years   (M75: a gate that only ever saw one phase proves half a law)
-[PASS] the tilt derives exactly · 555       |forced - counterfactual - bias| max 2.8e-17   (M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding)
-[PASS] no poison enters the rain · 555      0 non-finite · worst -0.457   (M2.6/M75: the tilt may not take the rains wholly away — that verdict is famine's)
-[PASS] the tilt replays · 555                    identical   (ADR-0003: the tilted belts are a pure function of the seed and the year)
-[PASS] the lag is recoverable blind · 555   4 mo (declared 4) · r = +0.990   (M76 gate: scanning every candidate lag 0-24 mo, the belt difference must correlate most strongly with the index at exactly the declared lag — the phase relation is in the world, not only in the constant)
-[PASS] the recovered lag is stable across worlds [4, 4, 4, 4, 4] mo over 5 seeds   (M76 gate: the teleconnection lag statistic must be the same in every seed — a lag that wandered by world would mean the phase relation is an artefact of the map, not the coupling)
-CHECKS: 50 pass · 0 warn · 0 fail
+[FAIL] the lane ran to completion                   exit 0   (M77: the report does not end in a CHECKS line — the lane was cut off, so nothing below its last printed row was measured)
+CHECKS: 0 pass · 0 warn · 1 fail
