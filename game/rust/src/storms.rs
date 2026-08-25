@@ -401,6 +401,86 @@ impl StormClimatology {
         }
         let peak = (pctl(&mut wn), pctl(&mut ws));
 
+        // ---- M78: the other engine. Where the frontal storm needed a
+        // gradient, the tropical cyclone needs heat and spin. The warm
+        // month is read the same way the cold one was — from the belt's
+        // own realized cycle, over tropical water, so the two seasons
+        // fall opposite because the world's seasons do.
+        let mut wamp = (0.0f64, 0.0f64);
+        let mut wn_c = (0usize, 0usize);
+        for y in 0..rows {
+            let lat = lat_of(y as f64, rows);
+            if lat.abs() > 35.0 {
+                continue;
+            }
+            for x in 0..cols {
+                if height[[y, x]] >= 0.0 {
+                    continue;
+                }
+                if lat >= 0.0 {
+                    wamp.0 += tamp[[y, x]] as f64;
+                    wn_c.0 += 1;
+                } else {
+                    wamp.1 += tamp[[y, x]] as f64;
+                    wn_c.1 += 1;
+                }
+            }
+        }
+        let mean_wamp = (
+            if wn_c.0 > 0 { wamp.0 / wn_c.0 as f64 } else { 0.0 },
+            if wn_c.1 > 0 { wamp.1 / wn_c.1 as f64 } else { 0.0 },
+        );
+        let warmest = |a: f64| -> i64 {
+            let mut best = 0i64;
+            let mut bestv = f64::NEG_INFINITY;
+            for m in 0..12i64 {
+                let t = crate::climate::month_temperature(0.0, a, m);
+                if t > bestv {
+                    bestv = t;
+                    best = m;
+                }
+            }
+            best
+        };
+        let warm_month = (warmest(mean_wamp.0), warmest(mean_wamp.1));
+
+        let mut tsst = Array2::<f64>::zeros((rows, cols));
+        let mut tweight = Array2::<f64>::zeros((rows, cols));
+        let mut spinless = (0usize, 0usize);
+        for y in 0..rows {
+            let lat = lat_of(y as f64, rows);
+            let north = lat >= 0.0;
+            let wm = if north { warm_month.0 } else { warm_month.1 };
+            for x in 0..cols {
+                if height[[y, x]] >= 0.0 {
+                    continue;
+                }
+                let sst = crate::climate::month_temperature(
+                    tmean[[y, x]] as f64,
+                    tamp[[y, x]] as f64 * crate::seaice::SST_DAMP,
+                    wm,
+                );
+                tsst[[y, x]] = sst;
+                if sst < TROP_SST_MIN {
+                    continue;
+                }
+                // Heat is necessary; rotation is what turns it into a
+                // storm. Near the equator f → 0 and the warmest sea on
+                // the map cannot close a vortex.
+                let spin = ((lat.abs() - TROP_LAT_MIN) / TROP_LAT_SPAN).clamp(0.0, 1.0);
+                if spin <= 0.0 {
+                    if north {
+                        spinless.0 += 1;
+                    } else {
+                        spinless.1 += 1;
+                    }
+                    continue;
+                }
+                let heat = ((sst - TROP_SST_MIN) / TROP_SST_SPAN).clamp(0.0, 1.0);
+                tweight[[y, x]] = heat * spin;
+            }
+        }
+
         Self {
             rows,
             cols,
@@ -410,8 +490,13 @@ impl StormClimatology {
             peak,
             cold_month,
             iced_out,
+            tsst,
+            tweight,
+            warm_month,
+            spinless,
         }
     }
+
 
     /// The gradient at a cell, °C per degree of latitude.
     pub fn gradient_at(&self, y: usize, x: usize) -> f64 {
