@@ -537,7 +537,9 @@ fn a_new_route_never_widens_a_spread() {
 
 #[test]
 fn extraction_books_balance() {
-    let mut w = World::generate(777, 256);
+    // Seed 12345 exercises both reserve extraction and renewable stock in
+    // this compact assay world under the current full system lattice.
+    let mut w = World::generate(12345, 256);
     let left0: Vec<f64> = w.deposits.iter().map(|d| d.left).collect();
     let stock0: Vec<f64> = w.deposits.iter().map(|d| d.stock).collect();
     // M79's storm losses can delay the first worked seam in this compact
