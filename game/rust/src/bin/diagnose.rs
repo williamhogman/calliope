@@ -23,7 +23,7 @@
 //!   diagnose seismic-hash <seed> <size> <months> bare ledger hash (wasm replay leg)
 //!   diagnose gate        <size> <years> <seed> [--reports <dir>]  Era I sealed as one verdict (M65)
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::Instant;
 
 // E5.10 — counting allocator behind the `alloc-count` feature: every heap
@@ -302,7 +302,13 @@ fn hash_state(w: &World) -> u64 {
     }
     for t in &w.peoples.settlements {
         // both axes ride the hash (ADR-0018): tongue and banner
-        s.push_str(&format!("s{}|{}|{}|{}|{}|{:.2}|{:?}\n", t.id, t.name, t.pop, t.people.0, t.realm.0, t.wealth, t.goods.iter().map(|g| g.name()).collect::<Vec<_>>()));
+        // M79 — the harbour's wound rides the identity line: a coast that
+        // remembers is state, and a replay must remember the same coast.
+        s.push_str(&format!("s{}|{}|{}|{}|{}|{:.2}|{:?}|{:.3}\n", t.id, t.name, t.pop, t.people.0, t.realm.0, t.wealth, t.goods.iter().map(|g| g.name()).collect::<Vec<_>>(), t.harbor_dmg));
+    }
+    // M79 — the coast's memory: every harbour a storm broke, in order.
+    for (m, sid, dmg) in &w.storm_marks {
+        s.push_str(&format!("h{}|{}|{:.3}\n", m, sid.0, dmg));
     }
     for f in &w.features {
         s.push_str(&format!("f{}|{}|{}|{}\n", f.t, f.name, f.x, f.y));
@@ -6566,8 +6572,36 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     let (mut wild_thin, mut wild_collapse, mut wild_recover) = (0usize, 0usize, 0usize);
     let mut prev_phase: Vec<u8> = w.deposits.iter().map(|d| d.phase).collect();
     let months = years * 12;
-    for _ in 0..months {
+    // M79 — the coast's books: each town's seaborne cargo month by month,
+    // and every harbour the storms broke. The dip and the recovery are
+    // read straight off these two series, per strike, with no averaging
+    // over towns that were never hit.
+    let mut sea_flow: HashMap<calliope::ids::SettlementId, Vec<f64>> = HashMap::new();
+    let mut strikes_log: Vec<(usize, calliope::ids::SettlementId, f64)> = Vec::new();
+    let mut storm_beats = 0usize;
+    let mut marks_seen = 0usize;
+    for mi in 0..months {
         let (evs, _f, _d) = w.tick(1);
+        // the month's water trade, per town: only lanes that actually sail
+        for (ri, r) in w.routes.iter().enumerate() {
+            if r.sea <= 0.0 {
+                continue;
+            }
+            let f = w.economy.route_flow.get(ri).copied().unwrap_or(0.0) * r.sea;
+            for id in [r.a, r.b] {
+                let e = sea_flow.entry(id).or_insert_with(|| vec![0.0; months]);
+                e[mi] += f;
+            }
+        }
+        for (_m, sid, dmg) in w.storm_marks.iter().skip(marks_seen) {
+            strikes_log.push((mi, *sid, *dmg));
+        }
+        marks_seen = w.storm_marks.len();
+        for e in &evs {
+            if e.text.contains("harbour will take") || e.text.contains("The sea rises on") {
+                storm_beats += 1;
+            }
+        }
         for e in &evs {
             match e.k.name() {
                 "discovery" => strikes += 1,
@@ -6861,8 +6895,101 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     let finite_ok = w.economy.market.iter_some().all(|(_, p)| p.is_finite()) && wealth.iter().all(|v| v.is_finite());
     let treasuries_ok = w.peoples.realms.iter().all(|r| r.treasury >= 0.0 && r.treasury.is_finite());
 
+    // ---- M79 the coasts remember: landfall → harbour → the water trade ----
+    // Per strike, on the struck town's own sea cargo: the twelve months
+    // before are the baseline, the strike month is the dip, and the last
+    // half-year of the repair arc is the recovery. A town with no water
+    // trade to lose is not evidence and is left out of both medians.
+    let told: Vec<(usize, calliope::ids::SettlementId, f64)> = strikes_log
+        .iter()
+        .filter(|(_, _, d)| *d >= calliope::settlements::HARBOR_TELL_MIN)
+        .copied()
+        .collect();
+    let mut dips: Vec<f64> = Vec::new();
+    let mut backs: Vec<f64> = Vec::new();
+    let win = calliope::settlements::HARBOR_WINDOW as usize;
+    for &(mi, sid, _) in &told {
+        let Some(series) = sea_flow.get(&sid) else { continue };
+        if mi < 12 || mi + win + 1 > months {
+            continue; // no room for a baseline or a full arc
+        }
+        let base = series[mi - 12..mi].iter().sum::<f64>() / 12.0;
+        if base <= 1e-6 {
+            continue;
+        }
+        dips.push(series[mi] / base);
+        let back = series[mi + win - 6..mi + win].iter().sum::<f64>() / 6.0;
+        backs.push(back / base);
+    }
+    let median = |v: &mut Vec<f64>| -> f64 {
+        if v.is_empty() {
+            return f64::NAN;
+        }
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        v[v.len() / 2]
+    };
+    let (n_dip, n_back) = (dips.len(), backs.len());
+    let med_dip = median(&mut dips.clone());
+    let med_back = median(&mut backs.clone());
+    let open_wounds = w
+        .peoples
+        .settlements
+        .iter()
+        .filter(|s| s.harbor_dmg > 0.0)
+        .count();
+    let stale_wounds = w
+        .peoples
+        .settlements
+        .iter()
+        .filter(|s| s.harbor_dmg > 0.0 && s.harbor_until <= months as i64)
+        .count();
+    let storm_ruins = w.ruins.iter().filter(|r| r.why.contains("the sea came over")).count();
+    println!();
+    println!(
+        "storm landfalls (M79): {} harbour strikes · {} told of · {} chronicle beats · {} harbours still mending · {} coasts the sea kept",
+        strikes_log.len(), told.len(), storm_beats, open_wounds, storm_ruins
+    );
+    if n_dip > 0 {
+        println!(
+            "  the water trade: strike month {:.0}% of the year before (n={}) · {} months on {:.0}% of it back (n={})",
+            100.0 * med_dip, n_dip, win, 100.0 * med_back, n_back
+        );
+    }
+
     let mut c = Checks::default();
     c.band("max pinned price share", max_pinned, pct(max_pinned));
+    // ---- M79 gates ----
+    c.must(
+        "storms reach the coasts",
+        !strikes_log.is_empty(),
+        format!("{} strikes", strikes_log.len()),
+        "M79 gate: a world with harbours and a storm belt must see landfalls in three centuries",
+    );
+    c.must(
+        "a landfall costs the harbour its water",
+        n_dip == 0 || med_dip <= 0.75,
+        if n_dip > 0 { format!("{:.0}% of base", 100.0 * med_dip) } else { "no measurable strike".into() },
+        "M79 gate: median seaborne cargo in the strike month is a quarter down or worse on the struck town's own year",
+    );
+    c.must(
+        "the harbour comes back",
+        n_back == 0 || med_back >= 0.90,
+        if n_back > 0 { format!("{:.0}% of base", 100.0 * med_back) } else { "no measurable strike".into() },
+        "M79 gate: by the close of the repair arc the struck town carries ≥90% of the water trade it had before",
+    );
+    c.must(
+        "no wound outlives its arc",
+        stale_wounds == 0,
+        format!("{} stale", stale_wounds),
+        "M79: a harbour whose window has lapsed must read whole",
+    );
+    c.want(
+        "the sea gets its beat",
+        strikes_log.is_empty() || storm_beats > 0,
+        format!("{} beats", storm_beats),
+        "M79: a broken harbour enters the chronicle",
+    );
+
     c.band("wealth gini", g, format!("{:.2}", g));
     c.must("routes exist", !w.routes.is_empty(), format!("{}", w.routes.len()), "the web of trade must hold");
     c.want("no unconnected towns", unconnected == 0, format!("{}", unconnected), "every town trades");

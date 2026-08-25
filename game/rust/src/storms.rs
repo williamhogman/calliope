@@ -951,3 +951,77 @@ impl StormClimatology {
         crate::util::fnv1a64(&b)
     }
 }
+
+// -------------------------------------------------- M79 · coasts that remember
+//
+// A storm is only weather until it hits a shore. The landfall ledger is
+// the one surface the world's tick reads out of this module: for a given
+// year it names every coast cell a storm centre crossed while it was
+// still strong enough to be told of, with the month it happened and the
+// intensity it arrived at. Everything downstream — harbour damage, the
+// sea lanes that stop carrying, the chronicle beat, the ruin — is priced
+// off these numbers, and nothing here knows about towns.
+
+/// The intensity a storm must still carry at the coast for its landfall
+/// to reach the world at all: the same bar the tropical lane uses to
+/// decide a storm is worth telling of.
+pub const LANDFALL_TELL_MIN: f64 = TROP_TELL_MIN;
+/// How far inland/alongshore a landfall is felt, in cells.
+pub const LANDFALL_REACH: f64 = TROP_TELL_REACH;
+
+/// One coast strike: where, when, how hard, and which kind of storm.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Landfall {
+    /// Months since the world's founding-year January, absolute.
+    pub month: i64,
+    /// The first land cell the centre crossed (row, col).
+    pub y: usize,
+    pub x: usize,
+    /// Intensity at the crossing, 0..1.
+    pub inten: f64,
+    /// Was this a warm-sea cyclone (M78) rather than a frontal storm (M77)?
+    pub trop: bool,
+}
+
+impl StormClimatology {
+    /// Every landfall of one calendar year, both hemispheres, both storm
+    /// kinds, in a fixed order. Pure in `(seed, year)` and the frozen
+    /// fields: two calls give the same ledger, which is what lets the
+    /// world replay a coast's history without storing it.
+    ///
+    /// A storm born in December may come ashore in January; the month is
+    /// therefore returned absolute (`year * 12 + offset`) and may fall in
+    /// the following year. The caller keeps the previous year's ledger
+    /// alive for exactly that reason.
+    pub fn landfalls(&self, seed: i64, year: i64, height: &Array2<f32>) -> Vec<Landfall> {
+        let mut out: Vec<Landfall> = Vec::new();
+        for &(trop, hemi) in &[(false, 1i8), (false, -1i8), (true, 1i8), (true, -1i8)] {
+            let tracks = if trop {
+                self.trop_season(seed, year, hemi, height)
+            } else {
+                self.season(seed, year, hemi, height)
+            };
+            for t in tracks {
+                let Some((ly, lx, day, inten)) = t.first_land else { continue };
+                if inten < LANDFALL_TELL_MIN {
+                    continue;
+                }
+                out.push(Landfall {
+                    month: year * 12 + t.month + (day / 30.0).floor() as i64,
+                    y: ly,
+                    x: lx,
+                    inten,
+                    trop,
+                });
+            }
+        }
+        // A total order that never consults a float's identity for the
+        // tie-break: month, then cell, then kind, then intensity bits.
+        out.sort_by(|a, b| {
+            (a.month, a.y, a.x, a.trop)
+                .cmp(&(b.month, b.y, b.x, b.trop))
+                .then(a.inten.total_cmp(&b.inten))
+        });
+        out
+    }
+}

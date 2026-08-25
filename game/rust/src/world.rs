@@ -191,6 +191,20 @@ pub struct World {
     pub(crate) variability: Perlin3,
     /// M74 — the slow lean of the seas, drawn once from the seed.
     pub(crate) oscillation: crate::oscillation::Oscillation,
+    /// M79 — the storm field, solved lazily the first time a month asks
+    /// the coast what hit it. Frozen once built (pure in the finished
+    /// climate), so the landfall ledger of any year can be re-derived.
+    pub(crate) storm_clim: Option<Box<crate::storms::StormClimatology>>,
+    /// The calendar year `storm_now` holds, or `i64::MIN` before any.
+    pub(crate) storm_year: i64,
+    /// This year's landfalls and last year's — a storm born in December
+    /// comes ashore in January, so the previous ledger stays alive.
+    pub(crate) storm_now: Vec<crate::storms::Landfall>,
+    pub(crate) storm_prev: Vec<crate::storms::Landfall>,
+    /// M79 — the coast's memory: `(month, settlement, wound)` for every
+    /// harbour a storm actually broke. Diagnostics ledger and the gate's
+    /// evidence; bounded, never on the wire.
+    pub storm_marks: Vec<(i64, SettlementId, f64)>,
     /// M71 — the current year's weather, memoized: `(year, dt °C, dp share)`.
     /// Derived state (a pure function of seed × year), never hashed, never
     /// packed; recomputed the first time a year is asked for.
@@ -1060,6 +1074,11 @@ impl GenBuilder {
             wire_buf: Vec::new(),
             variability: Perlin3::new(seed + 7717),
             oscillation: crate::oscillation::Oscillation::new(seed),
+            storm_clim: None,
+            storm_year: i64::MIN,
+            storm_now: Vec::new(),
+            storm_prev: Vec::new(),
+            storm_marks: Vec::new(),
             year_weather: std::sync::Mutex::new(None),
             year_site_weather: std::sync::Mutex::new(None),
             grain_shock_year: -1,
@@ -2445,6 +2464,8 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             quarry: "",
             rebuild_until: 0,
             rebuild_peak: 0,
+            harbor_dmg: 0.0,
+            harbor_until: 0,
         };
         trade::goods_for(&mut s, &self.deposits, &self.fields.fertility, &self.fields.rock);
         let mdc = self
@@ -3036,7 +3057,13 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
         }
         if let Some((i, _)) = felled {
             let (dead, ruin_name, rid) = self.fell_settlement(i, m, cause);
-            let text = if cause == "ash" {
+            let text = if cause == "storm" {
+                // M79 — the coast the sea kept.
+                format!(
+                    "The water goes clean over {} in the night — {} — and when it draws back there is nothing to rebuild on. Travellers call the place the {}.",
+                    dead.name, size, ruin_name
+                )
+            } else if cause == "ash" {
                 format!(
                     "Fire stands over the mountain and {} is gone by nightfall — {}; ash and stone take street and field alike. Travellers call the place the {}.",
                     dead.name, size, ruin_name
@@ -3050,7 +3077,11 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             evs.push(Event {
                 m,
                 s: dead.name.clone(),
-                k: if cause == "ash" { EventKind::Eruption } else { EventKind::Quake },
+                k: match cause {
+                    "ash" => EventKind::Eruption,
+                    "storm" => EventKind::Disaster,
+                    _ => EventKind::Quake,
+                },
                 text,
                 ids: smallvec![rid],
                 x: dead.x,
@@ -3061,7 +3092,12 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             // the felt beat: only marks that drew real blood get told,
             // so the chronicle speaks of hard years, not of tremors
             if lost >= 25 {
-                let text = if cause == "ash" {
+                let text = if cause == "storm" {
+                    format!(
+                        "The sea rises on {} — {}; the low streets go under, the nets and the winter's salt with them, and {} souls are not found.",
+                        name, size, lost
+                    )
+                } else if cause == "ash" {
                     format!(
                         "The mountain above {} throws fire — {}; ash falls for days, roofs are shovelled like snow, and {} souls are lost to the burning.",
                         name, size, lost
@@ -3075,7 +3111,11 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                 evs.push(Event {
                     m,
                     s: name,
-                    k: if cause == "ash" { EventKind::Eruption } else { EventKind::Quake },
+                    k: match cause {
+                        "ash" => EventKind::Eruption,
+                        "storm" => EventKind::Disaster,
+                        _ => EventKind::Quake,
+                    },
                     text,
                     x: cx,
                     y: cy,
@@ -3085,6 +3125,143 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
         }
     }
 
+    /// M79 — the coasts remember. Every month, the year's landfall ledger
+    /// (`storms::landfalls`, pure in seed × year) is read for strikes due
+    /// now: quays and boats take a wound scaled by the intensity the storm
+    /// arrived at and how far the town sits from the crossing, the water
+    /// takes its souls through the one kill path, and the chronicle hears
+    /// of it. Repairs run first, so a strike's own month is the dip.
+    ///
+    /// Nothing is stored between months but the wound itself: the ledger
+    /// is re-derived, never advanced, so a replay lands on the same coast.
+    pub fn storm_effects(&mut self, month_abs: i64, evs: &mut Vec<Event>) {
+        // --- the yards work: last month's wound is a month older ---------
+        for s in &mut self.peoples.settlements {
+            if s.harbor_dmg > 0.0 {
+                s.harbor_dmg = crate::util::round3(s.harbor_dmg * settlements::HARBOR_REPAIR);
+                if s.harbor_dmg < settlements::HARBOR_CLEAR || month_abs >= s.harbor_until {
+                    s.harbor_dmg = 0.0;
+                    s.harbor_until = 0;
+                }
+            }
+        }
+
+        // --- this month's strikes ----------------------------------------
+        let year = month_abs.div_euclid(12);
+        if self.storm_year != year {
+            if self.storm_clim.is_none() {
+                self.storm_clim = Some(Box::new(crate::storms::StormClimatology::new(
+                    &self.fields.height,
+                    &self.fields.tmean,
+                    &self.fields.tamp,
+                )));
+            }
+            let seed = self.seed;
+            let clim = self.storm_clim.as_ref().expect("climatology solved");
+            let next = clim.landfalls(seed, year, &self.fields.height);
+            // Only the immediately previous year can still owe a January.
+            self.storm_prev = if self.storm_year == year - 1 {
+                std::mem::take(&mut self.storm_now)
+            } else {
+                Vec::new()
+            };
+            self.storm_now = next;
+            self.storm_year = year;
+        }
+        let due: Vec<crate::storms::Landfall> = self
+            .storm_prev
+            .iter()
+            .chain(self.storm_now.iter())
+            .filter(|l| l.month == month_abs)
+            .copied()
+            .collect();
+        if due.is_empty() {
+            return;
+        }
+
+        for lf in due {
+            // How hard it came ashore, 0..1 above the telling bar.
+            let bite = ((lf.inten - crate::storms::LANDFALL_TELL_MIN)
+                / (1.0 - crate::storms::LANDFALL_TELL_MIN))
+                .clamp(0.0, 1.0);
+            let reach = crate::storms::LANDFALL_REACH;
+
+            // The harbours: quays, moles and boats, by distance from the
+            // crossing. Only coastal towns own a harbour to lose.
+            let mut worst: Option<(usize, f64)> = None;
+            for (i, s) in self.peoples.settlements.iter_mut().enumerate() {
+                if !s.coastal || s.pop <= 0 {
+                    continue;
+                }
+                let d = (((s.y - lf.y as i64).pow(2) + (s.x - lf.x as i64).pow(2)) as f64).sqrt();
+                if d > reach {
+                    continue;
+                }
+                let fall = (1.0 - d / reach).max(0.0);
+                let dmg = settlements::HARBOR_DMG_MAX * bite * fall;
+                if dmg < settlements::HARBOR_MARK_MIN {
+                    continue;
+                }
+                s.harbor_dmg = crate::util::round3(
+                    (s.harbor_dmg + dmg).min(settlements::HARBOR_DMG_MAX),
+                );
+                s.harbor_until = month_abs + settlements::HARBOR_WINDOW;
+                self.storm_marks.push((month_abs, s.id, s.harbor_dmg));
+                if worst.as_ref().map_or(true, |w| dmg > w.1) {
+                    worst = Some((i, dmg));
+                }
+            }
+            if self.storm_marks.len() > 4096 {
+                let cut = self.storm_marks.len() - 4096;
+                self.storm_marks.drain(..cut);
+            }
+            if let Some((i, dmg)) = worst {
+                if dmg >= settlements::HARBOR_TELL_MIN {
+                    let s = &self.peoples.settlements[i];
+                    let kind = if lf.trop { "a great warm-sea storm" } else { "a winter gale" };
+                    let text = format!(
+                        "The sea comes over the wall at {} — {} out of the deep water; the mole is breached, boats are thrown up the strand, and the harbour will take {} months of hammering before it works again.",
+                        s.name, kind, settlements::HARBOR_WINDOW
+                    );
+                    let (name, sx, sy) = (s.name.clone(), s.x, s.y);
+                    evs.push(Event {
+                        m: month_abs,
+                        s: name,
+                        k: EventKind::Disaster,
+                        text,
+                        x: sx,
+                        y: sy,
+                        ..Default::default()
+                    });
+                }
+            }
+
+            // The souls: the same kill path every disaster uses, so
+            // rebuild arcs, ruins and the chronicle behave as they do
+            // under quake and ash.
+            //
+            // A gale is not an earthquake. Storms come to the same coast
+            // every few years, so the per-strike bite has to be the size
+            // of a bad winter — a fraction of a percent to two percent of
+            // a town, squared in the intensity so only the rare monster
+            // is felt at all — and only a storm at the very top of the
+            // scale, breaking directly over the town, can take the ground
+            // itself. Anything heavier and three centuries of ordinary
+            // weather empty the shores, which is a demography change
+            // wearing a storm's clothes.
+            self.disaster_strike(
+                month_abs,
+                lf.y as i64,
+                lf.x as i64,
+                reach * (0.5 + 0.5 * bite),
+                if bite > 0.97 { 1.0 } else { 0.0 },
+                0.02 * bite * bite,
+                "storm",
+                if lf.trop { "a storm the old men had no name for" } else { "the worst gale in living memory" },
+                evs,
+            );
+        }
+    }
     /// M9.4 — roads fall disused. A route that has carried nothing for a
     /// generation fades on the map (and wakes again if the wagons return).
     fn route_age_pass(&mut self, month_abs: i64, evs: &mut Vec<Event>) {

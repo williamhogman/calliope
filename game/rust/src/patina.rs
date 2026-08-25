@@ -154,6 +154,8 @@ pub fn ruin_why(cause: &str) -> &'static str {
         // ruins to their chronicle beats by these exact strings.
         "quake" => "the earth broke it in a single morning",
         "ash" => "the mountain buried it in ash and fire",
+        // M79 — the sea took it: a landfall the coast never recovered from.
+        "storm" => "the sea came over the wall and never gave the ground back",
         _ => "it dwindled year by year until the last hearth went cold",
     }
 }
