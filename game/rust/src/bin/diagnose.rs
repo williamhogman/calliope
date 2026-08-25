@@ -9838,12 +9838,14 @@ fn cmd_storms(size: usize, years: i64, seeds: Vec<i64>) {
         );
 
         println!(
-            " · {} genesis field: sites N {} / S {} · peak dT/dlat {:.4} / {:.4} °C/° · season count N {} / S {}",
+            " · {} genesis field: sites N {} / S {} · ref weight {:.4} / {:.4} · iced-out N {} / S {} · season count N {} / S {}",
             seed,
             clim.sites(1).len(),
             clim.sites(-1).len(),
             clim.peak_gradient(1),
             clim.peak_gradient(-1),
+            clim.iced_out(1),
+            clim.iced_out(-1),
             clim.season_count(1),
             clim.season_count(-1),
         );
