@@ -694,6 +694,220 @@ impl StormClimatology {
         }
     }
 
+    // ---------------------------------------------- M78 · the warm seas
+
+    /// The warm-month sea-surface temperature at a cell, °C (0 on land).
+    pub fn sst_at(&self, y: usize, x: usize) -> f64 {
+        self.tsst[[y, x]]
+    }
+
+    /// The month the hemisphere's tropical sea is warmest — the season a
+    /// warm-sea cyclone belongs to.
+    pub fn warm_month(&self, hemi: i8) -> i64 {
+        if hemi >= 0 { self.warm_month.0 } else { self.warm_month.1 }
+    }
+
+    /// Warm sea cells the spin term struck out as too near the equator
+    /// (north, south): heat that never became a storm.
+    pub fn spinless(&self, hemi: i8) -> usize {
+        if hemi >= 0 { self.spinless.0 } else { self.spinless.1 }
+    }
+
+    /// The cells eligible to breed a tropical cyclone in this hemisphere,
+    /// with the genesis weight of each. Row-major.
+    pub fn trop_sites(&self, hemi: i8) -> Vec<((usize, usize), f64)> {
+        let mut out = Vec::new();
+        for y in 0..self.rows {
+            let north = lat_of(y as f64, self.rows) >= 0.0;
+            if north != (hemi >= 0) {
+                continue;
+            }
+            for x in 0..self.cols {
+                let w = self.tweight[[y, x]];
+                if w > 0.0 {
+                    out.push(((y, x), w));
+                }
+            }
+        }
+        out
+    }
+
+    /// How many tropical cyclones this hemisphere breeds in a year — a
+    /// property of the size of its warm sea.
+    pub fn trop_season_count(&self, hemi: i8) -> usize {
+        let n = self.trop_sites(hemi).len() as f64;
+        ((n / 1000.0) * TROP_PER_1000_CELLS)
+            .round()
+            .max(0.0)
+            .min(TROP_MAX_PER_SEASON as f64) as usize
+    }
+
+    /// Draw and walk one hemisphere's warm-sea cyclones for one year.
+    /// Pure in `(seed, year, hemi)` and the frozen fields above; its own
+    /// key domain, so a tropical season never consumes the frontal
+    /// corridor's draws.
+    pub fn trop_season(
+        &self,
+        seed: i64,
+        year: i64,
+        hemi: i8,
+        height: &Array2<f32>,
+    ) -> Vec<StormTrack> {
+        let sites = self.trop_sites(hemi);
+        let count = self.trop_season_count(hemi);
+        if sites.is_empty() || count == 0 {
+            return Vec::new();
+        }
+        let mut cum: Vec<f64> = Vec::with_capacity(sites.len());
+        let mut total = 0.0;
+        for &(_, g) in &sites {
+            total += g;
+            cum.push(total);
+        }
+        let warm = self.warm_month(hemi);
+        let mut mw = [0.0f64; 12];
+        let mut mtot = 0.0;
+        for m in 0..12usize {
+            let off = ((m as i64 - warm) as f64) * std::f64::consts::TAU / 12.0;
+            let w = 1.0 + TROP_SEASON_CONTRAST * off.cos();
+            mw[m] = w;
+            mtot += w;
+        }
+
+        let key = (seed as u64)
+            ^ (year as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ if hemi >= 0 { 0x7A0D_11C5u64 } else { 0x7A0D_50D7u64 };
+        let mut rng = Pcg64Mcg::seed_from_u64(key ^ 0x7C1F_0FE4_1A11_5EA5u64);
+        let mut out = Vec::with_capacity(count);
+        for _ in 0..count {
+            let u = rng.gen_range(0.0..total);
+            let i = cum.partition_point(|&c| c < u).min(sites.len() - 1);
+            let ((gy, gx), g) = sites[i];
+            let um = rng.gen_range(0.0..mtot);
+            let mut acc = 0.0;
+            let mut month = 11i64;
+            for m in 0..12usize {
+                acc += mw[m];
+                if um < acc {
+                    month = m as i64;
+                    break;
+                }
+            }
+            let vigour = 0.5 + 0.5 * rng.gen_range(0.0..1.0f64);
+            out.push(self.trop_walk(year, hemi, month, (gy, gx), g, vigour, height));
+        }
+        out
+    }
+
+    /// Advect one warm-sea cyclone: carried west by the trades, climbing
+    /// poleward as it goes, and — if it lives long enough to leave the
+    /// tropics — turned back east by the westerlies it runs into. The
+    /// recurvature is the wind field's; nothing here bends the path.
+    fn trop_walk(
+        &self,
+        year: i64,
+        hemi: i8,
+        month: i64,
+        genesis: (usize, usize),
+        weight: f64,
+        vigour: f64,
+        height: &Array2<f32>,
+    ) -> StormTrack {
+        let rows = self.rows;
+        let cols = self.cols;
+        let dlat = 180.0 / (rows as f64 - 1.0);
+        let dlon = 360.0 / cols as f64;
+        let mut inten = weight.min(1.0) * vigour;
+        let mut x = genesis.1 as f64;
+        let mut y = genesis.0 as f64;
+        let mut day = 0.0f64;
+        let mut peak = inten;
+        let mut landfall = false;
+        let mut first_land: Option<(usize, usize, f64, f64)> = None;
+        let mut points = Vec::with_capacity(STORM_MAX_STEPS + 1);
+        let mut over_land = height[[genesis.0, genesis.1]] >= 0.0;
+        points.push(StormPoint { x, y, day, inten, over_land });
+
+        for _ in 0..STORM_MAX_STEPS {
+            let lat = lat_of(y, rows);
+            let tau = crate::currents::wind_stress(lat.abs());
+            let dx = TROP_STEER_DEG * tau * STORM_STEP_DAYS / dlon;
+            let pole_sign = if lat >= 0.0 { 1.0 } else { -1.0 };
+            let dy = pole_sign * TROP_POLEWARD_DEG * STORM_STEP_DAYS / dlat;
+            x += dx;
+            y += dy;
+            day += STORM_STEP_DAYS;
+            if x < 0.0 || x > (cols - 1) as f64 || y < 0.0 || y > (rows - 1) as f64 {
+                break;
+            }
+            let cy = (y.round() as usize).min(rows - 1);
+            let cx = (x.round() as usize).min(cols - 1);
+            over_land = height[[cy, cx]] >= 0.0;
+            if over_land {
+                if !landfall {
+                    first_land = Some((cy, cx, day, inten));
+                }
+                landfall = true;
+                inten *= TROP_LAND_KEEP;
+            } else if self.tsst[[cy, cx]] >= TROP_SST_MIN {
+                // still over its fuel: the warm sea keeps feeding it
+                let heat =
+                    ((self.tsst[[cy, cx]] - TROP_SST_MIN) / TROP_SST_SPAN).clamp(0.0, 1.0);
+                inten += TROP_SEA_GROW * heat * (1.0 - inten).max(0.0);
+            } else {
+                // out over cool water: the engine starves
+                inten *= TROP_COOL_KEEP;
+            }
+            if inten > peak {
+                peak = inten;
+            }
+            points.push(StormPoint { x, y, day, inten, over_land });
+            if inten < TROP_END {
+                break;
+            }
+        }
+
+        StormTrack {
+            year,
+            hemi,
+            month,
+            genesis,
+            genesis_lat: lat_of(genesis.0 as f64, rows),
+            points,
+            peak,
+            landfall,
+            first_land,
+        }
+    }
+
+    /// The warm-sea law's replay probe: the seasons, the site counts and
+    /// the tracks of two spaced years, hashed.
+    pub fn trop_probe(&self, seed: i64, height: &Array2<f32>) -> u64 {
+        let mut b: Vec<u8> = Vec::new();
+        for v in [self.warm_month.0, self.warm_month.1] {
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        for h in [1i8, -1i8] {
+            b.extend_from_slice(&(self.trop_sites(h).len() as u64).to_le_bytes());
+            for year in [1i64, 97] {
+                for t in self.trop_season(seed, year, h, height) {
+                    b.extend_from_slice(&t.month.to_le_bytes());
+                    b.extend_from_slice(&(t.genesis.0 as u32).to_le_bytes());
+                    b.extend_from_slice(&(t.genesis.1 as u32).to_le_bytes());
+                    b.extend_from_slice(&t.peak.to_bits().to_le_bytes());
+                    b.extend_from_slice(&(t.points.len() as u32).to_le_bytes());
+                    if let Some((ly, lx, d, i)) = t.first_land {
+                        b.extend_from_slice(&(ly as u32).to_le_bytes());
+                        b.extend_from_slice(&(lx as u32).to_le_bytes());
+                        b.extend_from_slice(&d.to_bits().to_le_bytes());
+                        b.extend_from_slice(&i.to_bits().to_le_bytes());
+                    }
+                }
+            }
+        }
+        crate::util::fnv1a64(&b)
+    }
+
 
     /// A fixed read of the storm law for the replay identity line: the
     /// hemispheric peaks, the seasons, the site counts, and the full
