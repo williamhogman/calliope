@@ -5,66 +5,63 @@
 
  lane                          pass  warn  fail     age
  assay.txt                        1     0     0    0.0h
- atlas.txt                       13     0     0    0.2h
+ atlas.txt                       13     0     0    0.0h
  bench.txt                        4     1     0    0.1h
- browser.txt                      7     0     0    0.0h
+ browser.txt                      6     1     0    0.0h
  build.txt                        0     1     0    0.1h
- civ-12345.txt                    0     0     1    0.1h
- civ-777.txt                     80     3     0    0.4h
- climate-12345.txt               27     1     0    0.4h
- climate-777.txt                 26     2     0    0.4h
- climate-90210.txt               27     1     0    0.4h
- climate-variance.txt            74     0     0    0.4h
- coastjs.txt                      4     0     0    0.1h
- compile.txt                      1     0     0    0.1h
- compute.txt                      6     1     0    0.1h
- determinism.txt                  3     0     0    0.3h
- earth-wasm.txt                   0     0     0    0.1h
- earth.txt                       51     0     0    0.2h
- economy-12345.txt               46     1     0    0.4h
- era.txt                          8     1     0    0.3h
- hydro-12345.txt                 24     1     0    0.4h
- hydro-777.txt                   24     1     0    0.4h
- hydro-90210.txt                 24     1     0    0.4h
+ civ-12345.txt                   79     4     0    0.1h
+ civ-777.txt                     80     3     0    0.2h
+ climate-12345.txt               27     1     0    0.2h
+ climate-777.txt                 26     2     0    0.2h
+ climate-90210.txt               27     1     0    0.2h
+ climate-variance.txt            74     0     0    0.1h
+ coastjs.txt                      4     0     0    0.0h
+ compile.txt                      1     0     0    0.0h
+ compute.txt                      6     1     0    0.0h
+ determinism.txt                  3     0     0    0.1h
+ earth-wasm.txt                   2     0     0    0.0h
+ earth.txt                       51     0     0    0.0h
+ economy-12345.txt               46     1     0    0.2h
+ era.txt                          0     0     0    0.1h
+ hydro-12345.txt                 24     1     0    0.2h
+ hydro-777.txt                   24     1     0    0.2h
+ hydro-90210.txt                 24     1     0    0.2h
  moddag.txt                       1     0     0    0.0h
- ocean-meta.txt                   9     0     0    0.2h
- ocean.txt                       15     0     0    0.2h
- oscillation.txt                 73     0     0    0.4h
- patina.txt                       9     1     0    0.3h
- perf.txt                         8     5     0    0.1h
- properties.txt                  72     6     0    0.3h
- resources-12345.txt             32     0     0    0.4h
- resources-777.txt               32     0     0    0.4h
- resources-90210.txt             32     0     0    0.4h
- storms.txt                      77     0     0    0.3h
+ ocean-meta.txt                   9     0     0    0.0h
+ ocean.txt                       15     0     0    0.0h
+ oscillation.txt                 73     0     0    0.1h
+ patina.txt                       9     1     0    0.1h
+ perf.txt                         7     6     0    0.1h
+ properties.txt                  72     6     0    0.1h
+ resources-12345.txt             32     0     0    0.2h
+ resources-777.txt               32     0     0    0.2h
+ resources-90210.txt             32     0     0    0.2h
+ storms.txt                      77     0     0    0.1h
  sweep.txt                       18     1     0    0.1h
- systems.txt                      3     0     0    0.1h
- teleconnection.txt              50     0     0    0.3h
- telling-12345.txt               12     0     0    0.4h
+ systems.txt                      3     0     0    0.0h
+ teleconnection.txt              50     0     0    0.1h
+ telling-12345.txt               12     0     0    0.2h
  terrain-12345.txt               76     0     0    0.1h
  terrain-777.txt                 75     1     0    0.1h
  terrain-90210.txt               76     0     0    0.1h
- tropics.txt                     67     0     0    0.3h
+ tropics.txt                     67     0     0    0.1h
  wasm-audit.txt                   2     0     0       -
- wasm.txt                         0     1     0    0.1h
- TOTAL                         1189    30     1
-
- held rows (each holds the era open):
-   civ-12345.txt · [FAIL] the lane ran to completion                   exit 0   (M77: the report does not end in a CHECKS line — the lane was cut off, so nothing below its last printed row was measured)
+ wasm.txt                         0     1     0    0.0h
+ TOTAL                         1260    35     0
 
  structural leg: seed 12345 · 3600 months · chunkings 240/120 vs 180
- towns 16→96 · 683 events in the final decade · 43s for both runs (168 mo/s)
+ towns 16→96 · 683 events in the final decade · 49s for both runs (146 mo/s)
 
 ---- checks ----------------------------------------------------------
 [PASS] every era lane on the table                43 lanes   (M65: a gate over a partial suite proves nothing — run report.sh)
-[FAIL] every composed lane actually speaks  silent: earth-wasm.txt   (M76: a lane that emitted no check rows proves nothing — a truncated or crashed report may not compose as clean)
-[PASS] composed reports are fresh              oldest 0.4h   (M65: stale rows compose stale verdicts — rerun the suite within 6h)
-[FAIL] the veto bites somewhere in the ensemble 0 refused town(s) over 2 civ lane(s) [12345:0 · 777:0]   (M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it)
-[FAIL] the suite composes clean             1 fail · 30 warn · 1189 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
+[FAIL] every composed lane actually speaks  silent: era.txt   (M76: a lane that emitted no check rows proves nothing — a truncated or crashed report may not compose as clean)
+[PASS] composed reports are fresh              oldest 0.2h   (M65: stale rows compose stale verdicts — rerun the suite within 6h)
+[PASS] the veto bites somewhere in the ensemble 1 refused town(s) over 2 civ lane(s) [12345:1 · 777:0]   (M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it)
+[PASS] the suite composes clean             0 fail · 35 warn · 1260 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
 [PASS] the wasm audit speaks for shipped bytes     same bytes   (E6.6: audit subject sha256 = shipped wasm — rerun scripts/wasm-audit.sh after a rebuild)
 [PASS] replay identity at era scale              identical   (ADR-0003: 300y under two chunkings ⇒ one state, one town ledger)
 [PASS] fields finite after the centuries        all finite   (M65: height·tmean·precip·discharge·fertility carry no poison)
 [PASS] towns endure                                  16→96   (M65: three centuries leave a living map, not a wiped one)
 [PASS] the chronicle still speaks           683 events / final decade   (M65: an old world keeps making history)
-[FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
-CHECKS: 7 pass · 0 warn · 4 fail
+[PASS] era I seals                                  SEALED   (M65 gate: the deep earth closes only over a clean composed suite)
+CHECKS: 10 pass · 0 warn · 1 fail
