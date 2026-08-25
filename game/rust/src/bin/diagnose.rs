@@ -310,6 +310,9 @@ fn hash_state(w: &World) -> u64 {
     for (m, sid, dmg) in &w.storm_marks {
         s.push_str(&format!("h{}|{}|{:.3}\n", m, sid.0, dmg));
     }
+    for (m, sid, dmg) in &w.storm_bites {
+        s.push_str(&format!("b{}|{}|{:.3}\n", m, sid.0, dmg));
+    }
     for f in &w.features {
         s.push_str(&format!("f{}|{}|{}|{}\n", f.t, f.name, f.x, f.y));
     }
