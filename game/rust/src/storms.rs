@@ -118,7 +118,11 @@ pub struct StormTrack {
     pub peak: f64,
     /// Did the centre ever cross onto land?
     pub landfall: bool,
+    /// M78 — the first land cell the centre crossed, and the day and
+    /// intensity it crossed at: the coast the storm actually struck.
+    pub first_land: Option<(usize, usize, f64, f64)>,
 }
+
 
 impl StormTrack {
     /// Track length in days.
