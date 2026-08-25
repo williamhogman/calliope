@@ -1,0 +1,33 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · TELLING                      seed 12345 · size 512 · 150y
+========================================================================
+chronicle: 7626 entries over 150y (50.8/y)
+  ids on 100.0% · coords on 97.6% · legend layer on 2477/2477 loud entries
+cast: artifact 11+0† · civilization 1+2† · culture 13+0† · feature 98+0† · good 36+0† · person 12+198† · realm 13+18† · ruin 10+0† · settlement 98+10† · war 0+36† · world 1+0†
+epithets earned: 175  (Tamimbar "the Young", Thalshade "the Young", Arikos "the Unlucky", Dzunachi "the Wise")
+artifacts: 11 wrought · 9 held · 2 lost
+
+stories sifted: 48 (bloody-circlet ×10 · empire-arc ×2 · mine-curse ×10 · restoration ×2 · rise-fall ×7 · roads-of ×4 · trials ×10 · usurpation ×3)
+  476.5  The Trials of Roehythe  (y0–147, 12 beats)
+  440.5  The Trials of Mossorcarr  (y0–149, 12 beats)
+  395.0  The Trials of Bortepe  (y15–149, 12 beats)
+  353.0  The Trials of Sahmasab  (y0–148, 12 beats)
+  339.6  The Trials of Kalstoma  (y69–150, 12 beats)
+  329.8  The Trials of Aelorhythe  (y56–146, 12 beats)
+  317.4  The Trials of Briarwyhythe  (y52–148, 12 beats)
+  313.5  The Trials of Delliaulon  (y13–148, 12 beats)
+
+---- checks ----------------------------------------------------------
+[PASS] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
+[PASS] every carried id is valid                     0 bad   (ids index the registry)
+[PASS] events mappable (coords)                      97.6%   (most entries can fly the camera)
+[PASS] loud events carry a legend                2477/2477   (M6.9: two-layer telling on weight ≥ 3)
+[PASS] closed entities carry a fate              0 unfated   (every ending is written)
+[PASS] stories per century                            32.0   (M6.5 gate: the sifter yields)
+[PASS] sifter deterministic                      identical   (same log ⇒ same stories)
+[PASS] no duplicate stories                         0 dups   (dedup bounds hold)
+[PASS] a reversal story found                          yes   (M6.7: fortunes turn on the record)
+[PASS] relics wrought                                   11   (M6.3: artifacts enter the world)
+[PASS] epithets earned                                 175   (M6.8: names are coined in the field)
+[PASS] chronicle unbounded                            7626   (no truncation: the full log persists)
+CHECKS: 12 pass · 0 warn · 0 fail
