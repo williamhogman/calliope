@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 12345 · 640x512
 ========================================================================
-world: "Talomar" · generated in 2385 ms
+world: "Talomar" · generated in 3686 ms
 land: 115629 cells of 327680 (35.3%) · 1850064 km²
 hypsometry (land h): p5 0.015 · p25 0.083 · p50 0.194 · p75 0.371 · p95 0.547 · max 0.759
 bathymetry (sea h): p5 -0.592 · p50 -0.385 · p95 -0.036
