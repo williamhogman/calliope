@@ -39,8 +39,8 @@ upwelling (M47): 302 of 4625 coastline cells nutrient-rich (6.5%) · index p50 0
 
 interannual variability (M71) · 60 years · land cells only:
   belt                         σ T (°C)   declared σ σ rain (frac)
-  tropics (<23.5°)                0.376        0.375        0.097
-  mid-latitudes (23.5–55°)        0.742        0.739        0.131
+  tropics (<23.5°)                0.376        0.375        0.157
+  mid-latitudes (23.5–55°)        0.742        0.739        0.142
   polar (>55°)                    1.243        1.253        0.179
 
 ---- checks ----------------------------------------------------------
@@ -65,9 +65,9 @@ interannual variability (M71) · 60 years · land cells only:
 [PASS] seasonal share of the pack                    25.1%   (M37 gate: a fringe that opens in summer)
 [PASS] pack ice keeps to the polar seas        reaches 52°   (M37: no icebound tropics — Earth's pack stays poleward of ~44°)
 [PASS] the year's heat swings wider toward the poles σ 0.376 → 0.742 → 1.243 °C   (M71 gate: annual temperature-anomaly σ rises monotonically across the three latitude belts)
-[PASS] the year's rain swings wider toward the poles σ 0.097 → 0.131 → 0.179   (M71: the same latitude law shapes the rain lane, in fractional terms)
+[FAIL] the year's rain swings wider toward the poles σ 0.157 → 0.142 → 0.179   (M71: the same latitude law shapes the rain lane, in fractional terms)
 [PASS] the measured swing is the declared swing worst belt off by 0.8%   (M71: ANOM_FBM_SIGMA normalizes the lattice — if the measured σ drifts from the declared amplitude, the constant is stale, not the sky)
 [PASS] the anomaly field is finite          0 non-finite cells   (M71: every year's draw is a number)
 [PASS] a bad year never takes all the rain  worst -0.66 share   (M71: total failure of the rains is famine's verdict (M2.6), not the sky's noise)
 [PASS] one seed, one year, one sky          redraw identical · memo identical   (M71 gate: repeated runs at one seed reproduce identical per-year anomaly grids bit-for-bit, memo or fresh)
-CHECKS: 25 pass · 1 warn · 0 fail
+CHECKS: 24 pass · 1 warn · 1 fail

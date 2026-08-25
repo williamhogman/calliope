@@ -22,7 +22,7 @@ seed    777: silt ladder ≥1/5/10 m: 37.4/4.5/2.16% of land · plain 423 bodies
 seed    777: coast frontage 6570 cells · storied 52.5% · [raised beach 2791 · fjord 53 · tidal flat 37 · estuary 21 · delta plain 454 · spit 89 · barrier island 5 · lagoon 2] · shore 3118
 
 seed  90210: 5155 river cells · 0 uphill · 0 cycles · 0 dry terminals
-seed  90210: 19 towns · 26 routes · 0 isolated · 1 components
+seed  90210: 19 towns · 27 routes · 0 isolated · 1 components
 seed  90210: rain ×1.25 ⇒ river cells 5155 → 6055 · discharge 2108990 → 2649609
 seed  90210: hypsometry mean 861 m · below 1 km 59.8%
 seed  90210: streams (A_c 80 km²) N_k [8439, 1586, 333, 81, 16, 1] · Rb 5.62
@@ -39,12 +39,12 @@ seed  12345: territory over 240 months · 15 full ships · 8 tile ships
 [PASS] rivers reach an outlet (12345)                0 dry   (M8.1: sea, lake or salt basin)
 [PASS] no isolated settlement (12345)            0 cut off   (M8.1: every town trades)
 [PASS] route graph connected (12345)               1 comps   (M8.1: one world, one web)
-[PASS] pack is stable (12345)                    7177284 B   (M8.1: same world ⇒ same bytes)
+[PASS] pack is stable (12345)                    7177352 B   (M8.1: same world ⇒ same bytes)
 [PASS] pack v3 + crc32 (12345)                crc 9c61adbe   (E3.6: stamped and checksummed)
 [PASS] unpack layout sound (12345)               19 arrays   (M8.1: offsets contiguous, sizes exact)
 [PASS] raw sections bit-equal (12345)            bit-equal   (M8.1: arrays survive the wire)
 [PASS] quantization ≤ ε (12345)             worst 0.500·scale   (E3.4: quantized wire loses ≤ half a step)
-[PASS] territory RLE exact (12345)               1101 runs   (E3.5: borders compress, nothing drifts)
+[PASS] territory RLE exact (12345)               1113 runs   (E3.5: borders compress, nothing drifts)
 [PASS] rain↑ ⇒ rivers not↓ (12345)             5023 → 5911   (M8.2: metamorphic monotonicity)
 [PASS] rain↑ ⇒ discharge↑ (12345)                    ×1.31   (M8.2: more water flows)
 [PASS] land below 1 km % (12345)                     58.9%   (M64: one seed is one continent — Earth's continents run ~50–95% under 1 km)
@@ -83,12 +83,12 @@ seed  12345: territory over 240 months · 15 full ships · 8 tile ships
 [PASS] rivers reach an outlet (90210)                0 dry   (M8.1: sea, lake or salt basin)
 [PASS] no isolated settlement (90210)            0 cut off   (M8.1: every town trades)
 [PASS] route graph connected (90210)               1 comps   (M8.1: one world, one web)
-[PASS] pack is stable (90210)                    7177580 B   (M8.1: same world ⇒ same bytes)
+[PASS] pack is stable (90210)                    7177484 B   (M8.1: same world ⇒ same bytes)
 [PASS] pack v3 + crc32 (90210)                crc 00a36399   (E3.6: stamped and checksummed)
 [PASS] unpack layout sound (90210)               19 arrays   (M8.1: offsets contiguous, sizes exact)
 [PASS] raw sections bit-equal (90210)            bit-equal   (M8.1: arrays survive the wire)
 [PASS] quantization ≤ ε (90210)             worst 0.500·scale   (E3.4: quantized wire loses ≤ half a step)
-[PASS] territory RLE exact (90210)               1165 runs   (E3.5: borders compress, nothing drifts)
+[PASS] territory RLE exact (90210)               1149 runs   (E3.5: borders compress, nothing drifts)
 [PASS] rain↑ ⇒ rivers not↓ (90210)             5155 → 6055   (M8.2: metamorphic monotonicity)
 [PASS] rain↑ ⇒ discharge↑ (90210)                    ×1.26   (M8.2: more water flows)
 [PASS] land below 1 km % (90210)                     59.8%   (M64: one seed is one continent — Earth's continents run ~50–95% under 1 km)

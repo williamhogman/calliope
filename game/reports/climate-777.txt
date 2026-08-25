@@ -39,8 +39,8 @@ upwelling (M47): 287 of 4366 coastline cells nutrient-rich (6.6%) · index p50 0
 
 interannual variability (M71) · 60 years · land cells only:
   belt                         σ T (°C)   declared σ σ rain (frac)
-  tropics (<23.5°)                0.368        0.377        0.094
-  mid-latitudes (23.5–55°)        0.719        0.735        0.128
+  tropics (<23.5°)                0.368        0.377        0.115
+  mid-latitudes (23.5–55°)        0.719        0.735        0.131
   polar (>55°)                    1.213        1.245        0.177
 
 ---- checks ----------------------------------------------------------
@@ -65,7 +65,7 @@ interannual variability (M71) · 60 years · land cells only:
 [PASS] seasonal share of the pack                    25.8%   (M37 gate: a fringe that opens in summer)
 [PASS] pack ice keeps to the polar seas        reaches 53°   (M37: no icebound tropics — Earth's pack stays poleward of ~44°)
 [PASS] the year's heat swings wider toward the poles σ 0.368 → 0.719 → 1.213 °C   (M71 gate: annual temperature-anomaly σ rises monotonically across the three latitude belts)
-[PASS] the year's rain swings wider toward the poles σ 0.094 → 0.128 → 0.177   (M71: the same latitude law shapes the rain lane, in fractional terms)
+[PASS] the year's rain swings wider toward the poles σ 0.115 → 0.131 → 0.177   (M71: the same latitude law shapes the rain lane, in fractional terms)
 [PASS] the measured swing is the declared swing worst belt off by 2.6%   (M71: ANOM_FBM_SIGMA normalizes the lattice — if the measured σ drifts from the declared amplitude, the constant is stale, not the sky)
 [PASS] the anomaly field is finite          0 non-finite cells   (M71: every year's draw is a number)
 [PASS] a bad year never takes all the rain  worst -0.75 share   (M71: total failure of the rains is famine's verdict (M2.6), not the sky's noise)

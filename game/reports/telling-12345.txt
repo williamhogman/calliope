@@ -1,33 +1,33 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TELLING                      seed 12345 · size 512 · 150y
 ========================================================================
-chronicle: 8694 entries over 150y (58.0/y)
-  ids on 100.0% · coords on 97.6% · legend layer on 2564/2564 loud entries
-cast: artifact 23+0† · civilization 2+2† · culture 12+0† · feature 96+0† · good 36+0† · person 25+213† · realm 18+12† · ruin 1+0† · settlement 103+1† · war 3+44† · world 1+0†
-epithets earned: 169  (Tamimbar "the Young", Thalshade "the Young", Arikos "the Unlucky", Dzunachi "the Wise")
-artifacts: 23 wrought · 22 held · 1 lost
+chronicle: 7926 entries over 150y (52.8/y)
+  ids on 100.0% · coords on 98.0% · legend layer on 1947/1947 loud entries
+cast: artifact 11+0† · civilization 1+1† · culture 16+0† · feature 85+0† · good 36+0† · person 15+124† · realm 6+14† · ruin 1+0† · settlement 100+1† · war 0+21† · world 1+0†
+epithets earned: 103  (Tamimbar "the Young", Thalshade "the Young", Arikos "the Unlucky", Dzunachi "the Wise")
+artifacts: 11 wrought · 10 held · 1 lost
 
-stories sifted: 48 (bloody-circlet ×8 · empire-arc ×2 · high-noon ×1 · mine-curse ×10 · restoration ×1 · rise-fall ×1 · rivalry ×4 · roads-of ×10 · trials ×10 · usurpation ×1)
-  448.0  The Trials of Zarimsif  (y50–149, 12 beats)
-  343.5  The Trials of Aelencarr  (y49–149, 12 beats)
-  326.4  The Trials of Briarorhythe  (y54–148, 12 beats)
-  320.5  The Trials of Fenhythe  (y51–149, 12 beats)
-  320.2  The Trials of Thesleyra  (y59–146, 12 beats)
-  319.3  The Trials of Aelknoll  (y83–148, 12 beats)
-  319.2  The Trials of Khawadi  (y62–148, 12 beats)
-  316.0  The Bloody Circlet of Oropia  (y4–147, 12 beats)
+stories sifted: 47 (bloody-circlet ×7 · empire-arc ×1 · high-noon ×1 · mine-curse ×10 · relic-road ×1 · restoration ×1 · rise-fall ×1 · rivalry ×3 · roads-of ×10 · trials ×10 · usurpation ×2)
+  396.5  The Trials of Theslophos  (y23–150, 12 beats)
+  395.1  The Trials of Qassif  (y70–150, 12 beats)
+  381.5  The Trials of Idayra  (y0–148, 12 beats)
+  358.5  The Trials of Glenhythe  (y0–147, 12 beats)
+  336.2  The Trials of Xanleyra  (y60–148, 12 beats)
+  327.0  The Trials of Keshuyar  (y0–148, 12 beats)
+  307.0  The Trials of Sahmasab  (y0–149, 12 beats)
+  278.7  The Trials of Rassif  (y63–149, 12 beats)
 
 ---- checks ----------------------------------------------------------
 [PASS] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
 [PASS] every carried id is valid                     0 bad   (ids index the registry)
-[PASS] events mappable (coords)                      97.6%   (most entries can fly the camera)
-[PASS] loud events carry a legend                2564/2564   (M6.9: two-layer telling on weight ≥ 3)
+[PASS] events mappable (coords)                      98.0%   (most entries can fly the camera)
+[PASS] loud events carry a legend                1947/1947   (M6.9: two-layer telling on weight ≥ 3)
 [PASS] closed entities carry a fate              0 unfated   (every ending is written)
-[PASS] stories per century                            32.0   (M6.5 gate: the sifter yields)
+[PASS] stories per century                            31.3   (M6.5 gate: the sifter yields)
 [PASS] sifter deterministic                      identical   (same log ⇒ same stories)
 [PASS] no duplicate stories                         0 dups   (dedup bounds hold)
 [PASS] a reversal story found                          yes   (M6.7: fortunes turn on the record)
-[PASS] relics wrought                                   23   (M6.3: artifacts enter the world)
-[PASS] epithets earned                                 169   (M6.8: names are coined in the field)
-[PASS] chronicle unbounded                            8694   (no truncation: the full log persists)
+[PASS] relics wrought                                   11   (M6.3: artifacts enter the world)
+[PASS] epithets earned                                 103   (M6.8: names are coined in the field)
+[PASS] chronicle unbounded                            7926   (no truncation: the full log persists)
 CHECKS: 12 pass · 0 warn · 0 fail
