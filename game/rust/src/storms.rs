@@ -240,7 +240,19 @@ pub struct StormClimatology {
     /// too cold to fuel a storm in the season — the ice-edge front,
     /// counted so the lane can show what the fuel term removed.
     iced_out: (usize, usize),
+    /// M78 — the warm-month sea-surface temperature, °C, zero on land.
+    tsst: Array2<f64>,
+    /// M78 — tropical genesis weight = warm-sea fuel × spin, 0 on land,
+    /// 0 over any sea below `TROP_SST_MIN`, 0 in the equatorial dead band.
+    tweight: Array2<f64>,
+    /// M78 — the warmest month of the year in each hemisphere's tropical
+    /// sea, read from the realized annual cycle (north, south).
+    warm_month: (i64, i64),
+    /// M78 — warm sea cells the spin term struck out as too near the
+    /// equator to organise (north, south): heat without rotation.
+    spinless: (usize, usize),
 }
+
 
 impl StormClimatology {
     /// Solve the genesis field from the world's finished climate.
