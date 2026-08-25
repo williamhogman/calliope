@@ -6535,6 +6535,55 @@ fn pearson(xs: &[f64], ys: &[f64]) -> f64 {
 
 // ================================================================ economy
 
+type DirectedLane = (f64, f64, f64, String, String);
+
+/// M46's causal subject is the founding web under the founding current/wind
+/// field. Later deaths and rescue routes are history, not a second sailing
+/// law: measure them separately so a disaster can change the lived web without
+/// silently changing which passages prove the edge-cost mechanism.
+fn directed_sea(w: &World) -> (Vec<DirectedLane>, usize) {
+    let tf = w.trade.f;
+    let spos = |id: calliope::ids::SettlementId| {
+        w.peoples
+            .settlements
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| (s.y as usize / tf, s.x as usize / tf))
+    };
+    let sname = |id: calliope::ids::SettlementId| {
+        w.peoples
+            .settlements
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| "?".into())
+    };
+    let mut splits = Vec::new();
+    let mut rewalk_bad = 0usize;
+    for r in w.routes.iter().filter(|r| r.sea > 0.5) {
+        let (Some(start), Some(goal)) = (spos(r.a), spos(r.b)) else { continue };
+        if let Some((path, fwd)) = calliope::trade::astar(&w.trade, start, goal) {
+            let re_f = calliope::trade::path_cost(&w.trade, &path, false);
+            if (re_f - fwd).abs() > 1e-9 * fwd.max(1.0) {
+                rewalk_bad += 1;
+            }
+            let rev = calliope::trade::path_cost(&w.trade, &path, true);
+            let hi = fwd.max(rev);
+            if hi > 0.0 {
+                splits.push((
+                    100.0 * (1.0 - fwd.min(rev) / hi),
+                    fwd,
+                    rev,
+                    sname(r.a),
+                    sname(r.b),
+                ));
+            }
+        }
+    }
+    splits.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    (splits, rewalk_bad)
+}
+
 fn cmd_economy(seed: i64, size: usize, years: usize) {
     let mut w = World::generate(seed, size);
     header("ECONOMY", &format!("seed {} · {}x{} · {}y", seed, w.width, size, years));
@@ -6549,6 +6598,10 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         .map(|r| (r.a, r.b, r.cost, r.closed, r.season, r.shut.clone()))
         .collect();
     let cal0 = calendar_hash(&w.routes);
+    // Snapshot M46 before history starts. Storms, quakes and abandonment may
+    // later remove towns and re-knit the web; that evolved result is printed
+    // as a counterfactual below, while the gate remains on its stated subject.
+    let (founding_splits, founding_rewalk_bad) = directed_sea(&w);
 
     // M15.6 — conservation ledger baselines: what every seam and ground
     // held at the founding, so the books can be balanced at the end.
@@ -6739,42 +6792,10 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     // are worth to a keel. Land lanes are excluded — carts feel no
     // current — and the forward re-walk must equal the search's own
     // cost exactly, or the edge law and the re-walk have diverged.
-    let sname = |id: calliope::ids::SettlementId| {
-        w.peoples
-            .settlements
-            .iter()
-            .find(|s| s.id == id)
-            .map(|s| s.name.clone())
-            .unwrap_or_else(|| "?".into())
-    };
-    let tf = w.trade.f;
-    let spos = |id: calliope::ids::SettlementId| {
-        w.peoples
-            .settlements
-            .iter()
-            .find(|s| s.id == id)
-            .map(|s| (s.y as usize / tf, s.x as usize / tf))
-    };
     // The spec's own metric: the with-current passage is `adv`% faster
     // than its seed-matched against-current mirror — adv = 1 − out/home.
-    let mut splits: Vec<(f64, f64, f64, calliope::ids::SettlementId, calliope::ids::SettlementId)> = Vec::new();
-    let mut rewalk_bad = 0usize;
-    for r in w.routes.iter().filter(|r| r.sea > 0.5) {
-        let (Some(start), Some(goal)) = (spos(r.a), spos(r.b)) else { continue };
-        if let Some((path, fwd)) = calliope::trade::astar(&w.trade, start, goal) {
-            let re_f = calliope::trade::path_cost(&w.trade, &path, false);
-            if (re_f - fwd).abs() > 1e-9 * fwd.max(1.0) {
-                rewalk_bad += 1;
-            }
-            let rev = calliope::trade::path_cost(&w.trade, &path, true);
-            let hi = fwd.max(rev);
-            if hi > 0.0 {
-                let adv = 100.0 * (1.0 - fwd.min(rev) / hi);
-                splits.push((adv, fwd, rev, r.a, r.b));
-            }
-        }
-    }
-    splits.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    let splits = founding_splits;
+    let rewalk_bad = founding_rewalk_bad;
     let dir_alive = splits.iter().filter(|s| s.0 >= 2.0).count();
     let dir_best = splits.first().map(|s| s.0).unwrap_or(0.0);
     let dir_share = if splits.is_empty() { 0.0 } else { 100.0 * dir_alive as f64 / splits.len() as f64 };
@@ -6786,9 +6807,23 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
     for (sp, fwd, rev, a, b) in splits.iter().take(3) {
         println!(
             "  {} — {} · out {:.1} · home {:.1} · with-current {:.1}% faster",
-            sname(*a), sname(*b), fwd.min(*rev), fwd.max(*rev), sp
+            a, b, fwd.min(*rev), fwd.max(*rev), sp
         );
     }
+    let (evolved_splits, evolved_rewalk_bad) = directed_sea(&w);
+    let evolved_best = evolved_splits.first().map(|s| s.0).unwrap_or(0.0);
+    println!(
+        "  evolved-web counterfactual after {}y: {} blue-water lanes · best {:.1}% · {} divergent (not the M46 gate subject)",
+        years, evolved_splits.len(), evolved_best, evolved_rewalk_bad
+    );
+    let sname = |id: calliope::ids::SettlementId| {
+        w.peoples
+            .settlements
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| "?".into())
+    };
     // The field the lanes sail through: coarse current speeds over the
     // open cells, and the becalmed rows. If the splits look thin, this
     // line says whether the ocean or the gain is at fault.
