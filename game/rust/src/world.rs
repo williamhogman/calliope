@@ -93,6 +93,7 @@ pub struct FamineRow {
 
 /// M79 diagnostics: one direct-harbour landfall considered for permanent
 /// felling, with the local empirical evidence the exceptionality rule read.
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone, Copy)]
 pub struct StormFellProbe {
     pub month: i64,
@@ -229,7 +230,10 @@ pub struct World {
     /// harbour wound is added. Permanent felling reads this ledger's
     /// empirical severe-hit return interval; bounded and deterministic.
     pub storm_bites: Vec<(i64, SettlementId, f64)>,
-    /// Diagnostics-only decision ledger for the permanent-felling rule.
+    /// Native diagnostics-only decision ledger for the permanent-felling
+    /// rule. The shipped WASM runs the identical eligibility decision but
+    /// does not retain this write-only instrumentation.
+    #[cfg(not(target_arch = "wasm32"))]
     pub storm_fell_probe: Vec<StormFellProbe>,
     /// M71 — the current year's weather, memoized: `(year, dt °C, dp share)`.
     /// Derived state (a pure function of seed × year), never hashed, never
@@ -1106,6 +1110,7 @@ impl GenBuilder {
             storm_prev: Vec::new(),
             storm_marks: Vec::new(),
             storm_bites: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
             storm_fell_probe: Vec::new(),
             year_weather: std::sync::Mutex::new(None),
             year_site_weather: std::sync::Mutex::new(None),
@@ -3315,6 +3320,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                     (s.id, dmg, age, local, exceed, eligible)
                 });
             let fell_radius = if fell_evidence.map(|e| e.5).unwrap_or(false) { 1.0 } else { 0.0 };
+            #[cfg(not(target_arch = "wasm32"))]
             let ruins_before = self.ruins.len();
             self.disaster_strike(
                 month_abs,
@@ -3327,6 +3333,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                 if lf.trop { "a storm the old men had no name for" } else { "the worst gale in living memory" },
                 evs,
             );
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some((settlement, damage, age, local, exceed, eligible)) = fell_evidence {
                 self.storm_fell_probe.push(StormFellProbe {
                     month: month_abs,

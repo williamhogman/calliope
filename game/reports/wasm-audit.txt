@@ -1,14 +1,14 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · WASM AUDIT                   twiggy top (E6.4)
 ========================================================================
- subject: calliope_bg.wasm 3565213 B · sha256 51f58e3dce368dd5b3c988ca8520bd6f770bc445d4222aa5e629524b57c5683e
- profiling twin (symbolized): 3953893 B — sizes below are from the
+ subject: calliope_bg.wasm 3564981 B · sha256 e7dfa1ce27544815e83daf359e04c7cb82de1c5137050a4f0625cec06ef14f83
+ profiling twin (symbolized): 3953661 B — sizes below are from the
  twin; the release binary is the same code without names.
 
  Shallow Bytes │ Shallow % │ Item
 ───────────────┼───────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
         327835 ┊     8.29% ┊ "function names" subsection
-        135651 ┊     3.43% ┊ calliope::world::GenBuilder::stage_dawn::h3338b61462d074c4
+        135643 ┊     3.43% ┊ calliope::world::GenBuilder::stage_dawn::h3338b61462d074c4
          85453 ┊     2.16% ┊ orbital_render
          62593 ┊     1.58% ┊ <wgpu::backend::wgpu_core::CoreDevice as wgpu::dispatch::DeviceInterface>::create_shader_module::haad146540d3c18a2
          56150 ┊     1.42% ┊ calliope::world::GenBuilder::stage_glacial::hc34ae8c6377c37a5
@@ -34,7 +34,7 @@
          22219 ┊     0.56% ┊ data segment ".rodata.138"
          21825 ┊     0.55% ┊ wasmworld_explain multivalue shim
          21260 ┊     0.54% ┊ <Q as wgpu_hal::dynamic::queue::DynQueue>::submit::h65287ac3a4547bcb
-         20754 ┊     0.52% ┊ <calliope::systems::Storms as calliope::systems::System>::run::h9c7712cfd88095d0
+         20571 ┊     0.52% ┊ <calliope::systems::Storms as calliope::systems::System>::run::h9c7712cfd88095d0
          19938 ┊     0.50% ┊ calliope::world::GenBuilder::stage_erosion::hc6e9593ced3b5d76
          19641 ┊     0.50% ┊ wasmworld_bootstrap multivalue shim
          18868 ┊     0.48% ┊ naga::back::glsl::Writer<W>::write_stmt::hc05d0615484afeb1
@@ -47,8 +47,8 @@
          14929 ┊     0.38% ┊ calliope::world::GenBuilder::stage_climate::he5bc6ce3c21244c2
          14648 ┊     0.37% ┊ calliope::world::GenBuilder::stage_terrain::h7b0f84cc727f8075
          14454 ┊     0.37% ┊ naga::front::wgsl::parse::Parser::statement::h08dfb8e2b45a831a
-       2356389 ┊    59.60% ┊ ... and 4402 more.
-       3953893 ┊   100.00% ┊ Σ [4442 Total Rows]
+       2356348 ┊    59.60% ┊ ... and 4402 more.
+       3953661 ┊   100.00% ┊ Σ [4442 Total Rows]
 
 ---- checks ----------------------------------------------------------
 [PASS] twin speaks for the shipped binary          Δ 1.7%   (E6.6: |twin − names − release| ≤3% sweet · ≤6% hard of release — beyond that the audit reads a different build)
