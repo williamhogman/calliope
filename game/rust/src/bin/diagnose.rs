@@ -11534,6 +11534,23 @@ fn cmd_gate(size: usize, years: usize, seed: i64, reports: Option<String>) {
             if missing.is_empty() { format!("{} lanes", lanes.len()) } else { format!("missing {}", missing.join(" ")) },
             "M65: a gate over a partial suite proves nothing — run report.sh",
         );
+        // M76 follow-on: a lane present but silent is not a clean lane.
+        // A report truncated mid-write (crash, killed process, a snapshot
+        // racing the write) composes as 0/0/0 and would slip past both
+        // the presence row above and the 0-FAIL row below — the era would
+        // seal over evidence nobody produced. A lane on the table must
+        // carry at least one check row, or it holds the era open.
+        let silent: Vec<&str> = lanes
+            .iter()
+            .filter(|t| t.pass + t.warn + t.fail == 0)
+            .map(|t| t.name.as_str())
+            .collect();
+        c.must(
+            "every composed lane actually speaks",
+            silent.is_empty(),
+            if silent.is_empty() { format!("{} lanes with rows", lanes.len()) } else { format!("silent: {}", silent.join(" ")) },
+            "M76: a lane that emitted no check rows proves nothing — a truncated or crashed report may not compose as clean",
+        );
         c.want(
             "composed reports are fresh",
             oldest <= 6.0,
