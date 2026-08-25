@@ -343,6 +343,29 @@ fn hash_state(w: &World) -> u64 {
         }
         s.push_str(&format!("A{:016x}\n", calliope::util::fnv1a64(&sb)));
     }
+    // M73 — the year's sky is derived, never stored (ADR-0003), so the
+    // identity line carries a probe of it instead of a grid: the lattice
+    // read at a fixed, world-independent set of cells and years. Same
+    // seed ⇒ same variability source ⇒ same probe; a lattice whose
+    // constants or keying drift shows up here as a replay break, which
+    // is exactly what the stored fields already guarantee for the rest.
+    {
+        let (rows, cols) = w.fields.tmean.dim();
+        let mut vb: Vec<u8> = Vec::with_capacity(3 * 9 * 2 * 8);
+        for year in [1i64, 37, 211] {
+            for iy in 0..3usize {
+                for ix in 0..3usize {
+                    let y = (rows - 1) * iy / 2;
+                    let x = (cols - 1) * ix / 2;
+                    for lane in [0.0, calliope::climate::ANOM_RAIN_LANE] {
+                        let v = calliope::climate::anomaly_draw(&w.variability, x, y, year, lane);
+                        vb.extend_from_slice(&v.to_bits().to_le_bytes());
+                    }
+                }
+            }
+        }
+        s.push_str(&format!("W{:016x}\n", calliope::util::fnv1a64(&vb)));
+    }
     s.push_str(&format!("t{}\n", w.month));
     bytes.extend_from_slice(s.as_bytes());
     fnv(&bytes)
