@@ -1304,6 +1304,17 @@ impl World {
         climate::year_anomaly(&self.variability, rows, cols, year, self.year_osc(year))
     }
 
+    /// M75 — the same year with the seesaw held at zero: the unforced
+    /// latitude law alone, which is the quantity M71's amplitude law
+    /// declares. The forced field (`year_anomaly_fresh`) is what the sim
+    /// runs on; this is its counterfactual twin, used by diagnostics to
+    /// separate the noise law from the tilt laid over it.
+    pub fn year_anomaly_unforced(&self, year: i64) -> (Array2<f64>, Array2<f64>) {
+        let (rows, cols) = self.fields.tmean.dim();
+        climate::year_anomaly(&self.variability, rows, cols, year, 0.0)
+    }
+
+
     /// M71 — hand the caller the year's anomaly grids, computing them once
     /// per year and holding them until the year turns. `dt` is degrees on
     /// `tmean`, `dp` the fractional change on `precip`.
