@@ -84,6 +84,71 @@ pub const STORM_END: f64 = 0.15;
 /// warmest in the genesis draw. The *phase* is read from the world.
 pub const STORM_SEASON_CONTRAST: f64 = 0.75;
 
+// ------------------------------------------------- M78 · warm-sea fury
+//
+// The mid-latitude cyclone of M77 lives on a *gradient*: it exists to
+// move an imbalance, and it is born where the sea's temperature changes
+// fastest. The tropical cyclone is the other engine entirely. There is
+// no gradient to speak of over a tropical sea; what there is, is heat —
+// a deep warm mixed layer handing latent heat upward faster than the
+// storm can shed it. So the genesis rule below reads *temperature*, not
+// its derivative, and the only other thing it asks for is spin: within a
+// few degrees of the equator the Coriolis parameter vanishes and a warm
+// sea cannot organise a vortex however much heat it holds.
+//
+// Nothing here names a poleward limit. The gate demands that no tropical
+// storm is born beyond 30°, and that is a claim about *this world's*
+// 26 °C isotherm, which the climate stack of Era I put where it is — if
+// the warm seas reached the forties the row would fail and say so.
+
+/// The classical cyclogenesis threshold: below roughly this sea-surface
+/// temperature the surface flux cannot outrun the storm's own losses.
+/// Read in the hemisphere's warm month, on the same damped mixed-layer
+/// cycle `seaice` uses, so a sea this module calls warm is the sea the
+/// rest of the world calls warm.
+pub const TROP_SST_MIN: f64 = 26.0;
+/// Fuel saturates this many degrees above the threshold.
+pub const TROP_SST_SPAN: f64 = 3.5;
+/// Below this latitude the Coriolis parameter is too small to spin a
+/// vortex up, whatever the sea's heat — the equatorial dead band.
+pub const TROP_LAT_MIN: f64 = 5.0;
+/// …and spin saturates this many degrees poleward of that band.
+pub const TROP_LAT_SPAN: f64 = 5.0;
+/// Tropical storms drawn per hemisphere per year, per thousand
+/// qualifying warm ocean cells.
+pub const TROP_PER_1000_CELLS: f64 = 0.30;
+/// Hard stop on a hemisphere-year's draw.
+pub const TROP_MAX_PER_SEASON: usize = 30;
+/// Steering speed, degrees of longitude per day at unit wind stress.
+/// The trades carry a young storm west; past 30° the westerlies take it
+/// back east — the recurvature is the wind field's, not a rule here.
+pub const TROP_STEER_DEG: f64 = 6.0;
+/// Poleward drift, degrees of latitude per day (beta drift plus the
+/// steering flow's own poleward lean).
+pub const TROP_POLEWARD_DEG: f64 = 0.42;
+/// Per-step intensification over a fuelled sea, as a share of the
+/// intensity still unclaimed.
+pub const TROP_SEA_GROW: f64 = 0.11;
+/// Per-step intensity retained over a sea too cool to feed it — the
+/// storm crossing into the mid-latitudes starves before it fills.
+pub const TROP_COOL_KEEP: f64 = 0.93;
+/// Per-step intensity retained over land: cut off from the ocean, a
+/// tropical cyclone dies far faster than a frontal one.
+pub const TROP_LAND_KEEP: f64 = 0.62;
+/// Below this the storm has filled and the track ends.
+pub const TROP_END: f64 = 0.20;
+/// A landfall weaker than this is a wet week, not a disaster the
+/// chronicle remembers.
+pub const TROP_TELL_MIN: f64 = 0.55;
+/// How far from the landfall point a town may stand and still be the
+/// storm's named victim, in cells.
+pub const TROP_TELL_REACH: f64 = 7.0;
+/// Seasonal contrast for the tropical draw, peaked on the belt's
+/// *warmest* month — the phase, again, is read from the world.
+pub const TROP_SEASON_CONTRAST: f64 = 0.65;
+
+
+
 /// One dated point on a cyclone's path.
 #[derive(Clone, Copy, Debug)]
 pub struct StormPoint {
