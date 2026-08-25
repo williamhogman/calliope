@@ -10286,7 +10286,42 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
                 }
             }
         }
+        // TEMP-DIAG (M78 investigation)
+        {
+            let mut short = 0usize;
+            let mut long_west = 0usize;
+            let mut long_n = 0usize;
+            let mut short_west = 0usize;
+            let mut maxpole: Vec<f64> = Vec::new();
+            let mut net_west = 0usize;
+            for t in &tracks {
+                let p0 = t.points[0];
+                let last = *t.points.last().unwrap();
+                if last.x < p0.x { net_west += 1; }
+                let mp = t.points.iter().map(|p| calliope::storms::lat_of(p.y, rows).abs()).fold(0.0f64, f64::max);
+                maxpole.push(mp);
+                if t.days() < 5.0 {
+                    short += 1;
+                    if last.x < p0.x { short_west += 1; }
+                } else {
+                    long_n += 1;
+                    if let Some(p) = t.points.iter().find(|p| p.day >= 5.0) {
+                        if p.x < p0.x { long_west += 1; }
+                    }
+                }
+            }
+            maxpole.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let q = |f: f64| maxpole[((maxpole.len() as f64 - 1.0) * f) as usize];
+            println!(
+                "   TEMP-DIAG {}: n={} short(<5d)={} short_west={} long={} long_west={} ({:.1}%) net_west_all={} ({:.1}%) maxpole p50={:.1} p90={:.1} max={:.1}",
+                seed, tracks.len(), short, short_west, long_n, long_west,
+                if long_n > 0 { long_west as f64 * 100.0 / long_n as f64 } else { 0.0 },
+                net_west, net_west as f64 * 100.0 / n,
+                q(0.5), q(0.9), maxpole[maxpole.len() - 1],
+            );
+        }
         let recurve = if reached > 0 {
+
             recurved as f64 / reached as f64
         } else {
             0.0
@@ -10357,7 +10392,24 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
             let d = (pn - ps).abs() % 12;
             d.min(12 - d)
         };
+        // TEMP-DIAG (M78 season investigation)
+        {
+            let circ = |a: &[usize; 12]| -> f64 {
+                let (mut sx, mut sy) = (0.0f64, 0.0f64);
+                for (m, &k) in a.iter().enumerate() {
+                    let th = (m as f64) * std::f64::consts::TAU / 12.0;
+                    sx += (k as f64) * th.cos();
+                    sy += (k as f64) * th.sin();
+                }
+                let mut r = sy.atan2(sx) / std::f64::consts::TAU * 12.0;
+                if r < 0.0 { r += 12.0; }
+                r
+            };
+            println!("   TEMP-DIAG season {}: N {:?} (circ {:.2}, warm {}) · S {:?} (circ {:.2}, warm {})",
+                seed, monn, circ(&monn), clim.warm_month(1), mons, circ(&mons), clim.warm_month(-1));
+        }
         c.must(
+
             &format!("the seasons stand half a year apart · {}", seed),
             sep >= 5,
             format!("peak N month {} · S month {} · {} apart", pn, ps, sep),
