@@ -10411,10 +10411,20 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
         };
         let (pn, ps) = (circ_mean(&monn), circ_mean(&mons));
         let sep = circ_dist(pn, ps);
+        // A centre of mass at 11.96 must not print as "month 12.0" — the
+        // year wraps, so round first and then bring it back onto 0-11.
+        let show = |m: f64| -> f64 {
+            let r = (m * 10.0).round() / 10.0;
+            if r >= 12.0 {
+                r - 12.0
+            } else {
+                r
+            }
+        };
         c.must(
             &format!("the seasons stand half a year apart · {}", seed),
             sep >= 5.0,
-            format!("season centre N month {:.1} · S month {:.1} · {:.2} apart", pn, ps, sep),
+            format!("season centre N month {:.1} · S month {:.1} · {:.2} apart", show(pn), show(ps), sep),
             "M78 gate: each hemisphere's cyclones fall in its own warm season, so the two peaks must sit close to six months apart — as the world's seasons do",
         );
         c.must(
@@ -10423,13 +10433,14 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
                 && circ_dist(ps, clim.cold_month(-1) as f64) >= 3.0,
             format!(
                 "N warm-sea {:.1} vs frontal {} · S warm-sea {:.1} vs frontal {}",
-                pn,
+                show(pn),
                 clim.cold_month(1),
-                ps,
+                show(ps),
                 clim.cold_month(-1)
             ),
             "M78 gate: the frontal corridor of M77 peaks in the cold season and the warm-sea engine in the hot one — two engines running on opposite terms cannot share a peak month",
         );
+
 
         c.must(
             &format!("nothing poisons the tracks · {}", seed),
