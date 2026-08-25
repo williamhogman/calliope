@@ -1,0 +1,43 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · SYSTEM LATTICE               seed 12345 · 512² · 150y
+========================================================================
+ 150y ticked in 7573 ms · 103 towns · 8719 events
+
+ system            cadence  calls   total ms   share   writes     serial
+ towns             monthly   1800     2561.2   33.8%   P·R        yes
+ famine            monthly   1800        3.7    0.0%   P·R        yes
+ quakes            monthly   1800        1.1    0.0%   Q·P·C      yes
+ volcanoes         monthly   1800        1.1    0.0%   V·P·G·C    yes
+ storms            monthly   1800      427.4    5.6%   P·C        yes
+ colonize          monthly   1800     2308.5   30.5%   P·R        yes
+ prospect          monthly   1800      291.1    3.8%   D·R        yes
+ rush-camps        monthly   1800      126.0    1.7%   P·D·R      yes
+ goods              1/12mo    150        6.5    0.1%   P          yes
+ exonyms           1/120mo     15        0.6    0.0%   N·R        yes
+ society           monthly   1800       76.2    1.0%   P·R        yes
+ census            monthly   1800        5.2    0.1%   –          -
+ market-areas      monthly   1800        5.2    0.1%   E          -
+ crafts            monthly   1800       47.7    0.6%   P·R        yes
+ economy           monthly   1800      102.4    1.4%   E·P·R      yes
+ merchants         monthly   1800       22.3    0.3%   E·P·C·R    yes
+ statecraft        monthly   1800      305.7    4.0%   P·C·G·R    yes
+ kindred            1/12mo    150        2.4    0.0%   P·N·R      yes
+ union              1/12mo    150        0.6    0.0%   P·R        yes
+ civ                1/12mo    150        1.9    0.0%   P·C·R      yes
+ patina            monthly   1800        8.4    0.1%   P·C·N·R    yes
+ territory         monthly   1800     1246.2   16.5%   G          -
+ chronicle         monthly   1800        5.2    0.1%   C·P·R      yes
+ relics            monthly   1800        1.4    0.0%   C·R        yes
+ second-reading    monthly   1800        7.3    0.1%   C          -
+ veil              monthly   1800        0.8    0.0%   C          -
+ heat              monthly   1800        0.2    0.0%   –          -
+ driver                                  6.1    0.1%   (dispatch + clock)
+
+ serial fraction (writes Peoples or draws rng): 83.3% of in-system time
+ ⇒ ECS parallel-scheduling ceiling (Amdahl): 1.201× — before scheduler cost
+
+---- checks ----------------------------------------------------------
+[PASS] access table covers the lattice               27/27   (E11.7: the analysis names every system)
+[PASS] driver overhead is noise                      0.08%   (the hand-rolled lattice costs <5% dispatch)
+[PASS] ECS parallel ceiling stays low               1.201×   (ADR-0022: re-open the bevy_ecs question if this rises)
+CHECKS: 3 pass · 0 warn · 0 fail
