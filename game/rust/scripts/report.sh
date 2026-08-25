@@ -57,7 +57,25 @@ fi
 run() { # run <outfile> <diagnose args...>
   local f="$OUT/$1"; shift
   echo "-- diagnose $* -> $(basename "$f")"
-  "$BIN" "$@" > "$f"
+  local rc=0
+  "$BIN" "$@" > "$f" 2> "$OUT/.lane-err" || rc=$?
+  # M77 — a lane that died, or that stopped printing partway, must say so
+  # in its own report. The suite once carried a teleconnection.txt that
+  # ended mid-table with exit 0; only the era gate's must-speak row caught
+  # it. A truncated report is now a FAIL row with the exit status on it,
+  # so the evidence of the kill lands in the artifact instead of in a
+  # silence that a later reader has to notice.
+  if [ "$rc" -ne 0 ] || ! tail -n 1 "$f" | grep -q '^CHECKS:'; then
+    {
+      echo
+      echo "---- checks ----------------------------------------------------------"
+      printf '[FAIL] %-36s %14s   (%s)\n' "the lane ran to completion" "exit $rc" \
+        "M77: the report does not end in a CHECKS line — the lane was cut off, so nothing below its last printed row was measured"
+      sed 's/^/ stderr: /' "$OUT/.lane-err" | head -8
+      echo "CHECKS: 0 pass · 0 warn · 1 fail"
+    } >> "$f"
+  fi
+  rm -f "$OUT/.lane-err"
 }
 
 for s in "${SEEDS[@]}"; do
