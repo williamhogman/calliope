@@ -84,6 +84,71 @@ pub const STORM_END: f64 = 0.15;
 /// warmest in the genesis draw. The *phase* is read from the world.
 pub const STORM_SEASON_CONTRAST: f64 = 0.75;
 
+// ------------------------------------------------- M78 · warm-sea fury
+//
+// The mid-latitude cyclone of M77 lives on a *gradient*: it exists to
+// move an imbalance, and it is born where the sea's temperature changes
+// fastest. The tropical cyclone is the other engine entirely. There is
+// no gradient to speak of over a tropical sea; what there is, is heat —
+// a deep warm mixed layer handing latent heat upward faster than the
+// storm can shed it. So the genesis rule below reads *temperature*, not
+// its derivative, and the only other thing it asks for is spin: within a
+// few degrees of the equator the Coriolis parameter vanishes and a warm
+// sea cannot organise a vortex however much heat it holds.
+//
+// Nothing here names a poleward limit. The gate demands that no tropical
+// storm is born beyond 30°, and that is a claim about *this world's*
+// 26 °C isotherm, which the climate stack of Era I put where it is — if
+// the warm seas reached the forties the row would fail and say so.
+
+/// The classical cyclogenesis threshold: below roughly this sea-surface
+/// temperature the surface flux cannot outrun the storm's own losses.
+/// Read in the hemisphere's warm month, on the same damped mixed-layer
+/// cycle `seaice` uses, so a sea this module calls warm is the sea the
+/// rest of the world calls warm.
+pub const TROP_SST_MIN: f64 = 26.0;
+/// Fuel saturates this many degrees above the threshold.
+pub const TROP_SST_SPAN: f64 = 3.5;
+/// Below this latitude the Coriolis parameter is too small to spin a
+/// vortex up, whatever the sea's heat — the equatorial dead band.
+pub const TROP_LAT_MIN: f64 = 5.0;
+/// …and spin saturates this many degrees poleward of that band.
+pub const TROP_LAT_SPAN: f64 = 5.0;
+/// Tropical storms drawn per hemisphere per year, per thousand
+/// qualifying warm ocean cells.
+pub const TROP_PER_1000_CELLS: f64 = 0.30;
+/// Hard stop on a hemisphere-year's draw.
+pub const TROP_MAX_PER_SEASON: usize = 30;
+/// Steering speed, degrees of longitude per day at unit wind stress.
+/// The trades carry a young storm west; past 30° the westerlies take it
+/// back east — the recurvature is the wind field's, not a rule here.
+pub const TROP_STEER_DEG: f64 = 6.0;
+/// Poleward drift, degrees of latitude per day (beta drift plus the
+/// steering flow's own poleward lean).
+pub const TROP_POLEWARD_DEG: f64 = 0.42;
+/// Per-step intensification over a fuelled sea, as a share of the
+/// intensity still unclaimed.
+pub const TROP_SEA_GROW: f64 = 0.11;
+/// Per-step intensity retained over a sea too cool to feed it — the
+/// storm crossing into the mid-latitudes starves before it fills.
+pub const TROP_COOL_KEEP: f64 = 0.93;
+/// Per-step intensity retained over land: cut off from the ocean, a
+/// tropical cyclone dies far faster than a frontal one.
+pub const TROP_LAND_KEEP: f64 = 0.62;
+/// Below this the storm has filled and the track ends.
+pub const TROP_END: f64 = 0.20;
+/// A landfall weaker than this is a wet week, not a disaster the
+/// chronicle remembers.
+pub const TROP_TELL_MIN: f64 = 0.55;
+/// How far from the landfall point a town may stand and still be the
+/// storm's named victim, in cells.
+pub const TROP_TELL_REACH: f64 = 7.0;
+/// Seasonal contrast for the tropical draw, peaked on the belt's
+/// *warmest* month — the phase, again, is read from the world.
+pub const TROP_SEASON_CONTRAST: f64 = 0.65;
+
+
+
 /// One dated point on a cyclone's path.
 #[derive(Clone, Copy, Debug)]
 pub struct StormPoint {
@@ -118,7 +183,11 @@ pub struct StormTrack {
     pub peak: f64,
     /// Did the centre ever cross onto land?
     pub landfall: bool,
+    /// M78 — the first land cell the centre crossed, and the day and
+    /// intensity it crossed at: the coast the storm actually struck.
+    pub first_land: Option<(usize, usize, f64, f64)>,
 }
+
 
 impl StormTrack {
     /// Track length in days.
@@ -171,7 +240,19 @@ pub struct StormClimatology {
     /// too cold to fuel a storm in the season — the ice-edge front,
     /// counted so the lane can show what the fuel term removed.
     iced_out: (usize, usize),
+    /// M78 — the warm-month sea-surface temperature, °C, zero on land.
+    tsst: Array2<f64>,
+    /// M78 — tropical genesis weight = warm-sea fuel × spin, 0 on land,
+    /// 0 over any sea below `TROP_SST_MIN`, 0 in the equatorial dead band.
+    tweight: Array2<f64>,
+    /// M78 — the warmest month of the year in each hemisphere's tropical
+    /// sea, read from the realized annual cycle (north, south).
+    warm_month: (i64, i64),
+    /// M78 — warm sea cells the spin term struck out as too near the
+    /// equator to organise (north, south): heat without rotation.
+    spinless: (usize, usize),
 }
+
 
 impl StormClimatology {
     /// Solve the genesis field from the world's finished climate.
@@ -320,6 +401,86 @@ impl StormClimatology {
         }
         let peak = (pctl(&mut wn), pctl(&mut ws));
 
+        // ---- M78: the other engine. Where the frontal storm needed a
+        // gradient, the tropical cyclone needs heat and spin. The warm
+        // month is read the same way the cold one was — from the belt's
+        // own realized cycle, over tropical water, so the two seasons
+        // fall opposite because the world's seasons do.
+        let mut wamp = (0.0f64, 0.0f64);
+        let mut wn_c = (0usize, 0usize);
+        for y in 0..rows {
+            let lat = lat_of(y as f64, rows);
+            if lat.abs() > 35.0 {
+                continue;
+            }
+            for x in 0..cols {
+                if height[[y, x]] >= 0.0 {
+                    continue;
+                }
+                if lat >= 0.0 {
+                    wamp.0 += tamp[[y, x]] as f64;
+                    wn_c.0 += 1;
+                } else {
+                    wamp.1 += tamp[[y, x]] as f64;
+                    wn_c.1 += 1;
+                }
+            }
+        }
+        let mean_wamp = (
+            if wn_c.0 > 0 { wamp.0 / wn_c.0 as f64 } else { 0.0 },
+            if wn_c.1 > 0 { wamp.1 / wn_c.1 as f64 } else { 0.0 },
+        );
+        let warmest = |a: f64| -> i64 {
+            let mut best = 0i64;
+            let mut bestv = f64::NEG_INFINITY;
+            for m in 0..12i64 {
+                let t = crate::climate::month_temperature(0.0, a, m);
+                if t > bestv {
+                    bestv = t;
+                    best = m;
+                }
+            }
+            best
+        };
+        let warm_month = (warmest(mean_wamp.0), warmest(mean_wamp.1));
+
+        let mut tsst = Array2::<f64>::zeros((rows, cols));
+        let mut tweight = Array2::<f64>::zeros((rows, cols));
+        let mut spinless = (0usize, 0usize);
+        for y in 0..rows {
+            let lat = lat_of(y as f64, rows);
+            let north = lat >= 0.0;
+            let wm = if north { warm_month.0 } else { warm_month.1 };
+            for x in 0..cols {
+                if height[[y, x]] >= 0.0 {
+                    continue;
+                }
+                let sst = crate::climate::month_temperature(
+                    tmean[[y, x]] as f64,
+                    tamp[[y, x]] as f64 * crate::seaice::SST_DAMP,
+                    wm,
+                );
+                tsst[[y, x]] = sst;
+                if sst < TROP_SST_MIN {
+                    continue;
+                }
+                // Heat is necessary; rotation is what turns it into a
+                // storm. Near the equator f → 0 and the warmest sea on
+                // the map cannot close a vortex.
+                let spin = ((lat.abs() - TROP_LAT_MIN) / TROP_LAT_SPAN).clamp(0.0, 1.0);
+                if spin <= 0.0 {
+                    if north {
+                        spinless.0 += 1;
+                    } else {
+                        spinless.1 += 1;
+                    }
+                    continue;
+                }
+                let heat = ((sst - TROP_SST_MIN) / TROP_SST_SPAN).clamp(0.0, 1.0);
+                tweight[[y, x]] = heat * spin;
+            }
+        }
+
         Self {
             rows,
             cols,
@@ -329,8 +490,13 @@ impl StormClimatology {
             peak,
             cold_month,
             iced_out,
+            tsst,
+            tweight,
+            warm_month,
+            spinless,
         }
     }
+
 
     /// The gradient at a cell, °C per degree of latitude.
     pub fn gradient_at(&self, y: usize, x: usize) -> f64 {
@@ -472,6 +638,7 @@ impl StormClimatology {
         let mut day = 0.0f64;
         let mut peak = inten;
         let mut landfall = false;
+        let mut first_land: Option<(usize, usize, f64, f64)> = None;
         let mut points = Vec::with_capacity(STORM_MAX_STEPS + 1);
         let mut over_land = height[[genesis.0, genesis.1]] >= 0.0;
         points.push(StormPoint { x, y, day, inten, over_land });
@@ -497,6 +664,9 @@ impl StormClimatology {
             let cx = x.round() as usize;
             over_land = height[[cy.min(rows - 1), cx.min(cols - 1)]] >= 0.0;
             if over_land {
+                if !landfall {
+                    first_land = Some((cy.min(rows - 1), cx.min(cols - 1), day, inten));
+                }
                 landfall = true;
                 inten *= STORM_LAND_KEEP;
             } else {
@@ -520,8 +690,224 @@ impl StormClimatology {
             points,
             peak,
             landfall,
+            first_land,
         }
     }
+
+    // ---------------------------------------------- M78 · the warm seas
+
+    /// The warm-month sea-surface temperature at a cell, °C (0 on land).
+    pub fn sst_at(&self, y: usize, x: usize) -> f64 {
+        self.tsst[[y, x]]
+    }
+
+    /// The month the hemisphere's tropical sea is warmest — the season a
+    /// warm-sea cyclone belongs to.
+    pub fn warm_month(&self, hemi: i8) -> i64 {
+        if hemi >= 0 { self.warm_month.0 } else { self.warm_month.1 }
+    }
+
+    /// Warm sea cells the spin term struck out as too near the equator
+    /// (north, south): heat that never became a storm.
+    pub fn spinless(&self, hemi: i8) -> usize {
+        if hemi >= 0 { self.spinless.0 } else { self.spinless.1 }
+    }
+
+    /// The cells eligible to breed a tropical cyclone in this hemisphere,
+    /// with the genesis weight of each. Row-major.
+    pub fn trop_sites(&self, hemi: i8) -> Vec<((usize, usize), f64)> {
+        let mut out = Vec::new();
+        for y in 0..self.rows {
+            let north = lat_of(y as f64, self.rows) >= 0.0;
+            if north != (hemi >= 0) {
+                continue;
+            }
+            for x in 0..self.cols {
+                let w = self.tweight[[y, x]];
+                if w > 0.0 {
+                    out.push(((y, x), w));
+                }
+            }
+        }
+        out
+    }
+
+    /// How many tropical cyclones this hemisphere breeds in a year — a
+    /// property of the size of its warm sea.
+    pub fn trop_season_count(&self, hemi: i8) -> usize {
+        let n = self.trop_sites(hemi).len() as f64;
+        ((n / 1000.0) * TROP_PER_1000_CELLS)
+            .round()
+            .max(0.0)
+            .min(TROP_MAX_PER_SEASON as f64) as usize
+    }
+
+    /// Draw and walk one hemisphere's warm-sea cyclones for one year.
+    /// Pure in `(seed, year, hemi)` and the frozen fields above; its own
+    /// key domain, so a tropical season never consumes the frontal
+    /// corridor's draws.
+    pub fn trop_season(
+        &self,
+        seed: i64,
+        year: i64,
+        hemi: i8,
+        height: &Array2<f32>,
+    ) -> Vec<StormTrack> {
+        let sites = self.trop_sites(hemi);
+        let count = self.trop_season_count(hemi);
+        if sites.is_empty() || count == 0 {
+            return Vec::new();
+        }
+        let mut cum: Vec<f64> = Vec::with_capacity(sites.len());
+        let mut total = 0.0;
+        for &(_, g) in &sites {
+            total += g;
+            cum.push(total);
+        }
+        let warm = self.warm_month(hemi);
+        let mut mw = [0.0f64; 12];
+        let mut mtot = 0.0;
+        for m in 0..12usize {
+            let off = ((m as i64 - warm) as f64) * std::f64::consts::TAU / 12.0;
+            let w = 1.0 + TROP_SEASON_CONTRAST * off.cos();
+            mw[m] = w;
+            mtot += w;
+        }
+
+        let key = (seed as u64)
+            ^ (year as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ if hemi >= 0 { 0x7A0D_11C5u64 } else { 0x7A0D_50D7u64 };
+        let mut rng = Pcg64Mcg::seed_from_u64(key ^ 0x7C1F_0FE4_1A11_5EA5u64);
+        let mut out = Vec::with_capacity(count);
+        for _ in 0..count {
+            let u = rng.gen_range(0.0..total);
+            let i = cum.partition_point(|&c| c < u).min(sites.len() - 1);
+            let ((gy, gx), g) = sites[i];
+            let um = rng.gen_range(0.0..mtot);
+            let mut acc = 0.0;
+            let mut month = 11i64;
+            for m in 0..12usize {
+                acc += mw[m];
+                if um < acc {
+                    month = m as i64;
+                    break;
+                }
+            }
+            let vigour = 0.5 + 0.5 * rng.gen_range(0.0..1.0f64);
+            out.push(self.trop_walk(year, hemi, month, (gy, gx), g, vigour, height));
+        }
+        out
+    }
+
+    /// Advect one warm-sea cyclone: carried west by the trades, climbing
+    /// poleward as it goes, and — if it lives long enough to leave the
+    /// tropics — turned back east by the westerlies it runs into. The
+    /// recurvature is the wind field's; nothing here bends the path.
+    fn trop_walk(
+        &self,
+        year: i64,
+        hemi: i8,
+        month: i64,
+        genesis: (usize, usize),
+        weight: f64,
+        vigour: f64,
+        height: &Array2<f32>,
+    ) -> StormTrack {
+        let rows = self.rows;
+        let cols = self.cols;
+        let dlat = 180.0 / (rows as f64 - 1.0);
+        let dlon = 360.0 / cols as f64;
+        let mut inten = weight.min(1.0) * vigour;
+        let mut x = genesis.1 as f64;
+        let mut y = genesis.0 as f64;
+        let mut day = 0.0f64;
+        let mut peak = inten;
+        let mut landfall = false;
+        let mut first_land: Option<(usize, usize, f64, f64)> = None;
+        let mut points = Vec::with_capacity(STORM_MAX_STEPS + 1);
+        let mut over_land = height[[genesis.0, genesis.1]] >= 0.0;
+        points.push(StormPoint { x, y, day, inten, over_land });
+
+        for _ in 0..STORM_MAX_STEPS {
+            let lat = lat_of(y, rows);
+            let tau = crate::currents::wind_stress(lat.abs());
+            let dx = TROP_STEER_DEG * tau * STORM_STEP_DAYS / dlon;
+            let pole_sign = if lat >= 0.0 { 1.0 } else { -1.0 };
+            let dy = pole_sign * TROP_POLEWARD_DEG * STORM_STEP_DAYS / dlat;
+            x += dx;
+            y += dy;
+            day += STORM_STEP_DAYS;
+            if x < 0.0 || x > (cols - 1) as f64 || y < 0.0 || y > (rows - 1) as f64 {
+                break;
+            }
+            let cy = (y.round() as usize).min(rows - 1);
+            let cx = (x.round() as usize).min(cols - 1);
+            over_land = height[[cy, cx]] >= 0.0;
+            if over_land {
+                if !landfall {
+                    first_land = Some((cy, cx, day, inten));
+                }
+                landfall = true;
+                inten *= TROP_LAND_KEEP;
+            } else if self.tsst[[cy, cx]] >= TROP_SST_MIN {
+                // still over its fuel: the warm sea keeps feeding it
+                let heat =
+                    ((self.tsst[[cy, cx]] - TROP_SST_MIN) / TROP_SST_SPAN).clamp(0.0, 1.0);
+                inten += TROP_SEA_GROW * heat * (1.0 - inten).max(0.0);
+            } else {
+                // out over cool water: the engine starves
+                inten *= TROP_COOL_KEEP;
+            }
+            if inten > peak {
+                peak = inten;
+            }
+            points.push(StormPoint { x, y, day, inten, over_land });
+            if inten < TROP_END {
+                break;
+            }
+        }
+
+        StormTrack {
+            year,
+            hemi,
+            month,
+            genesis,
+            genesis_lat: lat_of(genesis.0 as f64, rows),
+            points,
+            peak,
+            landfall,
+            first_land,
+        }
+    }
+
+    /// The warm-sea law's replay probe: the seasons, the site counts and
+    /// the tracks of two spaced years, hashed.
+    pub fn trop_probe(&self, seed: i64, height: &Array2<f32>) -> u64 {
+        let mut b: Vec<u8> = Vec::new();
+        for v in [self.warm_month.0, self.warm_month.1] {
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        for h in [1i8, -1i8] {
+            b.extend_from_slice(&(self.trop_sites(h).len() as u64).to_le_bytes());
+            for year in [1i64, 97] {
+                for t in self.trop_season(seed, year, h, height) {
+                    b.extend_from_slice(&t.month.to_le_bytes());
+                    b.extend_from_slice(&(t.genesis.0 as u32).to_le_bytes());
+                    b.extend_from_slice(&(t.genesis.1 as u32).to_le_bytes());
+                    b.extend_from_slice(&t.peak.to_bits().to_le_bytes());
+                    b.extend_from_slice(&(t.points.len() as u32).to_le_bytes());
+                    if let Some((ly, lx, d, i)) = t.first_land {
+                        b.extend_from_slice(&(ly as u32).to_le_bytes());
+                        b.extend_from_slice(&(lx as u32).to_le_bytes());
+                        b.extend_from_slice(&d.to_bits().to_le_bytes());
+                        b.extend_from_slice(&i.to_bits().to_le_bytes());
+                    }
+                }
+            }
+        }
+        crate::util::fnv1a64(&b)
+    }
+
 
     /// A fixed read of the storm law for the replay identity line: the
     /// hemispheric peaks, the seasons, the site counts, and the full
