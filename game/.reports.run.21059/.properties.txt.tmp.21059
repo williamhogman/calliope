@@ -5,3 +5,21 @@ seam-invariant properties (M8.1) and metamorphic checks (M8.2)
 
 seed  12345: 5023 river cells · 0 uphill · 0 cycles · 0 dry terminals
 seed  12345: 19 towns · 30 routes · 0 isolated · 1 components
+seed  12345: rain ×1.25 ⇒ river cells 5023 → 5911 · discharge 2082309 → 2732049
+seed  12345: hypsometry mean 932 m · below 1 km 58.9%
+seed  12345: streams (A_c 80 km²) N_k [8222, 1589, 351, 70, 11] · Rb 5.13
+seed  12345: wet-land Dd 0.0193 km/km² · head A₅₀ 720 km² · Hack ratio 0.37
+seed  12345: silt ladder ≥1/5/10 m: 36.8/4.6/2.20% of land · plain 449 bodies · 94.1% river-borne
+seed  12345: coast frontage 6245 cells · storied 47.7% · [raised beach 2205 · fjord 97 · tidal flat 65 · estuary 51 · delta plain 453 · spit 91 · barrier island 5 · lagoon 10] · shore 3268
+
+seed    777: 5033 river cells · 0 uphill · 0 cycles · 0 dry terminals
+seed    777: 18 towns · 23 routes · 0 isolated · 1 components
+seed    777: rain ×1.25 ⇒ river cells 5033 → 6129 · discharge 2130723 → 2749149
+seed    777: hypsometry mean 1014 m · below 1 km 50.2%
+seed    777: streams (A_c 80 km²) N_k [8603, 1691, 389, 94, 19, 1] · Rb 5.58
+seed    777: wet-land Dd 0.0194 km/km² · head A₅₀ 720 km² · Hack ratio 0.37
+seed    777: silt ladder ≥1/5/10 m: 37.4/4.5/2.16% of land · plain 423 bodies · 92.9% river-borne
+seed    777: coast frontage 6570 cells · storied 52.5% · [raised beach 2791 · fjord 53 · tidal flat 37 · estuary 21 · delta plain 454 · spit 89 · barrier island 5 · lagoon 2] · shore 3118
+
+seed  90210: 5155 river cells · 0 uphill · 0 cycles · 0 dry terminals
+seed  90210: 19 towns · 27 routes · 0 isolated · 1 components
