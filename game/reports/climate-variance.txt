@@ -1,0 +1,103 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · CLIMATE-VARIANCE             512x512 · 5 seeds · 60 y
+========================================================================
+interannual σ per latitude belt · declared vs realized · cross-seed spread  (M73)
+
+ seed      belt                  σ T °C  declared    σ P frac  declared   cells
+ 12345     tropical  <23.5        0.376     0.375      0.0967    0.0973   35749
+ 12345     temperate 23.5-55      0.742     0.739      0.1312    0.1325   47292
+ 12345     polar     >=55         1.243     1.253      0.1791    0.1822   32588
+ 777       tropical  <23.5        0.368     0.377      0.0943    0.0974   37787
+ 777       temperate 23.5-55      0.719     0.735      0.1276    0.1321   50408
+ 777       polar     >=55         1.213     1.245      0.1774    0.1815   30134
+ 31337     tropical  <23.5        0.377     0.379      0.0962    0.0977   33914
+ 31337     temperate 23.5-55      0.740     0.739      0.1331    0.1325   42114
+ 31337     polar     >=55         1.247     1.261      0.1795    0.1830   32250
+ 90210     tropical  <23.5        0.371     0.378      0.0942    0.0975   33427
+ 90210     temperate 23.5-55      0.725     0.736      0.1271    0.1322   47241
+ 90210     polar     >=55         1.204     1.255      0.1740    0.1824   36976
+ 555       tropical  <23.5        0.371     0.376      0.0951    0.0973   37674
+ 555       temperate 23.5-55      0.742     0.738      0.1301    0.1324   47916
+ 555       polar     >=55         1.230     1.245      0.1775    0.1815   28626
+
+ belt                  σT mean   spread    σP mean   spread
+ tropical  <23.5        0.373      2.5%     0.0953      2.6%
+ temperate 23.5-55      0.734      3.2%     0.1298      4.6%
+ polar     >=55         1.228      3.5%     0.1775      3.1%
+
+---- checks ----------------------------------------------------------
+[PASS] σT under its cap · 12345 · tropical  <23.5 0.376 < 1.5 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 12345 · tropical  <23.5 +0.1% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 12345 · tropical  <23.5 -0.6% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σT under its cap · 12345 · temperate 23.5-55 0.742 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 12345 · temperate 23.5-55 +0.4% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 12345 · temperate 23.5-55 -1.0% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σT under its cap · 12345 · polar     >=55 1.243 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 12345 · polar     >=55 -0.8% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 12345 · polar     >=55 -1.7% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] polar amplification · 12345          3.31× tropical   (M73 (Budyko–Sellers): a weak polar gradient and ice-albedo feedback make the high belt swing >2× the tropics)
+[PASS] amplification is the declared one · 12345   3.31 vs 3.34   (M73: the measured polar/tropical ratio matches the ratio the amplitude law predicts for these belts)
+[PASS] σT climbs poleward · 12345           0.38 < 0.74 < 1.24   (M73: band by band, never a flat or inverted profile)
+[PASS] σP climbs poleward · 12345           0.097 < 0.131 < 0.179   (M73: the rain lane carries the same latitude shape as the heat lane)
+[PASS] σT under its cap · 777 · tropical  <23.5 0.368 < 1.5 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 777 · tropical  <23.5 -2.3% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 777 · tropical  <23.5 -3.2% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σT under its cap · 777 · temperate 23.5-55 0.719 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 777 · temperate 23.5-55 -2.2% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 777 · temperate 23.5-55 -3.4% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σT under its cap · 777 · polar     >=55 1.213 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 777 · polar     >=55 -2.6% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 777 · polar     >=55 -2.3% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] polar amplification · 777            3.30× tropical   (M73 (Budyko–Sellers): a weak polar gradient and ice-albedo feedback make the high belt swing >2× the tropics)
+[PASS] amplification is the declared one · 777   3.30 vs 3.31   (M73: the measured polar/tropical ratio matches the ratio the amplitude law predicts for these belts)
+[PASS] σT climbs poleward · 777             0.37 < 0.72 < 1.21   (M73: band by band, never a flat or inverted profile)
+[PASS] σP climbs poleward · 777             0.094 < 0.128 < 0.177   (M73: the rain lane carries the same latitude shape as the heat lane)
+[PASS] σT under its cap · 31337 · tropical  <23.5 0.377 < 1.5 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 31337 · tropical  <23.5 -0.5% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 31337 · tropical  <23.5 -1.6% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σT under its cap · 31337 · temperate 23.5-55 0.740 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 31337 · temperate 23.5-55 +0.0% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 31337 · temperate 23.5-55 +0.4% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σT under its cap · 31337 · polar     >=55 1.247 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 31337 · polar     >=55 -1.1% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 31337 · polar     >=55 -1.9% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] polar amplification · 31337          3.30× tropical   (M73 (Budyko–Sellers): a weak polar gradient and ice-albedo feedback make the high belt swing >2× the tropics)
+[PASS] amplification is the declared one · 31337   3.30 vs 3.32   (M73: the measured polar/tropical ratio matches the ratio the amplitude law predicts for these belts)
+[PASS] σT climbs poleward · 31337           0.38 < 0.74 < 1.25   (M73: band by band, never a flat or inverted profile)
+[PASS] σP climbs poleward · 31337           0.096 < 0.133 < 0.179   (M73: the rain lane carries the same latitude shape as the heat lane)
+[PASS] σT under its cap · 90210 · tropical  <23.5 0.371 < 1.5 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 90210 · tropical  <23.5 -1.8% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 90210 · tropical  <23.5 -3.4% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σT under its cap · 90210 · temperate 23.5-55 0.725 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 90210 · temperate 23.5-55 -1.4% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 90210 · temperate 23.5-55 -3.8% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σT under its cap · 90210 · polar     >=55 1.204 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 90210 · polar     >=55 -4.0% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 90210 · polar     >=55 -4.6% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] polar amplification · 90210          3.25× tropical   (M73 (Budyko–Sellers): a weak polar gradient and ice-albedo feedback make the high belt swing >2× the tropics)
+[PASS] amplification is the declared one · 90210   3.25 vs 3.32   (M73: the measured polar/tropical ratio matches the ratio the amplitude law predicts for these belts)
+[PASS] σT climbs poleward · 90210           0.37 < 0.73 < 1.20   (M73: band by band, never a flat or inverted profile)
+[PASS] σP climbs poleward · 90210           0.094 < 0.127 < 0.174   (M73: the rain lane carries the same latitude shape as the heat lane)
+[PASS] σT under its cap · 555 · tropical  <23.5 0.371 < 1.5 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 555 · tropical  <23.5 -1.1% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 555 · tropical  <23.5 -2.2% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σT under its cap · 555 · temperate 23.5-55 0.742 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 555 · temperate 23.5-55 +0.5% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 555 · temperate 23.5-55 -1.7% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σT under its cap · 555 · polar     >=55 1.230 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
+[PASS] σT is the declared law · 555 · polar     >=55 -1.2% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
+[PASS] σP is the declared law · 555 · polar     >=55 -2.2% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] polar amplification · 555            3.31× tropical   (M73 (Budyko–Sellers): a weak polar gradient and ice-albedo feedback make the high belt swing >2× the tropics)
+[PASS] amplification is the declared one · 555   3.31 vs 3.32   (M73: the measured polar/tropical ratio matches the ratio the amplitude law predicts for these belts)
+[PASS] σT climbs poleward · 555             0.37 < 0.74 < 1.23   (M73: band by band, never a flat or inverted profile)
+[PASS] σP climbs poleward · 555             0.095 < 0.130 < 0.177   (M73: the rain lane carries the same latitude shape as the heat lane)
+[PASS] σT is the sky's, not the seed's · tropical  <23.5   2.5% of mean   (M73: the belt's swing is a property of the law — cross-seed spread inside a tenth of the mean)
+[PASS] σP is the sky's, not the seed's · tropical  <23.5   2.6% of mean   (M73: same law, rain lane)
+[PASS] σT is the sky's, not the seed's · temperate 23.5-55   3.2% of mean   (M73: the belt's swing is a property of the law — cross-seed spread inside a tenth of the mean)
+[PASS] σP is the sky's, not the seed's · temperate 23.5-55   4.6% of mean   (M73: same law, rain lane)
+[PASS] σT is the sky's, not the seed's · polar     >=55   3.5% of mean   (M73: the belt's swing is a property of the law — cross-seed spread inside a tenth of the mean)
+[PASS] σP is the sky's, not the seed's · polar     >=55   3.1% of mean   (M73: same law, rain lane)
+[PASS] every anomaly cell is finite           0 non-finite   (M73: no poison enters the causal path M72 opened)
+[PASS] the rains are never wholly taken     worst -0.757 of the mean   (M2.6/M73: total failure of the rains is famine's verdict, not the sky's noise)
+[PASS] every belt carries land to measure   0 empty belt-seeds   (M73: a gate over an empty belt proves nothing)
+CHECKS: 74 pass · 0 warn · 0 fail
