@@ -1,0 +1,128 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · CIVILIZATION                 seed 12345 · 640x512 · 150y
+========================================================================
+world "Talomar" · 4 peoples · 4 realms · 16 settlements at dawn
+
+  yr      pop  towns  routes     wealth  treasury   arts  seams  ev/y
+   6     1940     16      27        850       108      7    136     8
+  12     3098     18      29       1326        92     13    139    11
+  18     5278     19      30       1967        82     18    143     9
+  24     8230     21      32       2951       188     22    146    24
+  30    12954     21      32       4667       250     25    149    15
+  36    19483     21      32       8207       470     29    151    19
+  42    27406     23      35      13033       569     34    153    21
+  48    38323     27      42      21713       952     39    155    17
+  54    60536     39      64      34344      1659     43    157    37
+  60    91610     55      90      52716      2943     48    158    67
+  66   137845     75     126      87312      3456     53    160    51
+  72   205072     96     162     142337      5643     57    160    70
+  78   287173     97     163     218940     13165     78    163    58
+  84   391362     98     164     336011     26557     80    165    68
+  90   509120     99     165     512737     39477     80    167    85
+  96   628875     99     165     766088     59511     84    168    80
+ 102   681825     99     165    1005770     84842    104    168    69
+ 108   766421     99     165    1217364    109008    104    168    69
+ 114   837935     99     165    1536888    140853    104    170    67
+ 120   881313    100     166    1894898    176126    104    170    71
+ 126   905681    100     166    2038277    204518    104    170    92
+ 132   940506    100     166    2139795    242111    156    170    73
+ 138  1006172    101     168    2394249    273675    182    170   100
+ 144  1023588    100     165    2363205    304773    254    170    70
+ 150  1055804    100     165    2385464    336181    267    170    58
+
+event census: depletion:137 · disaster:1092 · discovery:88 · economy:44 · era:6 · famine:220 · festival:201 · found:85 · growth:1169 · kindred:19 · myth:30 · omen:12 · quake:1 · realm:260 · ruler:66 · society:290 · tech:71 · trade:3302 · war:349 · wonder:459
+strikes 88 · depletions 137 · mining camps 2 · wars 349
+statecraft: 349 war events · 124 towns changed hands · 16 secessions · polities 4–10 · coalitions yes · vassals ≤3
+longest silence between events: 11 months
+
+the arc of the ages (tech & society events):
+  y1    The Mosswickkin learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y1    The scattered camps of the Mosswickkin bind themselves under one chief.
+  y2    The Koropiaians learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y3    The Aleshim learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y3    Weavers among the Mosswickkin string the first tall looms; good cloth becomes as good as coin.
+  y4    The Sarganaks learn to bend seasoned yew — no beast nor foe outruns an arrow.
+  y4    The Koropiaians shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y5    The Mosswickkin shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y7    The Aleshim shape river clay into jars and kilns — the harvest no longer rots before spring.
+  y8    Weavers among the Koropiaians string the first tall looms; good cloth becomes as good as coin.
+  y8    The wise-women of the Mosswickkin set down which roots cure and which kill.
+  y9    Weavers among the Sarganaks string the first tall looms; good cloth becomes as good as coin.
+  y10   Spread now into that country, the Aleshim keep their own word for The Vorudor Tablelands — in their tongue it is The Albar Tableland.
+  y10   The scattered camps of the Koropiaians bind themselves under one chief.
+  y10   Weavers among the Aleshim string the first tall looms; good cloth becomes as good as coin.
+  y11   The wise-women of the Koropiaians set down which roots cure and which kill.
+  y13   The Mosswickkin raise woven sails above their hulls, and the wind carries trade beyond the horizon.
+  y13   The Mosswickkin pass into an age of bronze — the old stone tools are laid in barrows.
+  … and 343 more
+
+societies at year 150:
+  Aleshim                kingdom    the High Age   19 arts · lore 121322
+  Mosswickkin            kingdom    the High Age   13 arts · lore 268223
+  Koropiaians            empire     the High Age   20 arts · lore 280041
+  Sarganaks              kingdom    the High Age   19 arts · lore 160423
+  Ashormerekin           kingdom    the High Age   13 arts · lore 116622
+  Arsyeneians            empire     the High Age   20 arts · lore 127933
+  Eryliaiaians           empire     the High Age   20 arts · lore 226832
+  Sylenmerekin           kingdom    the High Age   13 arts · lore 251098
+  Qasbarim               kingdom    the High Age   19 arts · lore 111813
+  Mossorgladekin         kingdom    the High Age   13 arts · lore 256267
+  Aelgladekin            kingdom    the High Age   13 arts · lore 255346
+  Leuantheiaians         empire     the High Age   20 arts · lore 272694
+  Saheshim               kingdom    the High Age   19 arts · lore 118574
+  Kalmoossaians          empire     the High Age   20 arts · lore 261753
+  Briarorbrookkin        kingdom    the High Age   13 arts · lore 257197
+  Briarormerekin         kingdom    the High Age   13 arts · lore 257419
+crowns at year 150:
+  Zarubar                treasury       74
+  Eryaia                 treasury   277297
+  Mossshade              treasury     8534
+  Ordagetau              treasury    39923
+  Temkum                 treasury     2035
+
+harbour shelter (M45): coastal band 6270 cells · mean 0.472 · q3 0.552 · p90 0.727
+  ports on top-quartile shelter: 45 of 55 (82%) · coastal towns 81 mean 0.702 (1.49× the band)
+    missed: Altagan sh=0.51 takeable-best=0.65 (at founding m0 0.71) pop=35625 at (401,354)
+    missed: Kalstoma sh=0.52 takeable-best=0.61 (at founding m618 0.72) pop=23623 at (383,301)
+    missed: Helstoma sh=0.38 takeable-best=0.49 (at founding m695 0.49) pop=44808 at (268,309)
+    missed: Linhythe sh=0.47 takeable-best=0.50 (at founding m774 0.50) pop=4348 at (343,146)
+    missed: Sahumasab sh=0.53 takeable-best=0.76 (at founding m814 0.76) pop=3862 at (145,429)
+  siting: 45 on top-quartile + 5 took the best their coast offers = 50 of 55 well-sited (91%) · 5 missed better water within 56 km
+  siting (founding-time occupancy): 45 + 4 = 49 of 55 (89%) · 6 missed — terminal-set reading 91%, gap -2 pp
+
+---- unrest ladder (M11) ----------------------------------------------
+ riots  87 · charters  84 · coups  32 · crises   3 (resolved   3) · secessions  16
+ unrest now: mean 0.29 · max 0.96 over 20 realms
+
+---- kindred and crown (M12) ------------------------------------------
+ foreign-crowned towns  70 of 100 · drifting  44 · max drift 0.76
+   Aleshim          under Koropiaians       10 towns · kinship 0.25
+   Mosswickkin      under Koropiaians        4 towns · kinship 0.08
+   Sarganaks        under Koropiaians        3 towns · kinship 0.01
+   Ashormerekin     under Mosswickkin        3 towns · kinship 0.93
+   Arsyeneians      under Koropiaians        3 towns · kinship 0.87
+   Eryliaiaians     under Koropiaians        5 towns · kinship 0.81
+   Sylenmerekin     under Mosswickkin        2 towns · kinship 0.77
+   Sylenmerekin     under Koropiaians        4 towns · kinship 0.03
+   Qasbarim         under Aleshim            1 towns · kinship 0.76
+   Qasbarim         under Koropiaians        3 towns · kinship 0.04
+   Mossorgladekin   under Mosswickkin        1 towns · kinship 0.77
+   Aelgladekin      under Mosswickkin        2 towns · kinship 0.78
+   Leuantheiaians   under Koropiaians       10 towns · kinship 0.78
+   Saheshim         under Koropiaians        6 towns · kinship 0.03
+   Kalmoossaians    under Koropiaians        3 towns · kinship 0.77
+   Briarorbrookkin  under Mosswickkin        3 towns · kinship 0.51
+   Briarorbrookkin  under Koropiaians        2 towns · kinship 0.01
+   Briarormerekin   under Mosswickkin        1 towns · kinship 0.50
+   Briarormerekin   under Koropiaians        4 towns · kinship 0.00
+ moves: 1 flips · 12 sunderings · 0 fusions · 8 unions · 36 crown exonyms
+   union gate: Ordagetau          + Temkum             kin 1.00 · opinion   30/  30 · vassal true
+
+---- the arc of empires (M13) -----------------------------------------
+   the Circle of Briarenwood  waning       7 tongues [Mosswickkin, Ashormerekin, Sylenmerekin, Mossorgladekin, Aelgladekin, Briarorbrookkin, Briarormerekin] · golden ages 1 · monuments 3
+     drivers: legit 0.99 · asab 0.79 · wealth 8528 · stretch 1.63   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
+     span: 1 crowns · 19 towns · admin 36.8 vs capacity 22.5   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
+   the Circle of Dzunsarai    interregnum  1 tongues [Sarganaks] · golden ages 0 · monuments 0 · ENDED
+     drivers: legit 0.78 · asab 0.39 · wealth 20554 · stretch 0.42   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
+     span: 3 crowns · 16 towns · admin 22.8 vs capacity 53.9   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
+ arc events: 2 minted · 1 golden dawns · 1 falls · 1 interregna closed

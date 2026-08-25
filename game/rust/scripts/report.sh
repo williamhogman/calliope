@@ -14,26 +14,54 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 MODE="${1:-full}"
-OUT="${2:-../reports}"
-mkdir -p "$OUT"
+FINAL_OUT="${2:-../reports}"
+mkdir -p "$FINAL_OUT"
 
 # The suite composes a folder of lane artifacts into one verdict. Two writers
 # sharing that folder can make a coherent run appear silent or mixed, so take
 # an advisory lock before any lane opens a report path.
 if command -v flock >/dev/null 2>&1; then
-  exec 9>"$OUT/.report.lock"
+  exec 9>"$FINAL_OUT/.report.lock"
   if ! flock -n 9; then
-    echo "another report.sh is writing $OUT" >&2
+    echo "another report.sh is writing $FINAL_OUT" >&2
     exit 75
   fi
 else
-  LOCKDIR="$OUT/.report.lockdir"
+  LOCKDIR="$FINAL_OUT/.report.lockdir"
   if ! mkdir "$LOCKDIR" 2>/dev/null; then
-    echo "another report.sh is writing $OUT" >&2
+    echo "another report.sh is writing $FINAL_OUT" >&2
     exit 75
   fi
-  trap 'rmdir "$LOCKDIR" 2>/dev/null || true' EXIT
 fi
+
+# Stage the whole suite outside the public reports folder, then publish the
+# completed artifacts at the end. Per-lane atomic mv protects each file; this
+# run-level staging protects readers and later gates from ever seeing a half
+# new / half old suite if the process is interrupted between lanes.
+OUT="$(dirname "$FINAL_OUT")/.$(basename "$FINAL_OUT").run.$$"
+rm -rf "$OUT"
+mkdir -p "$OUT"
+PUBLISHED=0
+cleanup() {
+  local rc=$?
+  if [ "$PUBLISHED" != 1 ]; then
+    rm -rf "$OUT" 2>/dev/null || true
+  fi
+  if [ -n "${LOCKDIR:-}" ]; then
+    rmdir "$LOCKDIR" 2>/dev/null || true
+  fi
+  exit "$rc"
+}
+trap cleanup EXIT
+
+# build.sh and wasm-audit.sh run before report.sh and already have their own
+# subjects. Copy those artifacts into this private run folder so gate composes
+# the exact audit/build rows alongside the lanes from this invocation.
+for carry in build.txt wasm-audit.txt; do
+  if [ -f "$FINAL_OUT/$carry" ]; then
+    cp "$FINAL_OUT/$carry" "$OUT/$carry"
+  fi
+done
 
 echo "== building diagnose (release) =="
 if command -v cargo >/dev/null 2>&1; then
@@ -75,10 +103,25 @@ fi
 run() { # run <outfile> <diagnose args...>
   local f="$OUT/$1"; shift
   local tmp="$OUT/.$(basename "$f").tmp.$$"
+  local err="$OUT/.$(basename "$f").err.$$"
   echo "-- diagnose $* -> $(basename "$f")"
   local rc=0
-  rm -f "$tmp"
-  "$BIN" "$@" > "$tmp" 2> "$OUT/.lane-err" || rc=$?
+  local attempt=1
+  rm -f "$tmp" "$err"
+  while :; do
+    rc=0
+    "$BIN" "$@" > "$tmp" 2> "$err" || rc=$?
+    if [ "$rc" -eq 0 ] && tail -n 1 "$tmp" | grep -q '^CHECKS:'; then
+      break
+    fi
+    if [ "$attempt" -eq 1 ]; then
+      echo "   incomplete lane output (exit $rc); retrying once" >&2
+      attempt=2
+      rm -f "$tmp" "$err"
+      continue
+    fi
+    break
+  done
   # M77 — a lane that died, or that stopped printing partway, must say so
   # in its own report. The suite once carried a teleconnection.txt that
   # ended mid-table with exit 0; only the era gate's must-speak row caught
@@ -91,12 +134,12 @@ run() { # run <outfile> <diagnose args...>
       echo "---- checks ----------------------------------------------------------"
       printf '[FAIL] %-36s %14s   (%s)\n' "the lane ran to completion" "exit $rc" \
         "M77: the report does not end in a CHECKS line — the lane was cut off, so nothing below its last printed row was measured"
-      sed 's/^/ stderr: /' "$OUT/.lane-err" | head -8
+      sed 's/^/ stderr: /' "$err" | head -8
       echo "CHECKS: 0 pass · 0 warn · 1 fail"
     } >> "$tmp"
   fi
   mv "$tmp" "$f"
-  rm -f "$OUT/.lane-err"
+  rm -f "$err"
 }
 
 for s in "${SEEDS[@]}"; do
@@ -432,7 +475,7 @@ echo "-- era gate (compose + ${GATE_YEARS}y structural leg) -> gate.txt"
 # ---- perf history (E10.8) --------------------------------------------------
 # One dated row per run, append-only: drift across weeks stays visible even
 # while every individual run passes its bands.
-HIST="$OUT/bench-history.txt"
+HIST="$FINAL_OUT/bench-history.txt"
 [ -f "$HIST" ] || echo "# date · mode · gen512 ms · tick mo/s · pack B/cell · tick payload B · wasm MiB" > "$HIST"
 GEN=$(grep -oP '512 generation time\s+\K[0-9]+(?= ms)' "$OUT/bench.txt" | head -1 || echo "?")
 RATE=$(grep -oP 'tick rate\s+\K[0-9]+(?= mo/s)' "$OUT/bench.txt" | head -1 || echo "?")
@@ -468,7 +511,15 @@ SUM="$OUT/SUMMARY.txt"
   done
 } > "$SUM"
 
+for f in "$OUT"/*.txt; do
+  [ -e "$f" ] || continue
+  mv -f "$f" "$FINAL_OUT/$(basename "$f")"
+done
+rmdir "$OUT" 2>/dev/null || true
+PUBLISHED=1
+OUT="$FINAL_OUT"
+
 echo
 echo "== reports written to $OUT =="
-grep -m1 "totals:" "$SUM"
+grep -m1 "totals:" "$OUT/SUMMARY.txt"
 echo "read SUMMARY.txt first, then the named reports for the tables behind a finding."
