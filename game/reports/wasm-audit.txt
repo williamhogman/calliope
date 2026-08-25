@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · WASM AUDIT                   twiggy top (E6.4)
 ========================================================================
- subject: calliope_bg.wasm 3528450 B · sha256 86c284f6b18ecbe3688674727ac52aa0f92ac3deb7ad099ee8e668fabf8f0ea7
+ subject: calliope_bg.wasm 3528450 B · sha256 5d63492e4418f796b25c9cb3f391f5c658331b5ad411344e45c364d7f2144d32
  profiling twin (symbolized): 3913558 B — sizes below are from the
  twin; the release binary is the same code without names.
 
