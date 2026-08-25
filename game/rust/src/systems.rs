@@ -121,6 +121,7 @@ pub static SYSTEMS: &[&dyn System] = &[
     &Famine,
     &Quakes,
     &Volcanoes,
+    &Storms,
     &Colonize,
     &Prospect,
     &RushCamps,
@@ -213,6 +214,25 @@ impl System for Volcanoes {
         }
         let mut evs = Vec::new();
         w.eruption_effects(from, &mut evs);
+        sink.emit(evs);
+    }
+}
+
+/// M79 — the coasts remember: the year's landfall ledger (M77 fronts,
+/// M78 warm-sea cyclones) is read for strikes due this month, harbours
+/// take their wound and repair it, the water takes its souls through the
+/// one disaster path. Runs with the other sudden endings, before the
+/// month's trade is priced, so a broken harbour bites the same month.
+struct Storms;
+impl System for Storms {
+    fn name(&self) -> &'static str {
+        "storms"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        let month = w.month;
+        let mut evs = Vec::new();
+        w.storm_effects(month, &mut evs);
         sink.emit(evs);
     }
 }

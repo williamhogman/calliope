@@ -1266,6 +1266,15 @@ pub fn monthly(
         if r.season != 0.0 {
             flow *= crate::trade::season_mult(r.season, month_abs);
         }
+        // M79 — a broken harbour moves no cargo over water. The wound
+        // bites only the sailed share of the lane: a road route out of a
+        // wrecked port carries as it always did, a sea lane into one
+        // stops until the mole is rebuilt. The worse of the two ends
+        // rules — one shut harbour is enough to end a voyage.
+        let wound = sa.harbor_dmg.max(sb.harbor_dmg);
+        if wound > 0.0 && r.sea > 0.0 {
+            flow *= (1.0 - wound * r.sea).max(0.0);
+        }
         let ta = mods.get(sa.people.idx()).map(|m| m.trade).unwrap_or(1.0);
         let tb = mods.get(sb.people.idx()).map(|m| m.trade).unwrap_or(1.0);
         // a harbour works the cranes: more cargo through, more dues taken

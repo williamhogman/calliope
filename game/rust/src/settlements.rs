@@ -120,11 +120,45 @@ pub struct Settlement {
     /// before the disaster struck.
     #[serde(skip)]
     pub rebuild_peak: i64,
+    /// M79 — the harbour's wound, 0..1: the share of the town's seaborne
+    /// trade its quays cannot handle while the moles are broken and the
+    /// fleet is scattered. Opened by a storm landfall, repaired month by
+    /// month. Engine-internal; folded into `hash_state`, never on the wire.
+    #[serde(skip)]
+    pub harbor_dmg: f64,
+    /// The month the harbour is whole again come what may — the repair
+    /// window's far edge, so no wound can outlive its arc.
+    #[serde(skip)]
+    pub harbor_until: i64,
 }
 
 /// M24 — the rebuild window, months: a struck town regrows hot for at
 /// most forty years before the arc closes on whatever stands.
 pub const REBUILD_WINDOW: i64 = 480;
+
+// -------------------------------------------------- M79 · the harbour's wound
+//
+// A wrecked harbour is not a wrecked town: the quays, moles and boats go
+// first and come back first. The numbers say a bad strike takes most of
+// a port's water trade for a season and is essentially forgotten inside
+// three years — the shape of a real rebuild, front-loaded and total.
+
+/// The worst a single coast can be left: even a direct hit leaves some
+/// beach to land a boat on.
+pub const HARBOR_DMG_MAX: f64 = 0.85;
+/// The share of the wound still standing a month later — 0.80 halves the
+/// damage in ~3 months and clears a full hit inside ~2 years.
+pub const HARBOR_REPAIR: f64 = 0.80;
+/// Below this the harbour is called whole again.
+pub const HARBOR_CLEAR: f64 = 0.02;
+/// The far edge of any repair arc, months: three years and the coast has
+/// its harbour back whatever else happened.
+pub const HARBOR_WINDOW: i64 = 36;
+/// A strike this weak is not worth a ledger row.
+pub const HARBOR_MARK_MIN: f64 = 0.05;
+/// A wound this deep gets its own chronicle beat.
+pub const HARBOR_TELL_MIN: f64 = 0.35;
+
 
 /// Effective hinterland a town can actually farm, km² — a half-day's
 /// cart out and back, shared with its neighbours (M2.5 spacing).
@@ -487,6 +521,8 @@ pub fn found_settlements(
             quarry: "",
             rebuild_until: 0,
             rebuild_peak: 0,
+            harbor_dmg: 0.0,
+            harbor_until: 0,
         });
         for y in 0..size {
             for x in 0..size {
