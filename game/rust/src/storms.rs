@@ -476,6 +476,7 @@ impl StormClimatology {
         let mut day = 0.0f64;
         let mut peak = inten;
         let mut landfall = false;
+        let mut first_land: Option<(usize, usize, f64, f64)> = None;
         let mut points = Vec::with_capacity(STORM_MAX_STEPS + 1);
         let mut over_land = height[[genesis.0, genesis.1]] >= 0.0;
         points.push(StormPoint { x, y, day, inten, over_land });
@@ -501,6 +502,9 @@ impl StormClimatology {
             let cx = x.round() as usize;
             over_land = height[[cy.min(rows - 1), cx.min(cols - 1)]] >= 0.0;
             if over_land {
+                if !landfall {
+                    first_land = Some((cy.min(rows - 1), cx.min(cols - 1), day, inten));
+                }
                 landfall = true;
                 inten *= STORM_LAND_KEEP;
             } else {
@@ -524,8 +528,10 @@ impl StormClimatology {
             points,
             peak,
             landfall,
+            first_land,
         }
     }
+
 
     /// A fixed read of the storm law for the replay identity line: the
     /// hemispheric peaks, the seasons, the site counts, and the full
