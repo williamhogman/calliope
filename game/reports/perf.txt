@@ -3,26 +3,26 @@
 ========================================================================
 per-stage generation (ms):
   seed        terrain    erosion    climate  hydrology     biomes  fertility     naming  resources settlements    total
-  12345           316        278        133        154          4        175        109        379        333     2966
-  777             291        246        122        135          4        139        114        336        285     2723
-  90210           259        250        119        156          6        202        125        412        246     2699
-tick rate seed 12345: year-0 1062 mo/s · year-100 127 mo/s (103 towns)
-tick rate seed 777: year-0 892 mo/s · year-100 115 mo/s (103 towns)
-tick rate seed 90210: year-0 931 mo/s · year-100 118 mo/s (105 towns)
-native peak RSS after run: 211 MiB via VmRSS at peak load (3 worlds resident)
+  12345           320        270        136        170          6        169        122        430        268     3163
+  777             292        260        160        168          4        152        106        386        270     2878
+  90210           290        246        122        156          3        185         97        401        249     2723
+tick rate seed 12345: year-0 830 mo/s · year-100 129 mo/s (103 towns)
+tick rate seed 777: year-0 970 mo/s · year-100 109 mo/s (103 towns)
+tick rate seed 90210: year-0 955 mo/s · year-100 121 mo/s (105 towns)
+native peak RSS after run: 214 MiB via VmRSS at peak load (3 worlds resident)
 
 ---- checks ----------------------------------------------------------
-[PASS] stage terrain ms                     316 ms (worst of 3 seeds)   (E10.1: plate+plume noise, warp, falloff + plate-history sketch (M16/M17; measured ~280-455 ms))
-[PASS] stage erosion ms                     278 ms (worst of 3 seeds)   (E10.1: thermal+fluvial passes)
-[PASS] stage climate ms                     133 ms (worst of 3 seeds)   (E10.1: temperature, advection precip)
-[PASS] stage hydrology ms                   156 ms (worst of 3 seeds)   (E10.1: D8 routing, accumulation, lakes)
+[PASS] stage terrain ms                     320 ms (worst of 3 seeds)   (E10.1: plate+plume noise, warp, falloff + plate-history sketch (M16/M17; measured ~280-455 ms))
+[PASS] stage erosion ms                     270 ms (worst of 3 seeds)   (E10.1: thermal+fluvial passes)
+[PASS] stage climate ms                     160 ms (worst of 3 seeds)   (E10.1: temperature, advection precip)
+[PASS] stage hydrology ms                   170 ms (worst of 3 seeds)   (E10.1: D8 routing, accumulation, lakes)
 [PASS] stage biomes ms                      6 ms (worst of 3 seeds)   (E10.1: Whittaker classification)
-[WARN] stage fertility ms                   202 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage naming ms                      125 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
-[PASS] stage resources ms                   412 ms (worst of 3 seeds)   (E10.1: rock classify + geology-seated placement (M18/M19; measured ~450-500 ms, was ~300 pre-geology))
-[WARN] stage settlements ms                 333 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2966 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 0                     892 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[WARN] tick rate year 100                   115 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
-[PASS] native peak RSS                      211 MiB (VmRSS at peak load)   (E10.6: sweet ≤1.5 GiB · hard ≤2.5 GiB (3 × 512² worlds + histories))
+[WARN] stage fertility ms                   185 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage naming ms                      122 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
+[PASS] stage resources ms                   430 ms (worst of 3 seeds)   (E10.1: rock classify + geology-seated placement (M18/M19; measured ~450-500 ms, was ~300 pre-geology))
+[WARN] stage settlements ms                 270 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         3163 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     830 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   109 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[PASS] native peak RSS                      214 MiB (VmRSS at peak load)   (E10.6: sweet ≤1.5 GiB · hard ≤2.5 GiB (3 × 512² worlds + histories))
 CHECKS: 7 pass · 6 warn · 0 fail
