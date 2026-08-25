@@ -3384,6 +3384,7 @@ fn cmd_climate(seed: i64, size: usize) {
         };
         for year in 1..=YEARS {
             let (dt, dp) = w.year_anomaly_fresh(year);
+            let (_, dpu) = w.year_anomaly_unforced(year);
             for y in 0..rows {
                 let lat = (-90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0)).abs();
                 let b = belt(lat);
