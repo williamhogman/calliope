@@ -1,0 +1,96 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · STORMS                       512x512 · 5 seeds · 60 y
+========================================================================
+the storm corridors · genesis, steering and death over land  (M77)
+
+ seed      storms/century   gen 30-60°   over sea   east%   pole drift   land keep   sea keep   landfall%   season N/S
+ · 12345 genesis field: sites N 37134 / S 35993 · ref weight 0.7065 / 0.7043 · iced-out N 41234 / S 39338 · season count N 20 / S 20
+ 12345         4000.0        72.1%     100.0%   91.2%       +7.60°      0.8600     1.0201       62.1%     6 / 0  
+ · 777 genesis field: sites N 34957 / S 33913 · ref weight 0.6842 / 0.7078 · iced-out N 43401 / S 39637 · season count N 19 / S 19
+ 777           3800.0        75.0%     100.0%   90.5%       +7.22°      0.8600     1.0197       63.2%     6 / 0  
+ · 31337 genesis field: sites N 39387 / S 38111 · ref weight 0.6747 / 0.7223 · iced-out N 40221 / S 40531 · season count N 22 / S 21
+ 31337         4300.0        72.9%     100.0%   91.4%       +7.77°      0.8600     1.0184       63.2%     6 / 0  
+ · 90210 genesis field: sites N 39636 / S 38588 · ref weight 0.6633 / 0.6590 · iced-out N 37460 / S 38821 · season count N 22 / S 21
+ 90210         4300.0        69.7%     100.0%   88.3%       +7.73°      0.8600     1.0188       61.7%     6 / 0  
+ · 555 genesis field: sites N 37004 / S 35606 · ref weight 0.7214 / 0.6711 · iced-out N 44080 / S 39397 · season count N 20 / S 20
+ 555           4000.0        71.1%     100.0%   90.9%       +7.67°      0.8600     1.0203       64.5%     6 / 0  
+
+---- checks ----------------------------------------------------------
+[PASS] genesis peaks in the baroclinic belt · 12345 peak bin 40-50°   (M77 gate: the busiest 10° band of cyclogenesis must fall inside 30-60° — the corridor is a consequence of where the temperature gradient concentrates, and nothing in storms.rs names a latitude)
+[PASS] the belt holds the season · 12345             72.1%   (M77 gate: a majority of a year's cyclones are born in the 30-60° belt — a corridor that leaked equatorward would mean the gradient measure is reading something other than baroclinicity)
+[PASS] cyclogenesis is a marine act · 12345         100.0%   (M77: a cyclone needs the sea's heat under it — a genesis point on land would mean the mask is not being read)
+[PASS] the corridor runs downwind · 12345            91.2%   (M77 gate: born in the westerlies, a storm must travel east — the steering is currents::wind_stress, the same field the gyres read, so a westward corridor would put storm and current in contradiction)
+[PASS] storms climb poleward · 12345           +7.60° mean   (M77: a travelling cyclone occludes as it goes and drifts toward its own pole — a net equatorward corridor would be the wrong sign of drift)
+[PASS] land fills the storm · 12345            0.8600/step   (M77 gate: cut off from the sea a cyclone loses intensity every step — measured over every land step of every track, not read off the constant)
+[PASS] the sea feeds the storm · 12345         1.0201/step   (M77 gate: over open water the storm must be gaining, or the land/sea contrast below proves nothing)
+[PASS] the coast is where they die · 12345           62.1%   (M77: a corridor that never reaches a shore costs the world nothing — M79 needs landfalls to wire consequences to)
+[PASS] no poison on the tracks · 12345      0 nan · 0 off-grid   (M77: every advected point is finite and inside the grid it was walked across)
+[PASS] the hemispheres storm in turn · 12345     6 mo apart   (M77 gate: the storm season is the belt's own cold season, read from the realized annual cycle — the two hemispheres must fall half a year apart because the world's seasons do, not because a calendar was typed in)
+[PASS] storms keep to their season · 12345           64.7%   (M77 gate: the five months centred on the belt's coldest must carry more than their uniform share (41.7%) of the year's cyclones — the season is drawn from the world's temperature cycle)
+[PASS] counts follow the breeding sea · 12345 0.54 vs 0.56/ky·1k   (M77 gate: storms per year per thousand baroclinic ocean cells must agree between hemispheres within a factor of two — a hemisphere that bred storms out of proportion to its sea would mean the count is coming from somewhere other than the zone)
+[PASS] shores share the exposure · 12345    816.1 vs 699.5/cy·1k   (M77 gate: landfalls per century per thousand coastline cells within a factor of two between hemispheres — one hemisphere's shore may genuinely sit downwind of a wider ocean, so this stands as a WARN band, not a hard row)
+[PASS] the corridor replays · 12345         0f39265c56120a5c   (ADR-0003: a storm season is derived, never stored — same seed and year must walk the same tracks)
+[PASS] each year draws its own storms · 12345 20 vs 20 tracks   (M77: the season is keyed on the year as well as the seed — two identical years would mean the corridor is a fixture, not weather)
+[PASS] genesis peaks in the baroclinic belt · 777 peak bin 40-50°   (M77 gate: the busiest 10° band of cyclogenesis must fall inside 30-60° — the corridor is a consequence of where the temperature gradient concentrates, and nothing in storms.rs names a latitude)
+[PASS] the belt holds the season · 777               75.0%   (M77 gate: a majority of a year's cyclones are born in the 30-60° belt — a corridor that leaked equatorward would mean the gradient measure is reading something other than baroclinicity)
+[PASS] cyclogenesis is a marine act · 777           100.0%   (M77: a cyclone needs the sea's heat under it — a genesis point on land would mean the mask is not being read)
+[PASS] the corridor runs downwind · 777              90.5%   (M77 gate: born in the westerlies, a storm must travel east — the steering is currents::wind_stress, the same field the gyres read, so a westward corridor would put storm and current in contradiction)
+[PASS] storms climb poleward · 777             +7.22° mean   (M77: a travelling cyclone occludes as it goes and drifts toward its own pole — a net equatorward corridor would be the wrong sign of drift)
+[PASS] land fills the storm · 777              0.8600/step   (M77 gate: cut off from the sea a cyclone loses intensity every step — measured over every land step of every track, not read off the constant)
+[PASS] the sea feeds the storm · 777           1.0197/step   (M77 gate: over open water the storm must be gaining, or the land/sea contrast below proves nothing)
+[PASS] the coast is where they die · 777             63.2%   (M77: a corridor that never reaches a shore costs the world nothing — M79 needs landfalls to wire consequences to)
+[PASS] no poison on the tracks · 777        0 nan · 0 off-grid   (M77: every advected point is finite and inside the grid it was walked across)
+[PASS] the hemispheres storm in turn · 777      6 mo apart   (M77 gate: the storm season is the belt's own cold season, read from the realized annual cycle — the two hemispheres must fall half a year apart because the world's seasons do, not because a calendar was typed in)
+[PASS] storms keep to their season · 777             64.3%   (M77 gate: the five months centred on the belt's coldest must carry more than their uniform share (41.7%) of the year's cyclones — the season is drawn from the world's temperature cycle)
+[PASS] counts follow the breeding sea · 777 0.54 vs 0.56/ky·1k   (M77 gate: storms per year per thousand baroclinic ocean cells must agree between hemispheres within a factor of two — a hemisphere that bred storms out of proportion to its sea would mean the count is coming from somewhere other than the zone)
+[PASS] shores share the exposure · 777      833.9 vs 714.3/cy·1k   (M77 gate: landfalls per century per thousand coastline cells within a factor of two between hemispheres — one hemisphere's shore may genuinely sit downwind of a wider ocean, so this stands as a WARN band, not a hard row)
+[PASS] the corridor replays · 777           04aaa48704a6206a   (ADR-0003: a storm season is derived, never stored — same seed and year must walk the same tracks)
+[PASS] each year draws its own storms · 777 19 vs 19 tracks   (M77: the season is keyed on the year as well as the seed — two identical years would mean the corridor is a fixture, not weather)
+[PASS] genesis peaks in the baroclinic belt · 31337 peak bin 40-50°   (M77 gate: the busiest 10° band of cyclogenesis must fall inside 30-60° — the corridor is a consequence of where the temperature gradient concentrates, and nothing in storms.rs names a latitude)
+[PASS] the belt holds the season · 31337             72.9%   (M77 gate: a majority of a year's cyclones are born in the 30-60° belt — a corridor that leaked equatorward would mean the gradient measure is reading something other than baroclinicity)
+[PASS] cyclogenesis is a marine act · 31337         100.0%   (M77: a cyclone needs the sea's heat under it — a genesis point on land would mean the mask is not being read)
+[PASS] the corridor runs downwind · 31337            91.4%   (M77 gate: born in the westerlies, a storm must travel east — the steering is currents::wind_stress, the same field the gyres read, so a westward corridor would put storm and current in contradiction)
+[PASS] storms climb poleward · 31337           +7.77° mean   (M77: a travelling cyclone occludes as it goes and drifts toward its own pole — a net equatorward corridor would be the wrong sign of drift)
+[PASS] land fills the storm · 31337            0.8600/step   (M77 gate: cut off from the sea a cyclone loses intensity every step — measured over every land step of every track, not read off the constant)
+[PASS] the sea feeds the storm · 31337         1.0184/step   (M77 gate: over open water the storm must be gaining, or the land/sea contrast below proves nothing)
+[PASS] the coast is where they die · 31337           63.2%   (M77: a corridor that never reaches a shore costs the world nothing — M79 needs landfalls to wire consequences to)
+[PASS] no poison on the tracks · 31337      0 nan · 0 off-grid   (M77: every advected point is finite and inside the grid it was walked across)
+[PASS] the hemispheres storm in turn · 31337     6 mo apart   (M77 gate: the storm season is the belt's own cold season, read from the realized annual cycle — the two hemispheres must fall half a year apart because the world's seasons do, not because a calendar was typed in)
+[PASS] storms keep to their season · 31337           64.7%   (M77 gate: the five months centred on the belt's coldest must carry more than their uniform share (41.7%) of the year's cyclones — the season is drawn from the world's temperature cycle)
+[PASS] counts follow the breeding sea · 31337 0.56 vs 0.55/ky·1k   (M77 gate: storms per year per thousand baroclinic ocean cells must agree between hemispheres within a factor of two — a hemisphere that bred storms out of proportion to its sea would mean the count is coming from somewhere other than the zone)
+[PASS] shores share the exposure · 31337    860.3 vs 764.5/cy·1k   (M77 gate: landfalls per century per thousand coastline cells within a factor of two between hemispheres — one hemisphere's shore may genuinely sit downwind of a wider ocean, so this stands as a WARN band, not a hard row)
+[PASS] the corridor replays · 31337         1342fe33ee31b2f1   (ADR-0003: a storm season is derived, never stored — same seed and year must walk the same tracks)
+[PASS] each year draws its own storms · 31337 22 vs 22 tracks   (M77: the season is keyed on the year as well as the seed — two identical years would mean the corridor is a fixture, not weather)
+[PASS] genesis peaks in the baroclinic belt · 90210 peak bin 40-50°   (M77 gate: the busiest 10° band of cyclogenesis must fall inside 30-60° — the corridor is a consequence of where the temperature gradient concentrates, and nothing in storms.rs names a latitude)
+[PASS] the belt holds the season · 90210             69.7%   (M77 gate: a majority of a year's cyclones are born in the 30-60° belt — a corridor that leaked equatorward would mean the gradient measure is reading something other than baroclinicity)
+[PASS] cyclogenesis is a marine act · 90210         100.0%   (M77: a cyclone needs the sea's heat under it — a genesis point on land would mean the mask is not being read)
+[PASS] the corridor runs downwind · 90210            88.3%   (M77 gate: born in the westerlies, a storm must travel east — the steering is currents::wind_stress, the same field the gyres read, so a westward corridor would put storm and current in contradiction)
+[PASS] storms climb poleward · 90210           +7.73° mean   (M77: a travelling cyclone occludes as it goes and drifts toward its own pole — a net equatorward corridor would be the wrong sign of drift)
+[PASS] land fills the storm · 90210            0.8600/step   (M77 gate: cut off from the sea a cyclone loses intensity every step — measured over every land step of every track, not read off the constant)
+[PASS] the sea feeds the storm · 90210         1.0188/step   (M77 gate: over open water the storm must be gaining, or the land/sea contrast below proves nothing)
+[PASS] the coast is where they die · 90210           61.7%   (M77: a corridor that never reaches a shore costs the world nothing — M79 needs landfalls to wire consequences to)
+[PASS] no poison on the tracks · 90210      0 nan · 0 off-grid   (M77: every advected point is finite and inside the grid it was walked across)
+[PASS] the hemispheres storm in turn · 90210     6 mo apart   (M77 gate: the storm season is the belt's own cold season, read from the realized annual cycle — the two hemispheres must fall half a year apart because the world's seasons do, not because a calendar was typed in)
+[PASS] storms keep to their season · 90210           65.9%   (M77 gate: the five months centred on the belt's coldest must carry more than their uniform share (41.7%) of the year's cyclones — the season is drawn from the world's temperature cycle)
+[PASS] counts follow the breeding sea · 90210 0.56 vs 0.54/ky·1k   (M77 gate: storms per year per thousand baroclinic ocean cells must agree between hemispheres within a factor of two — a hemisphere that bred storms out of proportion to its sea would mean the count is coming from somewhere other than the zone)
+[PASS] shores share the exposure · 90210    770.4 vs 759.1/cy·1k   (M77 gate: landfalls per century per thousand coastline cells within a factor of two between hemispheres — one hemisphere's shore may genuinely sit downwind of a wider ocean, so this stands as a WARN band, not a hard row)
+[PASS] the corridor replays · 90210         167e62e270b6f96c   (ADR-0003: a storm season is derived, never stored — same seed and year must walk the same tracks)
+[PASS] each year draws its own storms · 90210 22 vs 22 tracks   (M77: the season is keyed on the year as well as the seed — two identical years would mean the corridor is a fixture, not weather)
+[PASS] genesis peaks in the baroclinic belt · 555 peak bin 40-50°   (M77 gate: the busiest 10° band of cyclogenesis must fall inside 30-60° — the corridor is a consequence of where the temperature gradient concentrates, and nothing in storms.rs names a latitude)
+[PASS] the belt holds the season · 555               71.1%   (M77 gate: a majority of a year's cyclones are born in the 30-60° belt — a corridor that leaked equatorward would mean the gradient measure is reading something other than baroclinicity)
+[PASS] cyclogenesis is a marine act · 555           100.0%   (M77: a cyclone needs the sea's heat under it — a genesis point on land would mean the mask is not being read)
+[PASS] the corridor runs downwind · 555              90.9%   (M77 gate: born in the westerlies, a storm must travel east — the steering is currents::wind_stress, the same field the gyres read, so a westward corridor would put storm and current in contradiction)
+[PASS] storms climb poleward · 555             +7.67° mean   (M77: a travelling cyclone occludes as it goes and drifts toward its own pole — a net equatorward corridor would be the wrong sign of drift)
+[PASS] land fills the storm · 555              0.8600/step   (M77 gate: cut off from the sea a cyclone loses intensity every step — measured over every land step of every track, not read off the constant)
+[PASS] the sea feeds the storm · 555           1.0203/step   (M77 gate: over open water the storm must be gaining, or the land/sea contrast below proves nothing)
+[PASS] the coast is where they die · 555             64.5%   (M77: a corridor that never reaches a shore costs the world nothing — M79 needs landfalls to wire consequences to)
+[PASS] no poison on the tracks · 555        0 nan · 0 off-grid   (M77: every advected point is finite and inside the grid it was walked across)
+[PASS] the hemispheres storm in turn · 555      6 mo apart   (M77 gate: the storm season is the belt's own cold season, read from the realized annual cycle — the two hemispheres must fall half a year apart because the world's seasons do, not because a calendar was typed in)
+[PASS] storms keep to their season · 555             65.0%   (M77 gate: the five months centred on the belt's coldest must carry more than their uniform share (41.7%) of the year's cyclones — the season is drawn from the world's temperature cycle)
+[PASS] counts follow the breeding sea · 555 0.54 vs 0.56/ky·1k   (M77 gate: storms per year per thousand baroclinic ocean cells must agree between hemispheres within a factor of two — a hemisphere that bred storms out of proportion to its sea would mean the count is coming from somewhere other than the zone)
+[PASS] shores share the exposure · 555      870.4 vs 811.1/cy·1k   (M77 gate: landfalls per century per thousand coastline cells within a factor of two between hemispheres — one hemisphere's shore may genuinely sit downwind of a wider ocean, so this stands as a WARN band, not a hard row)
+[PASS] the corridor replays · 555           dc616132516ac835   (ADR-0003: a storm season is derived, never stored — same seed and year must walk the same tracks)
+[PASS] each year draws its own storms · 555 20 vs 20 tracks   (M77: the season is keyed on the year as well as the seed — two identical years would mean the corridor is a fixture, not weather)
+[PASS] the belt holds in every world         69.7% - 75.0%   (M77 gate: the corridor's latitude is a property of the general circulation, so every seed's map must put its storms in the same belt)
+[PASS] the downwind sense holds in every world          88.3%   (M77 gate: no world may run its corridor against the westerlies)
+CHECKS: 77 pass · 0 warn · 0 fail
