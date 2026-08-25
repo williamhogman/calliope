@@ -9783,6 +9783,18 @@ fn cmd_teleconnection(size: usize, years: i64, seeds: Vec<i64>) {
             "M76 gate: scanning every candidate lag 0-24 mo, the belt difference must correlate most strongly with the index at exactly the declared lag — the phase relation is in the world, not only in the constant",
         );
     }
+    // M76 — the lag is a property of the coupling, not of one world.
+    let all_same = !lags.is_empty() && lags.iter().all(|&l| l == lags[0]);
+    c.must(
+        "the recovered lag is stable across worlds",
+        all_same && lags[0] == calliope::climate::TELE_LAG_MONTHS,
+        format!(
+            "{:?} mo over {} seeds",
+            lags,
+            lags.len()
+        ),
+        "M76 gate: the teleconnection lag statistic must be the same in every seed — a lag that wandered by world would mean the phase relation is an artefact of the map, not the coupling",
+    );
     c.print();
 }
 
