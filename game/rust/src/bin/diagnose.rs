@@ -9564,6 +9564,10 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
         // V=volcanic record + ash (own stream — M23) · M24 effects write
         // Peoples (burn/bury), Grids (ash → fertility), chronicle: serial.
         ("volcanoes", "V·P·G·C", true),
+        // M79: reads the landfall ledger, wounds/repairs harbours, writes
+        // Peoples and chronicle events. No shared PCG draw, but Peoples is
+        // enough to keep this pass on the serial side of the lattice.
+        ("storms", "P·C", true),
         ("colonize", "P·R", true),
         ("prospect", "D·R", true),
         ("rush-camps", "P·D·R", true),
