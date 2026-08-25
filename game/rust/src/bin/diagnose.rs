@@ -10296,40 +10296,37 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
                 }
             }
         }
-        // TEMP-DIAG (M78 investigation)
+        // How far poleward the population actually gets, so the
+        // recurvature row below can be read against the reach that feeds
+        // it rather than against an empty set.
         {
-            let mut short = 0usize;
-            let mut long_west = 0usize;
-            let mut long_n = 0usize;
-            let mut short_west = 0usize;
-            let mut maxpole: Vec<f64> = Vec::new();
+            let mut maxpole: Vec<f64> = tracks
+                .iter()
+                .map(|t| {
+                    t.points
+                        .iter()
+                        .map(|p| calliope::storms::lat_of(p.y, rows).abs())
+                        .fold(0.0f64, f64::max)
+                })
+                .collect();
             let mut net_west = 0usize;
             for t in &tracks {
-                let p0 = t.points[0];
-                let last = *t.points.last().unwrap();
-                if last.x < p0.x { net_west += 1; }
-                let mp = t.points.iter().map(|p| calliope::storms::lat_of(p.y, rows).abs()).fold(0.0f64, f64::max);
-                maxpole.push(mp);
-                if t.days() < 5.0 {
-                    short += 1;
-                    if last.x < p0.x { short_west += 1; }
-                } else {
-                    long_n += 1;
-                    if let Some(p) = t.points.iter().find(|p| p.day >= 5.0) {
-                        if p.x < p0.x { long_west += 1; }
-                    }
+                if t.points.last().unwrap().x < t.points[0].x {
+                    net_west += 1;
                 }
             }
             maxpole.sort_by(|a, b| a.partial_cmp(b).unwrap());
             let q = |f: f64| maxpole[((maxpole.len() as f64 - 1.0) * f) as usize];
             println!(
-                "   TEMP-DIAG {}: n={} short(<5d)={} short_west={} long={} long_west={} ({:.1}%) net_west_all={} ({:.1}%) maxpole p50={:.1} p90={:.1} max={:.1}",
-                seed, tracks.len(), short, short_west, long_n, long_west,
-                if long_n > 0 { long_west as f64 * 100.0 / long_n as f64 } else { 0.0 },
-                net_west, net_west as f64 * 100.0 / n,
-                q(0.5), q(0.9), maxpole[maxpole.len() - 1],
+                "   poleward reach |lat|: p50 {:.1}° · p90 {:.1}° · deepest {:.1}° · net westward over life {}/{}",
+                q(0.5),
+                q(0.9),
+                maxpole[maxpole.len() - 1],
+                net_west,
+                tracks.len(),
             );
         }
+
         let recurve = if reached > 0 {
 
             recurved as f64 / reached as f64
