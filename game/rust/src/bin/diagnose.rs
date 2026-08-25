@@ -366,6 +366,8 @@ fn hash_state(w: &World) -> u64 {
         }
         s.push_str(&format!("W{:016x}\n", calliope::util::fnv1a64(&vb)));
     }
+    // M74 — the basin's lean is likewise derived, so its probe rides here.
+    s.push_str(&format!("O{:016x}\n", w.oscillation().probe()));
     s.push_str(&format!("t{}\n", w.month));
     bytes.extend_from_slice(s.as_bytes());
     fnv(&bytes)

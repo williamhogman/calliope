@@ -189,6 +189,8 @@ pub struct World {
     /// M71 — the interannual variability field over (space × year): its own
     /// stream, so the sky's noise and the famine die never share a draw.
     pub(crate) variability: Perlin3,
+    /// M74 — the slow lean of the seas, drawn once from the seed.
+    pub(crate) oscillation: crate::oscillation::Oscillation,
     /// M71 — the current year's weather, memoized: `(year, dt °C, dp share)`.
     /// Derived state (a pure function of seed × year), never hashed, never
     /// packed; recomputed the first time a year is asked for.
@@ -1057,6 +1059,7 @@ impl GenBuilder {
             sent: SentCache::default(),
             wire_buf: Vec::new(),
             variability: Perlin3::new(seed + 7717),
+            oscillation: crate::oscillation::Oscillation::new(seed),
             year_weather: std::sync::Mutex::new(None),
             year_site_weather: std::sync::Mutex::new(None),
             grain_shock_year: -1,
@@ -1278,6 +1281,12 @@ impl World {
     /// not stored, so the harness reads its source directly: to measure
     /// the realized σ against the declared amplitude law, and to fold a
     /// fixed probe of it into the replay identity line (ADR-0003).
+    /// M74 — the basin's seesaw, for the harness and for consumers that
+    /// need the year's lean rather than the cell's anomaly.
+    pub fn oscillation(&self) -> &crate::oscillation::Oscillation {
+        &self.oscillation
+    }
+
     pub fn variability(&self) -> &Perlin3 {
         &self.variability
     }

@@ -30,6 +30,7 @@ pub mod ids;
 pub mod naming;
 pub mod ndimage;
 pub mod noisegen;
+pub mod oscillation;
 pub mod pack;
 pub mod patina;
 pub mod permafrost;
