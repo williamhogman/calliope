@@ -2,10 +2,10 @@
  CALLIOPE DIAGNOSTIC · COAST-JS                     M67 third executor
 ========================================================================
  golden: /tmp/calliope-coast-golden.bin · 4 case(s) · 7913563 B
- fixture: 96×64 · js 14 ms · 0 of 6144 cells diverge
- seed 12345: 640×512 · js 407 ms · 0 of 327680 cells diverge
- seed 777: 640×512 · js 407 ms · 0 of 327680 cells diverge
- seed 90210: 640×512 · js 403 ms · 0 of 327680 cells diverge
+ fixture: 96×64 · js 16 ms · 0 of 6144 cells diverge
+ seed 12345: 640×512 · js 504 ms · 0 of 327680 cells diverge
+ seed 777: 640×512 · js 495 ms · 0 of 327680 cells diverge
+ seed 90210: 640×512 · js 472 ms · 0 of 327680 cells diverge
 
 ---- checks ----------------------------------------------------------
 [PASS] fixture js/rust seed parity               byte-parity   (M67 gate: the JS port of the coast law walks the same seed field as the Rust twin — one law, three executors)
