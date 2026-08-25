@@ -139,8 +139,10 @@ pub const TROP_POLEWARD_DEG: f64 = TROP_BETA_MS * 86_400.0 / METRES_PER_DEG_LAT;
 /// intensity still unclaimed.
 pub const TROP_SEA_GROW: f64 = 0.11;
 /// Per-step intensity retained over a sea too cool to feed it — the
-/// storm crossing into the mid-latitudes starves before it fills.
-pub const TROP_COOL_KEEP: f64 = 0.93;
+/// storm crossing into the mid-latitudes starves over days, not at the
+/// instant it first touches the westerly boundary, so surviving storms
+/// can actually testify to the steering field before they fill.
+pub const TROP_COOL_KEEP: f64 = 0.97;
 /// Per-step intensity retained over land: cut off from the ocean, a
 /// tropical cyclone dies far faster than a frontal one.
 pub const TROP_LAND_KEEP: f64 = 0.62;
