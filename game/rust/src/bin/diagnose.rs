@@ -9777,6 +9777,10 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
 
         // Blind recovery: the strongest Fourier power over candidate
         // periods, scanned finely enough to resolve the declared band.
+        // M76 keeps the whole spectrum, not only its argmax — a peak is
+        // only a mode if it stands above the floor around it and has no
+        // rival elsewhere in the scan.
+        let mut spectrum: Vec<(f64, f64)> = Vec::new();
         let mut best = (0.0f64, 0.0f64);
         let mut t = 12.0f64;
         while t <= 140.0 {
@@ -9790,9 +9794,44 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
             if pw > best.1 {
                 best = (t, pw);
             }
+            spectrum.push((t, pw));
             t += 0.25;
         }
         let rec = best.0;
+
+        // ---- M76: is this a mode, or is it noise wearing a peak? -----
+        // The floor is the median power of every candidate period that
+        // is not part of the peak's own skirt (±25% of the recovered
+        // period). The prominence is peak/floor. The rival is the
+        // strongest power outside that skirt: a second comparable peak
+        // would mean two modes, not one dominant seesaw.
+        let skirt = |p: f64| (p - rec).abs() / rec <= 0.25;
+        let mut off: Vec<f64> = spectrum
+            .iter()
+            .filter(|(p, _)| !skirt(*p))
+            .map(|(_, w)| *w)
+            .collect();
+        off.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let floor = if off.is_empty() { 0.0 } else { off[off.len() / 2] };
+        let rival = off.iter().cloned().fold(0.0f64, f64::max);
+        let prominence = if floor > 0.0 { best.1 / floor } else { f64::INFINITY };
+        let rival_share = if best.1 > 0.0 { rival / best.1 } else { 1.0 };
+
+        // Phase lock: the realized index against a unit sinusoid at the
+        // *recovered* period. A quasi-periodic mode keeps its phase over
+        // many cycles; broadband noise does not. This is the coherence
+        // (fraction of variance the single recovered tone explains).
+        let (mut re, mut im) = (0.0f64, 0.0f64);
+        for (m, v) in series.iter().enumerate() {
+            let a = std::f64::consts::TAU * m as f64 / rec;
+            re += (v - mean) * a.cos();
+            im += (v - mean) * a.sin();
+        }
+        let coherence = if var > 0.0 {
+            2.0 * (re * re + im * im) / (n as f64 * n as f64 * var) * n as f64
+        } else {
+            0.0
+        };
 
         // Irregularity: the gaps between upward zero crossings must not
         // all be the same number — a metronome is not a basin.
