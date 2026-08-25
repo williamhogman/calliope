@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-25 16:51 UTC
+mode: full · size: 512 · generated: 2026-08-25 17:30 UTC
 
-totals: 1276 pass · 35 warn · 6 fail
+totals: 1283 pass · 33 warn · 4 fail
 
 -- assay.txt
    all checks pass
@@ -69,9 +69,8 @@ totals: 1276 pass · 35 warn · 6 fail
 [WARN] landform oatmeal floor                       0.0015   (M64: the landform mix differs between worlds — the closest pair stays distinct)
 
 -- gate.txt
-[FAIL] every composed lane actually speaks  silent: assay.txt   (M76: a lane that emitted no check rows proves nothing — a truncated or crashed report may not compose as clean)
 [FAIL] the veto bites somewhere in the ensemble 0 refused town(s) over 2 civ lane(s) [12345:0 · 777:0]   (M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it)
-[FAIL] the suite composes clean             2 fail · 35 warn · 1269 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
+[FAIL] the suite composes clean             1 fail · 33 warn · 1275 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
 [FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
 
 -- hydro-12345.txt
@@ -100,12 +99,10 @@ totals: 1276 pass · 35 warn · 6 fail
 [WARN] civ arcs completed per 300 y         4.3 (gold 13 · arcs 13)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
 
 -- perf.txt
-[WARN] stage fertility ms                   177 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage naming ms                      143 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
-[WARN] stage settlements ms                 264 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         3022 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 0                     701 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[WARN] tick rate year 100                   118 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   139 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] gen total ms                         2270 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     916 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   126 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
@@ -131,7 +128,7 @@ totals: 1276 pass · 35 warn · 6 fail
 [WARN] mean forest share                             21.4%   (sweet 25–60% · hard 15–75%)
 
 -- systems.txt
-[FAIL] the lane ran to completion                 exit 134   (M77: the report does not end in a CHECKS line — the lane was cut off, so nothing below its last printed row was measured)
+   all checks pass
 
 -- teleconnection.txt
    all checks pass
