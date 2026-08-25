@@ -36,8 +36,12 @@ pub const OSC_NOISE_SHARE: f64 = 0.30;
 /// How slowly the noise term itself wanders, in lattice units per month.
 pub const OSC_NOISE_STEP: f64 = 0.055;
 /// σ of the fbm lane used for the noise term, so it can be normalised to
-/// unit variance before it is mixed in.
-pub const OSC_FBM_SIGMA: f64 = 0.36;
+/// unit variance before it is mixed in. Measured, not guessed: 200 000
+/// consecutive months of `fbm(m·OSC_NOISE_STEP, 0.5, 0.5, 2)` give
+/// σ = 0.1897 / 0.1949 / 0.1903 on three lattices (mean ≈ 0.1916). A
+/// wrong value here shows up directly as realized σ missing the drawn
+/// amplitude, which is what the M74 lane measures.
+pub const OSC_FBM_SIGMA: f64 = 0.1916;
 /// No basin leans further than this many σ — a hard physical stop, so a
 /// single tail draw can never hand the causal path an absurd year.
 pub const OSC_CAP_SIGMA: f64 = 3.0;
