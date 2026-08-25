@@ -1,8 +1,8 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · WASM AUDIT                   twiggy top (E6.4)
 ========================================================================
- subject: calliope_bg.wasm 3566235 B · sha256 ab6f5246a2ee1ee9d5076c6b9fa7116258f2ad3eb06e9c73290a7de00b617231
- profiling twin (symbolized): 3952680 B — sizes below are from the
+ subject: calliope_bg.wasm 3564206 B · sha256 cb61ae9dded98d28dbf595bd582a80b4f5c9647faebc5d8aa28f7464a454d788
+ profiling twin (symbolized): 3952872 B — sizes below are from the
  twin; the release binary is the same code without names.
 
  Shallow Bytes │ Shallow % │ Item
@@ -47,10 +47,10 @@
          14929 ┊     0.38% ┊ calliope::world::GenBuilder::stage_climate::he5bc6ce3c21244c2
          14648 ┊     0.37% ┊ calliope::world::GenBuilder::stage_terrain::h7b0f84cc727f8075
          14454 ┊     0.37% ┊ naga::front::wgsl::parse::Parser::statement::h08dfb8e2b45a831a
-       2356094 ┊    59.61% ┊ ... and 4402 more.
-       3952680 ┊   100.00% ┊ Σ [4442 Total Rows]
+       2356286 ┊    59.61% ┊ ... and 4402 more.
+       3952872 ┊   100.00% ┊ Σ [4442 Total Rows]
 
 ---- checks ----------------------------------------------------------
-[PASS] twin speaks for the shipped binary          Δ 1.6%   (E6.6: |twin − names − release| ≤3% sweet · ≤6% hard of release — beyond that the audit reads a different build)
+[PASS] twin speaks for the shipped binary          Δ 1.7%   (E6.6: |twin − names − release| ≤3% sweet · ≤6% hard of release — beyond that the audit reads a different build)
 [PASS] no single item dominates the twin              3.4%   (E6.6: heaviest item ≤8% sweet · ≤12% hard — today's worst is the ~3.4% dawn stage; a jump names a new monster: calliope::world::GenBuilder::stage_dawn::h3338)
 CHECKS: 2 pass · 0 warn · 0 fail

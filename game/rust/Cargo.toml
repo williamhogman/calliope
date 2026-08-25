@@ -78,7 +78,14 @@ panic = "unwind"
 # scripts/build.sh's nix path provides it). -O3 measured against -Oz on the
 # real binary; producers/target-features metadata stripped (E6.6).
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ["--no-inline=*stage_*", "-Oz", "--strip-producers", "--strip-target-features"]
+# M79 — `--converge` re-runs the -Oz pipeline to a byte fixpoint: binaryen's
+# single pass leaves shrinkage on the table because later passes expose work
+# earlier ones could have done. Purely a size pass over the same semantics
+# (no inlining policy change — --no-inline still precedes it), and the
+# earth-wasm replay lane proves the converged binary is bit-identical in
+# behaviour. --strip-dwarf drops any residual debug section the release
+# codegen leaves behind.
+wasm-opt = ["--no-inline=*stage_*", "-Oz", "--converge", "--strip-producers", "--strip-target-features", "--strip-dwarf"]
 
 # E6.6 — the symbolized twin for scripts/wasm-audit.sh: wasm-opt keeps the
 # name section (-g) so twiggy can name what weighs. Never shipped.
