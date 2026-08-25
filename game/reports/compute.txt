@@ -2,10 +2,10 @@
  CALLIOPE DIAGNOSTIC · COMPUTE                      M67 lane · size 512
 ========================================================================
  adapter: Vulkan · llvmpipe (LLVM 21.1.7, 256 bits) · Cpu
- fixture 96×64: gpu 25.4 ms · cpu twin 2.6 ms · 6144 cells
- seed 12345: grid 640×512 · coast law cpu 143 ms · max |jfa−exact| 0.938 cells · 19 of 212051 sea cells miss (0.0%)
- seed 777: grid 640×512 · coast law cpu 150 ms · max |jfa−exact| 0.592 cells · 17 of 209351 sea cells miss (0.0%)
- seed 90210: grid 640×512 · coast law cpu 128 ms · max |jfa−exact| 0.592 cells · 23 of 210036 sea cells miss (0.0%)
+ fixture 96×64: gpu 64.7 ms · cpu twin 1.3 ms · 6144 cells
+ seed 12345: grid 640×512 · coast law cpu 87 ms · max |jfa−exact| 0.938 cells · 19 of 212051 sea cells miss (0.0%)
+ seed 777: grid 640×512 · coast law cpu 92 ms · max |jfa−exact| 0.592 cells · 17 of 209351 sea cells miss (0.0%)
+ seed 90210: grid 640×512 · coast law cpu 81 ms · max |jfa−exact| 0.592 cells · 23 of 210036 sea cells miss (0.0%)
  golden: 4 case(s) · 7913563 B -> /tmp/calliope-coast-golden.bin
 
 ---- checks ----------------------------------------------------------
@@ -15,5 +15,5 @@
 [PASS] seed 90210 gpu/cpu parity                     agree   (M67 gate: GPU and CPU walk one seed field on a real world)
 [PASS] jfa max err cells                       0.938 cells   (sweet ≤1 · hard ≤2 (M67: worst |jfa−exact| over sea cells — sub-cell is invisible under bilinear resampling; measured 0.764 worst-of-seeds))
 [PASS] jfa wrong cell share                           0.0%   (sweet ≤0.1% · hard ≤1% (M67: share of sea cells whose exact squared distance differs from the EDT referee's; measured ≤0.001%))
-[WARN] coast law cpu ms                             150 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
-CHECKS: 6 pass · 1 warn · 0 fail
+[PASS] coast law cpu ms                              92 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
+CHECKS: 7 pass · 0 warn · 0 fail
