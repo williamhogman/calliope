@@ -540,7 +540,11 @@ fn extraction_books_balance() {
     let mut w = World::generate(777, 256);
     let left0: Vec<f64> = w.deposits.iter().map(|d| d.left).collect();
     let stock0: Vec<f64> = w.deposits.iter().map(|d| d.stock).collect();
-    w.tick_json(240);
+    // M79's storm losses can delay the first worked seam in this compact
+    // seed beyond twenty years. Run a century so this conservation proof
+    // still exercises both ledgers under the current full system lattice;
+    // the equalities below remain exact and unchanged.
+    w.tick_json(1200);
     assert_eq!(
         w.flows.extracted.len(),
         w.deposits.len(),
@@ -580,8 +584,8 @@ fn extraction_books_balance() {
             }
         }
     }
-    assert!(mined > 0, "240 months and nothing mined — meters never exercised");
-    assert!(breathed > 0, "240 months and no wild ground breathed");
+    assert!(mined > 0, "1200 months and nothing mined — meters never exercised");
+    assert!(breathed > 0, "1200 months and no wild ground breathed");
 }
 
 // ======================================================================
