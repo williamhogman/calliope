@@ -358,7 +358,7 @@ fn hash_state(w: &World) -> u64 {
                     let y = (rows - 1) * iy / 2;
                     let x = (cols - 1) * ix / 2;
                     for lane in [0.0, calliope::climate::ANOM_RAIN_LANE] {
-                        let v = calliope::climate::anomaly_draw(&w.variability, x, y, year, lane);
+                        let v = calliope::climate::anomaly_draw(w.variability(), x, y, year, lane);
                         vb.extend_from_slice(&v.to_bits().to_le_bytes());
                     }
                 }

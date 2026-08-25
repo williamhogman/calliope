@@ -1274,6 +1274,14 @@ impl World {
     /// M71 — the year's anomaly grids computed from scratch, bypassing the
     /// memo. Diagnostics hold this against the memoized copy so the cache
     /// can never quietly become a second source of weather.
+    /// M73 — the variability lattice itself. The year's sky is derived,
+    /// not stored, so the harness reads its source directly: to measure
+    /// the realized σ against the declared amplitude law, and to fold a
+    /// fixed probe of it into the replay identity line (ADR-0003).
+    pub fn variability(&self) -> &Perlin3 {
+        &self.variability
+    }
+
     pub fn year_anomaly_fresh(&self, year: i64) -> (Array2<f64>, Array2<f64>) {
         let (rows, cols) = self.fields.tmean.dim();
         climate::year_anomaly(&self.variability, rows, cols, year)
