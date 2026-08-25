@@ -7701,7 +7701,15 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
             fused,
             golden,
             arcs,
+            late_by_why: {
+                let mut t: std::collections::BTreeMap<String, usize> = Default::default();
+                for r in w.ruins.iter().filter(|r| r.since > 1200) {
+                    *t.entry(r.why.clone()).or_default() += 1;
+                }
+                t.into_iter().collect()
+            },
         });
+
     }
 
     println!(
