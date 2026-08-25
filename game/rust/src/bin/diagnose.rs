@@ -3423,19 +3423,24 @@ fn cmd_climate(seed: i64, size: usize) {
         let names = ["tropics (<23.5°)", "mid-latitudes (23.5–55°)", "polar (>55°)"];
         println!();
         println!("interannual variability (M71) · {} years · land cells only:", YEARS);
-        println!("  {:<26} {:>10} {:>12} {:>12}", "belt", "σ T (°C)", "declared σ", "σ rain (frac)");
+        println!(
+            "  {:<26} {:>10} {:>12} {:>14} {:>12}",
+            "belt", "σ T (°C)", "declared σ", "σ rain unforced", "σ rain total"
+        );
         for b in 0..3 {
             let dec = declared_t[b][0] / declared_t[b][1].max(1.0);
             println!(
-                "  {:<26} {:>10.3} {:>12.3} {:>12.3}",
+                "  {:<26} {:>10.3} {:>12.3} {:>14.3} {:>12.3}",
                 names[b],
                 sd(belt_t[b]),
                 dec,
+                sd(belt_pu[b]),
                 sd(belt_p[b])
             );
         }
         let (st, sp): (Vec<f64>, Vec<f64>) =
             (0..3).map(|b| (sd(belt_t[b]), sd(belt_p[b]))).unzip();
+        let spu: Vec<f64> = (0..3).map(|b| sd(belt_pu[b])).collect();
         c.must(
             "the year's heat swings wider toward the poles",
             st[0] < st[1] && st[1] < st[2],
@@ -3444,9 +3449,24 @@ fn cmd_climate(seed: i64, size: usize) {
         );
         c.must(
             "the year's rain swings wider toward the poles",
-            sp[0] < sp[1] && sp[1] < sp[2],
-            format!("σ {:.3} → {:.3} → {:.3}", sp[0], sp[1], sp[2]),
-            "M71: the same latitude law shapes the rain lane, in fractional terms",
+            spu[0] < spu[1] && spu[1] < spu[2],
+            format!("σ {:.3} → {:.3} → {:.3}", spu[0], spu[1], spu[2]),
+            "M71: the same latitude law shapes the rain lane, in fractional terms — measured unforced (osc≡0), which is the law's own claim; the M75 tilt is gated in the teleconnection lane",
+        );
+        // M75 — and the tilt must actually land: the forced tropics carry
+        // more year-to-year rain variance than the unforced tropics, while
+        // the polar belt the tilt does not reach is left as it was.
+        c.must(
+            "the seesaw widens the tropics it aims at",
+            sp[0] > spu[0] * (1.0 + 1e-6),
+            format!("tropics σ {:.3} unforced → {:.3} forced", spu[0], sp[0]),
+            "M75: the teleconnection belt adds interannual rain variance where it is aimed",
+        );
+        c.must(
+            "the seesaw leaves the poles alone",
+            (sp[2] - spu[2]).abs() <= 0.02 * spu[2].max(1e-9),
+            format!("polar σ {:.3} unforced → {:.3} forced", spu[2], sp[2]),
+            "M75: TELE_BELT_LAT 15° / σ 12° dies out well before the polar belt",
         );
         // The declared amplitude is a claim in °C; hold the measurement to it.
         let dec_mean: Vec<f64> = (0..3).map(|b| declared_t[b][0] / declared_t[b][1].max(1.0)).collect();
