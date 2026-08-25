@@ -9761,8 +9761,10 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
 
     let mut c = Checks::default();
     let mut periods: Vec<f64> = Vec::new();
+    let mut proms: Vec<f64> = Vec::new();
+    let mut recs: Vec<f64> = Vec::new();
     println!();
-    println!(" seed        period mo  recovered   amp    σ realized     mean   |idx|max  warm%  cold%");
+    println!(" seed        period mo  recovered   amp    σ realized     mean   |idx|max  warm%  cold%  peak/floor  rival  coher");
     for &seed in &seeds {
         let o = calliope::oscillation::Oscillation::new(seed);
         let n = months as usize;
@@ -9850,9 +9852,9 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
         };
 
         println!(
-            " {:<10} {:>8.1}  {:>8.1}  {:>6.2}  {:>10.3}  {:>7.3}  {:>8.2}  {:>5.1}  {:>5.1}",
+            " {:<10} {:>8.1}  {:>8.1}  {:>6.2}  {:>10.3}  {:>7.3}  {:>8.2}  {:>5.1}  {:>5.1}  {:>10.1}  {:>5.2}  {:>5.2}",
             seed, o.period(), rec, o.amp(), sd, mean, amax,
-            100.0 * warm, 100.0 * cold
+            100.0 * warm, 100.0 * cold, prominence, rival_share, coherence
         );
 
         let sk = |t: &str| format!("{} · {}", t, seed);
@@ -9918,6 +9920,34 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
             format!("{:016x}", o.probe()),
             "ADR-0003: the seesaw is derived from the seed alone — rebuilding it must give the same law and the same series",
         );
+        // ---- M76: the seesaw read as a spectrum ----------------------
+        c.must(
+            &sk("the dominant peak sits in the declared band"),
+            rec >= calliope::oscillation::OSC_PERIOD_MIN
+                && rec <= calliope::oscillation::OSC_PERIOD_MAX,
+            format!("{:.1} mo in 24-84", rec),
+            "M76 gate: the peak the spectrum actually finds — not the drawn constant — must land inside the ENSO-class band",
+        );
+        c.must(
+            &sk("the peak stands above the noise floor"),
+            prominence >= 3.0,
+            format!("{:.1}x floor", prominence),
+            "M76 gate: dominant spectral power at least 3x the off-peak median — a mode rises out of its own background, decorative noise does not",
+        );
+        c.must(
+            &sk("the peak is single, not one of a pair"),
+            rival_share <= 0.5,
+            format!("rival {:.0}% of peak", 100.0 * rival_share),
+            "M76 gate: the strongest power outside the peak's skirt must be under half of it — two comparable peaks would be two modes, not one seesaw",
+        );
+        c.must(
+            &sk("the mode holds its phase"),
+            coherence >= 0.30,
+            format!("{:.0}% of variance in the tone", 100.0 * coherence),
+            "M76: a quasi-periodic mode keeps phase over many cycles, so one tone carries a real share of the variance — broadband noise spreads it thin",
+        );
+        proms.push(prominence);
+        recs.push(rec);
         periods.push(o.period());
     }
 
@@ -9930,6 +9960,22 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
         pmax - pmin >= 4.0,
         format!("{:.1}-{:.1} mo across seeds", pmin, pmax),
         "M74: the period is drawn per seed — a sweep that all leans on one rhythm means the draw is not keyed to the world",
+    );
+    // M76 — the sweep-wide statement: every seed, not the best one.
+    let worst_prom = proms.iter().cloned().fold(f64::MAX, f64::min);
+    c.must(
+        "every world's peak clears the floor",
+        worst_prom >= 3.0,
+        format!("weakest {:.1}x over {} seeds", worst_prom, proms.len()),
+        "M76 gate: the 3x prominence must hold on every sweep seed — one world proving a mode proves nothing about the law",
+    );
+    let rmin = recs.iter().cloned().fold(f64::MAX, f64::min);
+    let rmax = recs.iter().cloned().fold(f64::MIN, f64::max);
+    c.must(
+        "the recovered rhythms differ across worlds",
+        rmax - rmin >= 4.0,
+        format!("{:.1}-{:.1} mo recovered", rmin, rmax),
+        "M76: the spectrum must see the per-seed draw too — one recovered period across every world would mean the analysis is reading the engine, not the series",
     );
     c.print();
 }
