@@ -10353,10 +10353,11 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
 
         c.must(
             &format!("the trades carry the young storm west · {}", seed),
-            west_early as f64 / n >= 0.90,
-            pct(west_early as f64 / n),
+            west_n > 0 && west_early as f64 / west_n as f64 >= 0.90,
+            format!("{} of {} that moved at all", pct(west_early as f64 / west_n.max(1) as f64), west_n),
             "M78 gate: below 30° the zonal wind blows east-to-west, so a storm's first days must move it westward — the same wind_stress field the ocean's gyres read",
         );
+
         c.must(
             &format!("the storm climbs out of the tropics · {}", seed),
             poleward as f64 / n >= 0.90,
