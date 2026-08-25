@@ -75,6 +75,8 @@ run "economy-${SEEDS[0]}.txt" economy "${SEEDS[0]}" "$SIZE" "$ECO_YEARS"
 run "telling-${SEEDS[0]}.txt" telling "${SEEDS[0]}" "$SIZE" "$TELL_YEARS"
 # M73 — the sky's variance held in bands, across the full sweep.
 run "climate-variance.txt" climate-variance "$SIZE" 60 $OCEAN
+# M74 — the slow lean of the seas, drawn per world and recovered blind.
+run "oscillation.txt" oscillation 1200 $OCEAN
 run "determinism.txt" determinism "${SEEDS[0]}" "$SIZE" "$DET_MONTHS"
 run "bench.txt" bench
 run "perf.txt" perf $PERF

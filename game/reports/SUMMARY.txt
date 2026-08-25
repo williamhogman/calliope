@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-25 00:42 UTC
+mode: full · size: 512 · generated: 2026-08-25 01:22 UTC
 
-totals: 1002 pass · 39 warn · 0 fail
+totals: 1053 pass · 39 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -10,11 +10,11 @@ totals: 1002 pass · 39 warn · 0 fail
    all checks pass
 
 -- bench.txt
-[WARN] 512 generation time                         3070 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
+[WARN] 512 generation time                         3050 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
 [WARN] median tick payload                          7454 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
-[WARN] worst long task                                    783 ms   (E10.7: single worst main-thread stall (ms); headless baseline 220)
+[WARN] worst long task                                    775 ms   (E10.7: single worst main-thread stall (ms); headless baseline 220)
 
 -- build.txt
 [WARN] wasm binary size                              3515909 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
@@ -50,7 +50,7 @@ totals: 1002 pass · 39 warn · 0 fail
    all checks pass
 
 -- compute.txt
-[WARN] coast law cpu ms                             123 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
+[WARN] coast law cpu ms                             124 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
 
 -- determinism.txt
    all checks pass
@@ -89,17 +89,20 @@ totals: 1002 pass · 39 warn · 0 fail
 -- ocean.txt
    all checks pass
 
+-- oscillation.txt
+   all checks pass
+
 -- patina.txt
 [WARN] ruins per century (after y100)                16.83   (M9.1 gate: mature worlds carry ruins)
 [WARN] civ arcs completed per 300 y         4.7 (gold 11 · arcs 14)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
 
 -- perf.txt
-[WARN] stage fertility ms                   202 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage naming ms                      125 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
-[WARN] stage settlements ms                 333 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2966 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 0                     892 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[WARN] tick rate year 100                   115 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   185 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage naming ms                      122 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
+[WARN] stage settlements ms                 270 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         3163 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     830 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   109 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
