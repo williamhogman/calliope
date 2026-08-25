@@ -9,6 +9,20 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# M78 — one builder at a time. Two overlapping build.sh runs share every
+# output path (gen/*.js, wasm/, dist/); a second builder's `>` truncation
+# can land after the first has already written, leaving a zero-byte
+# generated module that imports as "export not found" and silently kills
+# the coast-js parity lane and the browser probe. The lock makes a second
+# builder wait instead of racing (blocking, not -n: a build is a legitimate
+# thing to queue behind).
+mkdir -p game/reports
+if command -v flock >/dev/null 2>&1; then
+  exec 8>game/reports/.build.lock
+  flock 8
+fi
+
+
 RUST_DIR=game/rust
 OUT=game/web/js/wasm
 REPORT=game/reports/build.txt
@@ -34,26 +48,46 @@ elif [ ! -f "$SRC_STAMP" ] || [ "$(cat "$SRC_STAMP")" != "$SRC_HASH" ]; then
 fi
 
 GEN=game/web/js/gen/constants.js
-if [ ! -f "$GEN" ]; then
+# `-s`, not `-f`: a zero-byte generated module is not a generated module.
+# A truncated-but-present file used to read as "up to date" forever.
+if [ ! -s "$GEN" ] || [ ! -s "$(dirname "$GEN")/types.js" ]; then
   needs_build=1
 fi
+
+# Generate through a private temp file and move it into place only after
+# the generator exited 0 and actually emitted bytes. A direct `>` redirect
+# truncates the live module before the generator has produced a single
+# byte — every consumer that imports it during that window sees an empty
+# module, and a generator failure leaves the truncation permanent.
+gen_js() { # gen_js <dest> [genjs args...]
+  local dest="$1"; shift
+  local tmp; tmp="$(dirname "$dest")/.$(basename "$dest").tmp.$$"
+  if command -v cargo >/dev/null 2>&1; then
+    (cd "$RUST_DIR" && cargo run -q --release --bin genjs -- "$@") > "$tmp"
+  else
+    nix shell nixpkgs#rustc nixpkgs#cargo -c \
+      bash -c "cd '$RUST_DIR' && cargo run -q --release --bin genjs -- $*" > "$tmp"
+  fi
+  if [ ! -s "$tmp" ]; then
+    rm -f "$tmp"
+    echo "genjs produced no output for $dest — refusing to ship an empty module" >&2
+    exit 1
+  fi
+  mv -f "$tmp" "$dest"
+}
 
 if [ "$needs_build" = 1 ]; then
   echo "== rebuilding WASM engine =="
   if command -v wasm-pack >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1; then
     (cd "$RUST_DIR" && wasm-pack build --target web --release)
-    mkdir -p "$(dirname "$GEN")"
-    (cd "$RUST_DIR" && cargo run -q --release --bin genjs) > "$GEN"
-    (cd "$RUST_DIR" && cargo run -q --release --bin genjs -- types) > "$(dirname "$GEN")/types.js"
   else
     nix shell nixpkgs#rustc nixpkgs#cargo nixpkgs#lld nixpkgs#binaryen nixpkgs#wasm-pack -c \
       bash -c "cd '$RUST_DIR' && wasm-pack build --target web --release"
-    mkdir -p "$(dirname "$GEN")"
-    nix shell nixpkgs#rustc nixpkgs#cargo -c \
-      bash -c "cd '$RUST_DIR' && cargo run -q --release --bin genjs" > "$GEN"
-    nix shell nixpkgs#rustc nixpkgs#cargo -c \
-      bash -c "cd '$RUST_DIR' && cargo run -q --release --bin genjs -- types" > "$(dirname "$GEN")/types.js"
   fi
+  mkdir -p "$(dirname "$GEN")"
+  gen_js "$GEN"
+  gen_js "$(dirname "$GEN")/types.js" types
+
   mkdir -p "$OUT"
   cp "$RUST_DIR/pkg/calliope.js" "$RUST_DIR/pkg/calliope_bg.wasm" "$OUT/"
   printf '%s' "$SRC_HASH" > "$SRC_STAMP"
