@@ -123,9 +123,18 @@ pub const TROP_MAX_PER_SEASON: usize = 30;
 /// The trades carry a young storm west; past 30° the westerlies take it
 /// back east — the recurvature is the wind field's, not a rule here.
 pub const TROP_STEER_DEG: f64 = 6.0;
-/// Poleward drift, degrees of latitude per day (beta drift plus the
-/// steering flow's own poleward lean).
-pub const TROP_POLEWARD_DEG: f64 = 0.42;
+/// Beta drift, metres per second. A tropical cyclone's own vorticity
+/// advects it poleward-and-westward against the background flow; the
+/// observed magnitude of that self-propagation is 1-3 m/s. This is the
+/// physical quantity — the per-day latitude step below is derived from
+/// it, not tuned.
+pub const TROP_BETA_MS: f64 = 1.5;
+/// Metres per degree of latitude on a sphere of Earth's radius.
+pub const METRES_PER_DEG_LAT: f64 = 111_320.0;
+/// Poleward drift, degrees of latitude per day, derived from the beta
+/// drift speed above.
+pub const TROP_POLEWARD_DEG: f64 = TROP_BETA_MS * 86_400.0 / METRES_PER_DEG_LAT;
+
 /// Per-step intensification over a fuelled sea, as a share of the
 /// intensity still unclaimed.
 pub const TROP_SEA_GROW: f64 = 0.11;
