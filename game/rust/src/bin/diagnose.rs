@@ -10375,27 +10375,16 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
         );
 
         // --- the season -----------------------------------------------
-        let mut mon = [0usize; 12];
         let mut monn = [0usize; 12];
         let mut mons = [0usize; 12];
         for t in &tracks {
-            mon[t.month as usize] += 1;
             if t.hemi >= 0 {
                 monn[t.month as usize] += 1;
             } else {
                 mons[t.month as usize] += 1;
             }
         }
-        let peak_of = |a: &[usize; 12]| -> i64 {
-            let mut b = 0usize;
-            for m in 1..12 {
-                if a[m] > a[b] {
-                    b = m;
-                }
-            }
-            b as i64
-        };
-        let _ = peak_of(&mon);
+
         // The season's centre of mass on the circle of the year. The
         // modal month is not an estimator of a season: the humps here run
         // 30-49 tracks across three adjacent months, so the argmax turns
