@@ -3,12 +3,12 @@
 ========================================================================
 the slow lean of the seas · drawn law vs realized series  (M74)
 
- seed        period mo  recovered   amp    σ realized     mean   |idx|max  warm%  cold%
- 12345          27.3      27.2    1.04       1.033    0.106      2.71   28.5   20.2
- 777            67.9      67.8    0.56       0.548    0.009      1.50   24.7   24.5
- 31337          75.6      75.5    1.16       1.183   -0.013      3.35   26.5   26.8
- 90210          29.2      29.2    1.36       1.474   -0.093      3.45   26.8   30.2
- 555            28.8      28.8    0.56       0.604    0.026      1.45   26.9   23.8
+ seed        period mo  recovered   amp    σ realized     mean   |idx|max  warm%  cold%  peak/floor  rival  coher
+ 12345          27.3      27.2    1.04       1.033    0.106      2.71   28.5   20.2       194.6   0.05   0.68
+ 777            67.9      67.8    0.56       0.548    0.009      1.50   24.7   24.5       251.3   0.05   0.68
+ 31337          75.6      75.5    1.16       1.183   -0.013      3.35   26.5   26.8       173.6   0.04   0.71
+ 90210          29.2      29.2    1.36       1.474   -0.093      3.45   26.8   30.2       107.9   0.03   0.70
+ 555            28.8      28.8    0.56       0.604    0.026      1.45   26.9   23.8        82.8   0.06   0.60
 
 ---- checks ----------------------------------------------------------
 [PASS] period inside the declared band · 12345 27.3 mo in 24-84   (M74: an ENSO-class basin leans for two to seven years — never a season, never a century)
@@ -21,6 +21,10 @@ the slow lean of the seas · drawn law vs realized series  (M74)
 [PASS] the seesaw is irregular · 12345      cycle σ 3.5 mo   (M74: real basins skip and stall — successive cycles of identical length would be a metronome)
 [PASS] every month is finite · 12345               1200 mo   (M74: no poison enters the causal path M72 opened)
 [PASS] the basin replays · 12345            08ce6004b6a89232   (ADR-0003: the seesaw is derived from the seed alone — rebuilding it must give the same law and the same series)
+[PASS] the dominant peak sits in the declared band · 12345 27.2 mo in 24-84   (M76 gate: the peak the spectrum actually finds — not the drawn constant — must land inside the ENSO-class band)
+[PASS] the peak stands above the noise floor · 12345   194.6x floor   (M76 gate: dominant spectral power at least 3x the off-peak median — a mode rises out of its own background, decorative noise does not)
+[PASS] the peak is single, not one of a pair · 12345 rival 5% of peak   (M76 gate: the strongest power outside the peak's skirt must be under half of it — two comparable peaks would be two modes, not one seesaw)
+[PASS] the mode holds its phase · 12345     68% of variance in the tone   (M76: a quasi-periodic mode keeps phase over many cycles, so one tone carries a real share of the variance — broadband noise spreads it thin)
 [PASS] period inside the declared band · 777 67.9 mo in 24-84   (M74: an ENSO-class basin leans for two to seven years — never a season, never a century)
 [PASS] amplitude inside the declared band · 777 0.56 in 0.55-1.45   (M74: every world draws a basin of its own strength, inside one envelope)
 [PASS] the period is recoverable blind · 777 -0.2% of drawn   (M74: the dominant periodogram peak of the realized index must find the drawn period within 15% — the lean is in the series, not only in the struct)
@@ -31,6 +35,10 @@ the slow lean of the seas · drawn law vs realized series  (M74)
 [PASS] the seesaw is irregular · 777        cycle σ 12.6 mo   (M74: real basins skip and stall — successive cycles of identical length would be a metronome)
 [PASS] every month is finite · 777                 1200 mo   (M74: no poison enters the causal path M72 opened)
 [PASS] the basin replays · 777              14da36fcf8700f27   (ADR-0003: the seesaw is derived from the seed alone — rebuilding it must give the same law and the same series)
+[PASS] the dominant peak sits in the declared band · 777 67.8 mo in 24-84   (M76 gate: the peak the spectrum actually finds — not the drawn constant — must land inside the ENSO-class band)
+[PASS] the peak stands above the noise floor · 777   251.3x floor   (M76 gate: dominant spectral power at least 3x the off-peak median — a mode rises out of its own background, decorative noise does not)
+[PASS] the peak is single, not one of a pair · 777 rival 5% of peak   (M76 gate: the strongest power outside the peak's skirt must be under half of it — two comparable peaks would be two modes, not one seesaw)
+[PASS] the mode holds its phase · 777       68% of variance in the tone   (M76: a quasi-periodic mode keeps phase over many cycles, so one tone carries a real share of the variance — broadband noise spreads it thin)
 [PASS] period inside the declared band · 31337 75.6 mo in 24-84   (M74: an ENSO-class basin leans for two to seven years — never a season, never a century)
 [PASS] amplitude inside the declared band · 31337 1.16 in 0.55-1.45   (M74: every world draws a basin of its own strength, inside one envelope)
 [PASS] the period is recoverable blind · 31337 -0.1% of drawn   (M74: the dominant periodogram peak of the realized index must find the drawn period within 15% — the lean is in the series, not only in the struct)
@@ -41,6 +49,10 @@ the slow lean of the seas · drawn law vs realized series  (M74)
 [PASS] the seesaw is irregular · 31337      cycle σ 20.8 mo   (M74: real basins skip and stall — successive cycles of identical length would be a metronome)
 [PASS] every month is finite · 31337               1200 mo   (M74: no poison enters the causal path M72 opened)
 [PASS] the basin replays · 31337            0e8e1cab525c6798   (ADR-0003: the seesaw is derived from the seed alone — rebuilding it must give the same law and the same series)
+[PASS] the dominant peak sits in the declared band · 31337 75.5 mo in 24-84   (M76 gate: the peak the spectrum actually finds — not the drawn constant — must land inside the ENSO-class band)
+[PASS] the peak stands above the noise floor · 31337   173.6x floor   (M76 gate: dominant spectral power at least 3x the off-peak median — a mode rises out of its own background, decorative noise does not)
+[PASS] the peak is single, not one of a pair · 31337 rival 4% of peak   (M76 gate: the strongest power outside the peak's skirt must be under half of it — two comparable peaks would be two modes, not one seesaw)
+[PASS] the mode holds its phase · 31337     71% of variance in the tone   (M76: a quasi-periodic mode keeps phase over many cycles, so one tone carries a real share of the variance — broadband noise spreads it thin)
 [PASS] period inside the declared band · 90210 29.2 mo in 24-84   (M74: an ENSO-class basin leans for two to seven years — never a season, never a century)
 [PASS] amplitude inside the declared band · 90210 1.36 in 0.55-1.45   (M74: every world draws a basin of its own strength, inside one envelope)
 [PASS] the period is recoverable blind · 90210 +0.3% of drawn   (M74: the dominant periodogram peak of the realized index must find the drawn period within 15% — the lean is in the series, not only in the struct)
@@ -51,6 +63,10 @@ the slow lean of the seas · drawn law vs realized series  (M74)
 [PASS] the seesaw is irregular · 90210      cycle σ 6.1 mo   (M74: real basins skip and stall — successive cycles of identical length would be a metronome)
 [PASS] every month is finite · 90210               1200 mo   (M74: no poison enters the causal path M72 opened)
 [PASS] the basin replays · 90210            058335f80b08d527   (ADR-0003: the seesaw is derived from the seed alone — rebuilding it must give the same law and the same series)
+[PASS] the dominant peak sits in the declared band · 90210 29.2 mo in 24-84   (M76 gate: the peak the spectrum actually finds — not the drawn constant — must land inside the ENSO-class band)
+[PASS] the peak stands above the noise floor · 90210   107.9x floor   (M76 gate: dominant spectral power at least 3x the off-peak median — a mode rises out of its own background, decorative noise does not)
+[PASS] the peak is single, not one of a pair · 90210 rival 3% of peak   (M76 gate: the strongest power outside the peak's skirt must be under half of it — two comparable peaks would be two modes, not one seesaw)
+[PASS] the mode holds its phase · 90210     70% of variance in the tone   (M76: a quasi-periodic mode keeps phase over many cycles, so one tone carries a real share of the variance — broadband noise spreads it thin)
 [PASS] period inside the declared band · 555 28.8 mo in 24-84   (M74: an ENSO-class basin leans for two to seven years — never a season, never a century)
 [PASS] amplitude inside the declared band · 555 0.56 in 0.55-1.45   (M74: every world draws a basin of its own strength, inside one envelope)
 [PASS] the period is recoverable blind · 555 -0.3% of drawn   (M74: the dominant periodogram peak of the realized index must find the drawn period within 15% — the lean is in the series, not only in the struct)
@@ -61,5 +77,11 @@ the slow lean of the seas · drawn law vs realized series  (M74)
 [PASS] the seesaw is irregular · 555        cycle σ 5.3 mo   (M74: real basins skip and stall — successive cycles of identical length would be a metronome)
 [PASS] every month is finite · 555                 1200 mo   (M74: no poison enters the causal path M72 opened)
 [PASS] the basin replays · 555              b4c2c7707cdc775b   (ADR-0003: the seesaw is derived from the seed alone — rebuilding it must give the same law and the same series)
+[PASS] the dominant peak sits in the declared band · 555 28.8 mo in 24-84   (M76 gate: the peak the spectrum actually finds — not the drawn constant — must land inside the ENSO-class band)
+[PASS] the peak stands above the noise floor · 555    82.8x floor   (M76 gate: dominant spectral power at least 3x the off-peak median — a mode rises out of its own background, decorative noise does not)
+[PASS] the peak is single, not one of a pair · 555 rival 6% of peak   (M76 gate: the strongest power outside the peak's skirt must be under half of it — two comparable peaks would be two modes, not one seesaw)
+[PASS] the mode holds its phase · 555       60% of variance in the tone   (M76: a quasi-periodic mode keeps phase over many cycles, so one tone carries a real share of the variance — broadband noise spreads it thin)
 [PASS] each world draws its own basin       27.3-75.6 mo across seeds   (M74: the period is drawn per seed — a sweep that all leans on one rhythm means the draw is not keyed to the world)
-CHECKS: 51 pass · 0 warn · 0 fail
+[PASS] every world's peak clears the floor  weakest 82.8x over 5 seeds   (M76 gate: the 3x prominence must hold on every sweep seed — one world proving a mode proves nothing about the law)
+[PASS] the recovered rhythms differ across worlds 27.2-75.5 mo recovered   (M76: the spectrum must see the per-seed draw too — one recovered period across every world would mean the analysis is reading the engine, not the series)
+CHECKS: 73 pass · 0 warn · 0 fail
