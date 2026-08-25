@@ -9828,7 +9828,7 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
             im += (v - mean) * a.sin();
         }
         let coherence = if var > 0.0 {
-            2.0 * (re * re + im * im) / (n as f64 * n as f64 * var) * n as f64
+            2.0 * (re * re + im * im) / (n as f64 * n as f64 * var)
         } else {
             0.0
         };
