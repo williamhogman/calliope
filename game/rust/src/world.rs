@@ -1907,6 +1907,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Disaster,
                     text: format!("A brutal winter grips {} — {} lost.", s.name, loss),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
@@ -1919,6 +1921,8 @@ impl World {
                     s: s.name.clone(),
                     k: EventKind::Disaster,
                     text: format!("Plague stalks the streets of {} — {} souls perish.", s.name, loss),
+                    x: s.x,
+                    y: s.y,
                     ..Default::default()
                 });
             }
