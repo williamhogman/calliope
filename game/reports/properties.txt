@@ -13,7 +13,7 @@ seed  12345: silt ladder ≥1/5/10 m: 36.8/4.6/2.20% of land · plain 449 bodies
 seed  12345: coast frontage 6245 cells · storied 47.7% · [raised beach 2205 · fjord 97 · tidal flat 65 · estuary 51 · delta plain 453 · spit 91 · barrier island 5 · lagoon 10] · shore 3268
 
 seed    777: 5033 river cells · 0 uphill · 0 cycles · 0 dry terminals
-seed    777: 17 towns · 21 routes · 0 isolated · 1 components
+seed    777: 18 towns · 22 routes · 0 isolated · 1 components
 seed    777: rain ×1.25 ⇒ river cells 5033 → 6129 · discharge 2130723 → 2749149
 seed    777: hypsometry mean 1014 m · below 1 km 50.2%
 seed    777: streams (A_c 80 km²) N_k [8603, 1691, 389, 94, 19, 1] · Rb 5.58
@@ -61,12 +61,12 @@ seed  12345: territory over 240 months · 13 full ships · 9 tile ships
 [PASS] rivers reach an outlet (777)                  0 dry   (M8.1: sea, lake or salt basin)
 [PASS] no isolated settlement (777)              0 cut off   (M8.1: every town trades)
 [PASS] route graph connected (777)                 1 comps   (M8.1: one world, one web)
-[PASS] pack is stable (777)                      7176364 B   (M8.1: same world ⇒ same bytes)
+[PASS] pack is stable (777)                      7176620 B   (M8.1: same world ⇒ same bytes)
 [PASS] pack v3 + crc32 (777)                  crc 6f614356   (E3.6: stamped and checksummed)
 [PASS] unpack layout sound (777)                 19 arrays   (M8.1: offsets contiguous, sizes exact)
 [PASS] raw sections bit-equal (777)              bit-equal   (M8.1: arrays survive the wire)
 [PASS] quantization ≤ ε (777)               worst 0.500·scale   (E3.4: quantized wire loses ≤ half a step)
-[PASS] territory RLE exact (777)                  939 runs   (E3.5: borders compress, nothing drifts)
+[PASS] territory RLE exact (777)                  983 runs   (E3.5: borders compress, nothing drifts)
 [PASS] rain↑ ⇒ rivers not↓ (777)               5033 → 6129   (M8.2: metamorphic monotonicity)
 [PASS] rain↑ ⇒ discharge↑ (777)                      ×1.29   (M8.2: more water flows)
 [PASS] land below 1 km % (777)                       50.2%   (M64: one seed is one continent — Earth's continents run ~50–95% under 1 km)

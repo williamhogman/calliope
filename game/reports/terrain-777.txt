@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 777 · 640x512
 ========================================================================
-world: "Calomar" · generated in 3110 ms
+world: "Calomar" · generated in 3145 ms
 land: 118329 cells of 327680 (36.1%) · 1893264 km²
 hypsometry (land h): p5 0.018 · p25 0.102 · p50 0.249 · p75 0.389 · p95 0.528 · max 0.688
 bathymetry (sea h): p5 -0.591 · p50 -0.394 · p95 -0.042

@@ -1,25 +1,25 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · ERA I GATE                   size 512 · 300y leg · seed 12345
 ========================================================================
- composing ../.reports.run.61362
+ composing ../.reports.run.7210
 
  lane                          pass  warn  fail     age
  assay.txt                        1     0     0    0.0h
  atlas.txt                       13     0     0    0.1h
  bench.txt                        4     1     0    0.1h
  browser.txt                      7     0     0    0.0h
- build.txt                        0     1     0    0.1h
- civ-12345.txt                   78     5     0    0.1h
- civ-777.txt                     79     4     0    0.1h
+ build.txt                        0     1     0    0.5h
+ civ-12345.txt                   79     4     0    0.1h
+ civ-777.txt                     78     5     0    0.1h
  climate-12345.txt               27     1     0    0.1h
  climate-777.txt                 26     2     0    0.1h
  climate-90210.txt               27     1     0    0.1h
  climate-variance.txt            74     0     0    0.1h
- coastjs.txt                      4     0     0    0.0h
- compile.txt                      1     0     0    0.0h
- compute.txt                      7     0     0    0.0h
+ coastjs.txt                      4     0     0    0.1h
+ compile.txt                      1     0     0    0.1h
+ compute.txt                      7     0     0    0.1h
  determinism.txt                  3     0     0    0.1h
- earth-wasm.txt                   2     0     0    0.0h
+ earth-wasm.txt                   2     0     0    0.1h
  earth.txt                       51     0     0    0.1h
  economy-12345.txt               52     0     0    0.1h
  era.txt                          8     1     0    0.1h
@@ -30,8 +30,8 @@
  ocean-meta.txt                   9     0     0    0.1h
  ocean.txt                       15     0     0    0.1h
  oscillation.txt                 73     0     0    0.1h
- patina.txt                       8     1     1    0.1h
- perf.txt                         9     4     0    0.1h
+ patina.txt                       9     1     0    0.1h
+ perf.txt                         9     3     1    0.1h
  properties.txt                  72     6     0    0.1h
  resources-12345.txt             32     0     0    0.1h
  resources-777.txt               32     0     0    0.1h
@@ -40,31 +40,32 @@
  sweep.txt                       18     1     0    0.1h
  systems.txt                      3     0     0    0.1h
  teleconnection.txt              50     0     0    0.1h
- telling-12345.txt               12     0     0    0.1h
+ telling-12345.txt               11     0     1    0.1h
  terrain-12345.txt               76     0     0    0.1h
  terrain-777.txt                 75     1     0    0.1h
  terrain-90210.txt               76     0     0    0.1h
  tropics.txt                     67     0     0    0.1h
  wasm-audit.txt                   2     0     0       -
- wasm.txt                         0     1     0    0.0h
- TOTAL                         1275    33     1
+ wasm.txt                         0     1     0    0.1h
+ TOTAL                         1275    32     2
 
  held rows (each holds the era open):
-   patina.txt · [FAIL] ruins per century (after y100)                30.50   (M9.1 gate: mature worlds carry ruins)
+   perf.txt · [FAIL] tick rate year 100                   99 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+   telling-12345.txt · [FAIL] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
 
  structural leg: seed 12345 · 3600 months · chunkings 240/120 vs 180
- towns 16→96 · 812 events in the final decade · 48s for both runs (151 mo/s)
+ towns 16→96 · 802 events in the final decade · 48s for both runs (151 mo/s)
 
 ---- checks ----------------------------------------------------------
 [PASS] every era lane on the table                43 lanes   (M65: a gate over a partial suite proves nothing — run report.sh)
 [PASS] every composed lane actually speaks  43 lanes with rows   (M76: a lane that emitted no check rows proves nothing — a truncated or crashed report may not compose as clean)
-[PASS] composed reports are fresh              oldest 0.1h   (M65: stale rows compose stale verdicts — rerun the suite within 6h)
-[FAIL] the veto bites somewhere in the ensemble 0 refused town(s) over 2 civ lane(s) [12345:0 · 777:0]   (M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it)
-[FAIL] the suite composes clean             1 fail · 33 warn · 1275 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
+[PASS] composed reports are fresh              oldest 0.5h   (M65: stale rows compose stale verdicts — rerun the suite within 6h)
+[PASS] the veto bites somewhere in the ensemble 2 refused town(s) over 2 civ lane(s) [12345:2 · 777:0]   (M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it)
+[FAIL] the suite composes clean             2 fail · 32 warn · 1275 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
 [PASS] the wasm audit speaks for shipped bytes     same bytes   (E6.6: audit subject sha256 = shipped wasm — rerun scripts/wasm-audit.sh after a rebuild)
 [PASS] replay identity at era scale              identical   (ADR-0003: 300y under two chunkings ⇒ one state, one town ledger)
 [PASS] fields finite after the centuries        all finite   (M65: height·tmean·precip·discharge·fertility carry no poison)
 [PASS] towns endure                                  16→96   (M65: three centuries leave a living map, not a wiped one)
-[PASS] the chronicle still speaks           812 events / final decade   (M65: an old world keeps making history)
+[PASS] the chronicle still speaks           802 events / final decade   (M65: an old world keeps making history)
 [FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
-CHECKS: 8 pass · 0 warn · 3 fail
+CHECKS: 9 pass · 0 warn · 2 fail
