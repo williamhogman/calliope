@@ -9527,6 +9527,7 @@ fn cmd_teleconnection(size: usize, years: i64, seeds: Vec<i64>) {
     println!("the tilted belts · cross-hemisphere trade-belt rain, forced vs counterfactual  (M75)");
 
     let mut c = Checks::default();
+    let mut lags: Vec<i64> = Vec::new();
     let lat_of = |y: usize, rows: usize| -90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0);
     let core = calliope::climate::TELE_BELT_LAT;
     let halfwidth = calliope::climate::TELE_BELT_SIGMA;
@@ -9679,6 +9680,28 @@ fn cmd_teleconnection(size: usize, years: i64, seeds: Vec<i64>) {
             }
         };
         let (dw, dc) = (mean(&warm), mean(&cold));
+
+        // ---- M76: recover the declared lag blind ---------------------
+        // The tilt is driven by the index sampled TELE_LAG_MONTHS before
+        // the year opens. Nothing in the belt series says so. Scan every
+        // candidate lag 0..24 months, correlate the realized belt
+        // difference against the index at that lag, and take the argmax
+        // of |r|: the analysis must land on the lag the code declares,
+        // and must land on the same one in every world.
+        let osc_src = calliope::oscillation::Oscillation::new(seed);
+        let diff: Vec<f64> = (0..ns.len()).map(|i| ns[i] - ss[i]).collect();
+        let mut lag_best = (0i64, 0.0f64, 0.0f64);
+        for k in 0..=24i64 {
+            let probe: Vec<f64> = (1..=years)
+                .map(|year| osc_src.index(year * 12 - k))
+                .collect();
+            let r = corr(&diff, &probe);
+            if r.abs() > lag_best.1.abs() {
+                lag_best = (k, r, r);
+            }
+        }
+        let (lag_rec, lag_r, _) = lag_best;
+        lags.push(lag_rec);
         println!(
             " {:<9} {:>13.3} {:>14.3} {:>12.4} {:>11.4} {:>13.1e} {:>7} {:>7}",
             seed,
@@ -9747,6 +9770,17 @@ fn cmd_teleconnection(size: usize, years: i64, seeds: Vec<i64>) {
             },
             "identical".to_string(),
             "ADR-0003: the tilted belts are a pure function of the seed and the year",
+        );
+        c.must(
+            &format!("the lag is recoverable blind · {}", seed),
+            lag_rec == calliope::climate::TELE_LAG_MONTHS,
+            format!(
+                "{} mo (declared {}) · r = {:+.3}",
+                lag_rec,
+                calliope::climate::TELE_LAG_MONTHS,
+                lag_r
+            ),
+            "M76 gate: scanning every candidate lag 0-24 mo, the belt difference must correlate most strongly with the index at exactly the declared lag — the phase relation is in the world, not only in the constant",
         );
     }
     c.print();
