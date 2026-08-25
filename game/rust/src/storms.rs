@@ -44,6 +44,15 @@ pub const STORM_BAROCLINIC_MIN: f64 = 0.45;
 /// this hemisphere's sea gets" and moves with the climate rather than
 /// with one pathological cell.
 pub const STORM_SCALE_PCTL: f64 = 0.95;
+/// Storm fuel saturates this many degrees above the freezing point of
+/// salt water: at `seaice::SEA_FREEZE_C` a sea can hand a cyclone
+/// nothing, and by roughly ten degrees warmer the surface flux is no
+/// longer what limits it. The ramp between is the physical statement
+/// that a frozen front is not a breeding sea.
+pub const STORM_FUEL_SPAN: f64 = 10.0;
+/// Fuel at or below this counts a steep-gradient cell as struck out by
+/// the ice — diagnostic only, never a term in the weighting.
+pub const STORM_FUEL_DEAD: f64 = 0.05;
 /// Storms drawn per hemisphere per year, per thousand qualifying ocean
 /// cells. A larger baroclinic sea breeds more cyclones; a world whose
 /// mid-latitudes are mostly land breeds fewer.
@@ -137,8 +146,9 @@ pub fn lat_of(y: f64, rows: usize) -> f64 {
     -90.0 + y * 180.0 / (rows as f64 - 1.0)
 }
 
-/// The frozen genesis field for one world: baroclinicity over water, and
-/// the seasonal phase each hemisphere's own temperature cycle declares.
+/// The frozen genesis field for one world: the marine thermal gradient,
+/// the sea's storm fuel, and the seasonal phase each hemisphere's own
+/// temperature cycle declares.
 ///
 /// Solved once from the finished climate; a season is then drawn from it
 /// for any year without touching the grids again.
@@ -146,12 +156,21 @@ pub struct StormClimatology {
     rows: usize,
     cols: usize,
     /// |∂T/∂lat| in °C per degree, zero on land and at the poles.
-    baro: Array2<f64>,
-    /// The strongest gradient in each hemisphere (north, south).
+    grad: Array2<f64>,
+    /// Storm fuel 0..1: the sea's heat above its freezing point in the
+    /// hemisphere's own storm season, zero under pack ice and on land.
+    fuel: Array2<f64>,
+    /// Genesis weight = gradient × fuel.
+    weight: Array2<f64>,
+    /// The reference genesis weight in each hemisphere (north, south).
     peak: (f64, f64),
     /// The coldest month of the year in each hemisphere's storm belt,
     /// read from the realized annual cycle (north, south).
     cold_month: (i64, i64),
+    /// Water cells whose gradient qualified but whose sea was frozen or
+    /// too cold to fuel a storm in the season — the ice-edge front,
+    /// counted so the lane can show what the fuel term removed.
+    iced_out: (usize, usize),
 }
 
 impl StormClimatology {
@@ -160,10 +179,21 @@ impl StormClimatology {
     /// `height` gives the land mask (>= 0 is land); `tmean` and `tamp`
     /// are the annual mean and the signed seasonal amplitude the rest of
     /// the climate stack already uses.
+    ///
+    /// Two terms, both read off the world. **Gradient**: the meridional
+    /// temperature gradient over water — the imbalance a cyclone exists
+    /// to move. **Fuel**: the sea's heat above its own freezing point in
+    /// the storm season, which is what the storm actually lives on. A
+    /// front alone does not make a cyclone; the steepest marine gradient
+    /// on the map is the *sea-ice edge*, where a frozen surface can hand
+    /// a storm neither sensible nor latent heat, and gradient alone would
+    /// site the world's whole corridor along the pack. Weighting the
+    /// gradient by the fuel underneath it is the physical statement, and
+    /// it is what moves the belt off the ice — no latitude is named here.
     pub fn new(height: &Array2<f32>, tmean: &Array2<f32>, tamp: &Array2<f32>) -> Self {
         let (rows, cols) = tmean.dim();
         let dlat = 180.0 / (rows as f64 - 1.0);
-        let mut baro = Array2::<f64>::zeros((rows, cols));
+        let mut grad = Array2::<f64>::zeros((rows, cols));
         let mut gn: Vec<f64> = Vec::new();
         let mut gs: Vec<f64> = Vec::new();
         for y in 1..rows - 1 {
@@ -180,7 +210,7 @@ impl StormClimatology {
                     continue;
                 }
                 let g = ((b - a) / (2.0 * dlat)).abs();
-                baro[[y, x]] = g;
+                grad[[y, x]] = g;
                 if lat >= 0.0 {
                     gn.push(g);
                 } else {
@@ -197,22 +227,22 @@ impl StormClimatology {
             let i = ((v.len() - 1) as f64 * STORM_SCALE_PCTL).round() as usize;
             v[i]
         };
-        let peak = (pctl(&mut gn), pctl(&mut gs));
+        let gpeak = (pctl(&mut gn), pctl(&mut gs));
 
         // The storm season is the belt's own cold season. Take the mean
-        // signed seasonal amplitude over each hemisphere's qualifying
-        // water and find the month at which `month_temperature` bottoms
-        // out — half a year apart if and only if the world's seasons are.
+        // signed seasonal amplitude over each hemisphere's steep water
+        // and find the month at which `month_temperature` bottoms out —
+        // half a year apart if and only if the world's seasons are.
         let mut amp = (0.0f64, 0.0f64);
         let mut n = (0usize, 0usize);
         for y in 0..rows {
             let north = lat_of(y as f64, rows) >= 0.0;
-            let p = if north { peak.0 } else { peak.1 };
+            let p = if north { gpeak.0 } else { gpeak.1 };
             if p <= 0.0 {
                 continue;
             }
             for x in 0..cols {
-                if baro[[y, x]] < STORM_BAROCLINIC_MIN * p {
+                if grad[[y, x]] < STORM_BAROCLINIC_MIN * p {
                     continue;
                 }
                 if north {
@@ -240,17 +270,86 @@ impl StormClimatology {
             }
             best
         };
+        let cold_month = (coldest(mean_amp.0), coldest(mean_amp.1));
+
+        // Fuel: the season's sea-surface temperature above the freezing
+        // point of salt water, ramped over `STORM_FUEL_SPAN`. The SST
+        // cycle is `seaice`'s — the same damped mixed layer the pack-ice
+        // law reads, so a cell this module calls frozen is a cell the
+        // trade lanes also find shut.
+        let mut fuel = Array2::<f64>::zeros((rows, cols));
+        let mut weight = Array2::<f64>::zeros((rows, cols));
+        let mut wn: Vec<f64> = Vec::new();
+        let mut ws: Vec<f64> = Vec::new();
+        let mut iced_out = (0usize, 0usize);
+        for y in 0..rows {
+            let north = lat_of(y as f64, rows) >= 0.0;
+            let cm = if north { cold_month.0 } else { cold_month.1 };
+            let gp = if north { gpeak.0 } else { gpeak.1 };
+            for x in 0..cols {
+                if height[[y, x]] >= 0.0 {
+                    continue;
+                }
+                let sst = crate::climate::month_temperature(
+                    tmean[[y, x]] as f64,
+                    tamp[[y, x]] as f64 * crate::seaice::SST_DAMP,
+                    cm,
+                );
+                let f = ((sst - crate::seaice::SEA_FREEZE_C) / STORM_FUEL_SPAN).clamp(0.0, 1.0);
+                fuel[[y, x]] = f;
+                let w = grad[[y, x]] * f;
+                weight[[y, x]] = w;
+                if gp > 0.0
+                    && grad[[y, x]] >= STORM_BAROCLINIC_MIN * gp
+                    && f <= STORM_FUEL_DEAD
+                {
+                    if north {
+                        iced_out.0 += 1;
+                    } else {
+                        iced_out.1 += 1;
+                    }
+                }
+                if w > 0.0 {
+                    if north {
+                        wn.push(w);
+                    } else {
+                        ws.push(w);
+                    }
+                }
+            }
+        }
+        let peak = (pctl(&mut wn), pctl(&mut ws));
+
         Self {
             rows,
             cols,
-            baro,
+            grad,
+            fuel,
+            weight,
             peak,
-            cold_month: (coldest(mean_amp.0), coldest(mean_amp.1)),
+            cold_month,
+            iced_out,
         }
     }
 
-    /// The hemisphere's reference marine gradient (`STORM_SCALE_PCTL`
-    /// percentile), °C per degree of latitude.
+    /// The gradient at a cell, °C per degree of latitude.
+    pub fn gradient_at(&self, y: usize, x: usize) -> f64 {
+        self.grad[[y, x]]
+    }
+
+    /// The storm fuel at a cell, 0..1 — zero under the pack.
+    pub fn fuel_at(&self, y: usize, x: usize) -> f64 {
+        self.fuel[[y, x]]
+    }
+
+    /// Steep-gradient water cells the fuel term struck out as frozen or
+    /// near-frozen (north, south) — the ice-edge front, counted.
+    pub fn iced_out(&self, hemi: i8) -> usize {
+        if hemi >= 0 { self.iced_out.0 } else { self.iced_out.1 }
+    }
+
+    /// The hemisphere's reference genesis weight (`STORM_SCALE_PCTL`
+    /// percentile of gradient × fuel).
     pub fn peak_gradient(&self, hemi: i8) -> f64 {
         if hemi >= 0 { self.peak.0 } else { self.peak.1 }
     }
@@ -275,7 +374,7 @@ impl StormClimatology {
                 continue;
             }
             for x in 0..self.cols {
-                let g = self.baro[[y, x]];
+                let g = self.weight[[y, x]];
                 if g >= cut {
                     out.push(((y, x), g));
                 }
