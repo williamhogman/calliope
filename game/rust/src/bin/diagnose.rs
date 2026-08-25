@@ -9444,6 +9444,272 @@ struct OceanRow {
     swing_p50: f64,
 }
 
+/// M73 — the sky's variance, held in bands.
+///
+/// M71 gave every year its own weather and M72 made it causal; this lane
+/// is the instrument that keeps the swing believable. It measures the
+/// realized interannual σ of the temperature and rain lanes over land,
+/// split into the three latitude belts the declared amplitude law
+/// separates, and holds it against three independent kinds of evidence:
+///
+/// 1. **The declared law.** Each belt's realized σ is compared with the
+///    belt-mean of `climate::anomaly_amp_t`/`_p` over the very land cells
+///    measured — not a hard-coded number, so a change to the amplitude
+///    constants moves target and measurement together and only a genuine
+///    normalizer drift can open a gap.
+/// 2. **Budyko–Sellers shape.** Polar amplification is the physics here:
+///    a weaker meridional gradient and ice-albedo feedback make the high
+///    latitudes swing several times wider than the tropics. The measured
+///    polar/tropical σ ratio must be > 2 and must match the ratio the
+///    declared law itself predicts for these belts.
+/// 3. **Absolute ceilings.** Lively, never chaos: tropical σT < 1.5 °C
+///    and polar σT < 4 °C on every seed (the spec's own caps), with the
+///    rain lane never able to take a whole year's rain away.
+///
+/// Cross-seed spread closes it: the σ of a belt is a property of the sky's
+/// law, not of the seed that drew it, so the spread of each belt's σ
+/// across the sweep must stay inside a tenth of its mean.
+fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
+    header(
+        "CLIMATE-VARIANCE",
+        &format!("{}x{} · {} seeds · {} y", size, size, seeds.len(), years),
+    );
+    println!("interannual σ per latitude belt · declared vs realized · cross-seed spread  (M73)");
+
+    const BELTS: [&str; 3] = ["tropical  <23.5", "temperate 23.5-55", "polar     >=55"];
+    // σT hard ceilings per belt (M73 gate: tropical <1.5 °C, polar <4 °C;
+    // the temperate belt sits between them and is held to the polar cap).
+    const CAP_T: [f64; 3] = [1.5, 4.0, 4.0];
+
+    let mut c = Checks::default();
+    // [seed][belt] realized σ, and the declared belt mean beside it.
+    let mut all_t: Vec<[f64; 3]> = Vec::new();
+    let mut all_p: Vec<[f64; 3]> = Vec::new();
+    let mut all_dt: Vec<[f64; 3]> = Vec::new();
+    let mut all_dp: Vec<[f64; 3]> = Vec::new();
+    let mut nonfinite = 0usize;
+    let mut worst_floor = 0.0f64;
+    let mut empty_belt = 0usize;
+
+    println!();
+    println!(" seed      belt                  σ T °C  declared    σ P frac  declared   cells");
+    for &seed in &seeds {
+        let w = World::generate(seed, size);
+        let land = land_mask(&w);
+        let rows = w.fields.tmean.dim().0;
+        let belt_of = |lat: f64| -> usize {
+            if lat < 23.5 {
+                0
+            } else if lat < 55.0 {
+                1
+            } else {
+                2
+            }
+        };
+        // (Σx, Σx², n) per belt for each lane; declared amplitude summed
+        // over the same cells, once per cell (not once per year).
+        let mut acc_t = [[0.0f64; 3]; 3];
+        let mut acc_p = [[0.0f64; 3]; 3];
+        let mut dec_t = [[0.0f64; 2]; 3];
+        let mut dec_p = [[0.0f64; 2]; 3];
+        for y in 0..rows {
+            let lat = (-90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0)).abs();
+            let b = belt_of(lat);
+            for x in 0..w.width {
+                if !land[[y, x]] {
+                    continue;
+                }
+                dec_t[b][0] += calliope::climate::anomaly_amp_t(lat);
+                dec_t[b][1] += 1.0;
+                dec_p[b][0] += calliope::climate::anomaly_amp_p(lat);
+                dec_p[b][1] += 1.0;
+            }
+        }
+        for year in 1..=years {
+            let (dt, dp) = w.year_anomaly_fresh(year);
+            for y in 0..rows {
+                let lat = (-90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0)).abs();
+                let b = belt_of(lat);
+                for x in 0..w.width {
+                    if !land[[y, x]] {
+                        continue;
+                    }
+                    let (a, r) = (dt[[y, x]], dp[[y, x]]);
+                    if !a.is_finite() || !r.is_finite() {
+                        nonfinite += 1;
+                        continue;
+                    }
+                    if r < worst_floor {
+                        worst_floor = r;
+                    }
+                    acc_t[b][0] += a;
+                    acc_t[b][1] += a * a;
+                    acc_t[b][2] += 1.0;
+                    acc_p[b][0] += r;
+                    acc_p[b][1] += r * r;
+                    acc_p[b][2] += 1.0;
+                }
+            }
+        }
+        let sigma = |a: [f64; 3]| -> f64 {
+            if a[2] < 2.0 {
+                return f64::NAN;
+            }
+            let m = a[0] / a[2];
+            (a[1] / a[2] - m * m).max(0.0).sqrt()
+        };
+        let mut st = [0.0f64; 3];
+        let mut sp = [0.0f64; 3];
+        let mut dtm = [0.0f64; 3];
+        let mut dpm = [0.0f64; 3];
+        for b in 0..3 {
+            if acc_t[b][2] < 2.0 || dec_t[b][1] < 1.0 {
+                empty_belt += 1;
+                st[b] = f64::NAN;
+                sp[b] = f64::NAN;
+                dtm[b] = f64::NAN;
+                dpm[b] = f64::NAN;
+                println!(" {:<9} {:<20}      (no land in this belt)", seed, BELTS[b]);
+                continue;
+            }
+            st[b] = sigma(acc_t[b]);
+            sp[b] = sigma(acc_p[b]);
+            dtm[b] = dec_t[b][0] / dec_t[b][1];
+            dpm[b] = dec_p[b][0] / dec_p[b][1];
+            println!(
+                " {:<9} {:<20} {:>7.3} {:>9.3} {:>11.4} {:>9.4} {:>7}",
+                seed,
+                BELTS[b],
+                st[b],
+                dtm[b],
+                sp[b],
+                dpm[b],
+                acc_t[b][2] as i64 / years,
+            );
+        }
+        all_t.push(st);
+        all_p.push(sp);
+        all_dt.push(dtm);
+        all_dp.push(dpm);
+
+        // ---- per-seed gates -----------------------------------------
+        for b in 0..3 {
+            if !st[b].is_finite() {
+                continue;
+            }
+            c.must(
+                &format!("σT under its cap · {} · {}", seed, BELTS[b].trim()),
+                st[b] < CAP_T[b],
+                format!("{:.3} < {:.1} °C", st[b], CAP_T[b]),
+                "M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C",
+            );
+            let err_t = (st[b] - dtm[b]).abs() / dtm[b];
+            c.must(
+                &format!("σT is the declared law · {} · {}", seed, BELTS[b].trim()),
+                err_t <= 0.10,
+                format!("{:+.1}% of declared", 100.0 * (st[b] - dtm[b]) / dtm[b]),
+                "M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift",
+            );
+            let err_p = (sp[b] - dpm[b]).abs() / dpm[b];
+            c.must(
+                &format!("σP is the declared law · {} · {}", seed, BELTS[b].trim()),
+                err_p <= 0.12,
+                format!("{:+.1}% of declared", 100.0 * (sp[b] - dpm[b]) / dpm[b]),
+                "M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail)",
+            );
+        }
+        let (t0, t2) = (st[0], st[2]);
+        if t0.is_finite() && t2.is_finite() {
+            let ratio = t2 / t0;
+            let declared = dtm[2] / dtm[0];
+            c.must(
+                &format!("polar amplification · {}", seed),
+                ratio > 2.0,
+                format!("{:.2}× tropical", ratio),
+                "M73 (Budyko–Sellers): a weak polar gradient and ice-albedo feedback make the high belt swing >2× the tropics",
+            );
+            c.must(
+                &format!("amplification is the declared one · {}", seed),
+                (ratio - declared).abs() / declared <= 0.10,
+                format!("{:.2} vs {:.2}", ratio, declared),
+                "M73: the measured polar/tropical ratio matches the ratio the amplitude law predicts for these belts",
+            );
+            c.must(
+                &format!("σT climbs poleward · {}", seed),
+                st[0] < st[1] && st[1] < st[2],
+                format!("{:.2} < {:.2} < {:.2}", st[0], st[1], st[2]),
+                "M73: band by band, never a flat or inverted profile",
+            );
+            c.must(
+                &format!("σP climbs poleward · {}", seed),
+                sp[0] < sp[1] && sp[1] < sp[2],
+                format!("{:.3} < {:.3} < {:.3}", sp[0], sp[1], sp[2]),
+                "M73: the rain lane carries the same latitude shape as the heat lane",
+            );
+        }
+    }
+
+    // ---- cross-seed spread ------------------------------------------
+    println!();
+    println!(" belt                  σT mean   spread    σP mean   spread");
+    for b in 0..3 {
+        let ts: Vec<f64> = all_t.iter().map(|s| s[b]).filter(|v| v.is_finite()).collect();
+        let ps: Vec<f64> = all_p.iter().map(|s| s[b]).filter(|v| v.is_finite()).collect();
+        if ts.len() < 2 {
+            continue;
+        }
+        let mean_t = ts.iter().sum::<f64>() / ts.len() as f64;
+        let mean_p = ps.iter().sum::<f64>() / ps.len() as f64;
+        let spread_t = (ts.iter().cloned().fold(f64::MIN, f64::max)
+            - ts.iter().cloned().fold(f64::MAX, f64::min))
+            / mean_t;
+        let spread_p = (ps.iter().cloned().fold(f64::MIN, f64::max)
+            - ps.iter().cloned().fold(f64::MAX, f64::min))
+            / mean_p;
+        println!(
+            " {:<20} {:>7.3} {:>8.1}% {:>10.4} {:>8.1}%",
+            BELTS[b],
+            mean_t,
+            100.0 * spread_t,
+            mean_p,
+            100.0 * spread_p
+        );
+        c.must(
+            &format!("σT is the sky's, not the seed's · {}", BELTS[b].trim()),
+            spread_t <= 0.10,
+            format!("{:.1}% of mean", 100.0 * spread_t),
+            "M73: the belt's swing is a property of the law — cross-seed spread inside a tenth of the mean",
+        );
+        c.must(
+            &format!("σP is the sky's, not the seed's · {}", BELTS[b].trim()),
+            spread_p <= 0.10,
+            format!("{:.1}% of mean", 100.0 * spread_p),
+            "M73: same law, rain lane",
+        );
+    }
+
+    c.must(
+        "every anomaly cell is finite",
+        nonfinite == 0,
+        format!("{} non-finite", nonfinite),
+        "M73: no poison enters the causal path M72 opened",
+    );
+    c.must(
+        "the rains are never wholly taken",
+        worst_floor > -1.0,
+        format!("worst {:+.3} of the mean", worst_floor),
+        "M2.6/M73: total failure of the rains is famine's verdict, not the sky's noise",
+    );
+    c.must(
+        "every belt carries land to measure",
+        empty_belt == 0,
+        format!("{} empty belt-seeds", empty_belt),
+        "M73: a gate over an empty belt proves nothing",
+    );
+
+    c.print();
+}
+
 /// M49 — the ocean stack's own instrument panel. Everything the ocean
 /// phases (M40 gyres · M41 heat · M42 rain · M47 upwelling · M48
 /// seasonality) put into the world, measured on one page across the
@@ -11026,6 +11292,15 @@ fn main() {
                 cmd_ocean(size, seeds);
             }
         }
+        "climate-variance" => {
+            let size = sized(2, 512);
+            let years = num(3, 60);
+            let mut seeds: Vec<i64> = a.get(4..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 31337, 90210, 555];
+            }
+            cmd_climate_variance(size, years, seeds);
+        }
         "systems" => cmd_systems(num(2, 12345), sized(3, 512), num(4, 150) as usize),
         "perf" => {
             let size = sized(2, 512);
@@ -11151,7 +11426,7 @@ fn main() {
             cmd_compute(size, seeds, golden);
         }
         _ => {
-            println!("usage: diagnose <terrain|climate|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean|atlas|gate|compute> [args]");
+            println!("usage: diagnose <terrain|climate|climate-variance|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean|atlas|gate|compute> [args]");
             println!("  terrain|climate|hydro|resources  <seed=12345> <size=512>");
             println!("  civ <seed> <size> <years=120> · economy <seed> <size> <years=80> · telling <seed> <size> <years=150>");
             println!("  determinism <seed> <size> <months=120> · bench · perf <size=512> <seeds…> · sweep <size> <years> <seeds…>");
