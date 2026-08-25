@@ -14,3 +14,12 @@ seed  12345: coast frontage 6245 cells · storied 47.7% · [raised beach 2205 ·
 
 seed    777: 5033 river cells · 0 uphill · 0 cycles · 0 dry terminals
 seed    777: 18 towns · 22 routes · 0 isolated · 1 components
+seed    777: rain ×1.25 ⇒ river cells 5033 → 6129 · discharge 2130723 → 2749149
+seed    777: hypsometry mean 1014 m · below 1 km 50.2%
+seed    777: streams (A_c 80 km²) N_k [8603, 1691, 389, 94, 19, 1] · Rb 5.58
+seed    777: wet-land Dd 0.0194 km/km² · head A₅₀ 720 km² · Hack ratio 0.37
+seed    777: silt ladder ≥1/5/10 m: 37.4/4.5/2.16% of land · plain 423 bodies · 92.9% river-borne
+seed    777: coast frontage 6570 cells · storied 52.5% · [raised beach 2791 · fjord 53 · tidal flat 37 · estuary 21 · delta plain 454 · spit 89 · barrier island 5 · lagoon 2] · shore 3118
+
+seed  90210: 5155 river cells · 0 uphill · 0 cycles · 0 dry terminals
+seed  90210: 17 towns · 24 routes · 0 isolated · 1 components
