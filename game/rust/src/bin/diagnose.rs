@@ -3362,6 +3362,13 @@ fn cmd_climate(seed: i64, size: usize) {
         // (Σx, Σx², n) per belt, temperature and rain lanes.
         let mut belt_t = [[0.0f64; 3]; 3];
         let mut belt_p = [[0.0f64; 3]; 3];
+        // M75 — the same accumulation with the seesaw held at zero. The
+        // latitude law M71 declares is the *unforced* law; the tilt M75
+        // lays over the tropics is a separate, separately-gated term
+        // (teleconnection lane, and the composition in climate-variance).
+        // Measuring the shape claim on the forced field would be measuring
+        // two laws at once and attributing the sum to one of them.
+        let mut belt_pu = [[0.0f64; 3]; 3];
         let mut declared_t = [[0.0f64; 2]; 3]; // (Σ declared σ, n)
         let mut worst_floor = 0.0f64;
         let mut nonfinite = 0usize;
