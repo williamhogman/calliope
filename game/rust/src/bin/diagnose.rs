@@ -3403,6 +3403,10 @@ fn cmd_climate(seed: i64, size: usize) {
                     belt_p[b][0] += r;
                     belt_p[b][1] += r * r;
                     belt_p[b][2] += 1.0;
+                    let ru = dpu[[y, x]];
+                    belt_pu[b][0] += ru;
+                    belt_pu[b][1] += ru * ru;
+                    belt_pu[b][2] += 1.0;
                     declared_t[b][0] += clim::anomaly_amp_t(lat);
                     declared_t[b][1] += 1.0;
                     if r < worst_floor {
