@@ -648,6 +648,47 @@ pub const FLOW_ANOM_GAIN: f64 = 1.5;
 pub const FLOW_FACTOR_MIN: f64 = 0.35;
 pub const FLOW_FACTOR_MAX: f64 = 2.20;
 
+// ---- M75 — the tilted belts (teleconnection) -------------------------------
+//
+// A basin that leans does not lean alone. When the warm pool shifts, the
+// Walker circulation shifts with it: the trades slacken on one side and
+// stiffen on the other, and the rain belts on *opposite* hemispheres tilt
+// in opposite directions. That antisymmetry is the signature — not a
+// global wet year or a global dry one, but a see-saw in the rain itself,
+// arriving on the far side a season or two after the index moves.
+//
+// The bias is a pure function of `(index, latitude)`: it is added to the
+// fractional rain anomaly after the ITCZ gaussian the precipitation pass
+// already applies, so it strengthens or weakens trade-wind moisture
+// delivery without touching the mean climate a world was generated with.
+
+/// How long the far side takes to answer the index, in months. Real
+/// teleconnections propagate through the atmosphere in a season, not a
+/// year (~4 months, the canonical ENSO-to-remote lag).
+pub const TELE_LAG_MONTHS: i64 = 4;
+/// Fractional rain shifted per unit index at the belt core. A strong
+/// basin (index ≈ 2σ) therefore moves the trade belt's rain by roughly a
+/// third — large enough to be felt in harvests, far short of the −0.85
+/// floor that famine, not the sky, is allowed to reach.
+pub const TELE_GAIN: f64 = 0.16;
+/// Latitude of the trade-belt core, degrees. The tilt lives in the
+/// trades, not at the ITCZ itself and not in the westerlies.
+pub const TELE_BELT_LAT: f64 = 15.0;
+/// Width of the belt, degrees (1σ of the gaussian either side).
+pub const TELE_BELT_SIGMA: f64 = 12.0;
+
+/// M75 — the rain bias the oscillation's phase lays on this latitude.
+///
+/// Antisymmetric by construction: the northern trade belt is wet exactly
+/// when the southern one is dry, and the two swap when the index changes
+/// sign. It vanishes at the equator (the ITCZ is not tilted, it is
+/// straddled) and outside the trades, so the westerlies and the poles
+/// keep the variability M73 measured.
+pub fn teleconnection_bias(index: f64, lat_signed: f64) -> f64 {
+    let g = |c: f64| (-0.5 * ((lat_signed - c) / TELE_BELT_SIGMA).powi(2)).exp();
+    TELE_GAIN * index * (g(TELE_BELT_LAT) - g(-TELE_BELT_LAT))
+}
+
 /// 1σ of the year-to-year temperature swing at this latitude, °C.
 pub fn anomaly_amp_t(lat_abs: f64) -> f64 {
     ANOM_T_EQ + (ANOM_T_POLE - ANOM_T_EQ) * (lat_abs.abs() / 90.0).clamp(0.0, 1.0).powf(ANOM_LAT_POW)
@@ -679,17 +720,22 @@ pub fn year_anomaly(
     rows: usize,
     cols: usize,
     year: i64,
+    osc: f64,
 ) -> (Array2<f64>, Array2<f64>) {
     let mut dt = Array2::<f64>::zeros((rows, cols));
     let mut dp = Array2::<f64>::zeros((rows, cols));
     let n = rows as f64;
     for y in 0..rows {
-        let lat = (-90.0 + (y as f64) * 180.0 / (n - 1.0)).abs();
+        let lat_signed = -90.0 + (y as f64) * 180.0 / (n - 1.0);
+        let lat = lat_signed.abs();
         let at = anomaly_amp_t(lat) / ANOM_FBM_SIGMA;
         let ap = anomaly_amp_p(lat) / ANOM_FBM_SIGMA;
+        // M75: the tilt is a property of the row, drawn once per row.
+        let tilt = teleconnection_bias(osc, lat_signed);
         for x in 0..cols {
             dt[[y, x]] = anomaly_draw(noise, x, y, year, 0.0) * at;
-            dp[[y, x]] = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE) * ap).max(ANOM_P_FLOOR);
+            dp[[y, x]] = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE) * ap + tilt)
+                .max(ANOM_P_FLOOR);
         }
     }
     (dt, dp)
@@ -706,14 +752,16 @@ pub fn year_anomaly_at(
     x: usize,
     y: usize,
     year: i64,
+    osc: f64,
 ) -> (f64, f64) {
     let n = rows as f64;
-    let lat = (-90.0 + (y as f64) * 180.0 / (n - 1.0)).abs();
+    let lat_signed = -90.0 + (y as f64) * 180.0 / (n - 1.0);
+    let lat = lat_signed.abs();
     let dt = anomaly_draw(noise, x, y, year, 0.0) * anomaly_amp_t(lat) / ANOM_FBM_SIGMA;
-    let dp = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE)
-        * anomaly_amp_p(lat)
-        / ANOM_FBM_SIGMA)
-        .max(ANOM_P_FLOOR);
+    let dp = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE) * anomaly_amp_p(lat)
+        / ANOM_FBM_SIGMA
+        + teleconnection_bias(osc, lat_signed))
+    .max(ANOM_P_FLOOR);
     (dt, dp)
 }
 
@@ -728,6 +776,7 @@ pub fn catchment_anomaly_at(
     x: usize,
     y: usize,
     year: i64,
+    osc: f64,
 ) -> f64 {
     let sigma = CATCHMENT_SIGMA;
     let radius = (4.0 * sigma + 0.5) as isize;
@@ -746,7 +795,7 @@ pub fn catchment_anomaly_at(
         let mut horizontal = 0.0;
         for (jx, kx) in kernel.iter().enumerate() {
             let xx = crate::ndimage::reflect(x as isize + jx as isize - radius, cols as isize);
-            horizontal += kx * year_anomaly_at(noise, rows, xx, yy, year).1;
+            horizontal += kx * year_anomaly_at(noise, rows, xx, yy, year, osc).1;
         }
         out += ky * horizontal;
     }

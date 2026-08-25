@@ -77,6 +77,8 @@ run "telling-${SEEDS[0]}.txt" telling "${SEEDS[0]}" "$SIZE" "$TELL_YEARS"
 run "climate-variance.txt" climate-variance "$SIZE" 60 $OCEAN
 # M74 — the slow lean of the seas, drawn per world and recovered blind.
 run "oscillation.txt" oscillation 1200 $OCEAN
+# M75 — the tilted belts: the seesaw reaching across the equator, with its counterfactual.
+run "teleconnection.txt" teleconnection "$SIZE" 120 $OCEAN
 run "determinism.txt" determinism "${SEEDS[0]}" "$SIZE" "$DET_MONTHS"
 run "bench.txt" bench
 run "perf.txt" perf $PERF
