@@ -17,6 +17,24 @@ MODE="${1:-full}"
 OUT="${2:-../reports}"
 mkdir -p "$OUT"
 
+# The suite composes a folder of lane artifacts into one verdict. Two writers
+# sharing that folder can make a coherent run appear silent or mixed, so take
+# an advisory lock before any lane opens a report path.
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$OUT/.report.lock"
+  if ! flock -n 9; then
+    echo "another report.sh is writing $OUT" >&2
+    exit 75
+  fi
+else
+  LOCKDIR="$OUT/.report.lockdir"
+  if ! mkdir "$LOCKDIR" 2>/dev/null; then
+    echo "another report.sh is writing $OUT" >&2
+    exit 75
+  fi
+  trap 'rmdir "$LOCKDIR" 2>/dev/null || true' EXIT
+fi
+
 echo "== building diagnose (release) =="
 if command -v cargo >/dev/null 2>&1; then
   cargo build --release --bin diagnose --features alloc-count --quiet
@@ -56,16 +74,18 @@ fi
 
 run() { # run <outfile> <diagnose args...>
   local f="$OUT/$1"; shift
+  local tmp="$OUT/.$(basename "$f").tmp.$$"
   echo "-- diagnose $* -> $(basename "$f")"
   local rc=0
-  "$BIN" "$@" > "$f" 2> "$OUT/.lane-err" || rc=$?
+  rm -f "$tmp"
+  "$BIN" "$@" > "$tmp" 2> "$OUT/.lane-err" || rc=$?
   # M77 — a lane that died, or that stopped printing partway, must say so
   # in its own report. The suite once carried a teleconnection.txt that
   # ended mid-table with exit 0; only the era gate's must-speak row caught
   # it. A truncated report is now a FAIL row with the exit status on it,
   # so the evidence of the kill lands in the artifact instead of in a
   # silence that a later reader has to notice.
-  if [ "$rc" -ne 0 ] || ! tail -n 1 "$f" | grep -q '^CHECKS:'; then
+  if [ "$rc" -ne 0 ] || ! tail -n 1 "$tmp" | grep -q '^CHECKS:'; then
     {
       echo
       echo "---- checks ----------------------------------------------------------"
@@ -73,8 +93,9 @@ run() { # run <outfile> <diagnose args...>
         "M77: the report does not end in a CHECKS line — the lane was cut off, so nothing below its last printed row was measured"
       sed 's/^/ stderr: /' "$OUT/.lane-err" | head -8
       echo "CHECKS: 0 pass · 0 warn · 1 fail"
-    } >> "$f"
+    } >> "$tmp"
   fi
+  mv "$tmp" "$f"
   rm -f "$OUT/.lane-err"
 }
 

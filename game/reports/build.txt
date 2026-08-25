@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · BUILD                              static site
 ========================================================================
- phase times: wasm 141235 ms · site 58 ms · brotli 6730 ms · total 148023 ms
+ phase times: wasm 133670 ms · site 49 ms · brotli 6423 ms · total 140142 ms
  wasm binary: 3528450 B (3.36 MiB) · brotli wire 1020653 B · stamp 9f1c2550c605
 
 ---- checks ----------------------------------------------------------
