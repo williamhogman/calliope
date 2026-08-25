@@ -7636,7 +7636,11 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
         fused: usize,         // M12.4 fusions (roster fell)
         golden: usize,        // M13.2 golden dawns
         arcs: usize,          // M13.4 full arcs closed (interregnum ended)
+        /// M79 — late ruins by cause phrase (patina::ruin_why), so a jump in
+        /// the ruin rate names the disaster that made it.
+        late_by_why: Vec<(String, usize)>,
     }
+
 
     let mut rows: Vec<Row> = Vec::new();
     for &seed in &seeds {
