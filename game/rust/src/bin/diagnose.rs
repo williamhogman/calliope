@@ -10246,6 +10246,8 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
 
         // --- how they travel ------------------------------------------
         let mut west_early = 0usize;
+        let mut west_n = 0usize;
+
         let mut recurved = 0usize;
         let mut reached = 0usize;
         let mut peaks: Vec<f64> = Vec::new();
