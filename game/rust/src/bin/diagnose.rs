@@ -7642,6 +7642,19 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
         /// M79 — late ruins by cause phrase (patina::ruin_why), so a jump in
         /// the ruin rate names the disaster that made it.
         late_by_why: Vec<(String, usize)>,
+        storm_landfalls: usize,
+        storm_candidates: usize,
+        storm_eligible: usize,
+        storm_felled: usize,
+        storm_reject_age: usize,
+        storm_reject_sample: usize,
+        storm_reject_intensity: usize,
+        storm_reject_rate: usize,
+        storm_local_range: (usize, usize),
+        storm_exceed_range: (usize, usize),
+        storm_eligible_centuries: [usize; 3],
+        storm_felled_centuries: [usize; 3],
+        storm_calibration: [[usize; 3]; 4],
     }
 
 
@@ -7711,8 +7724,79 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
                 }
                 t.into_iter().collect()
             },
+            storm_landfalls: w.storm_bites.len(),
+            storm_candidates: w.storm_fell_probe.len(),
+            storm_eligible: w.storm_fell_probe.iter().filter(|p| p.eligible).count(),
+            storm_felled: w.storm_fell_probe.iter().filter(|p| p.felled).count(),
+            storm_reject_age: w.storm_fell_probe.iter().filter(|p| p.bite > 0.97 && p.age < 1200).count(),
+            storm_reject_sample: w.storm_fell_probe.iter().filter(|p| p.bite > 0.97 && p.age >= 1200 && p.local < 12).count(),
+            storm_reject_intensity: w.storm_fell_probe.iter().filter(|p| p.bite <= 0.97).count(),
+            storm_reject_rate: w.storm_fell_probe.iter().filter(|p| p.bite > 0.97 && p.age >= 1200 && p.local >= 12 && (p.exceed as i64) * 1200 > p.age).count(),
+            storm_local_range: (
+                w.storm_fell_probe.iter().map(|p| p.local).min().unwrap_or(0),
+                w.storm_fell_probe.iter().map(|p| p.local).max().unwrap_or(0),
+            ),
+            storm_exceed_range: (
+                w.storm_fell_probe.iter().map(|p| p.exceed).min().unwrap_or(0),
+                w.storm_fell_probe.iter().map(|p| p.exceed).max().unwrap_or(0),
+            ),
+            storm_eligible_centuries: std::array::from_fn(|century| {
+                let lo = century as i64 * 1200;
+                let hi = (century as i64 + 1) * 1200;
+                w.storm_fell_probe
+                    .iter()
+                    .filter(|p| p.eligible && p.month >= lo && p.month < hi)
+                    .count()
+            }),
+            storm_felled_centuries: std::array::from_fn(|century| {
+                let lo = century as i64 * 1200;
+                let hi = (century as i64 + 1) * 1200;
+                w.storm_fell_probe
+                    .iter()
+                    .filter(|p| p.felled && p.month >= lo && p.month < hi)
+                    .count()
+            }),
+            storm_calibration: std::array::from_fn(|bi| {
+                let bite_bar = [0.97, 0.98, 0.99, 0.995][bi];
+                std::array::from_fn(|ri| {
+                    let return_months = [1200_i64, 1800, 2400][ri];
+                    w.storm_fell_probe
+                        .iter()
+                        .filter(|p| {
+                            p.bite > bite_bar
+                                && p.age >= 1200
+                                && p.local >= 12
+                                && (p.exceed as i64) * return_months <= p.age
+                        })
+                        .count()
+                })
+            }),
         });
 
+    }
+
+    println!("\n storm-felling decision audit (M79)");
+    for r in &rows {
+        println!(
+            "   seed {}: {} local marks · {} candidate landfalls · {} eligible · {} felled | rejected intensity {} age {} sample {} rate {} | local n {}–{} · exceed {}–{}",
+            r.seed, r.storm_landfalls, r.storm_candidates, r.storm_eligible,
+            r.storm_felled, r.storm_reject_intensity, r.storm_reject_age,
+            r.storm_reject_sample, r.storm_reject_rate, r.storm_local_range.0,
+            r.storm_local_range.1, r.storm_exceed_range.0, r.storm_exceed_range.1,
+        );
+        println!(
+            "             eligible/felled by century: {}/{} · {}/{} · {}/{}",
+            r.storm_eligible_centuries[0], r.storm_felled_centuries[0],
+            r.storm_eligible_centuries[1], r.storm_felled_centuries[1],
+            r.storm_eligible_centuries[2], r.storm_felled_centuries[2],
+        );
+        for (bi, bite) in [0.97, 0.98, 0.99, 0.995].iter().enumerate() {
+            println!(
+                "             calibration bite>{:.3}, age≥100y: RI≥100/150/200y = {}/{}/{}",
+                bite, r.storm_calibration[bi][0], r.storm_calibration[bi][1],
+                r.storm_calibration[bi][2],
+            );
+        }
     }
 
     println!(
