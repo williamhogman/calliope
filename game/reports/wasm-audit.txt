@@ -1,8 +1,8 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · WASM AUDIT                   twiggy top (E6.4)
 ========================================================================
- subject: calliope_bg.wasm 3564981 B · sha256 e7dfa1ce27544815e83daf359e04c7cb82de1c5137050a4f0625cec06ef14f83
- profiling twin (symbolized): 3953661 B — sizes below are from the
+ subject: calliope_bg.wasm 3565003 B · sha256 14a97e87373e04df8ff254b46181a11bb68aa353a2b4e2b5da49b6e03fe0dd70
+ profiling twin (symbolized): 3953683 B — sizes below are from the
  twin; the release binary is the same code without names.
 
  Shallow Bytes │ Shallow % │ Item
@@ -47,8 +47,8 @@
          14929 ┊     0.38% ┊ calliope::world::GenBuilder::stage_climate::he5bc6ce3c21244c2
          14648 ┊     0.37% ┊ calliope::world::GenBuilder::stage_terrain::h7b0f84cc727f8075
          14454 ┊     0.37% ┊ naga::front::wgsl::parse::Parser::statement::h08dfb8e2b45a831a
-       2356348 ┊    59.60% ┊ ... and 4402 more.
-       3953661 ┊   100.00% ┊ Σ [4442 Total Rows]
+       2356370 ┊    59.60% ┊ ... and 4402 more.
+       3953683 ┊   100.00% ┊ Σ [4442 Total Rows]
 
 ---- checks ----------------------------------------------------------
 [PASS] twin speaks for the shipped binary          Δ 1.7%   (E6.6: |twin − names − release| ≤3% sweet · ≤6% hard of release — beyond that the audit reads a different build)
