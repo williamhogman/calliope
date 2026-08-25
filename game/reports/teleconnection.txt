@@ -4,6 +4,7 @@
 the tilted belts · cross-hemisphere trade-belt rain, forced vs counterfactual  (M75)
 
  seed        r(N,S) forced  r(N,S) osc=0   dN-S warm   dN-S cold   |resid| max   warm y  cold y
+ 12345            -0.987          0.024       0.2721     -0.2174       5.6e-17      53      53
 
 ---- checks ----------------------------------------------------------
 [FAIL] the lane ran to completion                   exit 0   (M77: the report does not end in a CHECKS line — the lane was cut off, so nothing below its last printed row was measured)
