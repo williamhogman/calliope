@@ -86,6 +86,21 @@ pub struct FamineRow {
     pub dead: i64,
 }
 
+/// M79 diagnostics: one direct-harbour landfall considered for permanent
+/// felling, with the local empirical evidence the exceptionality rule read.
+#[derive(Clone, Copy)]
+pub struct StormFellProbe {
+    pub month: i64,
+    pub settlement: SettlementId,
+    pub bite: f64,
+    pub damage: f64,
+    pub age: i64,
+    pub local: usize,
+    pub exceed: usize,
+    pub eligible: bool,
+    pub felled: bool,
+}
+
 pub struct World {
     pub seed: i64,
     pub size: usize,  // grid rows (the generated square base)
@@ -209,6 +224,8 @@ pub struct World {
     /// harbour wound is added. Permanent felling reads this ledger's
     /// empirical severe-hit return interval; bounded and deterministic.
     pub storm_bites: Vec<(i64, SettlementId, f64)>,
+    /// Diagnostics-only decision ledger for the permanent-felling rule.
+    pub storm_fell_probe: Vec<StormFellProbe>,
     /// M71 — the current year's weather, memoized: `(year, dt °C, dp share)`.
     /// Derived state (a pure function of seed × year), never hashed, never
     /// packed; recomputed the first time a year is asked for.
@@ -1084,6 +1101,7 @@ impl GenBuilder {
             storm_prev: Vec::new(),
             storm_marks: Vec::new(),
             storm_bites: Vec::new(),
+            storm_fell_probe: Vec::new(),
             year_weather: std::sync::Mutex::new(None),
             year_site_weather: std::sync::Mutex::new(None),
             grain_shock_year: -1,
@@ -3051,7 +3069,13 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             if lost > 0 && hit.as_ref().map_or(true, |h| lost > h.1) {
                 hit = Some((s.name.clone(), lost, d));
             }
-            if d <= r_fell
+            // A zero radius means "cannot fell", not "fell a town exactly at
+            // the event pin". Storm landfalls are pinned to their harbour,
+            // so accepting d == r_fell == 0 bypassed the entire M79
+            // exceptionality verdict and caused every intense direct hit to
+            // become a permanent ruin.
+            if r_fell > 0.0
+                && d <= r_fell
                 && n_towns > 6
                 && counts[s.people.idx()] > 1
                 && !besieged.contains(&s.id)
@@ -3257,37 +3281,37 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             // is felt at all. Permanent felling is rarer still: the town
             // must have a substantial local strike history, and this hit's
             // empirical severe-hit return interval (hits at least this
-            // damaging, including the present one) must be ≥200 years.
+            // damaging, including the present one) must be ≥100 years.
             // `storm_bites` is written at the mechanism before this test;
             // its settlement id makes the history local, while event damage
             // makes the comparison independent of any unrepaired old wound.
             // Ordinary damage, rebuilding and harbour recovery do not read
             // this verdict and therefore remain exactly as before.
-            let fell_radius = worst
+            let fell_evidence = worst
                 .as_ref()
-                .and_then(|&(i, dmg)| {
+                .map(|&(i, dmg)| {
                     let s = &self.peoples.settlements[i];
                     let age = month_abs.saturating_sub(s.born);
-                    if bite <= 0.97 || age < 2400 {
-                        return None;
-                    }
-                    let local: Vec<_> = self
+                    let local = self
                         .storm_bites
                         .iter()
                         .filter(|&&(m, sid, _)| m <= month_abs && sid == s.id)
-                        .collect();
-                    if local.len() < 12 {
-                        return None;
-                    }
-                    let exceed = local
+                        .count();
+                    let exceed = self
+                        .storm_bites
                         .iter()
-                        .filter(|&&&(_, _, wound)| {
-                            wound + 1e-9 >= dmg
+                        .filter(|&&(m, sid, wound)| {
+                            m <= month_abs && sid == s.id && wound + 1e-9 >= dmg
                         })
-                        .count() as i64;
-                    (exceed * 2400 <= age).then_some(1.0)
-                })
-                .unwrap_or(0.0);
+                        .count();
+                    let eligible = bite > 0.97
+                        && age >= 1200
+                        && local >= 12
+                        && (exceed as i64) * 1200 <= age;
+                    (s.id, dmg, age, local, exceed, eligible)
+                });
+            let fell_radius = if fell_evidence.map(|e| e.5).unwrap_or(false) { 1.0 } else { 0.0 };
+            let ruins_before = self.ruins.len();
             self.disaster_strike(
                 month_abs,
                 lf.y as i64,
@@ -3299,6 +3323,19 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                 if lf.trop { "a storm the old men had no name for" } else { "the worst gale in living memory" },
                 evs,
             );
+            if let Some((settlement, damage, age, local, exceed, eligible)) = fell_evidence {
+                self.storm_fell_probe.push(StormFellProbe {
+                    month: month_abs,
+                    settlement,
+                    bite,
+                    damage,
+                    age,
+                    local,
+                    exceed,
+                    eligible,
+                    felled: self.ruins.len() > ruins_before,
+                });
+            }
         }
     }
     /// M9.4 — roads fall disused. A route that has carried nothing for a
