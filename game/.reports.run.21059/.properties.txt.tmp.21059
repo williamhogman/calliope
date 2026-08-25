@@ -3,3 +3,5 @@
 ========================================================================
 seam-invariant properties (M8.1) and metamorphic checks (M8.2)
 
+seed  12345: 5023 river cells · 0 uphill · 0 cycles · 0 dry terminals
+seed  12345: 19 towns · 30 routes · 0 isolated · 1 components
