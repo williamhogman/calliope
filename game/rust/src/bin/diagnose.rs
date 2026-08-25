@@ -10276,7 +10276,6 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
             }
 
             if let Some(last) = t.points.last() {
-                if last.y.abs() - p0.y.abs() != 0.0 {}
                 let l0 = calliope::storms::lat_of(p0.y, rows).abs();
                 let l1 = calliope::storms::lat_of(last.y, rows).abs();
                 if l1 > l0 {
@@ -10414,12 +10413,11 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
         // A centre of mass at 11.96 must not print as "month 12.0" — the
         // year wraps, so round first and then bring it back onto 0-11.
         let show = |m: f64| -> f64 {
-            let r = (m * 10.0).round() / 10.0;
+            let mut r = (m * 10.0).round() / 10.0;
             if r >= 12.0 {
-                r - 12.0
-            } else {
-                r
+                r -= 12.0;
             }
+            if r.abs() < 0.05 { 0.0 } else { r }
         };
         c.must(
             &format!("the seasons stand half a year apart · {}", seed),
