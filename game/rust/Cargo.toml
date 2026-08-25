@@ -85,7 +85,7 @@ panic = "unwind"
 # earth-wasm replay lane proves the converged binary is bit-identical in
 # behaviour. --strip-dwarf drops any residual debug section the release
 # codegen leaves behind.
-wasm-opt = ["--no-inline=*stage_*", "-Oz", "--converge", "--strip-producers", "--strip-target-features", "--strip-dwarf"]
+wasm-opt = ["--no-inline=*stage_*", "-Oz", "--converge", "--vacuum", "--strip-producers", "--strip-target-features", "--strip-dwarf"]
 
 # E6.6 — the symbolized twin for scripts/wasm-audit.sh: wasm-opt keeps the
 # name section (-g) so twiggy can name what weighs. Never shipped.
