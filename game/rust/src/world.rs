@@ -3060,7 +3060,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             let text = if cause == "storm" {
                 // M79 — the coast the sea kept.
                 format!(
-                    "The sea takes {} in the night — {}; travellers call the place the {}.",
+                    "The water goes clean over {} in the night — {} — and when it draws back there is nothing to rebuild on. Travellers call the place the {}.",
                     dead.name, size, ruin_name
                 )
             } else if cause == "ash" {
@@ -3220,7 +3220,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                     let s = &self.peoples.settlements[i];
                     let kind = if lf.trop { "a great warm-sea storm" } else { "a winter gale" };
                     let text = format!(
-                        "The sea breaks {} — {}; the mole is breached and the harbour will take {} months to mend.",
+                        "The sea comes over the wall at {} — {} out of the deep water; the mole is breached, boats are thrown up the strand, and the harbour will take {} months of hammering before it works again.",
                         s.name, kind, settlements::HARBOR_WINDOW
                     );
                     let (name, sx, sy) = (s.name.clone(), s.x, s.y);
@@ -3257,7 +3257,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                 if bite > 0.97 { 1.0 } else { 0.0 },
                 0.02 * bite * bite,
                 "storm",
-                if lf.trop { "a nameless warm-sea storm" } else { "a living-memory gale" },
+                if lf.trop { "a storm the old men had no name for" } else { "the worst gale in living memory" },
                 evs,
             );
         }
