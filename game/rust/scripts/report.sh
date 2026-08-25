@@ -79,6 +79,8 @@ run "climate-variance.txt" climate-variance "$SIZE" 60 $OCEAN
 run "oscillation.txt" oscillation 1200 $OCEAN
 # M75 — the tilted belts: the seesaw reaching across the equator, with its counterfactual.
 run "teleconnection.txt" teleconnection "$SIZE" 120 $OCEAN
+# M77 — the storm corridors: genesis, steering and death over land.
+run "storms.txt" storms "$SIZE" 60 $OCEAN
 run "determinism.txt" determinism "${SEEDS[0]}" "$SIZE" "$DET_MONTHS"
 run "bench.txt" bench
 run "perf.txt" perf $PERF
