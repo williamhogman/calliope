@@ -37,6 +37,11 @@ use crate::telling;
 use crate::trade::{self, Route};
 use crate::util::{now_ms, round2};
 
+#[inline]
+fn within_fell_radius(distance: f64, radius: f64) -> bool {
+    radius > 0.0 && distance <= radius
+}
+
 /// E4.5 — one seat for "this wire section must reship on the next tick".
 /// Systems mark bits as they change state; `tick_json` takes them.
 #[derive(Default, Clone, Copy)]
@@ -3074,8 +3079,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             // so accepting d == r_fell == 0 bypassed the entire M79
             // exceptionality verdict and caused every intense direct hit to
             // become a permanent ruin.
-            if r_fell > 0.0
-                && d <= r_fell
+            if within_fell_radius(d, r_fell)
                 && n_towns > 6
                 && counts[s.people.idx()] > 1
                 && !besieged.contains(&s.id)
@@ -3680,6 +3684,21 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
     // `field_registry!` macro (E2.1) — it expands to both the static
     // `FIELD_SPECS` table (for codegen, E2.4) and `World::fields()`.
 
+}
+
+#[cfg(test)]
+mod storm_felling_tests {
+    use super::within_fell_radius;
+
+    #[test]
+    fn zero_radius_can_never_fell_a_settlement() {
+        assert!(!within_fell_radius(0.0, 0.0));
+        assert!(!within_fell_radius(f64::MIN_POSITIVE, 0.0));
+        assert!(!within_fell_radius(0.0, -1.0));
+        assert!(within_fell_radius(0.0, 1.0));
+        assert!(within_fell_radius(1.0, 1.0));
+        assert!(!within_fell_radius(1.000_001, 1.0));
+    }
 }
 
 
