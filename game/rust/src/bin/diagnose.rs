@@ -9527,6 +9527,7 @@ fn cmd_teleconnection(size: usize, years: i64, seeds: Vec<i64>) {
     println!("the tilted belts · cross-hemisphere trade-belt rain, forced vs counterfactual  (M75)");
 
     let mut c = Checks::default();
+    let mut lags: Vec<i64> = Vec::new();
     let lat_of = |y: usize, rows: usize| -90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0);
     let core = calliope::climate::TELE_BELT_LAT;
     let halfwidth = calliope::climate::TELE_BELT_SIGMA;
@@ -9679,6 +9680,28 @@ fn cmd_teleconnection(size: usize, years: i64, seeds: Vec<i64>) {
             }
         };
         let (dw, dc) = (mean(&warm), mean(&cold));
+
+        // ---- M76: recover the declared lag blind ---------------------
+        // The tilt is driven by the index sampled TELE_LAG_MONTHS before
+        // the year opens. Nothing in the belt series says so. Scan every
+        // candidate lag 0..24 months, correlate the realized belt
+        // difference against the index at that lag, and take the argmax
+        // of |r|: the analysis must land on the lag the code declares,
+        // and must land on the same one in every world.
+        let osc_src = calliope::oscillation::Oscillation::new(seed);
+        let diff: Vec<f64> = (0..ns.len()).map(|i| ns[i] - ss[i]).collect();
+        let mut lag_best = (0i64, 0.0f64, 0.0f64);
+        for k in 0..=24i64 {
+            let probe: Vec<f64> = (1..=years)
+                .map(|year| osc_src.index(year * 12 - k))
+                .collect();
+            let r = corr(&diff, &probe);
+            if r.abs() > lag_best.1.abs() {
+                lag_best = (k, r, r);
+            }
+        }
+        let (lag_rec, lag_r, _) = lag_best;
+        lags.push(lag_rec);
         println!(
             " {:<9} {:>13.3} {:>14.3} {:>12.4} {:>11.4} {:>13.1e} {:>7} {:>7}",
             seed,
@@ -9748,7 +9771,30 @@ fn cmd_teleconnection(size: usize, years: i64, seeds: Vec<i64>) {
             "identical".to_string(),
             "ADR-0003: the tilted belts are a pure function of the seed and the year",
         );
+        c.must(
+            &format!("the lag is recoverable blind · {}", seed),
+            lag_rec == calliope::climate::TELE_LAG_MONTHS,
+            format!(
+                "{} mo (declared {}) · r = {:+.3}",
+                lag_rec,
+                calliope::climate::TELE_LAG_MONTHS,
+                lag_r
+            ),
+            "M76 gate: scanning every candidate lag 0-24 mo, the belt difference must correlate most strongly with the index at exactly the declared lag — the phase relation is in the world, not only in the constant",
+        );
     }
+    // M76 — the lag is a property of the coupling, not of one world.
+    let all_same = !lags.is_empty() && lags.iter().all(|&l| l == lags[0]);
+    c.must(
+        "the recovered lag is stable across worlds",
+        all_same && lags[0] == calliope::climate::TELE_LAG_MONTHS,
+        format!(
+            "{:?} mo over {} seeds",
+            lags,
+            lags.len()
+        ),
+        "M76 gate: the teleconnection lag statistic must be the same in every seed — a lag that wandered by world would mean the phase relation is an artefact of the map, not the coupling",
+    );
     c.print();
 }
 
@@ -9761,8 +9807,10 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
 
     let mut c = Checks::default();
     let mut periods: Vec<f64> = Vec::new();
+    let mut proms: Vec<f64> = Vec::new();
+    let mut recs: Vec<f64> = Vec::new();
     println!();
-    println!(" seed        period mo  recovered   amp    σ realized     mean   |idx|max  warm%  cold%");
+    println!(" seed        period mo  recovered   amp    σ realized     mean   |idx|max  warm%  cold%  peak/floor  rival  coher");
     for &seed in &seeds {
         let o = calliope::oscillation::Oscillation::new(seed);
         let n = months as usize;
@@ -9777,6 +9825,10 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
 
         // Blind recovery: the strongest Fourier power over candidate
         // periods, scanned finely enough to resolve the declared band.
+        // M76 keeps the whole spectrum, not only its argmax — a peak is
+        // only a mode if it stands above the floor around it and has no
+        // rival elsewhere in the scan.
+        let mut spectrum: Vec<(f64, f64)> = Vec::new();
         let mut best = (0.0f64, 0.0f64);
         let mut t = 12.0f64;
         while t <= 140.0 {
@@ -9790,9 +9842,44 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
             if pw > best.1 {
                 best = (t, pw);
             }
+            spectrum.push((t, pw));
             t += 0.25;
         }
         let rec = best.0;
+
+        // ---- M76: is this a mode, or is it noise wearing a peak? -----
+        // The floor is the median power of every candidate period that
+        // is not part of the peak's own skirt (±25% of the recovered
+        // period). The prominence is peak/floor. The rival is the
+        // strongest power outside that skirt: a second comparable peak
+        // would mean two modes, not one dominant seesaw.
+        let skirt = |p: f64| (p - rec).abs() / rec <= 0.25;
+        let mut off: Vec<f64> = spectrum
+            .iter()
+            .filter(|(p, _)| !skirt(*p))
+            .map(|(_, w)| *w)
+            .collect();
+        off.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let floor = if off.is_empty() { 0.0 } else { off[off.len() / 2] };
+        let rival = off.iter().cloned().fold(0.0f64, f64::max);
+        let prominence = if floor > 0.0 { best.1 / floor } else { f64::INFINITY };
+        let rival_share = if best.1 > 0.0 { rival / best.1 } else { 1.0 };
+
+        // Phase lock: the realized index against a unit sinusoid at the
+        // *recovered* period. A quasi-periodic mode keeps its phase over
+        // many cycles; broadband noise does not. This is the coherence
+        // (fraction of variance the single recovered tone explains).
+        let (mut re, mut im) = (0.0f64, 0.0f64);
+        for (m, v) in series.iter().enumerate() {
+            let a = std::f64::consts::TAU * m as f64 / rec;
+            re += (v - mean) * a.cos();
+            im += (v - mean) * a.sin();
+        }
+        let coherence = if var > 0.0 {
+            2.0 * (re * re + im * im) / (n as f64 * n as f64 * var)
+        } else {
+            0.0
+        };
 
         // Irregularity: the gaps between upward zero crossings must not
         // all be the same number — a metronome is not a basin.
@@ -9811,9 +9898,9 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
         };
 
         println!(
-            " {:<10} {:>8.1}  {:>8.1}  {:>6.2}  {:>10.3}  {:>7.3}  {:>8.2}  {:>5.1}  {:>5.1}",
+            " {:<10} {:>8.1}  {:>8.1}  {:>6.2}  {:>10.3}  {:>7.3}  {:>8.2}  {:>5.1}  {:>5.1}  {:>10.1}  {:>5.2}  {:>5.2}",
             seed, o.period(), rec, o.amp(), sd, mean, amax,
-            100.0 * warm, 100.0 * cold
+            100.0 * warm, 100.0 * cold, prominence, rival_share, coherence
         );
 
         let sk = |t: &str| format!("{} · {}", t, seed);
@@ -9879,6 +9966,34 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
             format!("{:016x}", o.probe()),
             "ADR-0003: the seesaw is derived from the seed alone — rebuilding it must give the same law and the same series",
         );
+        // ---- M76: the seesaw read as a spectrum ----------------------
+        c.must(
+            &sk("the dominant peak sits in the declared band"),
+            rec >= calliope::oscillation::OSC_PERIOD_MIN
+                && rec <= calliope::oscillation::OSC_PERIOD_MAX,
+            format!("{:.1} mo in 24-84", rec),
+            "M76 gate: the peak the spectrum actually finds — not the drawn constant — must land inside the ENSO-class band",
+        );
+        c.must(
+            &sk("the peak stands above the noise floor"),
+            prominence >= 3.0,
+            format!("{:.1}x floor", prominence),
+            "M76 gate: dominant spectral power at least 3x the off-peak median — a mode rises out of its own background, decorative noise does not",
+        );
+        c.must(
+            &sk("the peak is single, not one of a pair"),
+            rival_share <= 0.5,
+            format!("rival {:.0}% of peak", 100.0 * rival_share),
+            "M76 gate: the strongest power outside the peak's skirt must be under half of it — two comparable peaks would be two modes, not one seesaw",
+        );
+        c.must(
+            &sk("the mode holds its phase"),
+            coherence >= 0.30,
+            format!("{:.0}% of variance in the tone", 100.0 * coherence),
+            "M76: a quasi-periodic mode keeps phase over many cycles, so one tone carries a real share of the variance — broadband noise spreads it thin",
+        );
+        proms.push(prominence);
+        recs.push(rec);
         periods.push(o.period());
     }
 
@@ -9891,6 +10006,22 @@ fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
         pmax - pmin >= 4.0,
         format!("{:.1}-{:.1} mo across seeds", pmin, pmax),
         "M74: the period is drawn per seed — a sweep that all leans on one rhythm means the draw is not keyed to the world",
+    );
+    // M76 — the sweep-wide statement: every seed, not the best one.
+    let worst_prom = proms.iter().cloned().fold(f64::MAX, f64::min);
+    c.must(
+        "every world's peak clears the floor",
+        worst_prom >= 3.0,
+        format!("weakest {:.1}x over {} seeds", worst_prom, proms.len()),
+        "M76 gate: the 3x prominence must hold on every sweep seed — one world proving a mode proves nothing about the law",
+    );
+    let rmin = recs.iter().cloned().fold(f64::MAX, f64::min);
+    let rmax = recs.iter().cloned().fold(f64::MIN, f64::max);
+    c.must(
+        "the recovered rhythms differ across worlds",
+        rmax - rmin >= 4.0,
+        format!("{:.1}-{:.1} mo recovered", rmin, rmax),
+        "M76: the spectrum must see the per-seed draw too — one recovered period across every world would mean the analysis is reading the engine, not the series",
     );
     c.print();
 }
