@@ -6643,7 +6643,23 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
             if r.sea <= 0.0 {
                 continue;
             }
-            let f = w.economy.route_flow.get(ri).copied().unwrap_or(0.0) * r.sea;
+            let route_flow = w.economy.route_flow.get(ri).copied().unwrap_or(0.0);
+            let wound = [r.a, r.b]
+                .iter()
+                .filter_map(|id| w.peoples.settlements.iter().find(|s| s.id == *id))
+                .map(|s| s.harbor_dmg)
+                .fold(0.0f64, f64::max);
+            // `route_flow` is the whole mixed journey after M79 preserves
+            // its carted share: base × (1 − wound × sea). Recover the base
+            // and read only its sailed component after the harbour wound.
+            // Multiplying the blended total by `sea` would falsely count
+            // preserved cart cargo as water cargo a broken quay still moved.
+            let blended = (1.0 - wound * r.sea).max(0.0);
+            let f = if blended > 0.0 {
+                route_flow / blended * r.sea * (1.0 - wound)
+            } else {
+                0.0
+            };
             for id in [r.a, r.b] {
                 let e = sea_flow.entry(id).or_insert_with(|| vec![0.0; months]);
                 e[mi] += f;
@@ -6945,8 +6961,9 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         .collect();
     let mut dips: Vec<f64> = Vec::new();
     let mut backs: Vec<f64> = Vec::new();
+    let mut strike_timeline: Vec<(usize, calliope::ids::SettlementId, f64, f64, f64, f64)> = Vec::new();
     let win = calliope::settlements::HARBOR_WINDOW as usize;
-    for &(mi, sid, _) in &told {
+    for &(mi, sid, dmg) in &told {
         let Some(series) = sea_flow.get(&sid) else { continue };
         if mi < 12 || mi + win + 1 > months {
             continue; // no room for a baseline or a full arc
@@ -6955,9 +6972,18 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         if base <= 1e-6 {
             continue;
         }
-        dips.push(series[mi] / base);
+        let dip = series[mi] / base;
+        dips.push(dip);
         let back = series[mi + win - 6..mi + win].iter().sum::<f64>() / 6.0;
-        backs.push(back / base);
+        let recovered = back / base;
+        backs.push(recovered);
+        let sailed_weight = w
+            .routes
+            .iter()
+            .filter(|r| r.a == sid || r.b == sid)
+            .map(|r| r.sea)
+            .sum::<f64>();
+        strike_timeline.push((mi, sid, dmg, sailed_weight, dip, recovered));
     }
     let median = |v: &mut Vec<f64>| -> f64 {
         if v.is_empty() {
@@ -6992,6 +7018,45 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
             "  the water trade: strike month {:.0}% of the year before (n={}) · {} months on {:.0}% of it back (n={})",
             100.0 * med_dip, n_dip, win, 100.0 * med_back, n_back
         );
+        println!("  causal cohorts (same strike samples; diagnostic only):");
+        for (lo, hi) in [(0usize, 1200usize), (1200, 1800), (1800, months)] {
+            let cohort: Vec<_> = strike_timeline
+                .iter()
+                .filter(|(mi, _, _, _, _, _)| *mi >= lo && *mi < hi)
+                .collect();
+            if cohort.is_empty() {
+                continue;
+            }
+            let mut cd: Vec<f64> = cohort.iter().map(|x| x.4).collect();
+            let mut cb: Vec<f64> = cohort.iter().map(|x| x.5).collect();
+            let mean_wound = cohort.iter().map(|x| x.2).sum::<f64>() / cohort.len() as f64;
+            let mean_sailed = cohort.iter().map(|x| x.3).sum::<f64>() / cohort.len() as f64;
+            println!(
+                "    years {:>3}-{:>3}: n={} · wound {:.3} · sailed-weight {:.2} · dip {:.1}% · back {:.1}%",
+                lo / 12,
+                hi.saturating_sub(1) / 12,
+                cohort.len(),
+                mean_wound,
+                mean_sailed,
+                100.0 * median(&mut cd),
+                100.0 * median(&mut cb),
+            );
+        }
+        let mut ordered = strike_timeline.clone();
+        ordered.sort_by(|a, b| a.4.partial_cmp(&b.4).unwrap());
+        let mid = ordered.len() / 2;
+        println!("  median neighbourhood (month · town · wound · sailed-weight · dip · back):");
+        for &(mi, sid, dmg, sailed, dip, back) in ordered.iter().skip(mid.saturating_sub(2)).take(5) {
+            println!(
+                "    {:>5} · {} · {:.3} · {:.2} · {:.1}% · {:.1}%",
+                mi,
+                sname(sid),
+                dmg,
+                sailed,
+                100.0 * dip,
+                100.0 * back,
+            );
+        }
     }
 
     let mut c = Checks::default();
