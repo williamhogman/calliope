@@ -10259,12 +10259,20 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
                 landfalls += 1;
             }
             let p0 = t.points[0];
-            // the first five days, while it is still in the trades
-            if let Some(p) = t.points.iter().find(|p| p.day >= 5.0) {
+            // Its young life in the trades: where it stands after five
+            // days, or — if the sea or a coast fills it sooner — where it
+            // stood when it died. Sampling strictly at day 5 would score
+            // every storm with a shorter life as though it had failed to
+            // move west, and 38-41% of this population fills before then.
+            // A storm that never took a step has no motion to testify to
+            // and is left out of the count entirely, not counted against.
+            if let Some(p) = t.points.iter().filter(|p| p.day > 0.0 && p.day <= 5.0).last() {
+                west_n += 1;
                 if p.x < p0.x {
                     west_early += 1;
                 }
             }
+
             if let Some(last) = t.points.last() {
                 if last.y.abs() - p0.y.abs() != 0.0 {}
                 let l0 = calliope::storms::lat_of(p0.y, rows).abs();
