@@ -205,6 +205,10 @@ pub struct World {
     /// harbour a storm actually broke. Diagnostics ledger and the gate's
     /// evidence; bounded, never on the wire.
     pub storm_marks: Vec<(i64, SettlementId, f64)>,
+    /// M79 — local strike history at event strength, before an existing
+    /// harbour wound is added. Permanent felling reads this ledger's
+    /// empirical severe-hit return interval; bounded and deterministic.
+    pub storm_bites: Vec<(i64, SettlementId, f64)>,
     /// M71 — the current year's weather, memoized: `(year, dt °C, dp share)`.
     /// Derived state (a pure function of seed × year), never hashed, never
     /// packed; recomputed the first time a year is asked for.
@@ -1079,6 +1083,7 @@ impl GenBuilder {
             storm_now: Vec::new(),
             storm_prev: Vec::new(),
             storm_marks: Vec::new(),
+            storm_bites: Vec::new(),
             year_weather: std::sync::Mutex::new(None),
             year_site_weather: std::sync::Mutex::new(None),
             grain_shock_year: -1,
@@ -3207,6 +3212,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                 );
                 s.harbor_until = month_abs + settlements::HARBOR_WINDOW;
                 self.storm_marks.push((month_abs, s.id, s.harbor_dmg));
+                self.storm_bites.push((month_abs, s.id, dmg));
                 if worst.as_ref().map_or(true, |w| dmg > w.1) {
                     worst = Some((i, dmg));
                 }
@@ -3214,6 +3220,10 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             if self.storm_marks.len() > 4096 {
                 let cut = self.storm_marks.len() - 4096;
                 self.storm_marks.drain(..cut);
+            }
+            if self.storm_bites.len() > 4096 {
+                let cut = self.storm_bites.len() - 4096;
+                self.storm_bites.drain(..cut);
             }
             if let Some((i, dmg)) = worst {
                 if dmg >= settlements::HARBOR_TELL_MIN {
@@ -3244,17 +3254,46 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             // every few years, so the per-strike bite has to be the size
             // of a bad winter — a fraction of a percent to two percent of
             // a town, squared in the intensity so only the rare monster
-            // is felt at all — and only a storm at the very top of the
-            // scale, breaking directly over the town, can take the ground
-            // itself. Anything heavier and three centuries of ordinary
-            // weather empty the shores, which is a demography change
-            // wearing a storm's clothes.
+            // is felt at all. Permanent felling is rarer still: the town
+            // must have a substantial local strike history, and this hit's
+            // empirical severe-hit return interval (hits at least this
+            // damaging, including the present one) must be ≥200 years.
+            // `storm_bites` is written at the mechanism before this test;
+            // its settlement id makes the history local, while event damage
+            // makes the comparison independent of any unrepaired old wound.
+            // Ordinary damage, rebuilding and harbour recovery do not read
+            // this verdict and therefore remain exactly as before.
+            let fell_radius = worst
+                .as_ref()
+                .and_then(|&(i, dmg)| {
+                    let s = &self.peoples.settlements[i];
+                    let age = month_abs.saturating_sub(s.born);
+                    if bite <= 0.97 || age < 2400 {
+                        return None;
+                    }
+                    let local: Vec<_> = self
+                        .storm_bites
+                        .iter()
+                        .filter(|&&(m, sid, _)| m <= month_abs && sid == s.id)
+                        .collect();
+                    if local.len() < 12 {
+                        return None;
+                    }
+                    let exceed = local
+                        .iter()
+                        .filter(|&&&(_, _, wound)| {
+                            wound + 1e-9 >= dmg
+                        })
+                        .count() as i64;
+                    (exceed * 2400 <= age).then_some(1.0)
+                })
+                .unwrap_or(0.0);
             self.disaster_strike(
                 month_abs,
                 lf.y as i64,
                 lf.x as i64,
                 reach * (0.5 + 0.5 * bite),
-                if bite > 0.97 { 1.0 } else { 0.0 },
+                fell_radius,
                 0.02 * bite * bite,
                 "storm",
                 if lf.trop { "a storm the old men had no name for" } else { "the worst gale in living memory" },
