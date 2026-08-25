@@ -38,10 +38,10 @@ current-aware rain (M42): sub-polar cold-rim land 568 cells at 0.45× its aspect
 upwelling (M47): 282 of 4747 coastline cells nutrient-rich (5.9%) · index p50 0.00 · p90 0.16 · marked rims -0.14°C against their own latitude's coast
 
 interannual variability (M71) · 60 years · land cells only:
-  belt                         σ T (°C)   declared σ σ rain (frac)
-  tropics (<23.5°)                0.371        0.378        0.209
-  mid-latitudes (23.5–55°)        0.725        0.736        0.151
-  polar (>55°)                    1.204        1.255        0.174
+  belt                         σ T (°C)   declared σ σ rain unforced σ rain total
+  tropics (<23.5°)                0.371        0.378          0.094        0.209
+  mid-latitudes (23.5–55°)        0.725        0.736          0.127        0.151
+  polar (>55°)                    1.204        1.255          0.174        0.174
 
 ---- checks ----------------------------------------------------------
 [PASS] desert share of land                          17.5%   (sweet 12–28% · hard 6–38%)
@@ -65,9 +65,11 @@ interannual variability (M71) · 60 years · land cells only:
 [PASS] seasonal share of the pack                    23.4%   (M37 gate: a fringe that opens in summer)
 [PASS] pack ice keeps to the polar seas        reaches 52°   (M37: no icebound tropics — Earth's pack stays poleward of ~44°)
 [PASS] the year's heat swings wider toward the poles σ 0.371 → 0.725 → 1.204 °C   (M71 gate: annual temperature-anomaly σ rises monotonically across the three latitude belts)
-[FAIL] the year's rain swings wider toward the poles σ 0.209 → 0.151 → 0.174   (M71: the same latitude law shapes the rain lane, in fractional terms)
+[PASS] the year's rain swings wider toward the poles σ 0.094 → 0.127 → 0.174   (M71: the same latitude law shapes the rain lane, in fractional terms — measured unforced (osc≡0), which is the law's own claim; the M75 tilt is gated in the teleconnection lane)
+[PASS] the seesaw widens the tropics it aims at tropics σ 0.094 unforced → 0.209 forced   (M75: the teleconnection belt adds interannual rain variance where it is aimed)
+[PASS] the seesaw leaves the poles alone    polar σ 0.174 unforced → 0.174 forced   (M75: TELE_BELT_LAT 15° / σ 12° dies out well before the polar belt)
 [PASS] the measured swing is the declared swing worst belt off by 4.0%   (M71: ANOM_FBM_SIGMA normalizes the lattice — if the measured σ drifts from the declared amplitude, the constant is stale, not the sky)
 [PASS] the anomaly field is finite          0 non-finite cells   (M71: every year's draw is a number)
 [PASS] a bad year never takes all the rain  worst -0.76 share   (M71: total failure of the rains is famine's verdict (M2.6), not the sky's noise)
 [PASS] one seed, one year, one sky          redraw identical · memo identical   (M71 gate: repeated runs at one seed reproduce identical per-year anomaly grids bit-for-bit, memo or fresh)
-CHECKS: 24 pass · 1 warn · 1 fail
+CHECKS: 27 pass · 1 warn · 0 fail
