@@ -9469,6 +9469,162 @@ struct OceanRow {
     swing_p50: f64,
 }
 
+/// M74 — the seesaw seas.
+///
+/// A basin that leans warm for a few years and then leans back is the
+/// single largest source of ordered, multi-year structure in a real
+/// sky, and the thing that makes a run of bad harvests feel caused
+/// rather than merely unlucky. This lane holds the law that M74 draws —
+/// period, amplitude, phase — against the series it actually produces:
+/// the period is *recovered blind* from the index by periodogram rather
+/// than read off the struct, the realized σ must be the drawn amplitude,
+/// the lean must be balanced (no basin that only ever warms), and the
+/// seesaw must be irregular — successive cycles of visibly different
+/// length, never a metronome. Determinism closes it: the same seed must
+/// hand back the same basin, byte for byte.
+fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
+    header(
+        "OSCILLATION",
+        &format!("{} seeds · {} mo", seeds.len(), months),
+    );
+    println!("the slow lean of the seas · drawn law vs realized series  (M74)");
+
+    let mut c = Checks::default();
+    let mut periods: Vec<f64> = Vec::new();
+    println!();
+    println!(" seed        period mo  recovered   amp    σ realized     mean   |idx|max  warm%  cold%");
+    for &seed in &seeds {
+        let o = calliope::oscillation::Oscillation::new(seed);
+        let n = months as usize;
+        let series: Vec<f64> = (0..months).map(|m| o.index(m)).collect();
+        let finite = series.iter().all(|v| v.is_finite());
+        let mean = series.iter().sum::<f64>() / n as f64;
+        let var = series.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / n as f64;
+        let sd = var.sqrt();
+        let amax = series.iter().fold(0.0f64, |a, v| a.max(v.abs()));
+        let warm = series.iter().filter(|v| **v > 0.8 * o.amp()).count() as f64 / n as f64;
+        let cold = series.iter().filter(|v| **v < -0.8 * o.amp()).count() as f64 / n as f64;
+
+        // Blind recovery: the strongest Fourier power over candidate
+        // periods, scanned finely enough to resolve the declared band.
+        let mut best = (0.0f64, 0.0f64);
+        let mut t = 12.0f64;
+        while t <= 140.0 {
+            let (mut re, mut im) = (0.0f64, 0.0f64);
+            for (m, v) in series.iter().enumerate() {
+                let a = std::f64::consts::TAU * m as f64 / t;
+                re += (v - mean) * a.cos();
+                im += (v - mean) * a.sin();
+            }
+            let pw = re * re + im * im;
+            if pw > best.1 {
+                best = (t, pw);
+            }
+            t += 0.25;
+        }
+        let rec = best.0;
+
+        // Irregularity: the gaps between upward zero crossings must not
+        // all be the same number — a metronome is not a basin.
+        let mut cross: Vec<usize> = Vec::new();
+        for m in 1..n {
+            if series[m - 1] <= 0.0 && series[m] > 0.0 {
+                cross.push(m);
+            }
+        }
+        let gaps: Vec<f64> = cross.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+        let gsd = if gaps.len() > 2 {
+            let gm = gaps.iter().sum::<f64>() / gaps.len() as f64;
+            (gaps.iter().map(|g| (g - gm) * (g - gm)).sum::<f64>() / gaps.len() as f64).sqrt()
+        } else {
+            0.0
+        };
+
+        println!(
+            " {:<10} {:>8.1}  {:>8.1}  {:>6.2}  {:>10.3}  {:>7.3}  {:>8.2}  {:>5.1}  {:>5.1}",
+            seed, o.period(), rec, o.amp(), sd, mean, amax,
+            100.0 * warm, 100.0 * cold
+        );
+
+        let sk = |t: &str| format!("{} · {}", t, seed);
+        c.must(
+            &sk("period inside the declared band"),
+            o.period() >= calliope::oscillation::OSC_PERIOD_MIN
+                && o.period() <= calliope::oscillation::OSC_PERIOD_MAX,
+            format!("{:.1} mo in 24-84", o.period()),
+            "M74: an ENSO-class basin leans for two to seven years — never a season, never a century",
+        );
+        c.must(
+            &sk("amplitude inside the declared band"),
+            o.amp() >= calliope::oscillation::OSC_AMP_MIN
+                && o.amp() <= calliope::oscillation::OSC_AMP_MAX,
+            format!("{:.2} in 0.55-1.45", o.amp()),
+            "M74: every world draws a basin of its own strength, inside one envelope",
+        );
+        c.must(
+            &sk("the period is recoverable blind"),
+            (rec - o.period()).abs() / o.period() <= 0.15,
+            format!("{:+.1}% of drawn", 100.0 * (rec - o.period()) / o.period()),
+            "M74: the dominant periodogram peak of the realized index must find the drawn period within 15% — the lean is in the series, not only in the struct",
+        );
+        c.must(
+            &sk("realized σ is the drawn amplitude"),
+            (sd - o.amp()).abs() / o.amp() <= 0.10,
+            format!("{:+.1}% of drawn", 100.0 * (sd - o.amp()) / o.amp()),
+            "M74: clean lane and coloured noise are mixed at fixed variance shares, so σ is the amplitude however the shares are tuned",
+        );
+        c.must(
+            &sk("the lean is balanced"),
+            mean.abs() <= 0.15 * o.amp(),
+            format!("{:+.3} vs {:.2}", mean, o.amp()),
+            "M74: a basin returns — no world may sit warm forever",
+        );
+        c.must(
+            &sk("warm and cold phases both occur"),
+            warm >= 0.08 && cold >= 0.08,
+            format!("{:.0}% warm · {:.0}% cold", 100.0 * warm, 100.0 * cold),
+            "M74: both sides of the seesaw must be lived in, or the index is a trend",
+        );
+        c.must(
+            &sk("the cap holds"),
+            amax <= calliope::oscillation::OSC_CAP_SIGMA * o.amp() + 1e-9,
+            format!("{:.2} <= {:.2}", amax, calliope::oscillation::OSC_CAP_SIGMA * o.amp()),
+            "M74: a tail draw may not hand the causal path an absurd year",
+        );
+        c.must(
+            &sk("the seesaw is irregular"),
+            gsd >= 1.0,
+            format!("cycle σ {:.1} mo", gsd),
+            "M74: real basins skip and stall — successive cycles of identical length would be a metronome",
+        );
+        c.must(
+            &sk("every month is finite"),
+            finite,
+            format!("{} mo", n),
+            "M74: no poison enters the causal path M72 opened",
+        );
+        c.must(
+            &sk("the basin replays"),
+            calliope::oscillation::Oscillation::new(seed).probe() == o.probe(),
+            format!("{:016x}", o.probe()),
+            "ADR-0003: the seesaw is derived from the seed alone — rebuilding it must give the same law and the same series",
+        );
+        periods.push(o.period());
+    }
+
+    // The basin is the world's, not the engine's: two worlds must not be
+    // handed the same seesaw.
+    let pmin = periods.iter().cloned().fold(f64::MAX, f64::min);
+    let pmax = periods.iter().cloned().fold(f64::MIN, f64::max);
+    c.must(
+        "each world draws its own basin",
+        pmax - pmin >= 4.0,
+        format!("{:.1}-{:.1} mo across seeds", pmin, pmax),
+        "M74: the period is drawn per seed — a sweep that all leans on one rhythm means the draw is not keyed to the world",
+    );
+    c.print();
+}
+
 /// M73 — the sky's variance, held in bands.
 ///
 /// M71 gave every year its own weather and M72 made it causal; this lane
@@ -11325,6 +11481,14 @@ fn main() {
                 seeds = vec![12345, 777, 31337, 90210, 555];
             }
             cmd_climate_variance(size, years, seeds);
+        }
+        "oscillation" => {
+            let months = num(2, 1200);
+            let mut seeds: Vec<i64> = a.get(3..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 31337, 90210, 555];
+            }
+            cmd_oscillation(months, seeds);
         }
         "systems" => cmd_systems(num(2, 12345), sized(3, 512), num(4, 150) as usize),
         "perf" => {
