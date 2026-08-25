@@ -50,6 +50,7 @@ pub mod seismic;
 pub mod settlements;
 pub mod snapshot;
 pub mod society;
+pub mod storms;
 pub mod state;
 pub mod systems;
 pub mod telling;

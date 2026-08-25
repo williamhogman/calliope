@@ -368,6 +368,14 @@ fn hash_state(w: &World) -> u64 {
     }
     // M74 — the basin's lean is likewise derived, so its probe rides here.
     s.push_str(&format!("O{:016x}\n", w.oscillation().probe()));
+    // M77 — a storm season is derived from the frozen genesis field and
+    // the year (ADR-0003), so the identity line carries a probe of the
+    // corridor rather than a track grid: the hemispheric gradients, the
+    // seasons, the site counts and two spaced years of full tracks.
+    {
+        let sc = calliope::storms::StormClimatology::new(&w.fields.height, &w.fields.tmean, &w.fields.tamp);
+        s.push_str(&format!("K{:016x}\n", sc.probe(w.seed, &w.fields.height)));
+    }
     s.push_str(&format!("t{}\n", w.month));
     bytes.extend_from_slice(s.as_bytes());
     fnv(&bytes)
@@ -9798,6 +9806,321 @@ fn cmd_teleconnection(size: usize, years: i64, seeds: Vec<i64>) {
     c.print();
 }
 
+/// M77 — The Storm Corridors.
+///
+/// The corridor is not declared anywhere: the genesis field is the
+/// world's own meridional temperature gradient over water, and the
+/// steering is the same zonal wind the gyres read. So the 30–60° belt,
+/// the eastward corridor, the poleward drift and the death over land all
+/// have to *emerge* from the climate the earlier eras solved — every row
+/// below measures the realized tracks and holds them against a law
+/// stated elsewhere, never against a number typed into this lane.
+fn cmd_storms(size: usize, years: i64, seeds: Vec<i64>) {
+    header(
+        "STORMS",
+        &format!("{}x{} · {} seeds · {} y", size, size, seeds.len(), years),
+    );
+    println!("the storm corridors · genesis, steering and death over land  (M77)");
+
+    let mut c = Checks::default();
+    let mut band_shares: Vec<f64> = Vec::new();
+    let mut east_shares: Vec<f64> = Vec::new();
+
+    println!();
+    println!(" seed      storms/century   gen 30-60°   over sea   east%   pole drift   land keep   sea keep   landfall%   season N/S");
+    for &seed in &seeds {
+        let w = World::generate(seed, size);
+        let rows = w.fields.height.dim().0;
+        let clim = calliope::storms::StormClimatology::new(
+            &w.fields.height,
+            &w.fields.tmean,
+            &w.fields.tamp,
+        );
+
+        println!(
+            " · {} genesis field: sites N {} / S {} · peak dT/dlat {:.4} / {:.4} °C/° · season count N {} / S {}",
+            seed,
+            clim.sites(1).len(),
+            clim.sites(-1).len(),
+            clim.peak_gradient(1),
+            clim.peak_gradient(-1),
+            clim.season_count(1),
+            clim.season_count(-1),
+        );
+        let mut tracks: Vec<calliope::storms::StormTrack> = Vec::new();
+        for year in 1..=years {
+            for h in [1i8, -1i8] {
+                tracks.extend(clim.season(seed, year, h, &w.fields.height));
+            }
+        }
+        if tracks.is_empty() {
+            c.must(
+                &format!("the westerlies breed storms · {}", seed),
+                false,
+                "0 tracks".to_string(),
+                "M77: a mid-latitude sea with a temperature gradient across it must shed cyclones — no tracks means the genesis field never fired",
+            );
+            continue;
+        }
+
+        let n = tracks.len() as f64;
+        let per_century = n * 100.0 / years as f64;
+
+        // --- where they are born -------------------------------------
+        let mut in_band = 0usize;
+        let mut over_sea = 0usize;
+        let mut hist = [0usize; 9]; // 10° bins of |lat|, 0..90
+        for t in &tracks {
+            let la = t.genesis_lat.abs();
+            if (30.0..=60.0).contains(&la) {
+                in_band += 1;
+            }
+            let bin = ((la / 10.0).floor() as usize).min(8);
+            hist[bin] += 1;
+            if w.fields.height[[t.genesis.0, t.genesis.1]] < 0.0 {
+                over_sea += 1;
+            }
+        }
+        let band_share = in_band as f64 / n;
+        let sea_share = over_sea as f64 / n;
+        band_shares.push(band_share);
+        let peak_bin = (0..9).max_by_key(|&i| hist[i]).unwrap();
+
+        // --- where they go -------------------------------------------
+        let east = tracks.iter().filter(|t| t.drift_x() > 0.0).count() as f64 / n;
+        east_shares.push(east);
+        let pole: f64 = tracks.iter().map(|t| t.drift_pole(rows)).sum::<f64>() / n;
+
+        // --- what kills them -----------------------------------------
+        // Per-step intensity ratio, measured separately over land and
+        // over sea across every step of every track: the engine's own
+        // number, not the constant.
+        let (mut lk, mut lkn, mut sk, mut skn) = (0.0f64, 0usize, 0.0f64, 0usize);
+        let mut nonfinite = 0usize;
+        let mut offgrid = 0usize;
+        for t in &tracks {
+            for pair in t.points.windows(2) {
+                let (a, b) = (pair[0], pair[1]);
+                if !b.inten.is_finite() || !b.x.is_finite() || !b.y.is_finite() {
+                    nonfinite += 1;
+                    continue;
+                }
+                if b.x < 0.0 || b.x > (w.width - 1) as f64 || b.y < 0.0 || b.y > (rows - 1) as f64 {
+                    offgrid += 1;
+                }
+                if a.inten <= 0.0 {
+                    continue;
+                }
+                let r = b.inten / a.inten;
+                if b.over_land {
+                    lk += r;
+                    lkn += 1;
+                } else {
+                    sk += r;
+                    skn += 1;
+                }
+            }
+        }
+        let land_keep = if lkn > 0 { lk / lkn as f64 } else { f64::NAN };
+        let sea_keep = if skn > 0 { sk / skn as f64 } else { f64::NAN };
+        let landfall = tracks.iter().filter(|t| t.landfall).count() as f64 / n;
+
+        println!(
+            " {:<9} {:>10.1}   {:>10}   {:>8}  {:>6}   {:>+9.2}°   {:>9.4}   {:>8.4}   {:>9}   {:>3} / {:<3}",
+            seed,
+            per_century,
+            pct(band_share),
+            pct(sea_share),
+            pct(east),
+            pole,
+            land_keep,
+            sea_keep,
+            pct(landfall),
+            clim.cold_month(1),
+            clim.cold_month(-1),
+        );
+
+        c.must(
+            &format!("genesis peaks in the baroclinic belt · {}", seed),
+            (3..6).contains(&peak_bin),
+            format!("peak bin {}-{}°", peak_bin * 10, peak_bin * 10 + 10),
+            "M77 gate: the busiest 10° band of cyclogenesis must fall inside 30-60° — the corridor is a consequence of where the temperature gradient concentrates, and nothing in storms.rs names a latitude",
+        );
+        c.must(
+            &format!("the belt holds the season · {}", seed),
+            band_share >= 0.60,
+            pct(band_share),
+            "M77 gate: a majority of a year's cyclones are born in the 30-60° belt — a corridor that leaked equatorward would mean the gradient measure is reading something other than baroclinicity",
+        );
+        c.must(
+            &format!("cyclogenesis is a marine act · {}", seed),
+            sea_share > 0.999,
+            pct(sea_share),
+            "M77: a cyclone needs the sea's heat under it — a genesis point on land would mean the mask is not being read",
+        );
+        c.must(
+            &format!("the corridor runs downwind · {}", seed),
+            east >= 0.80,
+            pct(east),
+            "M77 gate: born in the westerlies, a storm must travel east — the steering is currents::wind_stress, the same field the gyres read, so a westward corridor would put storm and current in contradiction",
+        );
+        c.must(
+            &format!("storms climb poleward · {}", seed),
+            pole > 0.0,
+            format!("{:+.2}° mean", pole),
+            "M77: a travelling cyclone occludes as it goes and drifts toward its own pole — a net equatorward corridor would be the wrong sign of drift",
+        );
+        c.must(
+            &format!("land fills the storm · {}", seed),
+            land_keep < 1.0 && land_keep.is_finite(),
+            format!("{:.4}/step", land_keep),
+            "M77 gate: cut off from the sea a cyclone loses intensity every step — measured over every land step of every track, not read off the constant",
+        );
+        c.must(
+            &format!("the sea feeds the storm · {}", seed),
+            sea_keep > 1.0 && sea_keep.is_finite(),
+            format!("{:.4}/step", sea_keep),
+            "M77 gate: over open water the storm must be gaining, or the land/sea contrast below proves nothing",
+        );
+        c.must(
+            &format!("the coast is where they die · {}", seed),
+            landfall > 0.05,
+            pct(landfall),
+            "M77: a corridor that never reaches a shore costs the world nothing — M79 needs landfalls to wire consequences to",
+        );
+        c.must(
+            &format!("no poison on the tracks · {}", seed),
+            nonfinite == 0 && offgrid == 0,
+            format!("{} nan · {} off-grid", nonfinite, offgrid),
+            "M77: every advected point is finite and inside the grid it was walked across",
+        );
+
+        // --- the seasons are the world's own --------------------------
+        let (cn, cs) = (clim.cold_month(1), clim.cold_month(-1));
+        let sep = (((cn - cs) % 12) + 12) % 12;
+        c.must(
+            &format!("the hemispheres storm in turn · {}", seed),
+            (5..=7).contains(&sep),
+            format!("{} mo apart", sep),
+            "M77 gate: the storm season is the belt's own cold season, read from the realized annual cycle — the two hemispheres must fall half a year apart because the world's seasons do, not because a calendar was typed in",
+        );
+        let cold_half = |cm: i64, m: i64| -> bool {
+            let d = (((m - cm) % 12) + 12) % 12;
+            d <= 2 || d >= 10
+        };
+        let in_season = tracks
+            .iter()
+            .filter(|t| cold_half(if t.hemi >= 0 { cn } else { cs }, t.month))
+            .count() as f64
+            / n;
+        c.must(
+            &format!("storms keep to their season · {}", seed),
+            in_season >= 0.50,
+            pct(in_season),
+            "M77 gate: the five months centred on the belt's coldest must carry more than their uniform share (41.7%) of the year's cyclones — the season is drawn from the world's temperature cycle",
+        );
+
+        // --- counts follow the sea that breeds them --------------------
+        let (mut sites_n, mut sites_s) = (clim.sites(1).len(), clim.sites(-1).len());
+        if sites_n == 0 {
+            sites_n = 1;
+        }
+        if sites_s == 0 {
+            sites_s = 1;
+        }
+        let cnt_n = tracks.iter().filter(|t| t.hemi > 0).count() as f64;
+        let cnt_s = tracks.iter().filter(|t| t.hemi < 0).count() as f64;
+        let rate_n = cnt_n / (years as f64) / (sites_n as f64 / 1000.0);
+        let rate_s = cnt_s / (years as f64) / (sites_s as f64 / 1000.0);
+        c.must(
+            &format!("counts follow the breeding sea · {}", seed),
+            (rate_n / rate_s).max(rate_s / rate_n) < 2.0,
+            format!("{:.2} vs {:.2}/ky·1k", rate_n, rate_s),
+            "M77 gate: storms per year per thousand baroclinic ocean cells must agree between hemispheres within a factor of two — a hemisphere that bred storms out of proportion to its sea would mean the count is coming from somewhere other than the zone",
+        );
+
+        // --- coastline exposure ---------------------------------------
+        // Landfalls per century per thousand coastline cells: the shore's
+        // exposure to the corridor, held between hemispheres.
+        let land = land_mask(&w);
+        let (mut coast_n, mut coast_s) = (0usize, 0usize);
+        for y in 1..rows - 1 {
+            let north = calliope::storms::lat_of(y as f64, rows) >= 0.0;
+            for x in 1..w.width - 1 {
+                if !land[[y, x]] {
+                    continue;
+                }
+                let edge = !land[[y - 1, x]] || !land[[y + 1, x]] || !land[[y, x - 1]] || !land[[y, x + 1]];
+                if edge {
+                    if north {
+                        coast_n += 1;
+                    } else {
+                        coast_s += 1;
+                    }
+                }
+            }
+        }
+        let lf_n = tracks.iter().filter(|t| t.hemi > 0 && t.landfall).count() as f64;
+        let lf_s = tracks.iter().filter(|t| t.hemi < 0 && t.landfall).count() as f64;
+        let exp_n = lf_n * 100.0 / years as f64 / (coast_n.max(1) as f64 / 1000.0);
+        let exp_s = lf_s * 100.0 / years as f64 / (coast_s.max(1) as f64 / 1000.0);
+        if coast_n >= 200 && coast_s >= 200 && lf_n >= 1.0 && lf_s >= 1.0 {
+            c.want(
+                &format!("shores share the exposure · {}", seed),
+                (exp_n / exp_s).max(exp_s / exp_n) < 2.0,
+                format!("{:.1} vs {:.1}/cy·1k", exp_n, exp_s),
+                "M77 gate: landfalls per century per thousand coastline cells within a factor of two between hemispheres — one hemisphere's shore may genuinely sit downwind of a wider ocean, so this stands as a WARN band, not a hard row",
+            );
+        }
+
+        // --- the corridor replays -------------------------------------
+        let clim2 = calliope::storms::StormClimatology::new(
+            &w.fields.height,
+            &w.fields.tmean,
+            &w.fields.tamp,
+        );
+        let a = clim.probe(seed, &w.fields.height);
+        let b = clim2.probe(seed, &w.fields.height);
+        c.must(
+            &format!("the corridor replays · {}", seed),
+            a == b,
+            format!("{:016x}", a),
+            "ADR-0003: a storm season is derived, never stored — same seed and year must walk the same tracks",
+        );
+        // …and a different year is a different season, or the corridor is
+        // a still image rather than a weather record.
+        let y1 = clim.season(seed, 1, 1, &w.fields.height);
+        let y2 = clim.season(seed, 2, 1, &w.fields.height);
+        let same = y1.len() == y2.len()
+            && y1.iter().zip(y2.iter()).all(|(p, q)| p.genesis == q.genesis && p.month == q.month);
+        c.must(
+            &format!("each year draws its own storms · {}", seed),
+            !same,
+            format!("{} vs {} tracks", y1.len(), y2.len()),
+            "M77: the season is keyed on the year as well as the seed — two identical years would mean the corridor is a fixture, not weather",
+        );
+    }
+
+    if band_shares.len() > 1 {
+        let lo = band_shares.iter().cloned().fold(f64::INFINITY, f64::min);
+        let hi = band_shares.iter().cloned().fold(0.0f64, f64::max);
+        c.must(
+            "the belt holds in every world",
+            lo >= 0.60,
+            format!("{} - {}", pct(lo), pct(hi)),
+            "M77 gate: the corridor's latitude is a property of the general circulation, so every seed's map must put its storms in the same belt",
+        );
+        let elo = east_shares.iter().cloned().fold(f64::INFINITY, f64::min);
+        c.must(
+            "the downwind sense holds in every world",
+            elo >= 0.80,
+            pct(elo),
+            "M77 gate: no world may run its corridor against the westerlies",
+        );
+    }
+    c.print();
+}
+
 fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
     header(
         "OSCILLATION",
@@ -11938,6 +12261,15 @@ fn main() {
                 seeds = vec![12345, 777, 31337, 90210, 555];
             }
             cmd_oscillation(months, seeds);
+        }
+        "storms" => {
+            let size = sized(2, 512);
+            let years = num(3, 60);
+            let mut seeds: Vec<i64> = a.get(4..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 31337, 90210, 555];
+            }
+            cmd_storms(size, years, seeds);
         }
         "teleconnection" => {
             let size = sized(2, 512);
