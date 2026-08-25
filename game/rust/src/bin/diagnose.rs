@@ -10246,6 +10246,8 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
 
         // --- how they travel ------------------------------------------
         let mut west_early = 0usize;
+        let mut west_n = 0usize;
+
         let mut recurved = 0usize;
         let mut reached = 0usize;
         let mut peaks: Vec<f64> = Vec::new();
@@ -10259,12 +10261,20 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
                 landfalls += 1;
             }
             let p0 = t.points[0];
-            // the first five days, while it is still in the trades
-            if let Some(p) = t.points.iter().find(|p| p.day >= 5.0) {
+            // Its young life in the trades: where it stands after five
+            // days, or — if the sea or a coast fills it sooner — where it
+            // stood when it died. Sampling strictly at day 5 would score
+            // every storm with a shorter life as though it had failed to
+            // move west, and 38-41% of this population fills before then.
+            // A storm that never took a step has no motion to testify to
+            // and is left out of the count entirely, not counted against.
+            if let Some(p) = t.points.iter().filter(|p| p.day > 0.0 && p.day <= 5.0).last() {
+                west_n += 1;
                 if p.x < p0.x {
                     west_early += 1;
                 }
             }
+
             if let Some(last) = t.points.last() {
                 if last.y.abs() - p0.y.abs() != 0.0 {}
                 let l0 = calliope::storms::lat_of(p0.y, rows).abs();
@@ -10286,7 +10296,39 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
                 }
             }
         }
+        // How far poleward the population actually gets, so the
+        // recurvature row below can be read against the reach that feeds
+        // it rather than against an empty set.
+        {
+            let mut maxpole: Vec<f64> = tracks
+                .iter()
+                .map(|t| {
+                    t.points
+                        .iter()
+                        .map(|p| calliope::storms::lat_of(p.y, rows).abs())
+                        .fold(0.0f64, f64::max)
+                })
+                .collect();
+            let mut net_west = 0usize;
+            for t in &tracks {
+                if t.points.last().unwrap().x < t.points[0].x {
+                    net_west += 1;
+                }
+            }
+            maxpole.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let q = |f: f64| maxpole[((maxpole.len() as f64 - 1.0) * f) as usize];
+            println!(
+                "   poleward reach |lat|: p50 {:.1}° · p90 {:.1}° · deepest {:.1}° · net westward over life {}/{}",
+                q(0.5),
+                q(0.9),
+                maxpole[maxpole.len() - 1],
+                net_west,
+                tracks.len(),
+            );
+        }
+
         let recurve = if reached > 0 {
+
             recurved as f64 / reached as f64
         } else {
             0.0
@@ -10308,10 +10350,11 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
 
         c.must(
             &format!("the trades carry the young storm west · {}", seed),
-            west_early as f64 / n >= 0.90,
-            pct(west_early as f64 / n),
+            west_n > 0 && west_early as f64 / west_n as f64 >= 0.90,
+            format!("{} of {} that moved at all", pct(west_early as f64 / west_n.max(1) as f64), west_n),
             "M78 gate: below 30° the zonal wind blows east-to-west, so a storm's first days must move it westward — the same wind_stress field the ocean's gyres read",
         );
+
         c.must(
             &format!("the storm climbs out of the tropics · {}", seed),
             poleward as f64 / n >= 0.90,
@@ -10352,26 +10395,45 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
             }
             b as i64
         };
-        let (pn, ps) = (peak_of(&monn), peak_of(&mons));
-        let sep = {
-            let d = (pn - ps).abs() % 12;
-            d.min(12 - d)
+        let _ = peak_of(&mon);
+        // The season's centre of mass on the circle of the year. The
+        // modal month is not an estimator of a season: the humps here run
+        // 30-49 tracks across three adjacent months, so the argmax turns
+        // over on sampling noise (31337's north reads 35/36/49 in months
+        // 0/1/2 and lands on 2 by a hair). The circular mean reads the
+        // whole realized distribution and is still measured off the
+        // tracks, not off the climatology that drew them.
+        let circ_mean = |a: &[usize; 12]| -> f64 {
+            let (mut sx, mut sy) = (0.0f64, 0.0f64);
+            for (m, &k) in a.iter().enumerate() {
+                let th = (m as f64) * std::f64::consts::TAU / 12.0;
+                sx += (k as f64) * th.cos();
+                sy += (k as f64) * th.sin();
+            }
+            let mut r = sy.atan2(sx) / std::f64::consts::TAU * 12.0;
+            if r < 0.0 {
+                r += 12.0;
+            }
+            r
         };
+        let circ_dist = |a: f64, b: f64| -> f64 {
+            let d = (a - b).abs() % 12.0;
+            d.min(12.0 - d)
+        };
+        let (pn, ps) = (circ_mean(&monn), circ_mean(&mons));
+        let sep = circ_dist(pn, ps);
         c.must(
             &format!("the seasons stand half a year apart · {}", seed),
-            sep >= 5,
-            format!("peak N month {} · S month {} · {} apart", pn, ps, sep),
+            sep >= 5.0,
+            format!("season centre N month {:.1} · S month {:.1} · {:.2} apart", pn, ps, sep),
             "M78 gate: each hemisphere's cyclones fall in its own warm season, so the two peaks must sit close to six months apart — as the world's seasons do",
         );
-        let opp = |a: i64, b: i64| -> i64 {
-            let d = (a - b).abs() % 12;
-            d.min(12 - d)
-        };
         c.must(
             &format!("the warm-sea season opposes the frontal one · {}", seed),
-            opp(pn, clim.cold_month(1)) >= 3 && opp(ps, clim.cold_month(-1)) >= 3,
+            circ_dist(pn, clim.cold_month(1) as f64) >= 3.0
+                && circ_dist(ps, clim.cold_month(-1) as f64) >= 3.0,
             format!(
-                "N warm-sea {} vs frontal {} · S warm-sea {} vs frontal {}",
+                "N warm-sea {:.1} vs frontal {} · S warm-sea {:.1} vs frontal {}",
                 pn,
                 clim.cold_month(1),
                 ps,
@@ -10379,6 +10441,7 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
             ),
             "M78 gate: the frontal corridor of M77 peaks in the cold season and the warm-sea engine in the hot one — two engines running on opposite terms cannot share a peak month",
         );
+
         c.must(
             &format!("nothing poisons the tracks · {}", seed),
             tracks
