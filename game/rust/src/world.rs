@@ -1291,9 +1291,17 @@ impl World {
         &self.variability
     }
 
+    /// M75 — the lean the far side is answering in `year`: the index read
+    /// `TELE_LAG_MONTHS` before the year opens, so the tilt arrives on a
+    /// season's delay rather than instantaneously.
+    pub fn year_osc(&self, year: i64) -> f64 {
+        self.oscillation
+            .index(year * 12 - crate::climate::TELE_LAG_MONTHS)
+    }
+
     pub fn year_anomaly_fresh(&self, year: i64) -> (Array2<f64>, Array2<f64>) {
         let (rows, cols) = self.fields.tmean.dim();
-        climate::year_anomaly(&self.variability, rows, cols, year)
+        climate::year_anomaly(&self.variability, rows, cols, year, self.year_osc(year))
     }
 
     /// M71 — hand the caller the year's anomaly grids, computing them once
@@ -1318,7 +1326,8 @@ impl World {
         };
         if stale {
             let (rows, cols) = self.fields.tmean.dim();
-            let (dt, dp) = climate::year_anomaly(&self.variability, rows, cols, year);
+            let (dt, dp) =
+                climate::year_anomaly(&self.variability, rows, cols, year, self.year_osc(year));
             let dq = crate::ndimage::gaussian_filter(&dp, climate::CATCHMENT_SIGMA);
             *slot = Some((year, dt, dp, dq));
         }
@@ -1337,7 +1346,8 @@ impl World {
         let (_, sites) = slot.as_mut().unwrap();
         let entry = sites.entry((y, x)).or_insert_with(|| {
             let rows = self.fields.tmean.dim().0;
-            let (dt, dp) = climate::year_anomaly_at(&self.variability, rows, x, y, year);
+            let (dt, dp) =
+                climate::year_anomaly_at(&self.variability, rows, x, y, year, self.year_osc(year));
             (dt, dp, None)
         });
         (entry.0, entry.1)
@@ -1351,7 +1361,8 @@ impl World {
         let (_, sites) = slot.as_mut().unwrap();
         let entry = sites.entry((y, x)).or_insert_with(|| {
             let rows = self.fields.tmean.dim().0;
-            let (dt, dp) = climate::year_anomaly_at(&self.variability, rows, x, y, year);
+            let (dt, dp) =
+                climate::year_anomaly_at(&self.variability, rows, x, y, year, self.year_osc(year));
             (dt, dp, None)
         });
         if entry.2.is_none() {
@@ -1363,6 +1374,7 @@ impl World {
                 x,
                 y,
                 year,
+                self.year_osc(year),
             ));
         }
         entry.2.unwrap_or(0.0)

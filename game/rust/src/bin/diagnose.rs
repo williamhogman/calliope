@@ -9482,6 +9482,244 @@ struct OceanRow {
 /// seesaw must be irregular — successive cycles of visibly different
 /// length, never a metronome. Determinism closes it: the same seed must
 /// hand back the same basin, byte for byte.
+/// M75 — the tilted belts. The oscillation's phase must reach across the
+/// world: when the northern trade belt is wet the southern one is dry,
+/// they swap when the index changes sign, and the whole effect must
+/// vanish when the index is held at zero — the counterfactual that proves
+/// the tilt *causes* the tie rather than merely accompanying it.
+fn cmd_teleconnection(size: usize, years: i64, seeds: Vec<i64>) {
+    header(
+        "TELECONNECTION",
+        &format!("{}x{} · {} seeds · {} y", size, size, seeds.len(), years),
+    );
+    println!("the tilted belts · cross-hemisphere trade-belt rain, forced vs counterfactual  (M75)");
+
+    let mut c = Checks::default();
+    let lat_of = |y: usize, rows: usize| -90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0);
+    let core = calliope::climate::TELE_BELT_LAT;
+    let halfwidth = calliope::climate::TELE_BELT_SIGMA;
+
+    // ---- the shape law, independent of any world ---------------------
+    c.must(
+        "the tilt is antisymmetric",
+        (0..=90).map(|d| d as f64).all(|d| {
+            let a = calliope::climate::teleconnection_bias(1.0, d);
+            let b = calliope::climate::teleconnection_bias(1.0, -d);
+            (a + b).abs() < 1e-12
+        }),
+        "|N + S| < 1e-12".to_string(),
+        "M75: a teleconnection tilts belts against each other — a term that wet both hemispheres would be a global wet year, not a see-saw",
+    );
+    c.must(
+        "the ITCZ is straddled, not tilted",
+        calliope::climate::teleconnection_bias(2.0, 0.0).abs() < 1e-12,
+        format!("{:.1e} at lat 0", calliope::climate::teleconnection_bias(2.0, 0.0).abs()),
+        "M75: the tilt is in the trades; the equator sits on the pivot",
+    );
+    c.must(
+        "the westerlies keep their own sky",
+        calliope::climate::teleconnection_bias(2.0, 55.0).abs() < 0.01,
+        format!("{:.4} at lat 55", calliope::climate::teleconnection_bias(2.0, 55.0).abs()),
+        "M75: outside the trades the belt keeps the unforced variability M73 measured",
+    );
+    c.must(
+        "the tilt flips with the phase",
+        calliope::climate::teleconnection_bias(1.0, core)
+            * calliope::climate::teleconnection_bias(-1.0, core)
+            < 0.0,
+        format!(
+            "{:+.3} / {:+.3} at lat {:.0}",
+            calliope::climate::teleconnection_bias(1.0, core),
+            calliope::climate::teleconnection_bias(-1.0, core),
+            core
+        ),
+        "M75: a warm phase and a cold phase must move the belt in opposite directions",
+    );
+
+    println!();
+    println!(" seed        r(N,S) forced  r(N,S) osc=0   dN-S warm   dN-S cold   |resid| max   warm y  cold y");
+    for &seed in &seeds {
+        let w = World::generate(seed, size);
+        let land = land_mask(&w);
+        let rows = w.fields.tmean.dim().0;
+        let mut north: Vec<(usize, usize)> = Vec::new();
+        let mut south: Vec<(usize, usize)> = Vec::new();
+        for y in 0..rows {
+            let lat = lat_of(y, rows);
+            let in_north = (lat - core).abs() <= halfwidth;
+            let in_south = (lat + core).abs() <= halfwidth;
+            if !in_north && !in_south {
+                continue;
+            }
+            for x in 0..w.width {
+                if !land[[y, x]] {
+                    continue;
+                }
+                if in_north {
+                    north.push((y, x));
+                } else {
+                    south.push((y, x));
+                }
+            }
+        }
+        if north.len() < 50 || south.len() < 50 {
+            c.must(
+                &format!("both trade belts carry land · {}", seed),
+                false,
+                format!("N {} · S {} cells", north.len(), south.len()),
+                "M75: a cross-hemisphere gate over an empty belt proves nothing",
+            );
+            continue;
+        }
+
+        let belt_mean = |g: &ndarray::Array2<f64>, cells: &[(usize, usize)]| -> f64 {
+            cells.iter().map(|&(y, x)| g[[y, x]]).sum::<f64>() / cells.len() as f64
+        };
+        let (mut ns, mut ss) = (Vec::new(), Vec::new());
+        let (mut ns0, mut ss0) = (Vec::new(), Vec::new());
+        let mut idx: Vec<f64> = Vec::new();
+        let mut resid_max = 0.0f64;
+        let mut nonfinite = 0usize;
+        let mut worst_floor = 0.0f64;
+        for year in 1..=years {
+            let (_, dp) = w.year_anomaly_fresh(year);
+            let (_, dp0) =
+                calliope::climate::year_anomaly(w.variability(), rows, w.width, year, 0.0);
+            let osc = w.year_osc(year);
+            for &(y, x) in north.iter().chain(south.iter()) {
+                let a = dp[[y, x]];
+                let b = dp0[[y, x]];
+                if !a.is_finite() || !b.is_finite() {
+                    nonfinite += 1;
+                    continue;
+                }
+                if a < worst_floor {
+                    worst_floor = a;
+                }
+                if a <= calliope::climate::ANOM_P_FLOOR + 1e-9
+                    || b <= calliope::climate::ANOM_P_FLOOR + 1e-9
+                {
+                    continue;
+                }
+                let expect = calliope::climate::teleconnection_bias(osc, lat_of(y, rows));
+                resid_max = resid_max.max((a - b - expect).abs());
+            }
+            ns.push(belt_mean(&dp, &north));
+            ss.push(belt_mean(&dp, &south));
+            ns0.push(belt_mean(&dp0, &north));
+            ss0.push(belt_mean(&dp0, &south));
+            idx.push(osc);
+        }
+
+        let corr = |a: &[f64], b: &[f64]| -> f64 {
+            let n = a.len() as f64;
+            let ma = a.iter().sum::<f64>() / n;
+            let mb = b.iter().sum::<f64>() / n;
+            let mut num = 0.0;
+            let mut da = 0.0;
+            let mut db = 0.0;
+            for i in 0..a.len() {
+                num += (a[i] - ma) * (b[i] - mb);
+                da += (a[i] - ma).powi(2);
+                db += (b[i] - mb).powi(2);
+            }
+            if da <= 0.0 || db <= 0.0 {
+                return 0.0;
+            }
+            num / (da * db).sqrt()
+        };
+        let r_forced = corr(&ns, &ss);
+        let r_counter = corr(&ns0, &ss0);
+        let (mut warm, mut cold) = (Vec::new(), Vec::new());
+        for i in 0..idx.len() {
+            let d = ns[i] - ss[i];
+            if idx[i] > 0.25 {
+                warm.push(d);
+            } else if idx[i] < -0.25 {
+                cold.push(d);
+            }
+        }
+        let mean = |v: &[f64]| -> f64 {
+            if v.is_empty() {
+                f64::NAN
+            } else {
+                v.iter().sum::<f64>() / v.len() as f64
+            }
+        };
+        let (dw, dc) = (mean(&warm), mean(&cold));
+        println!(
+            " {:<9} {:>13.3} {:>14.3} {:>12.4} {:>11.4} {:>13.1e} {:>7} {:>7}",
+            seed,
+            r_forced,
+            r_counter,
+            dw,
+            dc,
+            resid_max,
+            warm.len(),
+            cold.len()
+        );
+
+        c.must(
+            &format!("the belts speak across the equator · {}", seed),
+            r_forced <= -0.30,
+            format!("r = {:+.3}", r_forced),
+            "M75 gate: cross-hemisphere trade-belt rainfall correlation exceeds 0.3 in magnitude — and is negative, because a teleconnection tilts, it does not lift",
+        );
+        c.must(
+            &format!("the tie is the oscillation's, not the map's · {}", seed),
+            r_counter.abs() < 0.15,
+            format!("r = {:+.3} with the index held at zero", r_counter),
+            "M75 counterfactual: remove the lean and the hemispheres must fall silent — otherwise the correlation was geography, not teleconnection",
+        );
+        c.must(
+            &format!("the see-saw flips with the phase · {}", seed),
+            dw.is_finite() && dc.is_finite() && dw * dc < 0.0,
+            format!("warm {:+.4} · cold {:+.4}", dw, dc),
+            "M75 gate: the belt difference must change sign with the oscillation phase across a full period",
+        );
+        c.must(
+            &format!("the flip is felt, not cosmetic · {}", seed),
+            dw.is_finite() && dc.is_finite() && (dw - dc).abs() >= 0.02,
+            format!("swing {:.4} of the rain", (dw - dc).abs()),
+            "M75: a tilt too small to move a harvest is not a teleconnection",
+        );
+        c.must(
+            &format!("both phases are lived in · {}", seed),
+            warm.len() >= 5 && cold.len() >= 5,
+            format!("{} warm · {} cold years", warm.len(), cold.len()),
+            "M75: a gate that only ever saw one phase proves half a law",
+        );
+        c.must(
+            &format!("the tilt derives exactly · {}", seed),
+            resid_max < 1e-12,
+            format!("|forced - counterfactual - bias| max {:.1e}", resid_max),
+            "M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding",
+        );
+        c.must(
+            &format!("no poison enters the rain · {}", seed),
+            nonfinite == 0 && worst_floor >= calliope::climate::ANOM_P_FLOOR - 1e-9,
+            format!("{} non-finite · worst {:.3}", nonfinite, worst_floor),
+            "M2.6/M75: the tilt may not take the rains wholly away — that verdict is famine's",
+        );
+        c.must(
+            &format!("the tilt replays · {}", seed),
+            {
+                let w2 = World::generate(seed, size);
+                (1..=6).all(|yr| {
+                    (w2.year_osc(yr) - w.year_osc(yr)).abs() < 1e-15
+                        && (belt_mean(&w2.year_anomaly_fresh(yr).1, &north)
+                            - ns[(yr - 1) as usize])
+                            .abs()
+                            < 1e-15
+                })
+            },
+            "identical".to_string(),
+            "ADR-0003: the tilted belts are a pure function of the seed and the year",
+        );
+    }
+    c.print();
+}
+
 fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
     header(
         "OSCILLATION",
@@ -9666,6 +9904,7 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
     // [seed][belt] realized σ, and the declared belt mean beside it.
     let mut all_t: Vec<[f64; 3]> = Vec::new();
     let mut all_p: Vec<[f64; 3]> = Vec::new();
+    let mut all_p0: Vec<[f64; 3]> = Vec::new();
     let mut all_dt: Vec<[f64; 3]> = Vec::new();
     let mut all_dp: Vec<[f64; 3]> = Vec::new();
     let mut nonfinite = 0usize;
@@ -9673,7 +9912,7 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
     let mut empty_belt = 0usize;
 
     println!();
-    println!(" seed      belt                  σ T °C  declared    σ P frac  declared   cells");
+    println!(" seed      belt                  σ T °C  declared    σ P frac  declared   σP unforced   cells");
     for &seed in &seeds {
         let w = World::generate(seed, size);
         let land = land_mask(&w);
@@ -9691,6 +9930,20 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
         // over the same cells, once per cell (not once per year).
         let mut acc_t = [[0.0f64; 3]; 3];
         let mut acc_p = [[0.0f64; 3]; 3];
+        // M75: the sky now has two sources of interannual rain variance —
+        // the unforced lattice M73 declared, and the tilt the oscillation
+        // lays on the trade belts. The declaration is composed from both
+        // (they are independent by construction: one is a noise lane, the
+        // other a function of the index), and the *shape* laws are stated
+        // on the unforced lane, which is the one the amplitude law
+        // describes. Nothing is loosened; the prediction is re-derived
+        // against the mechanism that now exists.
+        let osc_years: Vec<f64> = (1..=years).map(|yr| w.year_osc(yr)).collect();
+        let osc_mean = osc_years.iter().sum::<f64>() / osc_years.len() as f64;
+        let osc_sigma = (osc_years.iter().map(|v| (v - osc_mean).powi(2)).sum::<f64>()
+            / osc_years.len() as f64)
+            .sqrt();
+        let mut acc_p0 = [[0.0f64; 3]; 3];
         let mut dec_t = [[0.0f64; 2]; 3];
         let mut dec_p = [[0.0f64; 2]; 3];
         for y in 0..rows {
@@ -9702,12 +9955,19 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
                 }
                 dec_t[b][0] += calliope::climate::anomaly_amp_t(lat);
                 dec_t[b][1] += 1.0;
-                dec_p[b][0] += calliope::climate::anomaly_amp_p(lat);
+                let shape = calliope::climate::teleconnection_bias(
+                    1.0,
+                    -90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0),
+                );
+                let amp_p = calliope::climate::anomaly_amp_p(lat);
+                dec_p[b][0] += (amp_p * amp_p + shape * shape * osc_sigma * osc_sigma).sqrt();
                 dec_p[b][1] += 1.0;
             }
         }
         for year in 1..=years {
             let (dt, dp) = w.year_anomaly_fresh(year);
+            let (_, dp0) =
+                calliope::climate::year_anomaly(w.variability(), rows, w.width, year, 0.0);
             for y in 0..rows {
                 let lat = (-90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0)).abs();
                 let b = belt_of(lat);
@@ -9729,6 +9989,10 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
                     acc_p[b][0] += r;
                     acc_p[b][1] += r * r;
                     acc_p[b][2] += 1.0;
+                    let r0 = dp0[[y, x]];
+                    acc_p0[b][0] += r0;
+                    acc_p0[b][1] += r0 * r0;
+                    acc_p0[b][2] += 1.0;
                 }
             }
         }
@@ -9741,6 +10005,7 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
         };
         let mut st = [0.0f64; 3];
         let mut sp = [0.0f64; 3];
+        let mut sp0 = [0.0f64; 3];
         let mut dtm = [0.0f64; 3];
         let mut dpm = [0.0f64; 3];
         for b in 0..3 {
@@ -9748,6 +10013,7 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
                 empty_belt += 1;
                 st[b] = f64::NAN;
                 sp[b] = f64::NAN;
+                sp0[b] = f64::NAN;
                 dtm[b] = f64::NAN;
                 dpm[b] = f64::NAN;
                 println!(" {:<9} {:<20}      (no land in this belt)", seed, BELTS[b]);
@@ -9755,21 +10021,24 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
             }
             st[b] = sigma(acc_t[b]);
             sp[b] = sigma(acc_p[b]);
+            sp0[b] = sigma(acc_p0[b]);
             dtm[b] = dec_t[b][0] / dec_t[b][1];
             dpm[b] = dec_p[b][0] / dec_p[b][1];
             println!(
-                " {:<9} {:<20} {:>7.3} {:>9.3} {:>11.4} {:>9.4} {:>7}",
+                " {:<9} {:<20} {:>7.3} {:>9.3} {:>11.4} {:>9.4} {:>13.4} {:>7}",
                 seed,
                 BELTS[b],
                 st[b],
                 dtm[b],
                 sp[b],
                 dpm[b],
+                sp0[b],
                 acc_t[b][2] as i64 / years,
             );
         }
         all_t.push(st);
         all_p.push(sp);
+        all_p0.push(sp0);
         all_dt.push(dtm);
         all_dp.push(dpm);
 
@@ -9823,9 +10092,9 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
             );
             c.must(
                 &format!("σP climbs poleward · {}", seed),
-                sp[0] < sp[1] && sp[1] < sp[2],
-                format!("{:.3} < {:.3} < {:.3}", sp[0], sp[1], sp[2]),
-                "M73: the rain lane carries the same latitude shape as the heat lane",
+                sp0[0] < sp0[1] && sp0[1] < sp0[2],
+                format!("{:.3} < {:.3} < {:.3}", sp0[0], sp0[1], sp0[2]),
+                "M73: the unforced rain lane carries the same latitude shape as the heat lane (M75's tilt is a forced term on top, held by its own lane)",
             );
         }
     }
@@ -9835,7 +10104,7 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
     println!(" belt                  σT mean   spread    σP mean   spread");
     for b in 0..3 {
         let ts: Vec<f64> = all_t.iter().map(|s| s[b]).filter(|v| v.is_finite()).collect();
-        let ps: Vec<f64> = all_p.iter().map(|s| s[b]).filter(|v| v.is_finite()).collect();
+        let ps: Vec<f64> = all_p0.iter().map(|s| s[b]).filter(|v| v.is_finite()).collect();
         if ts.len() < 2 {
             continue;
         }
@@ -9865,7 +10134,7 @@ fn cmd_climate_variance(size: usize, years: i64, seeds: Vec<i64>) {
             &format!("σP is the sky's, not the seed's · {}", BELTS[b].trim()),
             spread_p <= 0.10,
             format!("{:.1}% of mean", 100.0 * spread_p),
-            "M73: same law, rain lane",
+            "M73: same law, unforced rain lane (the forced tilt is per-world by design — M75)",
         );
     }
 
@@ -11490,6 +11759,15 @@ fn main() {
             }
             cmd_oscillation(months, seeds);
         }
+        "teleconnection" => {
+            let size = sized(2, 512);
+            let years = num(3, 120);
+            let mut seeds: Vec<i64> = a.get(4..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 31337, 90210, 555];
+            }
+            cmd_teleconnection(size, years, seeds);
+        }
         "systems" => cmd_systems(num(2, 12345), sized(3, 512), num(4, 150) as usize),
         "perf" => {
             let size = sized(2, 512);
@@ -11615,7 +11893,7 @@ fn main() {
             cmd_compute(size, seeds, golden);
         }
         _ => {
-            println!("usage: diagnose <terrain|climate|climate-variance|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean|atlas|gate|compute> [args]");
+            println!("usage: diagnose <terrain|climate|climate-variance|oscillation|teleconnection|hydro|resources|civ|economy|telling|determinism|bench|perf|sweep|properties|era|patina|systems|ocean|atlas|gate|compute> [args]");
             println!("  terrain|climate|hydro|resources  <seed=12345> <size=512>");
             println!("  civ <seed> <size> <years=120> · economy <seed> <size> <years=80> · telling <seed> <size> <years=150>");
             println!("  determinism <seed> <size> <months=120> · bench · perf <size=512> <seeds…> · sweep <size> <years> <seeds…>");
