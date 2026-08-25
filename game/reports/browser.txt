@@ -1,17 +1,17 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · BROWSER               headless chromium · :8080
 ========================================================================
- boot: ready 9.7s · first frame 11.1s · backend webgl2
+ boot: ready 8.2s · first frame 9.3s · backend webgl2
  compute lane: cpu-twin (no compute: webgl2 downlevel)
- playback: 102 months at speed 3 · 38 long tasks · worst 842 ms
+ playback: 102 months at speed 3 · 38 long tasks · worst 783 ms
  GL drill: pre webgl2 · detected=True · post backend webgl2 · draws 40→41
 
 ---- checks ----------------------------------------------------------
-[PASS] boot to engine ready                                9.7 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
-[PASS] ready to first frame                               1.40 s   (E10.5: engine ready → first annotated draw (s); baseline 0.4)
+[PASS] boot to engine ready                                8.2 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
+[PASS] ready to first frame                               1.06 s   (E10.5: engine ready → first annotated draw (s); baseline 0.4)
 [PASS] compute lane verdict                         cpu-twin (no compute: webgl2 downlevel)
 [PASS] long tasks in playback                                 38   (E10.7: tasks >50 ms across 100 months at speed 3; headless baseline 53)
-[WARN] worst long task                                    842 ms   (E10.7: single worst main-thread stall (ms); headless baseline 220)
+[WARN] worst long task                                    783 ms   (E10.7: single worst main-thread stall (ms); headless baseline 220)
 [PASS] context-loss drill: loss detected                  webgl2
 [PASS] context-loss drill: map still draws               1 draws
 CHECKS: 6 pass · 1 warn · 0 fail

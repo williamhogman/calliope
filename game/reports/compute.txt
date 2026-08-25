@@ -2,10 +2,10 @@
  CALLIOPE DIAGNOSTIC · COMPUTE                      M67 lane · size 512
 ========================================================================
  adapter: Vulkan · llvmpipe (LLVM 21.1.7, 256 bits) · Cpu
- fixture 96×64: gpu 180.2 ms · cpu twin 2.9 ms · 6144 cells
- seed 12345: grid 640×512 · coast law cpu 100 ms · max |jfa−exact| 0.938 cells · 19 of 212051 sea cells miss (0.0%)
- seed 777: grid 640×512 · coast law cpu 123 ms · max |jfa−exact| 0.592 cells · 17 of 209351 sea cells miss (0.0%)
- seed 90210: grid 640×512 · coast law cpu 117 ms · max |jfa−exact| 0.592 cells · 23 of 210036 sea cells miss (0.0%)
+ fixture 96×64: gpu 14.2 ms · cpu twin 1.2 ms · 6144 cells
+ seed 12345: grid 640×512 · coast law cpu 123 ms · max |jfa−exact| 0.938 cells · 19 of 212051 sea cells miss (0.0%)
+ seed 777: grid 640×512 · coast law cpu 116 ms · max |jfa−exact| 0.592 cells · 17 of 209351 sea cells miss (0.0%)
+ seed 90210: grid 640×512 · coast law cpu 111 ms · max |jfa−exact| 0.592 cells · 23 of 210036 sea cells miss (0.0%)
  golden: 4 case(s) · 7913563 B -> /tmp/calliope-coast-golden.bin
 
 ---- checks ----------------------------------------------------------
