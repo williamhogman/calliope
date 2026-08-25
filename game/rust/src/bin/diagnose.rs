@@ -7636,7 +7636,11 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
         fused: usize,         // M12.4 fusions (roster fell)
         golden: usize,        // M13.2 golden dawns
         arcs: usize,          // M13.4 full arcs closed (interregnum ended)
+        /// M79 — late ruins by cause phrase (patina::ruin_why), so a jump in
+        /// the ruin rate names the disaster that made it.
+        late_by_why: Vec<(String, usize)>,
     }
+
 
     let mut rows: Vec<Row> = Vec::new();
     for &seed in &seeds {
@@ -7697,7 +7701,15 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
             fused,
             golden,
             arcs,
+            late_by_why: {
+                let mut t: std::collections::BTreeMap<String, usize> = Default::default();
+                for r in w.ruins.iter().filter(|r| r.since > 1200) {
+                    *t.entry(r.why.clone()).or_default() += 1;
+                }
+                t.into_iter().collect()
+            },
         });
+
     }
 
     println!(
@@ -7734,6 +7746,23 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
     let total_xfers: usize = rows.iter().map(|r| r.transfers).sum();
     let total_renames: usize = rows.iter().map(|r| r.renames).sum();
     let total_worn: usize = rows.iter().map(|r| r.worn).sum();
+
+    // M79 — where the late ruins came from, aggregated over the seeds. A
+    // ruin rate that moves must name the cause that moved it.
+    {
+        let mut t: std::collections::BTreeMap<&str, usize> = Default::default();
+        for r in &rows {
+            for (why, n) in &r.late_by_why {
+                *t.entry(why.as_str()).or_default() += n;
+            }
+        }
+        println!("\n late ruins by cause (all seeds, after y100)");
+        let mut v: Vec<_> = t.into_iter().collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1));
+        for (why, n) in v {
+            println!("   {:>4}  {}", n, why);
+        }
+    }
 
     let mut c = Checks::default();
     c.band("ruins per century (after y100)", ruin_rate, format!("{:.2}", ruin_rate));
