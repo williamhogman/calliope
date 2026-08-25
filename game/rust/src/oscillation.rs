@@ -43,7 +43,7 @@ pub const OSC_FBM_SIGMA: f64 = 0.36;
 pub const OSC_CAP_SIGMA: f64 = 3.0;
 
 /// The slow lean of the seas for one world.
-#[derive(Debug)]
+
 pub struct Oscillation {
     period: f64,
     amp: f64,
