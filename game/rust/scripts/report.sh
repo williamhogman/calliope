@@ -99,6 +99,8 @@ run "oscillation.txt" oscillation 1200 $OCEAN
 run "teleconnection.txt" teleconnection "$SIZE" 120 $OCEAN
 # M77 — the storm corridors: genesis, steering and death over land.
 run "storms.txt" storms "$SIZE" 60 $OCEAN
+# M78 — warm-sea fury: tropical cyclone heat/spin genesis and recurvature.
+run "tropics.txt" tropics "$SIZE" 60 $OCEAN
 run "determinism.txt" determinism "${SEEDS[0]}" "$SIZE" "$DET_MONTHS"
 run "bench.txt" bench
 run "perf.txt" perf $PERF
