@@ -1,0 +1,8 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · WASM                              shipped binary
+========================================================================
+ calliope_bg.wasm: 3564206 bytes = 3.40 MiB
+
+---- checks ----------------------------------------------------------
+[WARN] wasm binary size                                    3.40 MiB   (sweet ≤3.0 MiB · hard ≤3.4 — E6.4 lean-binary budget)
+CHECKS: see row above
