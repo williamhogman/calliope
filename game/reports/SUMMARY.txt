@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-25 14:16 UTC
+mode: full · size: 512 · generated: 2026-08-25 16:51 UTC
 
-totals: 1282 pass · 33 warn · 0 fail
+totals: 1276 pass · 35 warn · 6 fail
 
 -- assay.txt
    all checks pass
@@ -10,24 +10,26 @@ totals: 1282 pass · 33 warn · 0 fail
    all checks pass
 
 -- bench.txt
-[WARN] median tick payload                          6304 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
+[WARN] median tick payload                          5057 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
    all checks pass
 
 -- build.txt
-[WARN] wasm binary size                              3528450 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
+[WARN] wasm binary size                              3564206 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
 
 -- civ-12345.txt
-[WARN] assimilation cadence                 0.7 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                52.7   (sweet 2–48 · hard 0.5–100)
-[WARN] famine events per century                     146.7   (M2.6: the rains must fail sometimes)
+[WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
+[WARN] events per year                                50.7   (sweet 2–48 · hard 0.5–100)
+[WARN] famine events per century                     144.0   (M2.6: the rains must fail sometimes)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
+[WARN] the dry-frontier veto is load-bearing no auction held — 1 cf dry founding(s), earliest month 960, deepest table 11 m, all inside the founder's reach (1 dry without · 1 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
 
 -- civ-777.txt
-[WARN] assimilation cadence                 0.7 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                53.6   (sweet 2–48 · hard 0.5–100)
-[WARN] the dry-frontier veto is load-bearing no auction held — 1 cf dry founding(s), earliest month 1080, deepest table 35 m, all inside the founder's reach (1 dry without · 1 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
+[WARN] events per year                                56.9   (sweet 2–48 · hard 0.5–100)
+[WARN] famine events per century                      65.3   (M2.6: the rains must fail sometimes)
+[WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
+[WARN] the dry-frontier veto is load-bearing no auction held — 1 cf dry founding(s), earliest month 1320, deepest table 30 m, all inside the founder's reach (1 dry without · 1 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
 
 -- climate-12345.txt
 [WARN] forest share of land                          23.4%   (sweet 25–60% · hard 15–75%)
@@ -49,7 +51,7 @@ totals: 1282 pass · 33 warn · 0 fail
    all checks pass
 
 -- compute.txt
-[WARN] coast law cpu ms                             122 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
+   all checks pass
 
 -- determinism.txt
    all checks pass
@@ -61,13 +63,16 @@ totals: 1282 pass · 33 warn · 0 fail
    all checks pass
 
 -- economy-12345.txt
-[WARN] directional lanes alive                         14%   (M46: share of blue-water lanes (%) sailing ≥2% faster one way than the other)
+   all checks pass
 
 -- era.txt
 [WARN] landform oatmeal floor                       0.0015   (M64: the landform mix differs between worlds — the closest pair stays distinct)
 
 -- gate.txt
-   all checks pass
+[FAIL] every composed lane actually speaks  silent: assay.txt   (M76: a lane that emitted no check rows proves nothing — a truncated or crashed report may not compose as clean)
+[FAIL] the veto bites somewhere in the ensemble 0 refused town(s) over 2 civ lane(s) [12345:0 · 777:0]   (M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it)
+[FAIL] the suite composes clean             2 fail · 35 warn · 1269 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
+[FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
 
 -- hydro-12345.txt
 [WARN] oasis share of arid land %                    25.7%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
@@ -91,13 +96,16 @@ totals: 1282 pass · 33 warn · 0 fail
    all checks pass
 
 -- patina.txt
-[WARN] ruins per century (after y100)                17.17   (M9.1 gate: mature worlds carry ruins)
+[FAIL] ruins per century (after y100)                30.50   (M9.1 gate: mature worlds carry ruins)
+[WARN] civ arcs completed per 300 y         4.3 (gold 13 · arcs 13)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
 
 -- perf.txt
-[WARN] stage fertility ms                   149 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] gen total ms                         2580 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 0                     915 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[WARN] tick rate year 100                   129 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   177 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage naming ms                      143 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
+[WARN] stage settlements ms                 264 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         3022 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     701 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   118 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
@@ -123,7 +131,7 @@ totals: 1282 pass · 33 warn · 0 fail
 [WARN] mean forest share                             21.4%   (sweet 25–60% · hard 15–75%)
 
 -- systems.txt
-   all checks pass
+[FAIL] the lane ran to completion                 exit 134   (M77: the report does not end in a CHECKS line — the lane was cut off, so nothing below its last printed row was measured)
 
 -- teleconnection.txt
    all checks pass
@@ -147,5 +155,5 @@ totals: 1282 pass · 33 warn · 0 fail
    all checks pass
 
 -- wasm.txt
-[WARN] wasm binary size                                    3.36 MiB   (sweet ≤3.0 MiB · hard ≤3.4 — E6.4 lean-binary budget)
+[WARN] wasm binary size                                    3.40 MiB   (sweet ≤3.0 MiB · hard ≤3.4 — E6.4 lean-binary budget)
 
