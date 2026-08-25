@@ -7747,6 +7747,23 @@ fn cmd_patina(size: usize, years: usize, seeds: Vec<i64>) {
     let total_renames: usize = rows.iter().map(|r| r.renames).sum();
     let total_worn: usize = rows.iter().map(|r| r.worn).sum();
 
+    // M79 — where the late ruins came from, aggregated over the seeds. A
+    // ruin rate that moves must name the cause that moved it.
+    {
+        let mut t: std::collections::BTreeMap<&str, usize> = Default::default();
+        for r in &rows {
+            for (why, n) in &r.late_by_why {
+                *t.entry(why.as_str()).or_default() += n;
+            }
+        }
+        println!("\n late ruins by cause (all seeds, after y100)");
+        let mut v: Vec<_> = t.into_iter().collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1));
+        for (why, n) in v {
+            println!("   {:>4}  {}", n, why);
+        }
+    }
+
     let mut c = Checks::default();
     c.band("ruins per century (after y100)", ruin_rate, format!("{:.2}", ruin_rate));
     c.band("withheld share of the chronicle", veil_share, pct(veil_share));
