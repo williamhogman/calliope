@@ -10123,6 +10123,318 @@ fn cmd_storms(size: usize, years: i64, seeds: Vec<i64>) {
     c.print();
 }
 
+fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
+    header(
+        "TROPICS",
+        &format!("{}x{} · {} seeds · {} y", size, size, seeds.len(), years),
+    );
+    println!("warm-sea fury · cyclones bred on heat and spin, and where they come ashore  (M78)");
+
+    let mut band_shares: Vec<f64> = Vec::new();
+    let mut recurve_shares: Vec<f64> = Vec::new();
+    let mut c = Checks::default();
+
+    for &seed in &seeds {
+        let w = World::generate(seed, size);
+        let rows = w.fields.height.dim().0;
+        let clim = calliope::storms::StormClimatology::new(
+            &w.fields.height,
+            &w.fields.tmean,
+            &w.fields.tamp,
+        );
+
+        println!();
+        println!(
+            " · {} warm sea: sites N {} / S {} · spinless N {} / S {} · warm month N {} / S {} (frontal cold month N {} / S {}) · season count N {} / S {}",
+            seed,
+            clim.trop_sites(1).len(),
+            clim.trop_sites(-1).len(),
+            clim.spinless(1),
+            clim.spinless(-1),
+            clim.warm_month(1),
+            clim.warm_month(-1),
+            clim.cold_month(1),
+            clim.cold_month(-1),
+            clim.trop_season_count(1),
+            clim.trop_season_count(-1),
+        );
+
+        let mut tracks: Vec<calliope::storms::StormTrack> = Vec::new();
+        for year in 1..=years {
+            for h in [1i8, -1i8] {
+                tracks.extend(clim.trop_season(seed, year, h, &w.fields.height));
+            }
+        }
+        if tracks.is_empty() {
+            c.must(
+                &format!("the warm seas breed cyclones · {}", seed),
+                false,
+                "0 tracks".to_string(),
+                "M78: a sea over 26 °C outside the equatorial dead band must shed tropical cyclones — no tracks means the genesis field never fired",
+            );
+            continue;
+        }
+
+        let n = tracks.len() as f64;
+
+        // --- where they are born -------------------------------------
+        let mut in_band = 0usize;
+        let mut too_polar = 0usize;
+        let mut in_dead_band = 0usize;
+        let mut cold_born = 0usize;
+        let mut over_land = 0usize;
+        let mut maxlat = 0.0f64;
+        let mut hist = [0usize; 9];
+        for t in &tracks {
+            let la = t.genesis_lat.abs();
+            maxlat = maxlat.max(la);
+            if (calliope::storms::TROP_LAT_MIN..=30.0).contains(&la) {
+                in_band += 1;
+            }
+            if la > 30.0 {
+                too_polar += 1;
+            }
+            if la < calliope::storms::TROP_LAT_MIN {
+                in_dead_band += 1;
+            }
+            if w.fields.height[[t.genesis.0, t.genesis.1]] >= 0.0 {
+                over_land += 1;
+            } else if clim.sst_at(t.genesis.0, t.genesis.1) < calliope::storms::TROP_SST_MIN {
+                cold_born += 1;
+            }
+            hist[((la / 10.0).floor() as usize).min(8)] += 1;
+        }
+        let band = in_band as f64 / n;
+        band_shares.push(band);
+        print!("   genesis by |lat|:");
+        for (i, h) in hist.iter().enumerate() {
+            if *h > 0 {
+                print!(" {}-{}°:{}", i * 10, i * 10 + 10, h);
+            }
+        }
+        println!();
+
+        c.must(
+            &format!("no cyclone is born on a cold sea · {}", seed),
+            cold_born == 0,
+            format!("{} of {} below {:.0} °C", cold_born, tracks.len(), calliope::storms::TROP_SST_MIN),
+            "M78 gate: the warm-sea engine runs on surface heat — every genesis cell must stand over water at or above the 26 °C threshold in its own warm month",
+        );
+        c.must(
+            &format!("no cyclone is born on land · {}", seed),
+            over_land == 0,
+            format!("{} of {}", over_land, tracks.len()),
+            "M78: a tropical cyclone has no engine without a sea under it",
+        );
+        c.must(
+            &format!("the equator breeds nothing · {}", seed),
+            in_dead_band == 0,
+            format!(
+                "{} inside {:.0}° · {} warm cells struck out for want of spin",
+                in_dead_band,
+                calliope::storms::TROP_LAT_MIN,
+                clim.spinless(1) + clim.spinless(-1)
+            ),
+            "M78 gate: within a few degrees of the equator the Coriolis parameter vanishes and the warmest sea on the map cannot close a vortex — the dead band must be empty",
+        );
+        c.must(
+            &format!("the warm seas keep the cyclone in the tropics · {}", seed),
+            too_polar == 0 && band >= 0.99,
+            format!("{} in {:.0}-30° · deepest {:.1}°", pct(band), calliope::storms::TROP_LAT_MIN, maxlat),
+            "M78 gate: genesis must fall inside 5-30° in every world — and nothing in storms.rs names a poleward limit, so this is a claim about where this world's 26 °C isotherm lies",
+        );
+
+        // --- how they travel ------------------------------------------
+        let mut west_early = 0usize;
+        let mut recurved = 0usize;
+        let mut reached = 0usize;
+        let mut peaks: Vec<f64> = Vec::new();
+        let mut lifetimes: Vec<f64> = Vec::new();
+        let mut landfalls = 0usize;
+        let mut poleward = 0usize;
+        for t in &tracks {
+            peaks.push(t.peak);
+            lifetimes.push(t.days());
+            if t.landfall {
+                landfalls += 1;
+            }
+            let p0 = t.points[0];
+            // the first five days, while it is still in the trades
+            if let Some(p) = t.points.iter().find(|p| p.day >= 5.0) {
+                if p.x < p0.x {
+                    west_early += 1;
+                }
+            }
+            if let Some(last) = t.points.last() {
+                if last.y.abs() - p0.y.abs() != 0.0 {}
+                let l0 = calliope::storms::lat_of(p0.y, rows).abs();
+                let l1 = calliope::storms::lat_of(last.y, rows).abs();
+                if l1 > l0 {
+                    poleward += 1;
+                }
+                // recurvature: of the storms that live to leave the
+                // trades, how many are running east by the end?
+                if let Some(cross) = t
+                    .points
+                    .iter()
+                    .find(|p| calliope::storms::lat_of(p.y, rows).abs() >= 30.0)
+                {
+                    reached += 1;
+                    if last.x > cross.x {
+                        recurved += 1;
+                    }
+                }
+            }
+        }
+        let recurve = if reached > 0 {
+            recurved as f64 / reached as f64
+        } else {
+            0.0
+        };
+        recurve_shares.push(recurve);
+        let mean_peak = peaks.iter().sum::<f64>() / n;
+        let mean_life = lifetimes.iter().sum::<f64>() / n;
+        println!(
+            "   {} tracks · {:.1}/century · mean peak {:.2} · mean life {:.0} d · landfall {} · poleward {} · recurved {}/{}",
+            tracks.len(),
+            n * 100.0 / years as f64,
+            mean_peak,
+            mean_life,
+            pct(landfalls as f64 / n),
+            pct(poleward as f64 / n),
+            recurved,
+            reached,
+        );
+
+        c.must(
+            &format!("the trades carry the young storm west · {}", seed),
+            west_early as f64 / n >= 0.90,
+            pct(west_early as f64 / n),
+            "M78 gate: below 30° the zonal wind blows east-to-west, so a storm's first days must move it westward — the same wind_stress field the ocean's gyres read",
+        );
+        c.must(
+            &format!("the storm climbs out of the tropics · {}", seed),
+            poleward as f64 / n >= 0.90,
+            pct(poleward as f64 / n),
+            "M78: beta drift and the steering flow carry a cyclone poleward as it ages",
+        );
+        c.must(
+            &format!("those that leave the trades recurve east · {}", seed),
+            reached == 0 || recurve >= 0.70,
+            format!("{} of {} reaching 30°", pct(recurve), reached),
+            "M78 gate: a storm that survives into the westerlies must be turned back eastward by them — the recurvature is the wind field's doing, nothing in storms.rs bends a path",
+        );
+        c.want(
+            &format!("the cool sea starves the engine · {}", seed),
+            (2.0..=30.0).contains(&mean_life),
+            format!("{:.0} d mean life", mean_life),
+            "M78: cut off from its warm water a tropical cyclone fills within days — a storm that lived for months would mean the fuel term never bit",
+        );
+
+        // --- the season -----------------------------------------------
+        let mut mon = [0usize; 12];
+        let mut monn = [0usize; 12];
+        let mut mons = [0usize; 12];
+        for t in &tracks {
+            mon[t.month as usize] += 1;
+            if t.hemi >= 0 {
+                monn[t.month as usize] += 1;
+            } else {
+                mons[t.month as usize] += 1;
+            }
+        }
+        let peak_of = |a: &[usize; 12]| -> i64 {
+            let mut b = 0usize;
+            for m in 1..12 {
+                if a[m] > a[b] {
+                    b = m;
+                }
+            }
+            b as i64
+        };
+        let (pn, ps) = (peak_of(&monn), peak_of(&mons));
+        let sep = {
+            let d = (pn - ps).abs() % 12;
+            d.min(12 - d)
+        };
+        c.must(
+            &format!("the seasons stand half a year apart · {}", seed),
+            sep >= 5,
+            format!("peak N month {} · S month {} · {} apart", pn, ps, sep),
+            "M78 gate: each hemisphere's cyclones fall in its own warm season, so the two peaks must sit close to six months apart — as the world's seasons do",
+        );
+        let opp = |a: i64, b: i64| -> i64 {
+            let d = (a - b).abs() % 12;
+            d.min(12 - d)
+        };
+        c.must(
+            &format!("the warm-sea season opposes the frontal one · {}", seed),
+            opp(pn, clim.cold_month(1)) >= 3 && opp(ps, clim.cold_month(-1)) >= 3,
+            format!(
+                "N warm-sea {} vs frontal {} · S warm-sea {} vs frontal {}",
+                pn,
+                clim.cold_month(1),
+                ps,
+                clim.cold_month(-1)
+            ),
+            "M78 gate: the frontal corridor of M77 peaks in the cold season and the warm-sea engine in the hot one — two engines running on opposite terms cannot share a peak month",
+        );
+        c.must(
+            &format!("nothing poisons the tracks · {}", seed),
+            tracks
+                .iter()
+                .all(|t| t.points.iter().all(|p| p.x.is_finite() && p.y.is_finite() && p.inten.is_finite())),
+            format!("{} points", tracks.iter().map(|t| t.points.len()).sum::<usize>()),
+            "M78: a non-finite position or intensity would poison every landfall that reads it",
+        );
+
+        // --- replay ----------------------------------------------------
+        let clim2 = calliope::storms::StormClimatology::new(
+            &w.fields.height,
+            &w.fields.tmean,
+            &w.fields.tamp,
+        );
+        c.must(
+            &format!("the warm seas replay · {}", seed),
+            clim.trop_probe(seed, &w.fields.height) == clim2.trop_probe(seed, &w.fields.height),
+            format!("{:016x}", clim.trop_probe(seed, &w.fields.height)),
+            "ADR-0003: a cyclone season is a pure function of (seed, year, hemisphere) — it is derived on demand, never stored",
+        );
+        let y1 = clim.trop_season(seed, 3, 1, &w.fields.height);
+        let y2 = clim.trop_season(seed, 4, 1, &w.fields.height);
+        c.must(
+            &format!("each year draws its own cyclones · {}", seed),
+            !(y1.len() == y2.len()
+                && y1
+                    .iter()
+                    .zip(y2.iter())
+                    .all(|(a, b)| a.genesis == b.genesis && a.month == b.month)),
+            format!("{} vs {} tracks", y1.len(), y2.len()),
+            "M78: the season is keyed on the year — two identical years would mean the warm seas are a fixture, not weather",
+        );
+    }
+
+    if band_shares.len() > 1 {
+        let lo = band_shares.iter().cloned().fold(f64::INFINITY, f64::min);
+        c.must(
+            "the tropical band holds in every world",
+            lo >= 0.99,
+            pct(lo),
+            "M78 gate: the 26 °C isotherm is a property of the general circulation, so every seed must breed its cyclones in the same band",
+        );
+        let rlo = recurve_shares.iter().cloned().fold(f64::INFINITY, f64::min);
+        c.must(
+            "no world runs its recurvature backwards",
+            rlo >= 0.70,
+            pct(rlo),
+            "M78 gate: the westerlies turn storms east in every world or the steering field is not the one the ocean reads",
+        );
+    }
+    c.print();
+}
+
+
+
 fn cmd_oscillation(months: i64, seeds: Vec<i64>) {
     header(
         "OSCILLATION",
