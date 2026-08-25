@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-25 05:27 UTC
+mode: full · size: 512 · generated: 2026-08-25 05:54 UTC
 
-totals: 1088 pass · 32 warn · 0 fail
+totals: 1138 pass · 33 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -13,7 +13,7 @@ totals: 1088 pass · 32 warn · 0 fail
 [WARN] median tick payload                          6304 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
-   all checks pass
+[WARN] worst long task                                    541 ms   (E10.7: single worst main-thread stall (ms); headless baseline 220)
 
 -- build.txt
 [WARN] wasm binary size                              3528450 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
@@ -94,10 +94,10 @@ totals: 1088 pass · 32 warn · 0 fail
 [WARN] ruins per century (after y100)                17.17   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-[WARN] stage fertility ms                   152 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage settlements ms                 260 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2522 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 100                   160 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   133 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] gen total ms                         2262 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     924 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   125 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
