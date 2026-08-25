@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-23 07:27 UTC
+mode: full · size: 512 · generated: 2026-08-25 00:01 UTC
 
-totals: 926 pass · 31 warn · 0 fail
+totals: 928 pass · 39 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -10,24 +10,25 @@ totals: 926 pass · 31 warn · 0 fail
    all checks pass
 
 -- bench.txt
-[WARN] median tick payload                          7570 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
+[WARN] 512 generation time                         3003 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
+[WARN] median tick payload                          7454 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
-   all checks pass
+[WARN] worst long task                                    842 ms   (E10.7: single worst main-thread stall (ms); headless baseline 220)
 
 -- build.txt
 [WARN] wasm binary size                              3515909 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
 
 -- civ-12345.txt
-[WARN] events per year                                56.6   (sweet 2–48 · hard 0.5–100)
-[WARN] famine events per century                      60.7   (M2.6: the rains must fail sometimes)
+[WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
+[WARN] events per year                                57.8   (sweet 2–48 · hard 0.5–100)
+[WARN] famine events per century                      82.0   (M2.6: the rains must fail sometimes)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
 
 -- civ-777.txt
-[WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                55.6   (sweet 2–48 · hard 0.5–100)
+[WARN] events per year                                57.2   (sweet 2–48 · hard 0.5–100)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
-[WARN] the dry-frontier veto is load-bearing no auction held — 0 cf dry founding(s), earliest month 0, deepest table 0 m, all inside the founder's reach (0 dry without · 0 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
+[WARN] the dry-frontier veto is load-bearing no auction held — 2 cf dry founding(s), earliest month 960, deepest table 35 m, all inside the founder's reach (1 dry without · 1 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
 
 -- climate-12345.txt
 [WARN] forest share of land                          23.4%   (sweet 25–60% · hard 15–75%)
@@ -46,7 +47,7 @@ totals: 926 pass · 31 warn · 0 fail
    all checks pass
 
 -- compute.txt
-   all checks pass
+[WARN] coast law cpu ms                             123 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
 
 -- determinism.txt
    all checks pass
@@ -59,6 +60,7 @@ totals: 926 pass · 31 warn · 0 fail
 
 -- economy-12345.txt
 [WARN] directional lanes alive                         14%   (M46: share of blue-water lanes (%) sailing ≥2% faster one way than the other)
+[WARN] kilns lit                            0 pottery · 0 brick towns · 5 clay towns   (M14.5: worked clay must reach a kiln — pottery or brick towns exist)
 
 -- era.txt
 [WARN] landform oatmeal floor                       0.0015   (M64: the landform mix differs between worlds — the closest pair stays distinct)
@@ -85,13 +87,16 @@ totals: 926 pass · 31 warn · 0 fail
    all checks pass
 
 -- patina.txt
-   all checks pass
+[WARN] ruins per century (after y100)                16.83   (M9.1 gate: mature worlds carry ruins)
+[WARN] civ arcs completed per 300 y         4.7 (gold 11 · arcs 14)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
 
 -- perf.txt
-[WARN] stage fertility ms                   167 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage settlements ms                 263 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2648 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 100                   108 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   197 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage naming ms                      135 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
+[WARN] stage settlements ms                 332 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         3331 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     773 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   117 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
