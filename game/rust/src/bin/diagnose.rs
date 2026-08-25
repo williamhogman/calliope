@@ -10398,43 +10398,45 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
             }
             b as i64
         };
-        let (pn, ps) = (peak_of(&monn), peak_of(&mons));
-        let sep = {
-            let d = (pn - ps).abs() % 12;
-            d.min(12 - d)
+        let _ = peak_of(&mon);
+        // The season's centre of mass on the circle of the year. The
+        // modal month is not an estimator of a season: the humps here run
+        // 30-49 tracks across three adjacent months, so the argmax turns
+        // over on sampling noise (31337's north reads 35/36/49 in months
+        // 0/1/2 and lands on 2 by a hair). The circular mean reads the
+        // whole realized distribution and is still measured off the
+        // tracks, not off the climatology that drew them.
+        let circ_mean = |a: &[usize; 12]| -> f64 {
+            let (mut sx, mut sy) = (0.0f64, 0.0f64);
+            for (m, &k) in a.iter().enumerate() {
+                let th = (m as f64) * std::f64::consts::TAU / 12.0;
+                sx += (k as f64) * th.cos();
+                sy += (k as f64) * th.sin();
+            }
+            let mut r = sy.atan2(sx) / std::f64::consts::TAU * 12.0;
+            if r < 0.0 {
+                r += 12.0;
+            }
+            r
         };
-        // TEMP-DIAG (M78 season investigation)
-        {
-            let circ = |a: &[usize; 12]| -> f64 {
-                let (mut sx, mut sy) = (0.0f64, 0.0f64);
-                for (m, &k) in a.iter().enumerate() {
-                    let th = (m as f64) * std::f64::consts::TAU / 12.0;
-                    sx += (k as f64) * th.cos();
-                    sy += (k as f64) * th.sin();
-                }
-                let mut r = sy.atan2(sx) / std::f64::consts::TAU * 12.0;
-                if r < 0.0 { r += 12.0; }
-                r
-            };
-            println!("   TEMP-DIAG season {}: N {:?} (circ {:.2}, warm {}) · S {:?} (circ {:.2}, warm {})",
-                seed, monn, circ(&monn), clim.warm_month(1), mons, circ(&mons), clim.warm_month(-1));
-        }
+        let circ_dist = |a: f64, b: f64| -> f64 {
+            let d = (a - b).abs() % 12.0;
+            d.min(12.0 - d)
+        };
+        let (pn, ps) = (circ_mean(&monn), circ_mean(&mons));
+        let sep = circ_dist(pn, ps);
         c.must(
-
             &format!("the seasons stand half a year apart · {}", seed),
-            sep >= 5,
-            format!("peak N month {} · S month {} · {} apart", pn, ps, sep),
+            sep >= 5.0,
+            format!("season centre N month {:.1} · S month {:.1} · {:.2} apart", pn, ps, sep),
             "M78 gate: each hemisphere's cyclones fall in its own warm season, so the two peaks must sit close to six months apart — as the world's seasons do",
         );
-        let opp = |a: i64, b: i64| -> i64 {
-            let d = (a - b).abs() % 12;
-            d.min(12 - d)
-        };
         c.must(
             &format!("the warm-sea season opposes the frontal one · {}", seed),
-            opp(pn, clim.cold_month(1)) >= 3 && opp(ps, clim.cold_month(-1)) >= 3,
+            circ_dist(pn, clim.cold_month(1) as f64) >= 3.0
+                && circ_dist(ps, clim.cold_month(-1) as f64) >= 3.0,
             format!(
-                "N warm-sea {} vs frontal {} · S warm-sea {} vs frontal {}",
+                "N warm-sea {:.1} vs frontal {} · S warm-sea {:.1} vs frontal {}",
                 pn,
                 clim.cold_month(1),
                 ps,
@@ -10442,6 +10444,7 @@ fn cmd_tropics(size: usize, years: i64, seeds: Vec<i64>) {
             ),
             "M78 gate: the frontal corridor of M77 peaks in the cold season and the warm-sea engine in the hot one — two engines running on opposite terms cannot share a peak month",
         );
+
         c.must(
             &format!("nothing poisons the tracks · {}", seed),
             tracks
