@@ -12585,7 +12585,17 @@ fn main() {
             }
             cmd_storms(size, years, seeds);
         }
+        "tropics" => {
+            let size = sized(2, 512);
+            let years = num(3, 60);
+            let mut seeds: Vec<i64> = a.get(4..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 31337, 90210, 555];
+            }
+            cmd_tropics(size, years, seeds);
+        }
         "teleconnection" => {
+
             let size = sized(2, 512);
             let years = num(3, 120);
             let mut seeds: Vec<i64> = a.get(4..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
