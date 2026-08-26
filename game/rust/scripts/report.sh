@@ -149,14 +149,14 @@ for s in "${SEEDS[@]}"; do
   run "hydro-$s.txt"     hydro     "$s" "$SIZE"
   run "resources-$s.txt" resources "$s" "$SIZE"
 done
-# M80 — the composed civ ensemble carries every configured seed, not the
-# first two. The M55 ensemble row is a law over worlds: with drought memory
-# in the model, one world's dry frontier may never hold the auction, so the
-# ensemble must be as wide as the suite's seed list before the row can say
-# anything about the law. Gate semantics and thresholds are unchanged — the
-# gate still composes whatever civ-*.txt lanes exist and still demands ≥1
-# refused town across them.
-for s in "${SEEDS[@]}"; do
+# M55 — the composed civ ensemble carries the first two seeds. The ensemble
+# row is a law over worlds: the veto-lifted run must stand at least one town
+# on ground the real veto refused, somewhere across the composed lanes. The
+# M80 widening to a third seed was a workaround for a per-world drought
+# normalization defect; with drought_norm calibrated per world the row is
+# carried again by seed 777 (1 refused town), so the ensemble stays as it
+# was banked through M79. Gate semantics and thresholds are unchanged.
+for s in "${SEEDS[@]:0:2}"; do
   run "civ-$s.txt" civ "$s" "$SIZE" "$CIV_YEARS"
 done
 
