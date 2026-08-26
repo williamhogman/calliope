@@ -12,7 +12,7 @@ fn main() {
     let size: usize = args.next().and_then(|s| s.parse().ok()).unwrap_or(512);
     let years: i64 = args.next().and_then(|s| s.parse().ok()).unwrap_or(300);
 
-    let w = World::new(seed, size);
+    let w = World::generate(seed, size);
 
     let mut n = 0u64;
     let (mut s1, mut s2) = (0.0f64, 0.0f64);
