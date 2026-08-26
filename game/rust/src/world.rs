@@ -1519,6 +1519,20 @@ impl World {
     /// `year_flow_factor` is what `year_discharge` multiplies by, so a canal
     /// can never be handed more water than the river is stated to carry.
     pub fn year_yield(&self, year: i64, y: usize, x: usize) -> f64 {
+        let base = self.year_yield_bare(year, y, x);
+        // M81 — last year's spate pays this year's harvest: the silt sheet
+        // laid on the floodplain lifts the season it feeds, once.
+        let silt = self.floods.silt_bonus(year, y, x);
+        if silt <= 0.0 {
+            base
+        } else {
+            (base * (1.0 + silt)).min(agriculture::YIELD_CEIL)
+        }
+    }
+
+    /// The same harvest read with the floodplain's silt sheet ignored —
+    /// the counterfactual the M81 gate measures the gift against.
+    pub fn year_yield_bare(&self, year: i64, y: usize, x: usize) -> f64 {
         let pack = agriculture::CropPackage::from_code(self.fields.crops[[y, x]]);
         let irrigated = self.near_fresh[[y, x]];
         let t = self.fields.tmean[[y, x]] as f64;
@@ -1529,15 +1543,7 @@ impl World {
         } else {
             dp
         };
-        let base = agriculture::year_yield_factor(pack, t, p, dt, rain, irrigated);
-        // M81 — last year's spate pays this year's harvest: the silt sheet
-        // laid on the floodplain lifts the season it feeds, once.
-        let silt = self.floods.silt_bonus(year, y, x);
-        if silt <= 0.0 {
-            base
-        } else {
-            (base * (1.0 + silt)).min(agriculture::YIELD_CEIL)
-        }
+        agriculture::year_yield_factor(pack, t, p, dt, rain, irrigated)
     }
 
     /// M72 — `year_flow_factor` at one cell without materializing the grid:

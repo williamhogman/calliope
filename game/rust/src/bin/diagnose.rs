@@ -5749,17 +5749,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             }
             tested += 1;
             let with = w.year_yield(r.year + 1, y, x);
-            let without = calliope::agriculture::year_yield_factor(
-                calliope::agriculture::CropPackage::from_code(w.fields.crops[[y, x]]),
-                w.fields.tmean[[y, x]] as f64,
-                w.fields.precip[[y, x]] as f64,
-                w.year_site_weather(r.year + 1, y, x).0,
-                {
-                    let (_, dp) = w.year_site_weather(r.year + 1, y, x);
-                    w.fields.precip[[y, x]] as f64 * (1.0 + dp)
-                },
-                w.near_fresh[[y, x]],
-            );
+            let without = w.year_yield_bare(r.year + 1, y, x);
             if with > without + 1e-9 {
                 lifted += 1;
                 lift_sum += with / without - 1.0;
