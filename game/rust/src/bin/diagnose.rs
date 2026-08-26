@@ -5438,6 +5438,175 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
 
 
 
+    // ---- M80: the failed year named — droughts with a span and a name ----
+    // The drought field now carries memory (`drought::MEM`), so a failed
+    // year is not an isolated roll: it takes hold over ground, holds it
+    // for years, and gets a name the chronicle speaks exactly once. This
+    // lane measures the span, the footprint's steadiness, the singularity
+    // of the naming, and — the causal claim — that the memory is what
+    // lets an ordinary year still fail.
+    {
+        let ds = &w.droughts;
+        let rows = w.fields.tmean.dim().0;
+        let didx = |year: i64, x: i64, y: i64| -> f64 {
+            let lat = (-90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0)).abs();
+            let sigma = calliope::climate::anomaly_amp_p(lat).max(1e-6);
+            let mut acc = 0.0;
+            let mut wt = 1.0;
+            for k in 0..calliope::drought::MEMO_YEARS as i64 {
+                let yr = year - k;
+                let (_, dp) = calliope::climate::year_anomaly_at(
+                    w.variability(), rows, x as usize, y as usize, yr, w.year_osc(yr),
+                );
+                acc += wt * dp / sigma;
+                wt *= calliope::drought::MEM;
+            }
+            acc * calliope::drought::NORM
+        };
+        // Only droughts that had room to end inside the run are judged on
+        // their span: one still burning at the last year is right-censored.
+        let last = w.month / 12;
+        let closed: Vec<&calliope::drought::DroughtEvent> =
+            ds.events.iter().filter(|e| e.last_year < last).collect();
+        let mut durs: Vec<i64> = closed.iter().map(|e| e.duration()).collect();
+        durs.sort_unstable();
+        let med_dur = if durs.is_empty() { 0.0 } else { durs[durs.len() / 2] as f64 };
+        let mean_dur = if durs.is_empty() {
+            0.0
+        } else {
+            durs.iter().sum::<i64>() as f64 / durs.len() as f64
+        };
+        let longest = durs.last().copied().unwrap_or(0);
+        let mut stabs: Vec<f64> = closed.iter().filter_map(|e| e.stability()).collect();
+        stabs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let med_stab = if stabs.is_empty() { 0.0 } else { stabs[stabs.len() / 2] };
+        let med_area = {
+            let mut a: Vec<f64> = closed
+                .iter()
+                .map(|e| e.peak_nodes as f64 * calliope::drought::NODE_KM2)
+                .collect();
+            a.sort_by(|x, y| x.partial_cmp(y).unwrap());
+            if a.is_empty() { 0.0 } else { a[a.len() / 2] }
+        };
+        println!();
+        println!(
+            "M80 · droughts named — {} took hold ({} closed) · median span {:.0}y (mean {:.1}, longest {}) · median extent {:.0} km² · median year-on-year overlap {:.2}",
+            ds.events.len(), closed.len(), med_dur, mean_dur, longest, med_area, med_stab
+        );
+        println!(
+            "  spans — {}",
+            (1..=6)
+                .map(|k| {
+                    let n = if k < 6 {
+                        durs.iter().filter(|d| **d == k).count()
+                    } else {
+                        durs.iter().filter(|d| **d >= 6).count()
+                    };
+                    format!("{}{}y {}", if k == 6 { "≥" } else { "" }, k, n)
+                })
+                .collect::<Vec<_>>()
+                .join(" · ")
+        );
+        c.must(
+            "droughts last years, not a season",
+            !durs.is_empty() && (2.0..=5.0).contains(&med_dur),
+            format!("median span {:.0}y over {} closed droughts", med_dur, durs.len()),
+            "M80 gate: a failed year persists — the drought field carries its shortfall forward, so the median event spans 2–5 consecutive years",
+        );
+        c.must(
+            "a drought holds the same ground",
+            !stabs.is_empty() && med_stab >= 0.40,
+            format!("median year-on-year footprint overlap {:.2} (Jaccard)", med_stab),
+            "M80 gate: the mapped extent is stable — a drought is one region moving slowly, not a new blotch each year",
+        );
+        // The naming: one drought, one name, spoken once.
+        let names: std::collections::BTreeSet<&str> =
+            ds.events.iter().map(|e| e.name.as_str()).collect();
+        let mut spoken: BTreeMap<&str, usize> = BTreeMap::new();
+        for n in &log.drought_named {
+            *spoken.entry(n.as_str()).or_default() += 1;
+        }
+        let once = ds
+            .events
+            .iter()
+            .filter(|e| spoken.get(e.name.as_str()).copied().unwrap_or(0) == 1)
+            .count();
+        println!(
+            "  naming — {} droughts · {} distinct names · {} chronicle announcements · e.g. {}",
+            ds.events.len(),
+            names.len(),
+            log.drought_named.len(),
+            ds.events
+                .iter()
+                .rev()
+                .take(3)
+                .map(|e| format!("{} ({}–{})", e.name, e.start_year, e.last_year))
+                .collect::<Vec<_>>()
+                .join(" · ")
+        );
+        c.must(
+            "every drought is named once and named alone",
+            !ds.events.is_empty()
+                && names.len() == ds.events.len()
+                && once == ds.events.len()
+                && log.drought_named.len() == ds.events.len(),
+            format!(
+                "{}/{} droughts surfaced exactly once · {} distinct names",
+                once,
+                ds.events.len(),
+                names.len()
+            ),
+            "M80 gate: the chronicle speaks each drought's name exactly once, in the year it takes hold — no duplicates, no silent droughts",
+        );
+        // Re-derivation: the ledger claims dry ground; the sky's own
+        // arithmetic, recomputed here from the seed, must agree at every
+        // event's deepest node in every year it held.
+        let mut checked = 0usize;
+        let mut agree = 0usize;
+        for e in &ds.events {
+            for &(yr, ..) in &e.years {
+                checked += 1;
+                if didx(yr, e.ax, e.ay) <= calliope::famine::DROUGHT_Z + 1e-9 {
+                    agree += 1;
+                }
+            }
+        }
+        c.must(
+            "the ledger answers to the sky",
+            checked > 0 && agree == checked,
+            format!("{}/{} drought-years re-derived dry from the seed alone", agree, checked),
+            "M80: the named event is a reading of the accumulated rain, re-computable from seed × cell × year with no stored per-cell state",
+        );
+        // The causal claim: memory is load-bearing. How many famines stood
+        // in a year whose *own* rain was not drought — a harvest that only
+        // failed because the years behind it had already emptied the ground.
+        let mut carried = 0usize;
+        for r in &w.famine_ledger {
+            let yr = r.m / 12;
+            if w.year_spi(yr, r.y as usize, r.x as usize) > calliope::famine::DROUGHT_Z {
+                carried += 1;
+            }
+        }
+        let share = if w.famine_ledger.is_empty() {
+            0.0
+        } else {
+            carried as f64 / w.famine_ledger.len() as f64
+        };
+        println!(
+            "  carry-over — {}/{} famines ({:.0}%) struck in a year whose own rain was above SPI −1: the ground, not the year, was empty",
+            carried,
+            w.famine_ledger.len(),
+            100.0 * share
+        );
+        c.must(
+            "the ground remembers the year before",
+            carried > 0,
+            format!("{} famines carried by memory alone ({:.0}%)", carried, 100.0 * share),
+            "M80: persistence is load-bearing — remove the memory and these harvests would not have failed",
+        );
+        c.band("drought carry-over share of famines", share, format!("{:.2}", share));
+    }
+
     // ---- M72: the year that was — one sky over harvest, flow and famine ----
     {
         let (rows, cols) = w.fields.tmean.dim();
