@@ -183,10 +183,10 @@ pub fn capacity(knows: impl Fn(TechId) -> bool) -> f64 {
 /// event, not about any one world's luck.
 pub const BANDS: &[crate::util::Band] = &[
     crate::util::Band {
-        name: "floods per century",
-        sweet: (2.0, 60.0),
-        hard: (0.2, 160.0),
-        target: "M81: a river town drowns now and then — often enough to be a fact of life on the water, rare enough to be news",
+        name: "floods per river town per century",
+        sweet: (2.0, 40.0),
+        hard: (0.5, 90.0),
+        target: "M81: a river town drowns now and then — a spate every few decades of its life, often enough to be a fact of life on the water, rare enough to be news",
     },
     crate::util::Band {
         name: "worst flood toll (share of town)",
