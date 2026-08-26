@@ -23,6 +23,7 @@ pub mod event;
 pub mod explain;
 pub mod drought;
 pub mod famine;
+pub mod flood;
 pub mod geo;
 pub mod grid;
 pub mod hydrology;
