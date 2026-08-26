@@ -1,0 +1,67 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · ECONOMY                      seed 12345 · 640x512 · 100y
+========================================================================
+good        base    mean     min     max mean/base   pinned
+clay        1.00    0.74    0.37    1.41      0.74       0%
+coal        1.00    1.13    0.49    2.17      1.13       0%
+copper      1.00    3.26    1.90    4.48      3.26       0%
+dyes        3.40    3.01    1.79    5.07      0.88       0%
+fish        0.85    0.37    0.31    0.69      0.44       0%
+furs        3.40    1.53    1.20    2.97      0.45       0%
+gems        3.40   12.09    5.57   15.61      3.56       0%
+gold        3.40   10.22    4.25   15.61      3.01       0%
+grain       1.00    0.37    0.36    0.72      0.37       0%
+grapes      1.80    1.18    0.95    1.69      0.66       0%
+hides       1.00    1.09    0.73    1.33      1.09       0%
+iron        1.00    3.16    1.67    4.58      3.16       0%
+marble      3.40    6.07    3.69    9.52      1.79       0%
+salt        1.80    2.24    1.14    4.24      1.24       0%
+silver      1.80    6.87    2.54    8.26      3.81       0%
+spices      3.40    2.05    1.20    4.35      0.60       0%
+stone       1.00    2.21    1.17    3.14      2.21       0%
+timber      1.00    0.45    0.36    0.91      0.45       0%
+wool        1.80    2.39    1.13    5.07      1.33       0%
+(pinned = months at the 0.3×/5× clamp — a pinned price is a mis-tuned market)
+
+market shocks: 51 strikes · 39 depletions · 1003 trade chronicle entries
+wealth: total 582360 · gini 0.71
+richest towns:
+  Sahmasab             pop  38508 · wealth    68603 · exports grain · harbour
+  Glenhythe            pop  32448 · wealth    47334 · exports grain · harbour
+  Erystoma             pop  30462 · wealth    37663 · exports grain · harbour
+  Thrayra              pop  11325 · wealth    37567 · exports spices · harbour
+  Delmostoma           pop  17502 · wealth    27344 · exports spices · harbour
+poorest towns:
+  Aldun                pop    120 · wealth       41
+  Mirasif              pop    142 · wealth       42
+  Mossorhythe          pop    475 · wealth       47
+
+routes: 171 (65 sea / 30 mixed / 76 land) · mean cost 57.3 · mean length 30 km
+harbours: 57 · unconnected towns: 0
+treasuries (crowns — ADR-0018):
+  Zarubar                     4049
+  Oropia                      1222
+  Aeldell                     2568
+  Kalossa                     9612
+  Yewdell                      189
+  Temakum                     2947
+  Aelrun                     10913
+  Khaah                       5345
+  Mossenleaf                  3137
+  Aelathorn                    251
+  Sylrun                      1459
+  Fenorrun                     548
+
+sea ice on the lanes (M37): 12 winter-closed of 95 sea-touching routes · 0 perennially shut · 0 malformed masks
+  hardest lane: Qasarasif — Alusif · calendar [··■■■■■■■■■·] · 9 months shut
+
+the directed sea (M46): 23 blue-water lanes · 8 sail ≥2% faster one way (35%) · best mirror advantage 16.2%
+  Sahmasab — Altagan · out 60.6 · home 72.4 · with-current 16.2% faster
+  Glenhythe — Mossorcarr · out 38.9 · home 43.0 · with-current 9.5% faster
+  Keshuyar — Sahmasab · out 48.4 · home 53.0 · with-current 8.8% faster
+  evolved-web counterfactual after 100y: 65 blue-water lanes · best 16.2% · 0 divergent (not the M46 gate subject)
+  the field: open cells 11882 · |current| p50 0.066 · p90 0.757 · max 4.429 · becalmed rows 12 of 128
+
+the sailor's calendar (M48): 31 monsoon lanes of 95 sea-touching (33%) · 19 shut in the burst · 0 malformed arcs · swing mean 65% best 100%
+  hardest gale lane: Altagan — Aelhythe · burst [■■···■■■···■] · season -0.04
+  the field: monsoon sea cells 62441 · |lean| p50 0.00 · p90 0.34 · max 0.43 · gale threshold 0.40
