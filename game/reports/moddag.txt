@@ -4,8 +4,5 @@
  scanned 53 modules · allowed world-importers: lib.rs world.rs systems.rs pack.rs snapshot.rs famine.rs prospecting.rs explain.rs
 
 ---- checks ----------------------------------------------------------
-[FAIL] leaf modules importing crate::world             (E11.8: break the edge or bless the module)
-drought.rs:
-45:use crate::world::World;
-
+[PASS] leaf modules import event/state, never world    (E11.8: import DAG acyclic by check)
 CHECKS: see row above

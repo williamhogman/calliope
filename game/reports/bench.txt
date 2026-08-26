@@ -2,41 +2,43 @@
  CALLIOPE DIAGNOSTIC · BENCH                        native release · alloc-count
 ========================================================================
  size    gen ms  pack bytes     cells  stage breakdown (ms)
-  320      1431     2805220    128000  plates 38 · terrain 93 · erosion 73 · glacial 92 · coast 332 · climate 85 · hydrology 46 · biomes 3 · fertility 73 · naming 76 · resources 157 · settlements 213
-  512      4346     7174532    327680  plates 131 · terrain 317 · erosion 264 · glacial 364 · coast 1012 · climate 230 · hydrology 137 · biomes 13 · fertility 242 · naming 271 · resources 557 · settlements 583
-  640      6956    11207596    512000  plates 235 · terrain 485 · erosion 462 · glacial 643 · coast 1553 · climate 422 · hydrology 249 · biomes 19 · fertility 341 · naming 377 · resources 701 · settlements 796
-  768      9549    16136576    737280  plates 272 · terrain 657 · erosion 696 · glacial 809 · coast 2232 · climate 605 · hydrology 333 · biomes 25 · fertility 455 · naming 496 · resources 1006 · settlements 966
-512 generation: median of 5 samples · spread 4243–4577 ms (E5.9)
+  320      1446     2805220    128000  plates 39 · terrain 143 · erosion 103 · glacial 152 · coast 290 · climate 55 · hydrology 61 · biomes 5 · fertility 76 · naming 51 · resources 184 · settlements 174
+  512      3028     7174532    327680  plates 98 · terrain 304 · erosion 247 · glacial 385 · coast 461 · climate 112 · hydrology 164 · biomes 7 · fertility 196 · naming 101 · resources 430 · settlements 274
+  640      5010    11207596    512000  plates 153 · terrain 444 · erosion 469 · glacial 626 · coast 765 · climate 208 · hydrology 231 · biomes 7 · fertility 330 · naming 151 · resources 689 · settlements 453
+  768      7168    16136576    737280  plates 262 · terrain 694 · erosion 726 · glacial 956 · coast 1017 · climate 294 · hydrology 335 · biomes 11 · fertility 395 · naming 256 · resources 1004 · settlements 585
+512 generation: median of 5 samples · spread 2792–3499 ms (E5.9)
 
-tick throughput @512, towns 16→97: median 240-month window 701 ms = 342 months/s (5 windows)
+tick throughput @512, towns 16→98: median 240-month window 496 ms = 484 months/s (5 windows)
 allocations: 63714 across window 0 = 265/month (E5.10, counting allocator)
-tick payload @512 over 100 y: median 6053 B · p90 31647 B · max 95263 B
-  routes               105 ships ·   2268333 B total ·  21603 B/ship
-  territory            133 ships ·   1830984 B total ·  13766 B/ship
-  peoples              146 ships ·   1810441 B total ·  12400 B/ship
-  areas               1173 ships ·   1341797 B total ·   1143 B/ship
-  settlements          803 ships ·   1255747 B total ·   1563 B/ship
-  s_hot               1200 ships ·   1210935 B total ·   1009 B/ship
-  deposits              69 ships ·    888852 B total ·  12881 B/ship
-  r_hot               1091 ships ·    744205 B total ·    682 B/ship
-  m_hot                925 ships ·    634890 B total ·    686 B/ship
-  market               264 ships ·    307594 B total ·   1165 B/ship
-  realms               109 ships ·    259708 B total ·   2382 B/ship
-  merchants            605 ships ·    251124 B total ·    415 B/ship
-  cultures             132 ships ·    233373 B total ·   1767 B/ship
-  features              24 ships ·    207754 B total ·   8656 B/ship
-  civs                 154 ships ·    112405 B total ·    729 B/ship
-  territory_tiles       13 ships ·     90956 B total ·   6996 B/ship
-  wars                 249 ships ·     38187 B total ·    153 B/ship
-  ev                  1200 ships ·     11828 B total ·      9 B/ship
-  headlines            807 ships ·      4800 B total ·      5 B/ship
+tick payload @512 over 100 y: median 5682 B · p90 30454 B · max 88909 B
+  routes               102 ships ·   2289552 B total ·  22446 B/ship
+  territory            129 ships ·   1741149 B total ·  13497 B/ship
+  peoples              140 ships ·   1710660 B total ·  12219 B/ship
+  areas               1173 ships ·   1358100 B total ·   1157 B/ship
+  s_hot               1200 ships ·   1199397 B total ·    999 B/ship
+  settlements          786 ships ·   1157678 B total ·   1472 B/ship
+  deposits              65 ships ·    830583 B total ·  12778 B/ship
+  r_hot               1107 ships ·    729499 B total ·    658 B/ship
+  m_hot                924 ships ·    633052 B total ·    685 B/ship
+  market               265 ships ·    302824 B total ·   1142 B/ship
+  merchants            542 ships ·    250544 B total ·    462 B/ship
+  cultures             135 ships ·    236246 B total ·   1749 B/ship
+  realms                93 ships ·    201388 B total ·   2165 B/ship
+  features              21 ships ·    176179 B total ·   8389 B/ship
+  territory_tiles       11 ships ·     67921 B total ·   6174 B/ship
+  civs                 133 ships ·     50670 B total ·    380 B/ship
+  wars                 223 ships ·     35274 B total ·    158 B/ship
+  ev                  1200 ships ·     11812 B total ·      9 B/ship
+  headlines            779 ships ·      4268 B total ·      5 B/ship
   month               1200 ships ·      3693 B total ·      3 B/ship
-  deposits_hidden       69 ships ·       118 B total ·      1 B/ship
+  ruins                  1 ships ·       157 B total ·    157 B/ship
+  deposits_hidden       65 ships ·       121 B total ·      1 B/ship
+  settlements_gone       1 ships ·         4 B total ·      4 B/ship
 
 ---- checks ----------------------------------------------------------
-[WARN] 512 generation time                         4346 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
-[PASS] tick rate                                  342 mo/s   (sweet ≥100 mo/s · hard ≥25)
+[WARN] 512 generation time                         3028 ms   (sweet ≤3s · hard ≤8s (wasm ≈ 2× native))
+[PASS] tick rate                                  484 mo/s   (sweet ≥100 mo/s · hard ≥25)
 [PASS] pack bytes per cell                     21.9 B/cell   (sweet ≤24 · hard ≤26 (7×u16 + 4×u8-quantized + 1×u8 raw + 7 categorical grids on M70's measured-width bit lane ≈ 21.9 B/cell + header))
-[WARN] median tick payload                          6053 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
+[WARN] median tick payload                          5682 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 [PASS] allocations per month                        265/mo   (sweet ≤350 · hard ≤1500 (baseline 183/mo — deterministic per seed, E5.10))
 CHECKS: 3 pass · 2 warn · 0 fail
