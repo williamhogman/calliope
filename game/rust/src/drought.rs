@@ -108,9 +108,14 @@ pub struct DroughtEvent {
     /// event from the seed without trusting this ledger.
     pub ax: i64,
     pub ay: i64,
-    /// Per-year ledger: `(year, nodes, cx, cy, jaccard-with-last-year)`.
-    /// The first row carries jaccard 1.0 by definition.
-    pub years: Vec<(i64, usize, f64, f64, f64)>,
+    /// Per-year ledger: `(year, nodes, cx, cy, jaccard-with-last-year,
+    /// anchor-x, anchor-y)`. The first row carries jaccard 1.0 by
+    /// definition. The anchor is *that year's* deepest node in fine-grid
+    /// cells: a drought walks, so a single onset anchor stops being dry
+    /// ground the moment the region moves off it, and the re-derivation
+    /// must probe the year it is judging.
+    pub years: Vec<(i64, usize, f64, f64, f64, i64, i64)>,
+
     /// Whether the chronicle has spoken its name (it does so once).
     pub announced: bool,
     /// Last year's node set — the matcher's working memory, never hashed.
@@ -387,6 +392,11 @@ impl World {
                 peak = peak.min(d.index[cell] as f64);
             }
             let (cx, cy) = (sx / nodes as f64, sy / nodes as f64);
+            // This year's anchor: the deepest node of *this* year's
+            // footprint, in fine-grid cells.
+            let deep_x = ((deep % d.cols) * STRIDE) as i64;
+            let deep_y = ((deep / d.cols) * STRIDE) as i64;
+
             let idx = match assign[ri] {
                 Some(e) => {
                     let prev: HashSet<usize> = d.events[e].prev.iter().copied().collect();
@@ -397,7 +407,7 @@ impl World {
                     ev.last_year = year;
                     ev.peak = ev.peak.min(peak);
                     ev.peak_nodes = ev.peak_nodes.max(nodes);
-                    ev.years.push((year, nodes, cx, cy, jac));
+                    ev.years.push((year, nodes, cx, cy, jac, deep_x, deep_y));
                     ev.prev = cells.clone();
                     e
                 }
@@ -415,9 +425,9 @@ impl World {
                         onset_nodes: nodes,
                         x: cx.round() as i64,
                         y: cy.round() as i64,
-                        ax: ((deep % d.cols) * STRIDE) as i64,
-                        ay: ((deep / d.cols) * STRIDE) as i64,
-                        years: vec![(year, nodes, cx, cy, 1.0)],
+                        ax: deep_x,
+                        ay: deep_y,
+                        years: vec![(year, nodes, cx, cy, 1.0, deep_x, deep_y)],
                         announced: true,
                         prev: cells.clone(),
                     });

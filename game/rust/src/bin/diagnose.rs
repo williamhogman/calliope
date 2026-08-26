@@ -5564,13 +5564,14 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let mut checked = 0usize;
         let mut agree = 0usize;
         for e in &ds.events {
-            for &(yr, ..) in &e.years {
+            for &(yr, _, _, _, _, ax, ay) in &e.years {
                 checked += 1;
-                if didx(yr, e.ax, e.ay) <= calliope::famine::DROUGHT_Z + 1e-9 {
+                if didx(yr, ax, ay) <= calliope::famine::DROUGHT_Z + 1e-9 {
                     agree += 1;
                 }
             }
         }
+
         c.must(
             "the ledger answers to the sky",
             checked > 0 && agree == checked,
