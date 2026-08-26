@@ -327,8 +327,13 @@ impl World {
         // yesterday's. The extent is grown on the holding contour; the
         // core decides only whether a *new* name is owed.
         let prev_owner = std::mem::replace(&mut d.owner, vec![-1; n]);
-        let hold: Vec<bool> =
-            (0..n).map(|i| d.land[i] && d.index[i] as f64 <= DRY_HOLD).collect();
+        let hold: Vec<bool> = (0..n)
+            .map(|i| {
+                d.land[i]
+                    && (d.index[i] as f64 <= DROUGHT_Z
+                        || (prev_owner[i] >= 0 && d.index[i] as f64 <= DRY_HOLD))
+            })
+            .collect();
         let mut seen = vec![false; n];
         let mut regs: Vec<(Vec<usize>, bool)> = Vec::new();
         for start in 0..n {
@@ -365,10 +370,34 @@ impl World {
             if cells.len() < MIN_NODES {
                 continue;
             }
-            // A core past SPI −1 earns a new name; ground already owned by
-            // a living drought keeps it without re-earning the core.
-            let core = cells.iter().filter(|&&i| d.index[i] as f64 <= DROUGHT_Z).count();
+            // Spatial hysteresis is asymmetric as temporal hysteresis must
+            // be: owned ground may remain at the holding contour, but new
+            // ground enters only after crossing SPI -1. This stops a named
+            // footprint annexing a different merely-parched margin each
+            // year while preserving the exact 12-year index beneath it.
             let inherited = cells.iter().any(|&i| prev_owner[i] >= 0);
+            if inherited {
+                // A named drought may advance into newly failed ground, but
+                // only along its existing edge. Without this rate limit, a
+                // one-node bridge across the entry mask annexed a remote dry
+                // core in one year: the sky's mask retained 0.35 of its area,
+                // while the named footprint retained only 0.21. One lattice
+                // step is 32 km/year — movement, not teleportation.
+                cells.retain(|&i| {
+                    if prev_owner[i] >= 0 {
+                        return true;
+                    }
+                    let (cy, cx) = (i / d.cols, i % d.cols);
+                    (cy > 0 && prev_owner[i - d.cols] >= 0)
+                        || (cy + 1 < d.rows && prev_owner[i + d.cols] >= 0)
+                        || (cx > 0 && prev_owner[i - 1] >= 0)
+                        || (cx + 1 < d.cols && prev_owner[i + 1] >= 0)
+                });
+                if cells.len() < MIN_NODES {
+                    continue;
+                }
+            }
+            let core = cells.iter().filter(|&&i| d.index[i] as f64 <= DROUGHT_Z).count();
             if core >= MIN_CORE || inherited {
                 regs.push((cells, core >= MIN_CORE));
             }
