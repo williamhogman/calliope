@@ -62,6 +62,9 @@ pub enum EventKind {
     /// M80 — the failed year named: a multi-year drought takes hold over
     /// named ground. Appended last; wire discriminants hold.
     Drought,
+    /// M81 — the river that drowns and gives: a spate overtops the levees
+    /// and leaves silt behind it. Appended last; wire discriminants hold.
+    Flood,
 }
 
 impl EventKind {
@@ -120,6 +123,7 @@ event_table! {
     Quake     => family nature,  weight 3, fortune -1;
     Eruption  => family nature,  weight 3, fortune -1;
     Drought   => family nature,  weight 3, fortune -1;
+    Flood     => family nature,  weight 3, fortune -1;
 }
 
 /// E5.5 — inline storage for the common 0–2 entity ids per event.

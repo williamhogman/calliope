@@ -237,6 +237,12 @@ pub struct World {
     /// is derived (a pure read of the sky); the *events* — names, spans,
     /// ground — are state, and ride the replay identity line.
     pub droughts: crate::drought::Droughts,
+    /// M81 — the flood ledger: every spate that overtopped a town's
+    /// levees, and the silt those spates left for the season after. The
+    /// year's water is derived (a pure read of the sky); the *floods* —
+    /// who drowned, how deep, what the ground was given — are state, and
+    /// ride the replay identity line.
+    pub floods: crate::flood::Floods,
     /// M79 — local strike history at event strength, before an existing
     /// harbour wound is added. Permanent felling reads this ledger's
     /// empirical severe-hit return interval; bounded and deterministic.
@@ -1121,6 +1127,7 @@ impl GenBuilder {
             storm_prev: Vec::new(),
             storm_marks: Vec::new(),
             droughts: crate::drought::Droughts::default(),
+            floods: crate::flood::Floods::default(),
             storm_bites: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             storm_fell_probe: Vec::new(),
@@ -1512,6 +1519,20 @@ impl World {
     /// `year_flow_factor` is what `year_discharge` multiplies by, so a canal
     /// can never be handed more water than the river is stated to carry.
     pub fn year_yield(&self, year: i64, y: usize, x: usize) -> f64 {
+        let base = self.year_yield_bare(year, y, x);
+        // M81 — last year's spate pays this year's harvest: the silt sheet
+        // laid on the floodplain lifts the season it feeds, once.
+        let silt = self.floods.silt_bonus(year, y, x);
+        if silt <= 0.0 {
+            base
+        } else {
+            (base * (1.0 + silt)).min(agriculture::YIELD_CEIL)
+        }
+    }
+
+    /// The same harvest read with the floodplain's silt sheet ignored —
+    /// the counterfactual the M81 gate measures the gift against.
+    pub fn year_yield_bare(&self, year: i64, y: usize, x: usize) -> f64 {
         let pack = agriculture::CropPackage::from_code(self.fields.crops[[y, x]]);
         let irrigated = self.near_fresh[[y, x]];
         let t = self.fields.tmean[[y, x]] as f64;
