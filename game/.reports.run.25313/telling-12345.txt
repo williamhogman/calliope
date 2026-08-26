@@ -1,0 +1,38 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · TELLING                      seed 12345 · size 512 · 150y
+========================================================================
+chronicle: 8743 entries over 150y (58.3/y)
+  ids on 98.6% · coords on 97.8% · legend layer on 3242/3242 loud entries
+  ID-LESS: drought ×121
+    m7 [drought] the Withering of The Vorudor Tablelands — The rains withdraw from The Vorudor Tablelands: the Withering of The Vorudor Tablelands be
+    m7 [drought] the Long Thirst of The Peaks of Aureion — The rains withdraw from The Peaks of Aureion: the Long Thirst of The Peaks of Aureion begi
+    m19 [drought] the Dust Years of The Farion Mere — The rains withdraw from The Farion Mere: the Dust Years of The Farion Mere begins, and 42 
+    m31 [drought] the Failing of Idayra — The rains withdraw from Idayra: the Failing of Idayra begins, and 40 thousand square leagu
+cast: artifact 14+0† · civilization 2+3† · culture 16+0† · feature 97+0† · good 36+0† · person 14+193† · realm 12+20† · ruin 2+0† · settlement 99+2† · war 1+43† · world 1+0†
+epithets earned: 166  (Tamimbar "the Young", Thalshade "the Young", Arikos "the Unlucky", Dzunachi "the Wise")
+artifacts: 14 wrought · 12 held · 2 lost
+
+stories sifted: 48 (bloody-circlet ×9 · empire-arc ×3 · mine-curse ×10 · restoration ×1 · rise-fall ×2 · rivalry ×4 · roads-of ×5 · trials ×10 · usurpation ×4)
+  674.0  The Trials of Qasarasif  (y0–149, 12 beats)
+  532.5  The Trials of Mossorcarr  (y0–149, 12 beats)
+  524.0  The Trials of Altagan  (y0–149, 12 beats)
+  493.0  The Trials of Keshuyar  (y0–149, 12 beats)
+  432.5  The Trials of Roehythe  (y0–150, 12 beats)
+  427.7  The Trials of Olynyra  (y63–149, 12 beats)
+  398.1  The Trials of Mossahythe  (y66–149, 12 beats)
+  377.9  The Trials of Yeworhythe  (y51–146, 12 beats)
+
+---- checks ----------------------------------------------------------
+[FAIL] every event carries an id                     98.6%   (M6.1 gate: ids = 100%)
+[PASS] every carried id is valid                     0 bad   (ids index the registry)
+[PASS] events mappable (coords)                      97.8%   (most entries can fly the camera)
+[PASS] loud events carry a legend                3242/3242   (M6.9: two-layer telling on weight ≥ 3)
+[PASS] closed entities carry a fate              0 unfated   (every ending is written)
+[PASS] stories per century                            32.0   (M6.5 gate: the sifter yields)
+[PASS] sifter deterministic                      identical   (same log ⇒ same stories)
+[PASS] no duplicate stories                         0 dups   (dedup bounds hold)
+[PASS] a reversal story found                          yes   (M6.7: fortunes turn on the record)
+[PASS] relics wrought                                   14   (M6.3: artifacts enter the world)
+[PASS] epithets earned                                 166   (M6.8: names are coined in the field)
+[PASS] chronicle unbounded                            8743   (no truncation: the full log persists)
+CHECKS: 11 pass · 0 warn · 1 fail

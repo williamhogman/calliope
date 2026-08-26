@@ -1,0 +1,45 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · SYSTEM LATTICE               seed 12345 · 512² · 150y
+========================================================================
+ 150y ticked in 7914 ms · 99 towns · 8743 events
+
+ system            cadence  calls   total ms   share   writes     serial
+ towns             monthly   1800     2369.2   30.0%   P·R        yes
+ drought           monthly   1800      103.1    1.3%   P·R        yes
+ famine            monthly   1800       82.9    1.0%   Q·P·C      yes
+ quakes            monthly   1800        1.0    0.0%   V·P·G·C    yes
+ volcanoes         monthly   1800        0.9    0.0%   P·C        yes
+ storms            monthly   1800      342.3    4.3%   P·R        yes
+ colonize          monthly   1800     2796.9   35.4%   D·R        yes
+ prospect          monthly   1800      307.6    3.9%   P·D·R      yes
+ rush-camps        monthly   1800      107.1    1.4%   P          yes
+ goods              1/12mo    150        5.7    0.1%   N·R        yes
+ exonyms           1/120mo     15        0.5    0.0%   P·R        yes
+ society           monthly   1800       65.2    0.8%   –          -
+ census            monthly   1800        7.3    0.1%   E          -
+ market-areas      monthly   1800        6.6    0.1%   P·R        yes
+ crafts            monthly   1800       44.4    0.6%   E·P·R      yes
+ economy           monthly   1800      100.8    1.3%   E·P·C·R    yes
+ merchants         monthly   1800       19.6    0.2%   P·C·G·R    yes
+ statecraft        monthly   1800      287.2    3.6%   P·N·R      yes
+ kindred            1/12mo    150        3.0    0.0%   P·R        yes
+ union              1/12mo    150        0.4    0.0%   P·C·R      yes
+ civ                1/12mo    150        1.6    0.0%   P·C·N·R    yes
+ patina            monthly   1800       17.9    0.2%   G          -
+ territory         monthly   1800     1226.7   15.5%   C·P·R      yes
+ chronicle         monthly   1800        2.6    0.0%   C·R        yes
+ relics            monthly   1800        1.1    0.0%   C          -
+ second-reading    monthly   1800        5.6    0.1%   C          -
+ veil              monthly   1800        0.7    0.0%   –          -
+
+---- checks ----------------------------------------------------------
+[FAIL] the lane ran to completion                 exit 134   (M77: the report does not end in a CHECKS line — the lane was cut off, so nothing below its last printed row was measured)
+ stderr: 
+ stderr: thread 'main' (29936) panicked at src/bin/diagnose.rs:10049:38:
+ stderr: index out of bounds: the len is 27 but the index is 27
+ stderr: stack backtrace:
+ stderr:    0: __rustc::rust_begin_unwind
+ stderr:    1: core::panicking::panic_fmt
+ stderr:    2: core::panicking::panic_bounds_check
+ stderr:    3: diagnose::cmd_systems
+CHECKS: 0 pass · 0 warn · 1 fail
