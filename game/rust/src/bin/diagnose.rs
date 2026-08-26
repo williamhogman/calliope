@@ -1503,6 +1503,8 @@ struct RunLog {
     /// Did the living-people count ever rise year-on-year? (Fusion — the
     /// falling half — is judged on the 300y patina clock, not here.)
     peoples_rose: bool,
+    /// M80 — every drought the chronicle announced, by the name it spoke.
+    drought_named: Vec<String>,
 }
 
 /// Advance `years` in 12-month ticks, logging everything worth judging.
@@ -1556,6 +1558,9 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
             }
             if e.text.contains("mining camp") {
                 log.camps += 1;
+            }
+            if e.k == calliope::event::EventKind::Drought {
+                log.drought_named.push(e.s.clone());
             }
             match e.k.name() {
                 "discovery" => log.strikes += 1,

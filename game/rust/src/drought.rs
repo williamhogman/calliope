@@ -103,6 +103,11 @@ pub struct DroughtEvent {
     /// Fine-grid anchor: the centroid at onset.
     pub x: i64,
     pub y: i64,
+    /// The deepest node at onset, in fine-grid cells — a point the sky's
+    /// own arithmetic must call dry, so the harness can re-derive the
+    /// event from the seed without trusting this ledger.
+    pub ax: i64,
+    pub ay: i64,
     /// Per-year ledger: `(year, nodes, cx, cy, jaccard-with-last-year)`.
     /// The first row carries jaccard 1.0 by definition.
     pub years: Vec<(i64, usize, f64, f64, f64)>,
@@ -202,8 +207,9 @@ impl Droughts {
         let mut s = String::new();
         for e in &self.events {
             s.push_str(&format!(
-                "{}|{}|{}|{}|{:.4}|{}|{}|{}|{}\n",
-                e.id, e.name, e.start_year, e.last_year, e.peak, e.peak_nodes, e.onset_nodes, e.x, e.y
+                "{}|{}|{}|{}|{:.4}|{}|{}|{}|{}|{}|{}\n",
+                e.id, e.name, e.start_year, e.last_year, e.peak, e.peak_nodes, e.onset_nodes,
+                e.x, e.y, e.ax, e.ay
             ));
         }
         crate::util::fnv1a64(s.as_bytes())
@@ -371,9 +377,13 @@ impl World {
             let nodes = cells.len();
             let (mut sx, mut sy) = (0.0f64, 0.0f64);
             let mut peak = 0.0f64;
+            let mut deep = cells[0];
             for &cell in cells {
                 sx += ((cell % d.cols) * STRIDE) as f64;
                 sy += ((cell / d.cols) * STRIDE) as f64;
+                if (d.index[cell] as f64) < peak {
+                    deep = cell;
+                }
                 peak = peak.min(d.index[cell] as f64);
             }
             let (cx, cy) = (sx / nodes as f64, sy / nodes as f64);
@@ -405,6 +415,8 @@ impl World {
                         onset_nodes: nodes,
                         x: cx.round() as i64,
                         y: cy.round() as i64,
+                        ax: ((deep % d.cols) * STRIDE) as i64,
+                        ay: ((deep / d.cols) * STRIDE) as i64,
                         years: vec![(year, nodes, cx, cy, 1.0)],
                         announced: true,
                         prev: cells.clone(),
