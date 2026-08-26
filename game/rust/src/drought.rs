@@ -224,7 +224,9 @@ impl Droughts {
             owner: vec![-1; rows * cols],
             events: Vec::new(),
             year: i64::MIN,
+            norm: 0.0,
             taken: HashSet::new(),
+
         }
     }
 
