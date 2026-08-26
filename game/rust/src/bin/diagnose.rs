@@ -9981,11 +9981,15 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
     // Walls each system writes, by inspection of systems.rs bodies.
     // P=peoples · E=economy · C=chronicle · G=grids · D=deposits ·
     // N=names/features · R=draws the one rng stream · Q=seismic ledger
+    // · U=drought ledger
     // (own stream, order-free — M22) · –=scratch only.
     // A system is SERIAL if it writes Peoples or draws the RNG: the single
     // PCG stream is a total order — determinism law makes it unsplittable.
     const ACCESS: &[(&str, &str, bool)] = &[
         ("towns", "P·R", true),
+        // M80: pure seed×cell×year mapping writes only the drought ledger
+        // and emits its onset event; it neither touches Peoples nor draws RNG.
+        ("drought", "U·C", false),
         ("famine", "P·R", true),
         // Q=seismic ledger (own stream). M24: the effects pass also
         // damages Peoples and fells towns into the chronicle: serial.
