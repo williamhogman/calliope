@@ -1,0 +1,10 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · TELECONNECTION               512x512 · 5 seeds · 120 y
+========================================================================
+the tilted belts · cross-hemisphere trade-belt rain, forced vs counterfactual  (M75)
+
+ seed        r(N,S) forced  r(N,S) osc=0   dN-S warm   dN-S cold   |resid| max   warm y  cold y
+ 12345            -0.987          0.024       0.2721     -0.2174       5.6e-17      53      53
+ 777              -0.953         -0.021       0.1405     -0.1546       5.6e-17      42      44
+ 31337            -0.989         -0.033       0.2826     -0.2598       5.6e-17      49      55
+ 90210            -0.994          0.100       0.3577     -0.3393       1.1e-16      48      59
