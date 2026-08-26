@@ -375,8 +375,29 @@ impl World {
             // ground enters only after crossing SPI -1. This stops a named
             // footprint annexing a different merely-parched margin each
             // year while preserving the exact 12-year index beneath it.
-            let core = cells.iter().filter(|&&i| d.index[i] as f64 <= DROUGHT_Z).count();
             let inherited = cells.iter().any(|&i| prev_owner[i] >= 0);
+            if inherited {
+                // A named drought may advance into newly failed ground, but
+                // only along its existing edge. Without this rate limit, a
+                // one-node bridge across the entry mask annexed a remote dry
+                // core in one year: the sky's mask retained 0.35 of its area,
+                // while the named footprint retained only 0.21. One lattice
+                // step is 32 km/year — movement, not teleportation.
+                cells.retain(|&i| {
+                    if prev_owner[i] >= 0 {
+                        return true;
+                    }
+                    let (cy, cx) = (i / d.cols, i % d.cols);
+                    (cy > 0 && prev_owner[i - d.cols] >= 0)
+                        || (cy + 1 < d.rows && prev_owner[i + d.cols] >= 0)
+                        || (cx > 0 && prev_owner[i - 1] >= 0)
+                        || (cx + 1 < d.cols && prev_owner[i + 1] >= 0)
+                });
+                if cells.len() < MIN_NODES {
+                    continue;
+                }
+            }
+            let core = cells.iter().filter(|&&i| d.index[i] as f64 <= DROUGHT_Z).count();
             if core >= MIN_CORE || inherited {
                 regs.push((cells, core >= MIN_CORE));
             }
