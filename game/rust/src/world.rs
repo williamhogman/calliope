@@ -226,6 +226,11 @@ pub struct World {
     /// harbour a storm actually broke. Diagnostics ledger and the gate's
     /// evidence; bounded, never on the wire.
     pub storm_marks: Vec<(i64, SettlementId, f64)>,
+    /// M80 — the drought ledger: the accumulated-shortfall lattice and
+    /// every named drought the world has lived through. The index itself
+    /// is derived (a pure read of the sky); the *events* — names, spans,
+    /// ground — are state, and ride the replay identity line.
+    pub droughts: crate::drought::Droughts,
     /// M79 — local strike history at event strength, before an existing
     /// harbour wound is added. Permanent felling reads this ledger's
     /// empirical severe-hit return interval; bounded and deterministic.
@@ -1109,6 +1114,7 @@ impl GenBuilder {
             storm_now: Vec::new(),
             storm_prev: Vec::new(),
             storm_marks: Vec::new(),
+            droughts: crate::drought::Droughts::default(),
             storm_bites: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             storm_fell_probe: Vec::new(),

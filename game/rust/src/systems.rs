@@ -118,6 +118,7 @@ pub trait System: Sync {
 /// The month, top to bottom. Reordering is a balance change.
 pub static SYSTEMS: &[&dyn System] = &[
     &Towns,
+    &Drought,
     &Famine,
     &Quakes,
     &Volcanoes,
@@ -158,6 +159,24 @@ impl System for Towns {
         let w = &mut *ctx.world;
         let evs = w.tick_month(w.month);
         sink.emit(evs);
+    }
+}
+
+/// M80 — the failed year named: the accumulated drought field is mapped
+/// over the land, regions are carried forward year to year, and a new one
+/// is named once. Runs before the harvest verdict so a famine and the
+/// drought it belongs to are the same year's reading.
+struct Drought;
+impl System for Drought {
+    fn name(&self) -> &'static str {
+        "drought"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        if w.month.rem_euclid(12) == 7 {
+            let evs = w.drought_pass(w.month);
+            sink.emit(evs);
+        }
     }
 }
 

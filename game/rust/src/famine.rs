@@ -31,7 +31,6 @@ impl World {
         // carries. z ≤ −1 is meteorological drought anywhere on Earth, and
         // because the spread is latitude-shaped the same threshold means
         // the same thing in the tropics and on the steppe.
-        let rows = self.fields.tmean.dim().0 as f64;
         // Read every inhabited point before populations move. Besides keeping
         // the later mutation walk borrow-clean, this pays for each town's sky
         // once and lets the kin search reuse the same standardized value.
@@ -40,9 +39,11 @@ impl World {
             .settlements
             .iter()
             .map(|s| {
-                let lat = (-90.0 + (s.y as f64) * 180.0 / (rows - 1.0)).abs();
-                let sigma = crate::climate::anomaly_amp_p(lat).max(1e-6);
-                self.year_rain_anomaly_site(year, s.y as usize, s.x as usize) / sigma
+                // M80 — the ground remembers. What decides the harvest is
+                // no longer this year's rain alone but the accumulated
+                // shortfall of the years behind it (`drought::MEM`),
+                // renormalized so the SPI threshold keeps its meaning.
+                self.drought_index(year, s.y as usize, s.x as usize)
             })
             .collect();
         let mut migrations: Vec<(usize, i64)> = Vec::new();

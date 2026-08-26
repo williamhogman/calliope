@@ -59,6 +59,9 @@ pub enum EventKind {
     /// record, felled towns and all. Appended last; wire discriminants
     /// hold.
     Eruption,
+    /// M80 — the failed year named: a multi-year drought takes hold over
+    /// named ground. Appended last; wire discriminants hold.
+    Drought,
 }
 
 impl EventKind {
@@ -116,6 +119,7 @@ event_table! {
     Era       => family realm,   weight 4, fortune 0;
     Quake     => family nature,  weight 3, fortune -1;
     Eruption  => family nature,  weight 3, fortune -1;
+    Drought   => family nature,  weight 3, fortune -1;
 }
 
 /// E5.5 — inline storage for the common 0–2 entity ids per event.
@@ -168,6 +172,7 @@ pub fn headline_worthy(k: EventKind) -> bool {
             | EventKind::Era
             | EventKind::Quake
             | EventKind::Eruption
+            | EventKind::Drought
     )
 }
 
