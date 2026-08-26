@@ -3,8 +3,6 @@
 ========================================================================
 chronicle: 8719 entries over 150y (58.1/y)
   ids on 100.0% · coords on 98.0% · legend layer on 3113/3113 loud entries
-  ID-LESS: disaster ×1
-    m1800 [disaster] Deldostoma — Plague stalks the streets of Deldostoma — 386 souls perish.
 cast: artifact 20+0† · civilization 1+2† · culture 13+0† · feature 94+0† · good 36+0† · person 16+212† · realm 15+22† · ruin 1+0† · settlement 103+1† · war 2+34† · world 1+0†
 epithets earned: 182  (Tamimbar "the Young", Thalshade "the Young", Arikos "the Unlucky", Dzunachi "the Wise")
 artifacts: 20 wrought · 18 held · 2 lost
@@ -20,7 +18,7 @@ stories sifted: 48 (bloody-circlet ×10 · empire-arc ×2 · high-noon ×1 · mi
   387.5  The Trials of Roehythe  (y0–149, 12 beats)
 
 ---- checks ----------------------------------------------------------
-[FAIL] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
+[PASS] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
 [PASS] every carried id is valid                     0 bad   (ids index the registry)
 [PASS] events mappable (coords)                      98.0%   (most entries can fly the camera)
 [PASS] loud events carry a legend                3113/3113   (M6.9: two-layer telling on weight ≥ 3)
@@ -32,4 +30,4 @@ stories sifted: 48 (bloody-circlet ×10 · empire-arc ×2 · high-noon ×1 · mi
 [PASS] relics wrought                                   20   (M6.3: artifacts enter the world)
 [PASS] epithets earned                                 182   (M6.8: names are coined in the field)
 [PASS] chronicle unbounded                            8719   (no truncation: the full log persists)
-CHECKS: 11 pass · 0 warn · 1 fail
+CHECKS: 12 pass · 0 warn · 0 fail
