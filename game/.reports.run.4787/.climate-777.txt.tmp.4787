@@ -1,0 +1,44 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · CLIMATE                      seed 777 · 640x512
+========================================================================
+biome shares of land:
+  Desert                     23805  20.1%
+  Savanna                    20974  17.7%
+  Tropical Rainforest        13868  11.7%
+  Grasslands                 12134  10.3%
+  Woodlands                   8896  7.5%
+  Seasonal Rainforest         1224  1.0%
+  Temperate Rainforest        1854  1.6%
+  Boreal Forest                600  0.5%
+  Tundra                     21469  18.1%
+  Ice                         8920  7.5%
+  Wet Tundra                  2611  2.2%
+land temperature °C: mean 7.3 · p10 -8.7 · p50 8.9 · p90 20.8
+land precipitation mm/yr: mean 818 · p10 164 · p50 394 · p90 2281
+seasonal swing |amp| °C: mean 5.7 · p90 9.4
+land freezing in deep winter: 44.0%
+latitude bands (land only):
+  band          cells   T mean    P mean  dominant biome
+  90°–60°       12618    -7.7C     299mm  Tundra
+  60°–30°       23920     4.7C     646mm  Desert
+  30°–0°        25002    17.4C    1206mm  Savanna
+  0°–30°        23457    16.7C    1255mm  Savanna
+  30°–60°       23501     4.8C     649mm  Desert
+  60°–90°        9831    -9.5C     271mm  Ice
+monsoon |amp| of annual rain: tropics 0.30 · extratropics 0.01
+
+sea ice (M37): 17.2% of ocean area ever frozen (42.8% of cells) · perennial 66415 cells · seasonal fringe 23097 cells · pack reaches 53°
+
+crop packages of the land: wheat 18.0% · rice 3.1% · maize 9.5% · pastoral 33.7% · wildland 35.6%
+
+current-aware rain (M42): sub-polar cold-rim land 463 cells at 0.45× its aspect-matched coast · warm-rim 510 cells at 1.01× · 262 delta-flat cells excluded
+  by wind belt: cold trades 1.00× (0) · westerlies 0.45× (463) · polar 0.96× (705)
+  by wind belt: warm trades 1.00× (130) · westerlies 1.02× (380) · polar 0.76× (4)
+
+upwelling (M47): 287 of 4366 coastline cells nutrient-rich (6.6%) · index p50 0.00 · p90 0.21 · marked rims -0.12°C against their own latitude's coast
+
+interannual variability (M71) · 60 years · land cells only:
+  belt                         σ T (°C)   declared σ σ rain unforced σ rain total
+  tropics (<23.5°)                0.368        0.377          0.094        0.115
+  mid-latitudes (23.5–55°)        0.719        0.735          0.128        0.131
+  polar (>55°)                    1.213        1.245          0.177        0.177
