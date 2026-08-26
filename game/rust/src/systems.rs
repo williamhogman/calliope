@@ -119,6 +119,7 @@ pub trait System: Sync {
 pub static SYSTEMS: &[&dyn System] = &[
     &Towns,
     &Drought,
+    &Flood,
     &Famine,
     &Quakes,
     &Volcanoes,
@@ -175,6 +176,23 @@ impl System for Drought {
         let w = &mut *ctx.world;
         if w.month.rem_euclid(12) == 7 {
             let evs = w.drought_pass(w.month);
+            sink.emit(evs);
+        }
+    }
+}
+
+/// M81 — the river that drowns and gives: the year's realized stage
+/// against each river town's levees. Runs in the spate month, before the
+/// harvest verdict, and the silt it lays is dated to the season after.
+struct Flood;
+impl System for Flood {
+    fn name(&self) -> &'static str {
+        "flood"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        if w.month.rem_euclid(12) == 3 {
+            let evs = w.flood_pass(w.month);
             sink.emit(evs);
         }
     }
