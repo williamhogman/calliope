@@ -261,7 +261,7 @@ impl crate::world::World {
                 year,
                 x,
                 y,
-                sid: sid.0,
+                sid: sid.0 as usize,
                 pop,
                 factor,
                 cap,
