@@ -15,7 +15,8 @@ use crate::chronicle::{self, ChronicleState};
 use crate::climate;
 use crate::culture::{self};
 use crate::drought::{
-    DroughtEvent, Droughts, DRY_HOLD, FORMS, MEM, MEMO_YEARS, MIN_CORE, MIN_NODES, NODE_KM2, NORM,
+    DroughtEvent, Droughts, CAL_STRIDE, CAL_YEARS, DRY_HOLD, FORMS, MEM, MEMO_YEARS, MIN_CORE,
+    MIN_NODES, NODE_KM2, NORM,
     STRIDE,
 };
 use crate::economy::{self, Market};
@@ -3846,7 +3847,9 @@ impl World {
         let year = month_abs / 12;
         let mut d = std::mem::take(&mut self.droughts);
         if d.rows == 0 {
+            let norm = d.norm;
             d = Droughts::new(&self.fields.height);
+            d.norm = norm; // the calibration survives the lazy build
         }
         let out = self.drought_map(&mut d, year, month_abs);
         self.droughts = d;
@@ -3893,7 +3896,7 @@ impl World {
                 acc += w * g[i] as f64;
                 w *= MEM;
             }
-            d.index[i] = (acc * NORM) as f32;
+            d.index[i] = (acc * self.drought_norm()) as f32;
         }
 
         // Two thresholds, not one (hysteresis). A drought must ENTER on
