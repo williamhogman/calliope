@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-25 20:31 UTC
+mode: full · size: 512 · generated: 2026-08-26 07:37 UTC
 
-totals: 1284 pass · 32 warn · 4 fail
+totals: 1279 pass · 34 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -12,11 +12,8 @@ totals: 1284 pass · 32 warn · 4 fail
 -- bench.txt
 [WARN] median tick payload                          6797 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
--- browser.txt
-   all checks pass
-
 -- build.txt
-[WARN] wasm binary size                              3564981 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
+[WARN] wasm binary size                              3565003 B   (sweet ≤3.0 MiB · hard ≤3.4 MiB (E6.4))
 
 -- civ-12345.txt
 [WARN] assimilation cadence                 0.7 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
@@ -51,7 +48,7 @@ totals: 1284 pass · 32 warn · 4 fail
    all checks pass
 
 -- compute.txt
-   all checks pass
+[WARN] coast law cpu ms                             136 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
 
 -- determinism.txt
    all checks pass
@@ -69,8 +66,7 @@ totals: 1284 pass · 32 warn · 4 fail
 [WARN] landform oatmeal floor                       0.0015   (M64: the landform mix differs between worlds — the closest pair stays distinct)
 
 -- gate.txt
-[FAIL] the suite composes clean             2 fail · 32 warn · 1275 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
-[FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
+   all checks pass
 
 -- hydro-12345.txt
 [WARN] oasis share of arid land %                    25.7%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
@@ -97,10 +93,10 @@ totals: 1284 pass · 32 warn · 4 fail
 [WARN] ruins per century (after y100)                19.83   (M9.1 gate: mature worlds carry ruins)
 
 -- perf.txt
-[WARN] stage fertility ms                   162 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] gen total ms                         2605 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 0                     682 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[FAIL] tick rate year 100                   99 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   124 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] gen total ms                         2396 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     754 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   105 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
@@ -132,7 +128,7 @@ totals: 1284 pass · 32 warn · 4 fail
    all checks pass
 
 -- telling-12345.txt
-[FAIL] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
+   all checks pass
 
 -- terrain-12345.txt
    all checks pass
