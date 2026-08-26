@@ -545,7 +545,11 @@ SUM="$OUT/SUMMARY.txt"
 
 for f in "$OUT"/*.txt; do
   [ -e "$f" ] || continue
-  mv -f "$f" "$FINAL_OUT/$(basename "$f")"
+  # staging may sit on another filesystem, so copy into the destination
+  # directory first and rename in place — the reader never sees a partial file
+  cp -f "$f" "$FINAL_OUT/.pub.$(basename "$f").$$"
+  mv -f "$FINAL_OUT/.pub.$(basename "$f").$$" "$FINAL_OUT/$(basename "$f")"
+  rm -f "$f"
 done
 rmdir "$OUT" 2>/dev/null || true
 PUBLISHED=1
