@@ -14,10 +14,15 @@ use crate::biomes as biomes_mod;
 use crate::chronicle::{self, ChronicleState};
 use crate::climate;
 use crate::culture::{self};
+use crate::drought::{
+    DroughtEvent, Droughts, DRY_HOLD, FORMS, MEM, MEMO_YEARS, MIN_CORE, MIN_NODES, NODE_KM2, NORM,
+    STRIDE,
+};
 use crate::economy::{self, Market};
 use crate::entity::EntityKind;
 use crate::entity::Registry;
 use crate::erosion;
+use crate::famine::DROUGHT_Z;
 use crate::geo;
 use crate::hydrology;
 use crate::ids::{EntityId, PeopleId, RealmId, SettlementId};

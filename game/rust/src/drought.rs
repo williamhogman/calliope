@@ -39,10 +39,6 @@
 
 use std::collections::HashSet;
 
-use crate::climate;
-use crate::event::{Event, EventKind};
-use crate::famine::DROUGHT_Z;
-use crate::world::World;
 
 /// How much of last year's shortfall the ground still carries. 0.5: the
 /// weight of a year halves annually — a two-year memory in the sense that
@@ -87,7 +83,7 @@ pub const NODE_KM2: f64 = (STRIDE * STRIDE * 16) as f64;
 
 /// Name forms. `{P}` is the ground the drought sits on — the nearest
 /// named feature or town, so the name is the map's, not a bank's.
-const FORMS: [&str; 6] = [
+pub(crate) const FORMS: [&str; 6] = [
     "the Withering of {P}",
     "the Long Thirst of {P}",
     "the Dust Years of {P}",
@@ -171,7 +167,7 @@ pub struct Droughts {
     pub events: Vec<DroughtEvent>,
     /// The last year mapped (`i64::MIN` before the first pass).
     pub year: i64,
-    taken: HashSet<String>,
+    pub(crate) taken: HashSet<String>,
 }
 
 impl Droughts {
