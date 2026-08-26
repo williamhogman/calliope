@@ -21,6 +21,7 @@ pub mod entity;
 pub mod erosion;
 pub mod event;
 pub mod explain;
+pub mod drought;
 pub mod famine;
 pub mod geo;
 pub mod grid;
