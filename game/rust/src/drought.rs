@@ -319,7 +319,7 @@ impl World {
         let hold: Vec<bool> =
             (0..n).map(|i| d.land[i] && d.index[i] as f64 <= DRY_HOLD).collect();
         let mut seen = vec![false; n];
-        let mut regions: Vec<Vec<usize>> = Vec::new();
+        let mut regs: Vec<(Vec<usize>, bool)> = Vec::new();
         for start in 0..n {
             if !hold[start] || seen[start] {
                 continue;
