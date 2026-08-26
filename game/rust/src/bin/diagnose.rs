@@ -5559,25 +5559,32 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             "M80 gate: the chronicle speaks each drought's name exactly once, in the year it takes hold — no duplicates, no silent droughts",
         );
         // Re-derivation: the ledger claims dry ground; the sky's own
-        // arithmetic, recomputed here from the seed, must agree at every
-        // event's deepest node in every year it held.
+        // arithmetic, recomputed here from the seed, must agree at that
+        // year's deepest node. The onset year is judged on the entering
+        // contour (SPI −1, the harvest verdict's own line); a holding
+        // year is judged on the holding contour it actually claims.
         let mut checked = 0usize;
         let mut agree = 0usize;
         for e in &ds.events {
             for &(yr, _, _, _, _, ax, ay) in &e.years {
                 checked += 1;
-                if didx(yr, ax, ay) <= calliope::famine::DROUGHT_Z + 1e-9 {
+                let line = if yr == e.start_year {
+                    calliope::famine::DROUGHT_Z
+                } else {
+                    calliope::drought::DRY_HOLD
+                };
+                if didx(yr, ax, ay) <= line + 1e-9 {
                     agree += 1;
                 }
             }
         }
-
         c.must(
             "the ledger answers to the sky",
             checked > 0 && agree == checked,
             format!("{}/{} drought-years re-derived dry from the seed alone", agree, checked),
             "M80: the named event is a reading of the accumulated rain, re-computable from seed × cell × year with no stored per-cell state",
         );
+
         // The causal claim: memory is load-bearing. How many famines stood
         // in a year whose *own* rain was not drought — a harvest that only
         // failed because the years behind it had already emptied the ground.
