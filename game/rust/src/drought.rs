@@ -491,3 +491,20 @@ impl World {
 fn row_lat(rows: usize, y: usize) -> f64 {
     (-90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0)).abs()
 }
+
+/// Diagnostics bands (M80). Both are shape claims about the failed year
+/// as an *event*, not about any one world's luck.
+pub const BANDS: &[crate::util::Band] = &[
+    crate::util::Band {
+        name: "drought carry-over share of famines",
+        sweet: (0.05, 0.60),
+        hard: (0.01, 0.85),
+        target: "M80: memory is load-bearing but not sovereign — some harvests fail on the years behind them, most still on the year itself",
+    },
+    crate::util::Band {
+        name: "named droughts per century",
+        sweet: (3.0, 40.0),
+        hard: (1.0, 90.0),
+        target: "M80: a drought is a generational event the chronicle can carry, not annual weather",
+    },
+];

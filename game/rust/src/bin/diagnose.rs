@@ -5605,6 +5605,8 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             "M80: persistence is load-bearing — remove the memory and these harvests would not have failed",
         );
         c.band("drought carry-over share of famines", share, format!("{:.2}", share));
+        let per_c = ds.events.len() as f64 * 100.0 / (years.max(1) as f64);
+        c.band("named droughts per century", per_c, format!("{:.1}", per_c));
     }
 
     // ---- M72: the year that was — one sky over harvest, flow and famine ----
