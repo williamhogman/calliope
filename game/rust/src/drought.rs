@@ -431,7 +431,16 @@ impl World {
                     e
                 }
                 None => {
+                    // Orphaned holding ground: a region whose ancestor was
+                    // already claimed by a larger sibling and which never
+                    // reached a failing core of its own is not a drought —
+                    // it is the parched margin of one. It goes unowned and
+                    // unnamed rather than minting a name for a wet year.
+                    if !cored[ri] {
+                        continue;
+                    }
                     let id = d.events.len();
+
                     let (name, place) = self.name_drought(&mut d.taken, id, cx, cy);
                     d.events.push(DroughtEvent {
                         id,
