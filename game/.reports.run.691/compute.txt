@@ -1,0 +1,7 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · COMPUTE                      M67 lane · size 512
+========================================================================
+ adapter: Vulkan · llvmpipe (LLVM 21.1.7, 256 bits) · Cpu
+ fixture 96×64: gpu 81.5 ms · cpu twin 0.9 ms · 6144 cells
+ seed 12345: grid 640×512 · coast law cpu 91 ms · max |jfa−exact| 0.938 cells · 19 of 212051 sea cells miss (0.0%)
+ seed 777: grid 640×512 · coast law cpu 89 ms · max |jfa−exact| 0.592 cells · 17 of 209351 sea cells miss (0.0%)
