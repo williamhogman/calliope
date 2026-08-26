@@ -413,7 +413,10 @@ impl World {
         // splits, the larger half keeps the name and the other half is a
         // new failed year of its own.
 
-        let mut claimed: HashSet<usize> = HashSet::new();
+        // Event ids are dense indices into `d.events`; a byte ledger says
+        // the same thing as a temporary HashSet without shipping a second
+        // hash-table monomorphization in the wasm engine.
+        let mut claimed = vec![false; d.events.len()];
         let mut assign: Vec<Option<usize>> = vec![None; regions.len()];
         let mut order: Vec<usize> = (0..regions.len()).collect();
         order.sort_by_key(|&i| (std::cmp::Reverse(regions[i].len()), regions[i][0]));
@@ -427,11 +430,11 @@ impl World {
             }
             let best = tally
                 .iter()
-                .filter(|(e, _)| !claimed.contains(*e))
+                .filter(|(e, _)| !claimed[**e])
                 .max_by_key(|(e, n)| (**n, std::cmp::Reverse(**e)))
                 .map(|(e, _)| *e);
             if let Some(e) = best {
-                claimed.insert(e);
+                claimed[e] = true;
                 assign[ri] = Some(e);
             }
         }
@@ -458,8 +461,23 @@ impl World {
 
             let idx = match assign[ri] {
                 Some(e) => {
-                    let prev: HashSet<usize> = d.events[e].prev.iter().copied().collect();
-                    let inter = cells.iter().filter(|c| prev.contains(c)).count();
+                    // Both footprints are kept in ascending lattice order.
+                    // Intersect them directly instead of materializing a
+                    // one-year hash table; this preserves the exact Jaccard
+                    // and removes harness-shaped weight from the web build.
+                    let prev = &d.events[e].prev;
+                    let (mut a, mut b, mut inter) = (0usize, 0usize, 0usize);
+                    while a < cells.len() && b < prev.len() {
+                        match cells[a].cmp(&prev[b]) {
+                            std::cmp::Ordering::Less => a += 1,
+                            std::cmp::Ordering::Greater => b += 1,
+                            std::cmp::Ordering::Equal => {
+                                inter += 1;
+                                a += 1;
+                                b += 1;
+                            }
+                        }
+                    }
                     let union = prev.len() + nodes - inter;
                     let jac = if union == 0 { 0.0 } else { inter as f64 / union as f64 };
                     let ev = &mut d.events[e];
