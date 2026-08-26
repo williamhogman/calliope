@@ -16,11 +16,15 @@ RUST_DIR=game/rust
 OUT=game/reports/wasm-audit.txt
 
 echo "== building symbolized twin (--profiling) =="
+# M80 — the twin must be compiled with the same codegen flags as the
+# shipped binary (-Oz on the wasm target only; the release profile is -O3
+# for native), or the E6.6 twin-vs-release row stops speaking for it.
+export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C opt-level=z"
 if command -v wasm-pack >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1; then
   (cd "$RUST_DIR" && wasm-pack build --target web --profiling --out-dir pkg-prof)
 else
   nix shell nixpkgs#rustc nixpkgs#cargo nixpkgs#lld nixpkgs#binaryen nixpkgs#wasm-pack -c \
-    bash -c "cd '$RUST_DIR' && wasm-pack build --target web --profiling --out-dir pkg-prof"
+    bash -c "cd '$RUST_DIR' && RUSTFLAGS='$RUSTFLAGS' wasm-pack build --target web --profiling --out-dir pkg-prof"
 fi
 
 REL=game/web/js/wasm/calliope_bg.wasm

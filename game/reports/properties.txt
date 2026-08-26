@@ -22,7 +22,7 @@ seed    777: silt ladder ≥1/5/10 m: 37.4/4.5/2.16% of land · plain 423 bodies
 seed    777: coast frontage 6570 cells · storied 52.5% · [raised beach 2791 · fjord 53 · tidal flat 37 · estuary 21 · delta plain 454 · spit 89 · barrier island 5 · lagoon 2] · shore 3118
 
 seed  90210: 5155 river cells · 0 uphill · 0 cycles · 0 dry terminals
-seed  90210: 17 towns · 24 routes · 0 isolated · 1 components
+seed  90210: 17 towns · 25 routes · 0 isolated · 1 components
 seed  90210: rain ×1.25 ⇒ river cells 5155 → 6055 · discharge 2108990 → 2649609
 seed  90210: hypsometry mean 861 m · below 1 km 59.8%
 seed  90210: streams (A_c 80 km²) N_k [8439, 1586, 333, 81, 16, 1] · Rb 5.62
@@ -83,12 +83,12 @@ seed  12345: territory over 240 months · 13 full ships · 9 tile ships
 [PASS] rivers reach an outlet (90210)                0 dry   (M8.1: sea, lake or salt basin)
 [PASS] no isolated settlement (90210)            0 cut off   (M8.1: every town trades)
 [PASS] route graph connected (90210)               1 comps   (M8.1: one world, one web)
-[PASS] pack is stable (90210)                    7177252 B   (M8.1: same world ⇒ same bytes)
+[PASS] pack is stable (90210)                    7176848 B   (M8.1: same world ⇒ same bytes)
 [PASS] pack v3 + crc32 (90210)                crc 00a36399   (E3.6: stamped and checksummed)
 [PASS] unpack layout sound (90210)               19 arrays   (M8.1: offsets contiguous, sizes exact)
 [PASS] raw sections bit-equal (90210)            bit-equal   (M8.1: arrays survive the wire)
 [PASS] quantization ≤ ε (90210)             worst 0.500·scale   (E3.4: quantized wire loses ≤ half a step)
-[PASS] territory RLE exact (90210)               1107 runs   (E3.5: borders compress, nothing drifts)
+[PASS] territory RLE exact (90210)               1033 runs   (E3.5: borders compress, nothing drifts)
 [PASS] rain↑ ⇒ rivers not↓ (90210)             5155 → 6055   (M8.2: metamorphic monotonicity)
 [PASS] rain↑ ⇒ discharge↑ (90210)                    ×1.26   (M8.2: more water flows)
 [PASS] land below 1 km % (90210)                     59.8%   (M64: one seed is one continent — Earth's continents run ~50–95% under 1 km)
@@ -112,5 +112,5 @@ seed  12345: territory over 240 months · 13 full ships · 9 tile ships
 [PASS] area prices replay to truth (12345)          1 hubs   (E4.3: per-good hub patches rebuild the areas)
 [PASS] territory replays to truth (12345)   13 full · 9 tiles   (E4.7: full RLE and tile patches must leave the client's grid exactly the engine's)
 [PASS] no unchanged section reships (12345)      0 reships   (E4.2/E4.3: a section crosses only when it moved)
-[PASS] event cursor tiles the log (12345)            → 211   (E4.4: ranges concatenate without gap or overlap)
+[PASS] event cursor tiles the log (12345)            → 228   (E4.4: ranges concatenate without gap or overlap)
 CHECKS: 72 pass · 6 warn · 0 fail

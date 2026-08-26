@@ -78,11 +78,16 @@ gen_js() { # gen_js <dest> [genjs args...]
 
 if [ "$needs_build" = 1 ]; then
   echo "== rebuilding WASM engine =="
+  # M80 — size is a wasm budget, not a law: the release profile stays at
+  # -O3 so the native diagnose harness keeps its E10.1/E10.2 speed, and the
+  # shipped engine gets -Oz here, on the wasm target only. wasm-audit.sh
+  # passes the identical flag to the symbolized twin (E6.6).
+  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C opt-level=z"
   if command -v wasm-pack >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1; then
     (cd "$RUST_DIR" && wasm-pack build --target web --release)
   else
     nix shell nixpkgs#rustc nixpkgs#cargo nixpkgs#lld nixpkgs#binaryen nixpkgs#wasm-pack -c \
-      bash -c "cd '$RUST_DIR' && wasm-pack build --target web --release"
+      bash -c "cd '$RUST_DIR' && RUSTFLAGS='$RUSTFLAGS' wasm-pack build --target web --release"
   fi
   mkdir -p "$(dirname "$GEN")"
   gen_js "$GEN"

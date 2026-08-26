@@ -52,11 +52,17 @@ wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ["HtmlCanvasElement", "console"] }
 
 [profile.release]
-# M80 — optimize the shipped engine for size before Binaryen's existing
-# semantic-preserving convergence pass. Measured on the exact M80 source:
-# 3,601,836 B at LLVM -O3 versus 2,823,768 B at -Oz. The native diagnostics
-# exercise the same laws, while earth-wasm/replay closes cross-runtime identity.
-opt-level = "z"
+# M80 — the shipped engine wants -Oz (3,601,836 B at LLVM -O3 versus
+# 2,823,768 B at -Oz on the exact M80 source), but the native diagnose
+# harness shares this profile and paid 1.8× for it: gen total 2396 → 4237 ms
+# and year-100 tick 105 → 65 mo/s, straight through E10.1/E10.2. Size is a
+# wasm budget, not a law of the simulation, so the profile stays at -O3 for
+# every native build and scripts/build.sh + scripts/wasm-audit.sh pass
+# `-C opt-level=z` through RUSTFLAGS for the wasm target only. Both wasm
+# builds (release and the symbolized twin) must carry the same flag or the
+# E6.6 twin-vs-release row stops speaking for the shipped bytes.
+opt-level = 3
+
 lto = true
 codegen-units = 1
 # E6.2 — no unwind machinery in the shipped binary; nothing in the crate
