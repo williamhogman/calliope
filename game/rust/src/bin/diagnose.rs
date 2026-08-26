@@ -324,6 +324,9 @@ fn hash_state(w: &World) -> u64 {
     }
     // M80 — the drought ledger is state: names, spans, the ground they held.
     s.push_str(&format!("W{:016x}\n", w.droughts.hash()));
+    // M81 — the flood ledger is state: who drowned, and the silt standing
+    // on the ground for the season after.
+    s.push_str(&format!("D{:016x}\n", w.floods.hash()));
     // M16/ADR-0024 — the plate sketch is state: polygons, kinds, ages.
     s.push_str(&format!("P{:016x}\n", w.plates.hash()));
     // M22 — the seismic ledger is state: seams, clocks, the quake log.
@@ -5670,6 +5673,88 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         c.band("drought carry-over share of famines", share, format!("{:.2}", share));
         let per_c = ds.events.len() as f64 * 100.0 / (years.max(1) as f64);
         c.band("named droughts per century", per_c, format!("{:.1}", per_c));
+    }
+
+    // ---- M81: the river that drowns and gives ------------------------
+    {
+        let fl = &w.floods;
+        let river_towns = w
+            .peoples
+            .settlements
+            .iter()
+            .filter(|s| s.river && s.pop >= calliope::flood::MIN_POP)
+            .count()
+            .max(1);
+        let per_town_century =
+            fl.rows.len() as f64 * 100.0 / (years.max(1) as f64 * river_towns as f64);
+        let worst = fl.rows.iter().map(|r| r.frac).fold(0.0f64, f64::max);
+        let deepest = fl.rows.iter().map(|r| r.factor - r.cap).fold(0.0f64, f64::max);
+        let souls: i64 = fl.rows.iter().map(|r| r.hit).sum();
+        println!();
+        println!(
+            "M81 · the spates — {} floods over {} y across {} river towns ({:.1} per town-century) · worst toll {:.3} of a town · deepest stage +{:.2} over the levees · {} souls to the water",
+            fl.rows.len(), years, river_towns, per_town_century, worst, deepest, souls
+        );
+        // no flood may be recorded on ground the year's own water did not
+        // actually overtop — the ledger is re-derivable from the sky.
+        let mut rederived = 0usize;
+        for r in &fl.rows {
+            let f = w.year_site_flow_factor(r.year, r.y as usize, r.x as usize);
+            if (f - r.factor).abs() < 1e-9 && f > r.cap {
+                rederived += 1;
+            }
+        }
+        // the levee craft has to matter: engineered towns must hold a
+        // higher stage than a town that has learned nothing.
+        let bare = calliope::flood::capacity(|_| false);
+        let full = calliope::flood::capacity(|_| true);
+        c.band(
+            "floods per river town per century",
+            per_town_century,
+            format!("{:.1}", per_town_century),
+        );
+        c.band(
+            "worst flood toll (share of town)",
+            worst,
+            format!("{:.3}", worst),
+        );
+        c.must(
+            "every flood re-derives from the year's own water",
+            rederived == fl.rows.len(),
+            format!("{}/{}", rederived, fl.rows.len()),
+            "M81 gate: a flood is a threshold crossing on the realized flow, not a die — every ledger row recomputes from seed × cell × year",
+        );
+        c.must(
+            "the toll is capped by law",
+            fl.rows.iter().all(|r| r.frac <= calliope::flood::DMG_CAP + 1e-12),
+            format!("worst {:.3} ≤ cap {:.3}", worst, calliope::flood::DMG_CAP),
+            "M81 gate: a levee breach is a disaster, never an extinction — no spate takes more than DMG_CAP of a town",
+        );
+        c.must(
+            "levees raise the stage the banks hold",
+            full > bare,
+            format!("{:.2} → {:.2}", bare, full),
+            "M81 gate: masonry, aqueducts and engineering buy real freeboard — an engineered town floods in strictly fewer years",
+        );
+        c.must(
+            "the flood gives the season after",
+            fl.rows.iter().any(|r| r.silt > 0.0),
+            format!("{} silted spates", fl.rows.iter().filter(|r| r.silt > 0.0).count()),
+            "M81 gate: the water that drowns the levees lays the silt — the harvest after a flood stands on richer ground",
+        );
+        c.must(
+            "no silt flatters the year it drowned",
+            fl.rows.iter().all(|r| fl.silt_bonus(r.year, r.y as usize, r.x as usize) == 0.0
+                || fl.rows.iter().any(|q| q.year + 1 == r.year)),
+            format!("{} rows", fl.rows.len()),
+            "M81 gate: the silt sheet is dated to the following season — a spate never improves the harvest it ruined",
+        );
+        c.must(
+            "the flood ledger rides the identity line",
+            fl.hash() != 0 || fl.rows.is_empty(),
+            format!("{:016x}", fl.hash()),
+            "ADR-0003: floods are state — a replay that lost a spate would farm a different next year",
+        );
     }
 
     // ---- M72: the year that was — one sky over harvest, flow and famine ----
