@@ -359,11 +359,14 @@ impl World {
             let core = cells.iter().filter(|&&i| d.index[i] as f64 <= DROUGHT_Z).count();
             let inherited = cells.iter().any(|&i| prev_owner[i] >= 0);
             if core >= MIN_CORE || inherited {
-                regions.push(cells);
+                regs.push((cells, core >= MIN_CORE));
             }
         }
         // Deterministic order: by the region's lowest node.
-        regions.sort_by_key(|r| r[0]);
+        regs.sort_by(|a, b| a.0[0].cmp(&b.0[0]));
+        let cored: Vec<bool> = regs.iter().map(|r| r.1).collect();
+        let regions: Vec<Vec<usize>> = regs.into_iter().map(|r| r.0).collect();
+
 
         // Inheritance: a region belongs to last year's drought it overlaps
         // most. One ancestor can only be claimed once — where a drought
