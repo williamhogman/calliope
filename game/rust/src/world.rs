@@ -4042,6 +4042,7 @@ impl World {
                             name,
                             (nodes as f64 * NODE_KM2 / 1000.0).max(1.0)
                         ),
+                        ids: subject.into_iter().collect(),
                         x: cx.round() as i64,
                         y: cy.round() as i64,
                         ..Default::default()
