@@ -5234,7 +5234,10 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 acc += wt * dp / sigma;
                 wt *= calliope::drought::MEM;
             }
-            acc * calliope::drought::NORM
+            // M80 follow-up — the re-derivation reads the world's own
+            // published calibration (the sky's real lag structure), not
+            // the independence baseline the constant carries.
+            acc * w.drought_norm()
         };
         let mut zs: Vec<f64> = Vec::with_capacity(log.famine_sites.len());
         for &(m, x, y, _) in &log.famine_sites {
@@ -5461,7 +5464,10 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 acc += wt * dp / sigma;
                 wt *= calliope::drought::MEM;
             }
-            acc * calliope::drought::NORM
+            // M80 follow-up — the re-derivation reads the world's own
+            // published calibration (the sky's real lag structure), not
+            // the independence baseline the constant carries.
+            acc * w.drought_norm()
         };
         // Only droughts that had room to end inside the run are judged on
         // their span: one still burning at the last year is right-censored.
