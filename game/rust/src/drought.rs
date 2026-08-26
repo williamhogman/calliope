@@ -158,7 +158,7 @@ pub struct Droughts {
     /// The last `MEMO_YEARS` standardized rain years over the lattice,
     /// newest first. Derived state: a pure read of the sky, rebuilt from
     /// the seed alone, never hashed and never packed.
-    hist: Vec<Vec<f32>>,
+    pub(crate) hist: Vec<Vec<f32>>,
     /// The accumulated index over the lattice, this year.
     pub index: Vec<f32>,
     /// Which event owns each node this year; `-1` = dry-free ground.
