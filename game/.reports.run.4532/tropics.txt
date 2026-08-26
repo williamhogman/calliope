@@ -1,0 +1,99 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · TROPICS                      512x512 · 5 seeds · 60 y
+========================================================================
+warm-sea fury · cyclones bred on heat and spin, and where they come ashore  (M78)
+
+ · 12345 warm sea: sites N 14566 / S 14022 · spinless N 5188 / S 5160 · warm month N 0 / S 6 (frontal cold month N 6 / S 0) · season count N 4 / S 4
+   genesis by |lat|: 0-10°:161 10-20°:319
+   poleward reach |lat|: p50 19.2° · p90 39.2° · deepest 43.2° · net westward over life 474/480
+   480 tracks · 800.0/century · mean peak 0.44 · mean life 10 d · landfall 34.8% · poleward 98.8% · recurved 119/124
+
+ · 777 warm sea: sites N 14065 / S 13476 · spinless N 4971 / S 5029 · warm month N 0 / S 6 (frontal cold month N 6 / S 0) · season count N 4 / S 4
+   genesis by |lat|: 0-10°:156 10-20°:323 20-30°:1
+   poleward reach |lat|: p50 19.0° · p90 37.4° · deepest 43.6° · net westward over life 474/480
+   480 tracks · 800.0/century · mean peak 0.43 · mean life 9 d · landfall 39.2% · poleward 99.0% · recurved 95/96
+
+ · 31337 warm sea: sites N 15493 / S 14497 · spinless N 5676 / S 5436 · warm month N 0 / S 6 (frontal cold month N 6 / S 0) · season count N 5 / S 4
+   genesis by |lat|: 0-10°:181 10-20°:358 20-30°:1
+   poleward reach |lat|: p50 18.3° · p90 38.1° · deepest 43.8° · net westward over life 535/540
+   540 tracks · 900.0/century · mean peak 0.44 · mean life 9 d · landfall 45.2% · poleward 99.3% · recurved 98/101
+
+ · 90210 warm sea: sites N 15125 / S 14814 · spinless N 5556 / S 5539 · warm month N 0 / S 6 (frontal cold month N 6 / S 0) · season count N 5 / S 4
+   genesis by |lat|: 0-10°:211 10-20°:328 20-30°:1
+   poleward reach |lat|: p50 20.3° · p90 39.0° · deepest 43.3° · net westward over life 534/540
+   540 tracks · 900.0/century · mean peak 0.45 · mean life 10 d · landfall 38.0% · poleward 98.9% · recurved 135/137
+
+ · 555 warm sea: sites N 13989 / S 13393 · spinless N 5096 / S 4884 · warm month N 0 / S 6 (frontal cold month N 6 / S 0) · season count N 4 / S 4
+   genesis by |lat|: 0-10°:186 10-20°:294
+   poleward reach |lat|: p50 19.4° · p90 37.8° · deepest 42.6° · net westward over life 478/480
+   480 tracks · 800.0/century · mean peak 0.44 · mean life 9 d · landfall 38.3% · poleward 99.6% · recurved 98/100
+
+---- checks ----------------------------------------------------------
+[PASS] no cyclone is born on a cold sea · 12345 0 of 480 below 26 °C   (M78 gate: the warm-sea engine runs on surface heat — every genesis cell must stand over water at or above the 26 °C threshold in its own warm month)
+[PASS] no cyclone is born on land · 12345         0 of 480   (M78: a tropical cyclone has no engine without a sea under it)
+[PASS] the equator breeds nothing · 12345   0 inside 5° · 10348 warm cells struck out for want of spin   (M78 gate: within a few degrees of the equator the Coriolis parameter vanishes and the warmest sea on the map cannot close a vortex — the dead band must be empty)
+[PASS] the warm seas keep the cyclone in the tropics · 12345 100.0% in 5-30° · deepest 18.5°   (M78 gate: genesis must fall inside 5-30° in every world — and nothing in storms.rs names a poleward limit, so this is a claim about where this world's 26 °C isotherm lies)
+[PASS] the trades carry the young storm west · 12345 100.0% of 474 that moved at all   (M78 gate: below 30° the zonal wind blows east-to-west, so a storm's first days must move it westward — the same wind_stress field the ocean's gyres read)
+[PASS] the storm climbs out of the tropics · 12345          98.8%   (M78: beta drift and the steering flow carry a cyclone poleward as it ages)
+[PASS] those that leave the trades recurve east · 12345 96.0% of 124 reaching 30°   (M78 gate: a storm that survives into the westerlies must be turned back eastward by them — the recurvature is the wind field's doing, nothing in storms.rs bends a path)
+[PASS] the cool sea starves the engine · 12345 10 d mean life   (M78: cut off from its warm water a tropical cyclone fills within days — a storm that lived for months would mean the fuel term never bit)
+[PASS] the seasons stand half a year apart · 12345 season centre N month 0.4 · S month 6.3 · 5.88 apart   (M78 gate: each hemisphere's cyclones fall in its own warm season, so the two peaks must sit close to six months apart — as the world's seasons do)
+[PASS] the warm-sea season opposes the frontal one · 12345 N warm-sea 0.4 vs frontal 6 · S warm-sea 6.3 vs frontal 0   (M78 gate: the frontal corridor of M77 peaks in the cold season and the warm-sea engine in the hot one — two engines running on opposite terms cannot share a peak month)
+[PASS] nothing poisons the tracks · 12345      9923 points   (M78: a non-finite position or intensity would poison every landfall that reads it)
+[PASS] the warm seas replay · 12345         af8ee883346ee241   (ADR-0003: a cyclone season is a pure function of (seed, year, hemisphere) — it is derived on demand, never stored)
+[PASS] each year draws its own cyclones · 12345  4 vs 4 tracks   (M78: the season is keyed on the year — two identical years would mean the warm seas are a fixture, not weather)
+[PASS] no cyclone is born on a cold sea · 777 0 of 480 below 26 °C   (M78 gate: the warm-sea engine runs on surface heat — every genesis cell must stand over water at or above the 26 °C threshold in its own warm month)
+[PASS] no cyclone is born on land · 777           0 of 480   (M78: a tropical cyclone has no engine without a sea under it)
+[PASS] the equator breeds nothing · 777     0 inside 5° · 10000 warm cells struck out for want of spin   (M78 gate: within a few degrees of the equator the Coriolis parameter vanishes and the warmest sea on the map cannot close a vortex — the dead band must be empty)
+[PASS] the warm seas keep the cyclone in the tropics · 777 100.0% in 5-30° · deepest 20.6°   (M78 gate: genesis must fall inside 5-30° in every world — and nothing in storms.rs names a poleward limit, so this is a claim about where this world's 26 °C isotherm lies)
+[PASS] the trades carry the young storm west · 777 100.0% of 475 that moved at all   (M78 gate: below 30° the zonal wind blows east-to-west, so a storm's first days must move it westward — the same wind_stress field the ocean's gyres read)
+[PASS] the storm climbs out of the tropics · 777          99.0%   (M78: beta drift and the steering flow carry a cyclone poleward as it ages)
+[PASS] those that leave the trades recurve east · 777 99.0% of 96 reaching 30°   (M78 gate: a storm that survives into the westerlies must be turned back eastward by them — the recurvature is the wind field's doing, nothing in storms.rs bends a path)
+[PASS] the cool sea starves the engine · 777  9 d mean life   (M78: cut off from its warm water a tropical cyclone fills within days — a storm that lived for months would mean the fuel term never bit)
+[PASS] the seasons stand half a year apart · 777 season centre N month 0.0 · S month 6.2 · 5.88 apart   (M78 gate: each hemisphere's cyclones fall in its own warm season, so the two peaks must sit close to six months apart — as the world's seasons do)
+[PASS] the warm-sea season opposes the frontal one · 777 N warm-sea 0.0 vs frontal 6 · S warm-sea 6.2 vs frontal 0   (M78 gate: the frontal corridor of M77 peaks in the cold season and the warm-sea engine in the hot one — two engines running on opposite terms cannot share a peak month)
+[PASS] nothing poisons the tracks · 777        9060 points   (M78: a non-finite position or intensity would poison every landfall that reads it)
+[PASS] the warm seas replay · 777           509817f8188bd849   (ADR-0003: a cyclone season is a pure function of (seed, year, hemisphere) — it is derived on demand, never stored)
+[PASS] each year draws its own cyclones · 777  4 vs 4 tracks   (M78: the season is keyed on the year — two identical years would mean the warm seas are a fixture, not weather)
+[PASS] no cyclone is born on a cold sea · 31337 0 of 540 below 26 °C   (M78 gate: the warm-sea engine runs on surface heat — every genesis cell must stand over water at or above the 26 °C threshold in its own warm month)
+[PASS] no cyclone is born on land · 31337         0 of 540   (M78: a tropical cyclone has no engine without a sea under it)
+[PASS] the equator breeds nothing · 31337   0 inside 5° · 11112 warm cells struck out for want of spin   (M78 gate: within a few degrees of the equator the Coriolis parameter vanishes and the warmest sea on the map cannot close a vortex — the dead band must be empty)
+[PASS] the warm seas keep the cyclone in the tropics · 31337 100.0% in 5-30° · deepest 23.8°   (M78 gate: genesis must fall inside 5-30° in every world — and nothing in storms.rs names a poleward limit, so this is a claim about where this world's 26 °C isotherm lies)
+[PASS] the trades carry the young storm west · 31337 100.0% of 536 that moved at all   (M78 gate: below 30° the zonal wind blows east-to-west, so a storm's first days must move it westward — the same wind_stress field the ocean's gyres read)
+[PASS] the storm climbs out of the tropics · 31337          99.3%   (M78: beta drift and the steering flow carry a cyclone poleward as it ages)
+[PASS] those that leave the trades recurve east · 31337 97.0% of 101 reaching 30°   (M78 gate: a storm that survives into the westerlies must be turned back eastward by them — the recurvature is the wind field's doing, nothing in storms.rs bends a path)
+[PASS] the cool sea starves the engine · 31337  9 d mean life   (M78: cut off from its warm water a tropical cyclone fills within days — a storm that lived for months would mean the fuel term never bit)
+[PASS] the seasons stand half a year apart · 31337 season centre N month 0.3 · S month 6.2 · 5.87 apart   (M78 gate: each hemisphere's cyclones fall in its own warm season, so the two peaks must sit close to six months apart — as the world's seasons do)
+[PASS] the warm-sea season opposes the frontal one · 31337 N warm-sea 0.3 vs frontal 6 · S warm-sea 6.2 vs frontal 0   (M78 gate: the frontal corridor of M77 peaks in the cold season and the warm-sea engine in the hot one — two engines running on opposite terms cannot share a peak month)
+[PASS] nothing poisons the tracks · 31337      9987 points   (M78: a non-finite position or intensity would poison every landfall that reads it)
+[PASS] the warm seas replay · 31337         76dcdcf2167ec865   (ADR-0003: a cyclone season is a pure function of (seed, year, hemisphere) — it is derived on demand, never stored)
+[PASS] each year draws its own cyclones · 31337  5 vs 5 tracks   (M78: the season is keyed on the year — two identical years would mean the warm seas are a fixture, not weather)
+[PASS] no cyclone is born on a cold sea · 90210 0 of 540 below 26 °C   (M78 gate: the warm-sea engine runs on surface heat — every genesis cell must stand over water at or above the 26 °C threshold in its own warm month)
+[PASS] no cyclone is born on land · 90210         0 of 540   (M78: a tropical cyclone has no engine without a sea under it)
+[PASS] the equator breeds nothing · 90210   0 inside 5° · 11095 warm cells struck out for want of spin   (M78 gate: within a few degrees of the equator the Coriolis parameter vanishes and the warmest sea on the map cannot close a vortex — the dead band must be empty)
+[PASS] the warm seas keep the cyclone in the tropics · 90210 100.0% in 5-30° · deepest 22.4°   (M78 gate: genesis must fall inside 5-30° in every world — and nothing in storms.rs names a poleward limit, so this is a claim about where this world's 26 °C isotherm lies)
+[PASS] the trades carry the young storm west · 90210 100.0% of 534 that moved at all   (M78 gate: below 30° the zonal wind blows east-to-west, so a storm's first days must move it westward — the same wind_stress field the ocean's gyres read)
+[PASS] the storm climbs out of the tropics · 90210          98.9%   (M78: beta drift and the steering flow carry a cyclone poleward as it ages)
+[PASS] those that leave the trades recurve east · 90210 98.5% of 137 reaching 30°   (M78 gate: a storm that survives into the westerlies must be turned back eastward by them — the recurvature is the wind field's doing, nothing in storms.rs bends a path)
+[PASS] the cool sea starves the engine · 90210 10 d mean life   (M78: cut off from its warm water a tropical cyclone fills within days — a storm that lived for months would mean the fuel term never bit)
+[PASS] the seasons stand half a year apart · 90210 season centre N month 0.0 · S month 5.9 · 5.94 apart   (M78 gate: each hemisphere's cyclones fall in its own warm season, so the two peaks must sit close to six months apart — as the world's seasons do)
+[PASS] the warm-sea season opposes the frontal one · 90210 N warm-sea 0.0 vs frontal 6 · S warm-sea 5.9 vs frontal 0   (M78 gate: the frontal corridor of M77 peaks in the cold season and the warm-sea engine in the hot one — two engines running on opposite terms cannot share a peak month)
+[PASS] nothing poisons the tracks · 90210     11538 points   (M78: a non-finite position or intensity would poison every landfall that reads it)
+[PASS] the warm seas replay · 90210         6016d94c72ddae8b   (ADR-0003: a cyclone season is a pure function of (seed, year, hemisphere) — it is derived on demand, never stored)
+[PASS] each year draws its own cyclones · 90210  5 vs 5 tracks   (M78: the season is keyed on the year — two identical years would mean the warm seas are a fixture, not weather)
+[PASS] no cyclone is born on a cold sea · 555 0 of 480 below 26 °C   (M78 gate: the warm-sea engine runs on surface heat — every genesis cell must stand over water at or above the 26 °C threshold in its own warm month)
+[PASS] no cyclone is born on land · 555           0 of 480   (M78: a tropical cyclone has no engine without a sea under it)
+[PASS] the equator breeds nothing · 555     0 inside 5° · 9980 warm cells struck out for want of spin   (M78 gate: within a few degrees of the equator the Coriolis parameter vanishes and the warmest sea on the map cannot close a vortex — the dead band must be empty)
+[PASS] the warm seas keep the cyclone in the tropics · 555 100.0% in 5-30° · deepest 18.5°   (M78 gate: genesis must fall inside 5-30° in every world — and nothing in storms.rs names a poleward limit, so this is a claim about where this world's 26 °C isotherm lies)
+[PASS] the trades carry the young storm west · 555 100.0% of 478 that moved at all   (M78 gate: below 30° the zonal wind blows east-to-west, so a storm's first days must move it westward — the same wind_stress field the ocean's gyres read)
+[PASS] the storm climbs out of the tropics · 555          99.6%   (M78: beta drift and the steering flow carry a cyclone poleward as it ages)
+[PASS] those that leave the trades recurve east · 555 98.0% of 100 reaching 30°   (M78 gate: a storm that survives into the westerlies must be turned back eastward by them — the recurvature is the wind field's doing, nothing in storms.rs bends a path)
+[PASS] the cool sea starves the engine · 555  9 d mean life   (M78: cut off from its warm water a tropical cyclone fills within days — a storm that lived for months would mean the fuel term never bit)
+[PASS] the seasons stand half a year apart · 555 season centre N month 0.1 · S month 6.0 · 5.89 apart   (M78 gate: each hemisphere's cyclones fall in its own warm season, so the two peaks must sit close to six months apart — as the world's seasons do)
+[PASS] the warm-sea season opposes the frontal one · 555 N warm-sea 0.1 vs frontal 6 · S warm-sea 6.0 vs frontal 0   (M78 gate: the frontal corridor of M77 peaks in the cold season and the warm-sea engine in the hot one — two engines running on opposite terms cannot share a peak month)
+[PASS] nothing poisons the tracks · 555        9425 points   (M78: a non-finite position or intensity would poison every landfall that reads it)
+[PASS] the warm seas replay · 555           a7eaf9e80c6b22e6   (ADR-0003: a cyclone season is a pure function of (seed, year, hemisphere) — it is derived on demand, never stored)
+[PASS] each year draws its own cyclones · 555  4 vs 4 tracks   (M78: the season is keyed on the year — two identical years would mean the warm seas are a fixture, not weather)
+[PASS] the tropical band holds in every world         100.0%   (M78 gate: the 26 °C isotherm is a property of the general circulation, so every seed must breed its cyclones in the same band)
+[PASS] no world runs its recurvature backwards          96.0%   (M78 gate: the westerlies turn storms east in every world or the steering field is not the one the ocean reads)
+CHECKS: 67 pass · 0 warn · 0 fail
