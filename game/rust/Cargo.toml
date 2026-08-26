@@ -52,7 +52,11 @@ wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ["HtmlCanvasElement", "console"] }
 
 [profile.release]
-opt-level = 3
+# M80 — optimize the shipped engine for size before Binaryen's existing
+# semantic-preserving convergence pass. Measured on the exact M80 source:
+# 3,601,836 B at LLVM -O3 versus 2,823,768 B at -Oz. The native diagnostics
+# exercise the same laws, while earth-wasm/replay closes cross-runtime identity.
+opt-level = "z"
 lto = true
 codegen-units = 1
 # E6.2 — no unwind machinery in the shipped binary; nothing in the crate
