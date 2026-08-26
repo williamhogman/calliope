@@ -56,7 +56,14 @@ fi
 # completed artifacts at the end. Per-lane atomic mv protects each file; this
 # run-level staging protects readers and later gates from ever seeing a half
 # new / half old suite if the process is interrupted between lanes.
-OUT="$(dirname "$FINAL_OUT")/.$(basename "$FINAL_OUT").run.$$"
+#
+# The staging root lives OUTSIDE the repository working tree by default: a
+# working-tree restore during a long suite deletes untracked files under the
+# repo and takes the live staging folder with it mid-lane. Override with
+# CALLIOPE_REPORT_STAGE if that root is not writable.
+STAGE_ROOT="${CALLIOPE_REPORT_STAGE:-/tmp/calliope-report-stage}"
+mkdir -p "$STAGE_ROOT" 2>/dev/null || STAGE_ROOT="$(dirname "$FINAL_OUT")"
+OUT="$STAGE_ROOT/.$(basename "$FINAL_OUT").run.$$"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 PUBLISHED=0
