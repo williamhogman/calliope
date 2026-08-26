@@ -306,13 +306,22 @@ impl World {
             d.index[i] = (acc * NORM) as f32;
         }
 
-        // Connected regions of dry ground (4-neighbour on the lattice).
-        let dry: Vec<bool> =
-            (0..n).map(|i| d.land[i] && d.index[i] as f64 <= DROUGHT_Z).collect();
+        // Two thresholds, not one (hysteresis). A drought must ENTER on
+        // genuinely failed ground — a core of `MIN_CORE` nodes at or past
+        // SPI −1 — but it HOLDS while the ground stays merely parched
+        // (`DRY_HOLD`). Mapping both edges at the same line was what made
+        // the ledger blink: a region flickering across a single contour
+        // dies and is re-named every other year, which reads as a
+        // one-year median span and a footprint that never matches
+        // yesterday's. The extent is grown on the holding contour; the
+        // core decides only whether a *new* name is owed.
+        let prev_owner = std::mem::replace(&mut d.owner, vec![-1; n]);
+        let hold: Vec<bool> =
+            (0..n).map(|i| d.land[i] && d.index[i] as f64 <= DRY_HOLD).collect();
         let mut seen = vec![false; n];
         let mut regions: Vec<Vec<usize>> = Vec::new();
         for start in 0..n {
-            if !dry[start] || seen[start] {
+            if !hold[start] || seen[start] {
                 continue;
             }
             let mut stack = vec![start];
@@ -323,7 +332,7 @@ impl World {
                 let (cy, cx) = (i / d.cols, i % d.cols);
                 let push = |ny: usize, nx: usize, stack: &mut Vec<usize>, seen: &mut Vec<bool>| {
                     let j = ny * d.cols + nx;
-                    if dry[j] && !seen[j] {
+                    if hold[j] && !seen[j] {
                         seen[j] = true;
                         stack.push(j);
                     }
@@ -342,7 +351,14 @@ impl World {
                 }
             }
             cells.sort_unstable();
-            if cells.len() >= MIN_NODES {
+            if cells.len() < MIN_NODES {
+                continue;
+            }
+            // A core past SPI −1 earns a new name; ground already owned by
+            // a living drought keeps it without re-earning the core.
+            let core = cells.iter().filter(|&&i| d.index[i] as f64 <= DROUGHT_Z).count();
+            let inherited = cells.iter().any(|&i| prev_owner[i] >= 0);
+            if core >= MIN_CORE || inherited {
                 regions.push(cells);
             }
         }
@@ -353,7 +369,7 @@ impl World {
         // most. One ancestor can only be claimed once — where a drought
         // splits, the larger half keeps the name and the other half is a
         // new failed year of its own.
-        let prev_owner = std::mem::replace(&mut d.owner, vec![-1; n]);
+
         let mut claimed: HashSet<usize> = HashSet::new();
         let mut assign: Vec<Option<usize>> = vec![None; regions.len()];
         let mut order: Vec<usize> = (0..regions.len()).collect();
