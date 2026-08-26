@@ -237,6 +237,12 @@ pub struct World {
     /// is derived (a pure read of the sky); the *events* — names, spans,
     /// ground — are state, and ride the replay identity line.
     pub droughts: crate::drought::Droughts,
+    /// M81 — the flood ledger: every spate that overtopped a town's
+    /// levees, and the silt those spates left for the season after. The
+    /// year's water is derived (a pure read of the sky); the *floods* —
+    /// who drowned, how deep, what the ground was given — are state, and
+    /// ride the replay identity line.
+    pub floods: crate::flood::Floods,
     /// M79 — local strike history at event strength, before an existing
     /// harbour wound is added. Permanent felling reads this ledger's
     /// empirical severe-hit return interval; bounded and deterministic.
@@ -1121,6 +1127,7 @@ impl GenBuilder {
             storm_prev: Vec::new(),
             storm_marks: Vec::new(),
             droughts: crate::drought::Droughts::default(),
+            floods: crate::flood::Floods::default(),
             storm_bites: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             storm_fell_probe: Vec::new(),
@@ -1522,7 +1529,15 @@ impl World {
         } else {
             dp
         };
-        agriculture::year_yield_factor(pack, t, p, dt, rain, irrigated)
+        let base = agriculture::year_yield_factor(pack, t, p, dt, rain, irrigated);
+        // M81 — last year's spate pays this year's harvest: the silt sheet
+        // laid on the floodplain lifts the season it feeds, once.
+        let silt = self.floods.silt_bonus(year, y, x);
+        if silt <= 0.0 {
+            base
+        } else {
+            (base * (1.0 + silt)).min(agriculture::YIELD_CEIL)
+        }
     }
 
     /// M72 — `year_flow_factor` at one cell without materializing the grid:
