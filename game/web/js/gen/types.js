@@ -68,7 +68,7 @@
 /**
  * One chronicle entry (wire form).
  * @typedef {Object} ChronicleEvent
- * @property {Array<number>} ids
+ * @property {Array<number>} [ids]
  * @property {number} k
  * @property {string} [legend]
  * @property {number} m
