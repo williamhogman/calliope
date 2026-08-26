@@ -327,8 +327,13 @@ impl World {
         // yesterday's. The extent is grown on the holding contour; the
         // core decides only whether a *new* name is owed.
         let prev_owner = std::mem::replace(&mut d.owner, vec![-1; n]);
-        let hold: Vec<bool> =
-            (0..n).map(|i| d.land[i] && d.index[i] as f64 <= DRY_HOLD).collect();
+        let hold: Vec<bool> = (0..n)
+            .map(|i| {
+                d.land[i]
+                    && (d.index[i] as f64 <= DROUGHT_Z
+                        || (prev_owner[i] >= 0 && d.index[i] as f64 <= DRY_HOLD))
+            })
+            .collect();
         let mut seen = vec![false; n];
         let mut regs: Vec<(Vec<usize>, bool)> = Vec::new();
         for start in 0..n {
@@ -365,8 +370,11 @@ impl World {
             if cells.len() < MIN_NODES {
                 continue;
             }
-            // A core past SPI −1 earns a new name; ground already owned by
-            // a living drought keeps it without re-earning the core.
+            // Spatial hysteresis is asymmetric as temporal hysteresis must
+            // be: owned ground may remain at the holding contour, but new
+            // ground enters only after crossing SPI -1. This stops a named
+            // footprint annexing a different merely-parched margin each
+            // year while preserving the exact 12-year index beneath it.
             let core = cells.iter().filter(|&&i| d.index[i] as f64 <= DROUGHT_Z).count();
             let inherited = cells.iter().any(|&i| prev_owner[i] >= 0);
             if core >= MIN_CORE || inherited {

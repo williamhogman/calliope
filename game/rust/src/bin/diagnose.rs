@@ -5493,6 +5493,55 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             "M80 · droughts named — {} took hold ({} closed) · median span {:.0}y (mean {:.1}, longest {}) · median extent {:.0} km² · median year-on-year overlap {:.2}",
             ds.events.len(), closed.len(), med_dur, mean_dur, longest, med_area, med_stab
         );
+        // Diagnose the persistence chain before judging its named output:
+        // lag correlation of the accumulated field, then overlap of the
+        // thresholded mask, then (above) overlap of matched components. If
+        // the first two persist but named regions do not, the defect is in
+        // connected-component topology/identity, not in the 12-year sky.
+        let (mut prev_index, mut prev_hold): (Option<Vec<f64>>, Option<Vec<bool>>) = (None, None);
+        let (mut corr_sum, mut corr_n, mut mask_sum, mut mask_n) = (0.0, 0usize, 0.0, 0usize);
+        for yr in 0..=last {
+            let mut index = Vec::new();
+            let mut hold = Vec::new();
+            for cy in 0..ds.rows {
+                for cx in 0..ds.cols {
+                    let i = cy * ds.cols + cx;
+                    if ds.land[i] {
+                        let z = didx(yr, (cx * calliope::drought::STRIDE) as i64, (cy * calliope::drought::STRIDE) as i64);
+                        index.push(z);
+                        hold.push(z <= calliope::drought::DRY_HOLD);
+                    }
+                }
+            }
+            if let (Some(p), Some(ph)) = (&prev_index, &prev_hold) {
+                let ma = p.iter().sum::<f64>() / p.len() as f64;
+                let mb = index.iter().sum::<f64>() / index.len() as f64;
+                let (mut cov, mut va, mut vb) = (0.0, 0.0, 0.0);
+                for (&a, &b) in p.iter().zip(&index) {
+                    cov += (a - ma) * (b - mb);
+                    va += (a - ma).powi(2);
+                    vb += (b - mb).powi(2);
+                }
+                if va > 0.0 && vb > 0.0 {
+                    corr_sum += cov / (va * vb).sqrt();
+                    corr_n += 1;
+                }
+                let inter = ph.iter().zip(&hold).filter(|(a, b)| **a && **b).count();
+                let union = ph.iter().zip(&hold).filter(|(a, b)| **a || **b).count();
+                if union > 0 {
+                    mask_sum += inter as f64 / union as f64;
+                    mask_n += 1;
+                }
+            }
+            prev_index = Some(index);
+            prev_hold = Some(hold);
+        }
+        println!(
+            "  persistence chain — index lag-1 spatial r {:.2} · whole hold-mask Jaccard {:.2} · matched-region Jaccard {:.2}",
+            corr_sum / corr_n.max(1) as f64,
+            mask_sum / mask_n.max(1) as f64,
+            med_stab,
+        );
         println!(
             "  spans — {}",
             (1..=6)
