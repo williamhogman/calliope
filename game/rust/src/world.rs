@@ -3993,6 +3993,26 @@ impl World {
                     let id = d.events.len();
 
                     let (name, place) = self.name_drought(&mut d.taken, id, cx, cy);
+                    // M6.1 — every entry in the telling must reach the cast.
+                    // A drought is not itself a registry entity, but the
+                    // ground it withers is, and that ground is exactly what
+                    // the entry speaks of: the feature or town it was named
+                    // for, or the world itself when the naming fell back to
+                    // the world's own name. `resolve_events` cannot find it
+                    // for us — the subject line carries the drought's name,
+                    // which the registry has never heard, and the centroid
+                    // rarely lands on an entity's own cell.
+                    let subject = self
+                        .chronicle
+                        .registry
+                        .find_kind(EntityKind::Feature, &place)
+                        .or_else(|| {
+                            self.chronicle.registry.find_kind(EntityKind::Settlement, &place)
+                        })
+                        .or_else(|| self.chronicle.registry.find(&place))
+                        .or_else(|| {
+                            self.chronicle.registry.find_kind(EntityKind::World, &self.world_name)
+                        });
                     d.events.push(DroughtEvent {
                         id,
                         name: name.clone(),
