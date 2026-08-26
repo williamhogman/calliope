@@ -50,11 +50,39 @@ pub const MEM: f64 = 0.5;
 /// exactly reproducible* expression rather than an unbounded recursion.
 pub const MEMO_YEARS: usize = 12;
 
-/// Renormalization back to unit variance, `sqrt(1 − MEM²)`: the weighted
-/// sum of independent unit-variance years has variance `1/(1 − MEM²)`.
-/// Without it the same numeric threshold would silently mean a rarer
-/// event than SPI −1 does.
+/// Renormalization back to unit variance under the *independence*
+/// assumption, `sqrt(1 − MEM²)`: the weighted sum of independent
+/// unit-variance years has variance `1/(1 − MEM²)`.
+///
+/// M80 follow-up — this constant is the textbook baseline, and it is not
+/// what this sky needs. The years are not independent: the M74/M76
+/// seesaw gives the interannual anomaly a real lag structure (measured
+/// ρ(1) = −0.19 on seed 12345, −0.30 on 90210, +0.04 on 777), so the
+/// weighted sum's variance is a property of the *world*, not of `MEM`.
+/// Applied blind it narrowed the index against the single year it
+/// replaced — sd(D)/sd(z) measured 0.938 / 0.983 / 0.880 across the three
+/// suite seeds, i.e. the same numeric threshold silently meant a *rarer*
+/// event than SPI −1, exactly the failure this factor exists to prevent
+/// (P(z ≤ −1) 0.2055 → P(D ≤ −1) 0.1923 on seed 12345). M80's contract is
+/// that memory changes drought *persistence*, not its severity
+/// distribution, so the shipped normalization is calibrated per world
+/// against its own sky ([`Droughts::norm`], set once at generation from a
+/// fixed deterministic sample — pure in seed × size). This constant
+/// remains the fallback for an uncalibrated ledger and the documented
+/// independence baseline.
 pub const NORM: f64 = 0.866_025_403_784_438_6;
+
+/// The calibration sample for [`Droughts::norm`]: how many years of the
+/// sky's own prehistory the world reads to measure what its weighted sum
+/// actually does to the variance. Fixed, seed-independent and read from
+/// negative years, so the scalar is a pure function of seed × size and
+/// never moves as the world ages.
+pub const CAL_YEARS: i64 = 96;
+
+/// Lattice spacing of the calibration sample, in grid cells — coarser
+/// than [`STRIDE`] because a variance ratio needs breadth, not detail.
+pub const CAL_STRIDE: usize = 16;
+
 
 /// Spacing of the lattice the extent is mapped on, in grid cells. A cell
 /// is 4 km (ADR-0004), so one lattice node stands for 32 × 32 km — finer
