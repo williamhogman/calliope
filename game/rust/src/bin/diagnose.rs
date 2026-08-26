@@ -5736,35 +5736,54 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             format!("{:.2} → {:.2}", bare, full),
             "M81 gate: masonry, aqueducts and engineering buy real freeboard — an engineered town floods in strictly fewer years",
         );
-        // the counterfactual: the same ground, the same following year,
-        // read with and without the silt the spate laid.
+        // The counterfactual, twice. First by re-derivation over every row
+        // in the ledger: the same cell, the same following year, the bare
+        // harvest against the harvest the sheet feeds. (The standing sheet
+        // is swept once its season passes, so only the last years' layers
+        // are still on the map at the end of the leg — those are checked
+        // through the live path below.)
         let mut lifted = 0usize;
         let mut lift_sum = 0.0f64;
-        let mut tested = 0usize;
-        for r in fl.rows.iter().take(400) {
+        for r in &fl.rows {
             let (y, x) = (r.y as usize, r.x as usize);
-            let g = fl.silt_bonus(r.year + 1, y, x);
-            if g <= 0.0 {
-                continue;
-            }
-            tested += 1;
-            let with = w.year_yield(r.year + 1, y, x);
-            let without = w.year_yield_bare(r.year + 1, y, x);
-            if with > without + 1e-9 {
+            let bare = w.year_yield_bare(r.year + 1, y, x);
+            let fed = (bare * (1.0 + r.silt)).min(calliope::agriculture::YIELD_CEIL);
+            if fed > bare + 1e-9 {
                 lifted += 1;
-                lift_sum += with / without - 1.0;
+                lift_sum += fed / bare - 1.0;
             }
         }
         let mean_lift = if lifted == 0 { 0.0 } else { lift_sum / lifted as f64 };
+        // Second, through the live path: the sheets still standing must
+        // actually reach `year_yield` — the law wired in, not just stated.
+        let live_year = fl.rows.iter().map(|r| r.year).max().unwrap_or(0) + 1;
+        let mut live_tested = 0usize;
+        let mut live_lifted = 0usize;
+        for r in fl.rows.iter().filter(|r| r.year + 1 == live_year) {
+            let (y, x) = (r.y as usize, r.x as usize);
+            if fl.silt_bonus(live_year, y, x) <= 0.0 {
+                continue;
+            }
+            live_tested += 1;
+            if w.year_yield(live_year, y, x) > w.year_yield_bare(live_year, y, x) + 1e-9 {
+                live_lifted += 1;
+            }
+        }
         println!(
-            "  the gift — {}/{} silted grounds harvest better the season after, by {:.1}% on average",
-            lifted, tested, 100.0 * mean_lift
+            "  the gift — {}/{} spates leave ground that harvests better the season after, by {:.1}% on average · {}/{} standing sheets lift the live harvest read",
+            lifted, fl.rows.len(), 100.0 * mean_lift, live_lifted, live_tested
         );
         c.must(
             "the silt is load-bearing on the next harvest",
-            tested > 0 && lifted == tested,
-            format!("{}/{} grounds lifted, mean +{:.1}%", lifted, tested, 100.0 * mean_lift),
+            lifted == fl.rows.len() && !fl.rows.is_empty(),
+            format!("{}/{} grounds lifted, mean +{:.1}%", lifted, fl.rows.len(), 100.0 * mean_lift),
             "M81 gate: counterfactual — the same cell, the same following year, read with and without the sheet: every silted ground must harvest measurably better, or the gift is decoration",
+        );
+        c.must(
+            "the standing sheet reaches the harvest",
+            live_tested > 0 && live_lifted == live_tested,
+            format!("{}/{} standing sheets lift the live read", live_lifted, live_tested),
+            "M81 gate: the silt the ledger records must be the silt year_yield consumes — the wiring, not the intent",
         );
         c.must(
             "the flood gives the season after",
