@@ -1,0 +1,49 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · HYDROLOGY                    seed 12345 · 640x512
+========================================================================
+river cells: 5023 (4.3% of land) · lake cells: 1983 (1.7% of land)
+river systems (≥12 cells): 116 · longest network 255 cells ≈ 1020 km
+discharge on rivers: p50 147.5 · p90 594.7 · p99 2525.2 · max 5706.4
+named: 3 deltas · 4 marshes
+  delta: The Karath Delta @(513,261)
+  delta: The Mouths of the Calys @(269,250)
+  delta: The Mouths of the Malaos @(349,170)
+river towns: 15 of 16
+strahler orders: 1:18 2:413 3:896 4:1992 5:1453 6:251 · top 6
+wadis: 678 cells · salt basins: 13 (549 cells) · river |flow amp| mean 0.20
+glacier-fed rivers (melt ≥ 25% of flow): 56 cells (1.1% of rivers) · median melt share 31.1% · warm-month peaks 100.0%
+
+aquifer (M54): median depth 13.5 m · p10 0.0 · p90 103.7 · within 10 m of surface 46.3%
+  median depth by province: shield 5.9 · basin 12.9 · fold 19.7 · volcanic 20.3 m
+  median depth by rainfall: arid <400mm 33.2 m (56655 cells) · humid >1200mm 0.0 m (16724 cells)
+  spearman: vs HAND (height above nearest drainage) 0.63 · vs raw elevation 0.30 · vs elevation at 400-900mm 0.32 (25555 cells)
+
+springs & oases (M55): 1358 springs (1.17% of land) · 13780 oases (25.7% of arid land) · arid land with any water 29.1%
+
+---- checks ----------------------------------------------------------
+[PASS] river share of land                            4.3%   (sweet 0.8–5% · hard 0.3–10%)
+[PASS] lake share of land                             1.7%   (sweet 0–3% · hard 0–8%)
+[PASS] river systems                                   116   (sweet 8–400 · hard 3–2000)
+[PASS] named deltas                                      3   (≥1 — great river mouths get names)
+[PASS] discharge finite                                yes   (no NaN/inf in flow accumulation)
+[PASS] dawn towns reach fresh water                  93.8%   (≥20% — rivers should pull the first peoples)
+[PASS] strahler top order                                6   (sweet 4–9 · hard 3–12)
+[PASS] river seasonal swing                           0.20   (mean |amp| · sweet .05–.50 · hard .01–.90)
+[PASS] endorheic salt basins                            13   (≥1 — the desert keeps its dead seas)
+[PASS] wadis                                           678   (≥1 — some rivers should run dry half the year)
+[PASS] glacier-fed river share %                      1.1%   (sweet 0.5–15 · hard 0.05–40 (M35: % of river cells carrying ≥25% accumulated melt — the ice keeps its rivers; measured 1.3–1.5 on three seeds))
+[PASS] monthly discharge sane on rivers              clean   (M35 gate: 12-month curves non-negative and NaN-free on every river cell)
+[PASS] glacier-fed rivers peak in warm months         100.0%   (≥80% — melt follows the sun, whatever the rain does (M35 gate))
+[PASS] no glacier-fed wadis                              0   (M35: the melt returns every summer — the wadi stamp yields)
+[PASS] aquifer median depth m                       13.5 m   (M54: median depth to water on unpinned land · sweet 4–60 m · hard 1–120)
+[PASS] water table tracks the valleys               ρ 0.63   (M54 gate: Spearman ≥0.50 of depth against HAND — height above the drainage each cell flows to. Raw sea-level elevation is the wrong variable: the drains sit at every valley floor, so a highland basin's table is shallow however high it stands (raw-elevation ρ printed above for contrast))
+[PASS] aquifer depth finite and bounded              clean   (M54: every cell reports 0..150 m, no NaN out of the Darcy solve)
+[PASS] surface water pins the table         0 river/lake · 0 ocean   (M54: where water already stands, depth to water is zero)
+[PASS] permeable rock holds a deeper table  basin 12.9 m vs shield 5.9 m   (M54: the shield throttles the flow and mounds the table high; the basin drains it away)
+[PASS] the dry country digs deeper          arid 33.2 m vs humid 0.0 m   (M54: less recharge, lower mound — a well in the desert is a longer rope)
+[PASS] spring share of land %                        1.17%   (M55: land cells where the table daylights at a break in slope · sweet 0.05–4% · hard 0.005–12%)
+[WARN] oasis share of arid land %                    25.7%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
+[PASS] every spring stands on a shallow table      1358/1358   (M55 gate: a spring is the table daylighting — depth to water ≤2 m at every marked cell, by construction and by audit)
+[PASS] no oasis outside the dry country        13780 oases   (M55 gate: oases exist only where the year is arid (desert biome or <300 mm))
+[PASS] aquifer joins the state hash                    yes   (M54 gate: the field is CRC-stable and part of hash_state)
+CHECKS: 24 pass · 1 warn · 0 fail
