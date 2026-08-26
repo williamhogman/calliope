@@ -66,10 +66,21 @@ pub const NORM: f64 = 0.866_025_403_784_438_6;
 /// mapping costs a few million noise draws, not a few hundred million.
 pub const STRIDE: usize = 8;
 
-/// The smallest region worth calling a drought, in lattice nodes: three
-/// nodes ≈ 3 000 km². Below that the sky is having a bad week somewhere,
-/// not a failed year over a country.
-pub const MIN_NODES: usize = 3;
+/// The holding contour. A drought ENTERS at [`DROUGHT_Z`] (SPI −1, the
+/// same line the harvest verdict reads) but HOLDS while the ground is
+/// merely parched. Without the second contour a region flickering across
+/// one line dies and is re-named every other year — the ledger blinks.
+pub const DRY_HOLD: f64 = -0.45;
+
+/// The smallest failing core that earns a new name, in lattice nodes:
+/// 24 nodes ≈ 24 500 km², a country's worth of failed harvest, not a
+/// bad week over three valleys.
+pub const MIN_CORE: usize = 32;
+
+/// The smallest region worth mapping at all, in lattice nodes, once a
+/// drought is alive and only holding.
+pub const MIN_NODES: usize = 12;
+
 
 /// Area one lattice node stands for, in km².
 pub const NODE_KM2: f64 = (STRIDE * STRIDE * 16) as f64;
@@ -108,9 +119,14 @@ pub struct DroughtEvent {
     /// event from the seed without trusting this ledger.
     pub ax: i64,
     pub ay: i64,
-    /// Per-year ledger: `(year, nodes, cx, cy, jaccard-with-last-year)`.
-    /// The first row carries jaccard 1.0 by definition.
-    pub years: Vec<(i64, usize, f64, f64, f64)>,
+    /// Per-year ledger: `(year, nodes, cx, cy, jaccard-with-last-year,
+    /// anchor-x, anchor-y)`. The first row carries jaccard 1.0 by
+    /// definition. The anchor is *that year's* deepest node in fine-grid
+    /// cells: a drought walks, so a single onset anchor stops being dry
+    /// ground the moment the region moves off it, and the re-derivation
+    /// must probe the year it is judging.
+    pub years: Vec<(i64, usize, f64, f64, f64, i64, i64)>,
+
     /// Whether the chronicle has spoken its name (it does so once).
     pub announced: bool,
     /// Last year's node set — the matcher's working memory, never hashed.
@@ -301,13 +317,22 @@ impl World {
             d.index[i] = (acc * NORM) as f32;
         }
 
-        // Connected regions of dry ground (4-neighbour on the lattice).
-        let dry: Vec<bool> =
-            (0..n).map(|i| d.land[i] && d.index[i] as f64 <= DROUGHT_Z).collect();
+        // Two thresholds, not one (hysteresis). A drought must ENTER on
+        // genuinely failed ground — a core of `MIN_CORE` nodes at or past
+        // SPI −1 — but it HOLDS while the ground stays merely parched
+        // (`DRY_HOLD`). Mapping both edges at the same line was what made
+        // the ledger blink: a region flickering across a single contour
+        // dies and is re-named every other year, which reads as a
+        // one-year median span and a footprint that never matches
+        // yesterday's. The extent is grown on the holding contour; the
+        // core decides only whether a *new* name is owed.
+        let prev_owner = std::mem::replace(&mut d.owner, vec![-1; n]);
+        let hold: Vec<bool> =
+            (0..n).map(|i| d.land[i] && d.index[i] as f64 <= DRY_HOLD).collect();
         let mut seen = vec![false; n];
-        let mut regions: Vec<Vec<usize>> = Vec::new();
+        let mut regs: Vec<(Vec<usize>, bool)> = Vec::new();
         for start in 0..n {
-            if !dry[start] || seen[start] {
+            if !hold[start] || seen[start] {
                 continue;
             }
             let mut stack = vec![start];
@@ -318,7 +343,7 @@ impl World {
                 let (cy, cx) = (i / d.cols, i % d.cols);
                 let push = |ny: usize, nx: usize, stack: &mut Vec<usize>, seen: &mut Vec<bool>| {
                     let j = ny * d.cols + nx;
-                    if dry[j] && !seen[j] {
+                    if hold[j] && !seen[j] {
                         seen[j] = true;
                         stack.push(j);
                     }
@@ -337,18 +362,28 @@ impl World {
                 }
             }
             cells.sort_unstable();
-            if cells.len() >= MIN_NODES {
-                regions.push(cells);
+            if cells.len() < MIN_NODES {
+                continue;
+            }
+            // A core past SPI −1 earns a new name; ground already owned by
+            // a living drought keeps it without re-earning the core.
+            let core = cells.iter().filter(|&&i| d.index[i] as f64 <= DROUGHT_Z).count();
+            let inherited = cells.iter().any(|&i| prev_owner[i] >= 0);
+            if core >= MIN_CORE || inherited {
+                regs.push((cells, core >= MIN_CORE));
             }
         }
         // Deterministic order: by the region's lowest node.
-        regions.sort_by_key(|r| r[0]);
+        regs.sort_by(|a, b| a.0[0].cmp(&b.0[0]));
+        let cored: Vec<bool> = regs.iter().map(|r| r.1).collect();
+        let regions: Vec<Vec<usize>> = regs.into_iter().map(|r| r.0).collect();
+
 
         // Inheritance: a region belongs to last year's drought it overlaps
         // most. One ancestor can only be claimed once — where a drought
         // splits, the larger half keeps the name and the other half is a
         // new failed year of its own.
-        let prev_owner = std::mem::replace(&mut d.owner, vec![-1; n]);
+
         let mut claimed: HashSet<usize> = HashSet::new();
         let mut assign: Vec<Option<usize>> = vec![None; regions.len()];
         let mut order: Vec<usize> = (0..regions.len()).collect();
@@ -387,6 +422,11 @@ impl World {
                 peak = peak.min(d.index[cell] as f64);
             }
             let (cx, cy) = (sx / nodes as f64, sy / nodes as f64);
+            // This year's anchor: the deepest node of *this* year's
+            // footprint, in fine-grid cells.
+            let deep_x = ((deep % d.cols) * STRIDE) as i64;
+            let deep_y = ((deep / d.cols) * STRIDE) as i64;
+
             let idx = match assign[ri] {
                 Some(e) => {
                     let prev: HashSet<usize> = d.events[e].prev.iter().copied().collect();
@@ -397,12 +437,21 @@ impl World {
                     ev.last_year = year;
                     ev.peak = ev.peak.min(peak);
                     ev.peak_nodes = ev.peak_nodes.max(nodes);
-                    ev.years.push((year, nodes, cx, cy, jac));
+                    ev.years.push((year, nodes, cx, cy, jac, deep_x, deep_y));
                     ev.prev = cells.clone();
                     e
                 }
                 None => {
+                    // Orphaned holding ground: a region whose ancestor was
+                    // already claimed by a larger sibling and which never
+                    // reached a failing core of its own is not a drought —
+                    // it is the parched margin of one. It goes unowned and
+                    // unnamed rather than minting a name for a wet year.
+                    if !cored[ri] {
+                        continue;
+                    }
                     let id = d.events.len();
+
                     let (name, place) = self.name_drought(&mut d.taken, id, cx, cy);
                     d.events.push(DroughtEvent {
                         id,
@@ -415,9 +464,9 @@ impl World {
                         onset_nodes: nodes,
                         x: cx.round() as i64,
                         y: cy.round() as i64,
-                        ax: ((deep % d.cols) * STRIDE) as i64,
-                        ay: ((deep / d.cols) * STRIDE) as i64,
-                        years: vec![(year, nodes, cx, cy, 1.0)],
+                        ax: deep_x,
+                        ay: deep_y,
+                        years: vec![(year, nodes, cx, cy, 1.0, deep_x, deep_y)],
                         announced: true,
                         prev: cells.clone(),
                     });
