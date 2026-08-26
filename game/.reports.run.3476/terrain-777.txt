@@ -1,0 +1,128 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · TERRAIN                      seed 777 · 640x512
+========================================================================
+world: "Calomar" · generated in 2038 ms
+land: 118329 cells of 327680 (36.1%) · 1893264 km²
+hypsometry (land h): p5 0.018 · p25 0.102 · p50 0.249 · p75 0.389 · p95 0.528 · max 0.688
+bathymetry (sea h): p5 -0.591 · p50 -0.394 · p95 -0.042
+relief of land: hills(h>.35) 31.3% · mountains(h>.5) 7.6% · alpine(h>.65) 0.2%
+landmasses: 25 total · 2 continents(≥3000c) · 0 major isles(≥400c) · 9 islands(≥40c) · 14 islets
+largest landmass: 58539 cells = 49.5% of all land
+coastline: 3127 coastal cells · crenulation 0.026 (coast/land)
+land share by latitude band:
+    90°–  60°   12618  23.2%
+    60°–  30°   23920  44.0%
+    30°–   0°   25002  45.4%
+     0°–  30°   23457  43.1%
+    30°–  60°   23501  43.2%
+    60°–  90°    9831  17.9%
+sea level (M25): phase 0.916 · stand -0.821 · eustatic -0.0148 h · rebound +0.0049 · forebulge -0.0017
+named: 1 archipelagos · 4 islands · 7 mountain ranges
+plates: 12 polygons (9 continental) · mean drift-age 1423 Myr
+seams: 1733 convergent · 1314 divergent · 1471 transform cells
+orogeny ages: mean belt relief re-aged  200 Myr 0.1304 · 900 Myr 0.1117 · 2000 Myr 0.1047  (74026 belt cells)
+rock provinces: shield 25.0% · basin 59.1% · fold belt 8.0% · volcanic 7.9%
+legibility (M21): off-correlate shield 0.0% · basin 0.0% · fold belt 0.0%
+heat transport (M41): warm rim 667 cells mean +1.02 °C · cold rim 1476 cells mean -1.20 °C · net +0.058 °C
+coastal landforms (M26): raised 4524 · ria 0 · skerry 0 · coast 3127 cells
+landform vocabulary (M60): open sea 206144 · raised beach 4524 · fjord 53 · moraine 2441 · drumlin 40 · esker 187 · spillway 33 · outwash plain 247 · patterned ground 16410 · tidal flat 37 · estuary 21 · delta plain 972 · spit 96 · barrier island 5 · lagoon 2 · oasis 243 · springline 666 · glacial trough 3981 · mountain 20224 · hills 63041 · plateau 3407 · valley 206 · plain 1582 · shore 3118
+  oasis split: 163 daylighted (table ≤2 m) · 80 low-point of the reach
+longshore drift (M44): spit cells 96 in 39 chains · barrier cells 5 in 5 chains · lagoon cells 2 · deposits 101
+sediment budget (M59): detached 93.65 · settled 38.16 (41%) · delta fill 25.81 (28%) · abyssal 29.67 (32%)
+deltas: 78 mouths ledgered · 78 built fans · 1161 delta cells (1.0% of land) · largest fan 44 cells
+  spearman: fan cells vs mouth load 0.62 · vs drainage area 0.42 (78 mouths)
+  dose-response: mean fan cells Q1 9.9 → Q4 21.7 by load quartile (×2.19, n/4 = 19)
+  shoaling: 708 silted anchorages · mean shelter ratio 0.74 · 0 clean cells moved · 0 silted cells off-law
+
+glacial relief: u-cells alpine 3568 / sheet 3868 · cirques 227 (166 alpine) · hangs 127 · fjord cells 53
+glacial legacy: till 18279 cells (70.2% of iced lowland) · moraine 2472 · drumlins 44 · esker cells 192 · loess 31196 cells (26.4% of land)
+till dividend (observational): -0.0586 fertility over 13 matched lat×h bins
+legacy counterfactual: 22438 of 49475 till+loess cells farmable · mean uplift +0.0537 there
+proglacial (M31): 4 lakes (2 refilled today) · 0 chains · 40 spillway cells · widths 3/1/0 · 0 of 36 steps ascend
+outwash (M32): 306 corridor + 1014 apron cells · 224 of 4428 below-margin river cells braided (5.1%)
+outwash counterfactual: 1191 of 1320 plain cells farmable · mean uplift +0.0347 there
+
+cold rim (M38): treeline−frontier offset median -17.3° · IQR 11.3° over 137 column-legs · treeline GDD5 median 532 °C·day
+  regime breakdown: maritime median -18.3° (109 legs) · continental median -12.0° (28 legs) · treeline continentality p10 0.36 p50 0.56 p90 0.76 (split at 0.70)
+tundra subtypes: dry 21469 · wet 2611 cells · wet share 10.8% of the tundra
+
+provenance (M61): 2016 cells sampled (2000 lattice + 16 settlement sites) · 0 empty · 0 disordered · 0 terminal mismatches
+
+---- checks ----------------------------------------------------------
+[PASS] land fraction                                 36.1%   (sweet 22–40% · hard 15–52%)
+[PASS] warm and cold rims both exist (M41)  667 warm · 1476 cold cells   (M41: the currents must touch coasts both ways — Gulf Stream and Humboldt analogs)
+[PASS] warm-coast heat delta                +1.02 °C (667 cells)   (sweet +0.75..+6 °C · hard +0.3..+10 (M41: mean bias over land the warm rims reach (≥ +0.5); Gulf-Stream coasts run a few degrees over their zonal law))
+[PASS] cold-coast heat delta                -1.20 °C (1476 cells)   (sweet −6..−0.75 °C · hard −10..−0.3 (M41: mean bias over land the cold rims reach (≤ −0.5); Humboldt/Benguela coasts run a few degrees under))
+[PASS] heat transport net bias                   +0.058 °C   (sweet ≤0.3 °C · hard ≤0.6 (M41: |world-mean bias| — advection redistributes heat, it must not mint it))
+[PASS] border land cells                                 0   (must be 0 — no clipped landmasses)
+[PASS] coastline holds the datum (M25)      4.6% drift at stand -0.82 (cap 8.7%)   (M25 gate: land area within ±5% of the pre-M25 baseline near mid-curve)
+[PASS] sea-level history regen byte-identical      identical   (M25: same seed ⇒ same waterline; joins hash_state)
+[PASS] raised coast per stand                       87.883   (sweet 70–150 · hard 40–250 (share of coast per mean emergence, ≈1/coastal slope))
+[PASS] landform signs read true             0 tags against the offset sign   (M26: raised only where the land rose, drowned only where the sea did)
+[PASS] landform grid regen byte-identical        identical   (M26/M60 gate: pure function of the dawn grids (classify + every stamp + the relief fill); joins hash_state)
+[PASS] no ground is nameless                0 land · 0 shore cells untold   (M60 gate: after the fold, NONE survives only on open sea)
+[PASS] relief vocabulary is spoken          mountain 20224 · hills 63041 · plain 1582   (M60 gate: Hammond classes read real relief (300 m/90 m breaks over the 20 km window))
+[PASS] karst stays reserved                        0 cells   (M60: the code point is held for Karst Country II; no pass may stamp it yet)
+[PASS] oasis cells stay pointlike                243 cells   (sweet 50–800 · hard 10–2000 (M60 gate: strict depth minima of the well-reach mask — groves, not basins; measured 228–305 ×5 seeds))
+[PASS] coastform share of coastal cells %           3.21 %   (sweet 0.5–4 · hard 0.2–8 (M44 gate: spit+barrier+lagoon cells over coastal water cells — features, not pavement; measured 3.30–3.73 ×3 seeds))
+[PASS] spit chains per seed                             39   (sweet 5–50 · hard 1–100 (M44: drift-built hooks rooted on the shore — every windward coast grows a few; measured 22–39))
+[PASS] barrier chains per seed                           5   (sweet 1–12 · hard 0–30 (M44: free-standing bars grown to daylight — rarer than spits, absent only on steep coasts; measured 3–4))
+[PASS] lagoon cells per seed                             2   (sweet 1–100 · hard 0–300 (M44: world-ocean water the deposits pinched off — the quiet water behind the bar; measured 2–20))
+[PASS] drift ground stands, lagoons drown (M44) 0 cells against their class   (M44: spits and barriers are land, lagoons are water — the form grid never lies about the height field)
+[PASS] deposit ledger matches the grown ground (M44) 101 deposits vs 101 formed cells   (M44: every deposited cell is a spit or barrier cell, and nothing else is)
+[PASS] deposits sit on the shelf (M44)       all shoreface   (M44: longshore sand only lands on shallow seabed (0 to −80 m — the bank the 4 km grid resolves))
+[PASS] sediment ledger closes (M59)           0.0000% open   (M59 gate: detached = settled + delta fill + abyssal to within 1% end-to-end)
+[PASS] the grid remembers the ledger (M59)  Σdepth 63.97 vs books 63.97   (M59 gate: deposition depth re-summed from the grid matches the ledger to 1% (f32 grid vs f64 books))
+[PASS] deltas scale with the load (M59)     ρ 0.62 · Q4/Q1 ×2.19 / 78 mouths   (M59/M64 gate: rank ρ ≥0.35 (p<0.001 at n≈80) AND top load quartile builds ≥1.5× the bottom's fans — over ≥10 mouths so the check cannot pass on vacancy)
+[PASS] deltas scale with the basin (M59)            ρ 0.42   (M59: drainage area drives load drives fans — the indirect leg, range-restricted by the ≥10⁴ km² dominance bar itself (measured 0.38–0.42 ×3 seeds))
+[PASS] delta land share of land %                  0.981 %   (M59/M64: deltas on every coast, never swallowing one (measured 1.0% post-recalibration; Earth's deltaic plains ≈0.5–1% of land))
+[PASS] river deltas per seed                            78   (M59/M64: mouths that built fans — a family of tens, as Earth carries at 4-km resolution (measured 78–83))
+[PASS] sediment settled share %                     40.8 %   (M59: floodplains and lakes take a real cut of the load)
+[PASS] sediment abyssal share %                     31.7 %   (M59: the deep sea takes what the shelf cannot hold)
+[PASS] silt shoals the anchorage, nothing else moves (M59) 0 clean moved · 0 off-law   (M59: shelter divides by 1+k·silt where fan silt stands in the anchorage window, and only there)
+[PASS] harbors shoal where the silt lands (M59) 708 anchorages at ratio 0.74   (M59: high-load mouths must actually cost their harbors something)
+[PASS] u-valley cells per 1000 iced, alpine            172   (sweet 20–200 · hard 5–400 (carved cells per 1000 glaciated, 40–62°|lat|))
+[PASS] u-valley cells per 1000 iced, sheet             197   (sweet 10–200 · hard 2–400 (carved cells per 1000 glaciated, >62°|lat|))
+[PASS] cirques per 1000 iced, alpine                   8.0   (sweet 1–40 · hard 0.2–100 (scooped bowls per 1000 glaciated alpine cells))
+[PASS] hanging valleys per world                       127   (sweet 10–600 · hard 2–2000 (tributaries left in the air at trunk junctions))
+[PASS] height field NaN-free after the carve         finite   (M29 gate: the carve is pure lowering arithmetic)
+[PASS] till share of iced lowland %                 70.2 %   (sweet 35–90 · hard 10–98 (M30: till cells per 100 glaciated lowland cells, h<0.30; measured 59–80 on six seeds))
+[PASS] moraine cells per 1000 iced                    53.8   (sweet 10–90 · hard 2–200 (M30: margin ridge cells per 1000 glaciated land cells; measured 39–54))
+[PASS] drumlins per 1000 till                          2.4   (sweet 1.5–30 · hard 0.5–100 (M30: swarm seeds per 1000 till cells; measured 2.4–5.5))
+[PASS] esker cells per world                           192   (sweet 40–800 · hard 10–3000 (M30: chained subglacial ridge cells, chains ≥3; measured 159–213))
+[PASS] loess share of land %                        26.4 %   (sweet 4–30 · hard 1–45 (M30: mantle cells per 100 land cells; Earth ~10; measured 24–28 on six seeds))
+[PASS] till lies under old ice only          0 stray cells   (M30 gate: the sheet is the depositional footprint)
+[PASS] the legacy feeds the farms on it     +0.0537 uplift on 22438 farmable legacy cells   (M30 gate: zeroing till+loess must cost the farmable belt ≥ +0.005 (counterfactual))
+[WARN] proglacial lakes per world                        4   (sweet 5–120 · hard 1–400 (M31: moraine-dammed basins ≥4 cells inside the LGM footprint))
+[PASS] spillway cells per world                         40   (sweet 20–1500 · hard 5–5000 (M31: outburst channel cells cut below the old sills))
+[PASS] spillway width scales with catchment wide-class basins avg 46 cells vs 5   (M31 gate: width bands follow the basins that fed them)
+[PASS] spillways drain downhill             0 of 36 steps ascend   (M31 gate: outburst channels descend in the shipped relief (≤2% crossing tolerance))
+[PASS] outwash cells per world                        1320   (sweet 150–6000 · hard 30–20000 (M32: corridor + apron cells below the former margin; measured 853–1831 on four seeds))
+[PASS] braided share of ice-fed rivers %             5.1 %   (sweet 2–35 · hard 0.5–60 (M32: % of below-margin river cells running braided over outwash; measured 3.1–5.5))
+[PASS] outwash fertility uplift             +0.0347 on 1191 cells   (sweet +0.01–0.12 · hard +0.005–0.20 (M32: counterfactual — zeroing the outwash grid must cost the farmable plain; measured +0.027–0.033))
+[PASS] raised beaches thicken with the rise rebound belt 180.2% vs collar 105.3%   (M26 gate: landform frequency follows the amplitude within one world)
+[PASS] largest landmass share of land                49.5%   (sweet 25–85% · hard 10–93%)
+[PASS] landmass count                                   25   (sweet 15–400 · hard 6–2000)
+[PASS] small isles+islets                               23   (sweet 10–380 · hard 3–1900)
+[PASS] mountain share of land (h>0.5)                 7.6%   (sweet 2–14% · hard 0.5–22%)
+[PASS] coastline crenulation                         0.026   (sweet 0.02–0.30 at 4 km cells)
+[PASS] archipelagos named                                1   (≥1 — island clusters should get names)
+[PASS] plate count                                      12   (M16: a coarse sketch — continents, not crazy paving)
+[PASS] plate mean drift-age (Myr)                     1423   (M16: deep time, neither newborn nor exhausted)
+[PASS] convergent share of boundary                  38.4%   (M16: some seams close, some open, some slide)
+[PASS] plate sketch regen byte-identical         identical   (M16: same seed ⇒ same polygons)
+[PASS] heightmap regen byte-identical            identical   (M16: same sketch ⇒ same land)
+[PASS] belt relief falls with seam age      0.1304 → 0.1117 → 0.1047   (M17: the same sketch re-aged 200/900/2000 Myr sinks monotonically)
+[PASS] shield share of land                          25.0%   (M18 gate: every province present at ≥2% of land)
+[PASS] basin share of land                           59.1%   (M18 gate: every province present at ≥2% of land)
+[PASS] fold-belt share of land                        8.0%   (M18 gate: every province present at ≥2% of land)
+[PASS] volcanic share of land                         7.9%   (M18 gate: every province present at ≥2% of land)
+[PASS] province map reads true              worst off-correlate 0.0% (shield 0.0% · basin 0.0% · fold 0.0%)   (M21 gate: ≤3% of each province off its landform correlate)
+[PASS] treeline−permafrost offset           -17.3° (137 legs)   (sweet −22..−8° · hard −28..−2 (M38 gate: median treeline latitude minus continuous-lowland-frontier latitude over cold-limited columns — negative, bounded, tracking; measured −16.9..−19.0))
+[PASS] treeline tracking spread                      11.3°   (sweet ≤12° · hard ≤18 (M38 gate: IQR of the per-column offset — tracks, not wanders; measured 8.5–10.6))
+[PASS] treeline GDD discipline                  532 °C·day   (sweet 350–850 · hard 200–1100 °C·day (M38: median GDD5 on the treeline cells straddles the 600 threshold))
+[PASS] wet share of the tundra                       10.8%   (sweet 8–60% · hard 2–85% (M38: polygon-mire lowlands are a real minority of the tundra; measured 10.4–17.7))
+[PASS] every sampled cell explains itself   2016 of 2016 chains non-empty   (M61 gate: every cell must return a provenance chain — no ground goes unexplained)
+[PASS] the chain reads deep time forward    2016 of 2016 open on stone, close on landform, stages nondecreasing   (M61 gate: stone → ice → water → soil → landform, in that order, always)
+[PASS] the chain ends on the stored landform 2016 of 2016 terminals match the lane verbatim   (M61 gate: the last word of the chain is the cell's Landform value, not a paraphrase)
+CHECKS: 75 pass · 1 warn · 0 fail
