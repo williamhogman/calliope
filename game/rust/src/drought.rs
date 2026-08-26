@@ -66,10 +66,21 @@ pub const NORM: f64 = 0.866_025_403_784_438_6;
 /// mapping costs a few million noise draws, not a few hundred million.
 pub const STRIDE: usize = 8;
 
-/// The smallest region worth calling a drought, in lattice nodes: three
-/// nodes ≈ 3 000 km². Below that the sky is having a bad week somewhere,
-/// not a failed year over a country.
-pub const MIN_NODES: usize = 3;
+/// The holding contour. A drought ENTERS at [`DROUGHT_Z`] (SPI −1, the
+/// same line the harvest verdict reads) but HOLDS while the ground is
+/// merely parched. Without the second contour a region flickering across
+/// one line dies and is re-named every other year — the ledger blinks.
+pub const DRY_HOLD: f64 = -0.6;
+
+/// The smallest failing core that earns a new name, in lattice nodes:
+/// 24 nodes ≈ 24 500 km², a country's worth of failed harvest, not a
+/// bad week over three valleys.
+pub const MIN_CORE: usize = 24;
+
+/// The smallest region worth mapping at all, in lattice nodes, once a
+/// drought is alive and only holding.
+pub const MIN_NODES: usize = 12;
+
 
 /// Area one lattice node stands for, in km².
 pub const NODE_KM2: f64 = (STRIDE * STRIDE * 16) as f64;
