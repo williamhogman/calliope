@@ -1,66 +1,73 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · ERA I GATE                   size 512 · 300y leg · seed 12345
 ========================================================================
- composing ../.reports.run.4787
+ composing ../.reports.run.3760
 
  lane                          pass  warn  fail     age
  assay.txt                        1     0     0    0.0h
  atlas.txt                       13     0     0    0.2h
- bench.txt                        4     1     0    0.3h
- build.txt                        0     1     0    0.5h
- civ-12345.txt                   79     4     0    0.4h
- civ-777.txt                     78     5     0    0.3h
+ bench.txt                        3     2     0    0.3h
+ browser.txt                      6     1     0    0.0h
+ build.txt                        1     0     0    0.4h
+ civ-12345.txt                   84     7     0    0.4h
+ civ-777.txt                     84     6     0    0.4h
  climate-12345.txt               27     1     0    0.4h
  climate-777.txt                 26     2     0    0.4h
  climate-90210.txt               27     1     0    0.4h
- climate-variance.txt            74     0     0    0.3h
+ climate-variance.txt            74     0     0    0.4h
  coastjs.txt                      4     0     0    0.1h
  compile.txt                      1     0     0    0.1h
  compute.txt                      6     1     0    0.1h
  determinism.txt                  3     0     0    0.3h
  earth-wasm.txt                   2     0     0    0.1h
  earth.txt                       51     0     0    0.2h
- economy-12345.txt               52     0     0    0.3h
+ economy-12345.txt               51     1     0    0.4h
  era.txt                          8     1     0    0.2h
  hydro-12345.txt                 24     1     0    0.4h
  hydro-777.txt                   24     1     0    0.4h
  hydro-90210.txt                 24     1     0    0.4h
- moddag.txt                       1     0     0    0.0h
+ moddag.txt                       0     0     1    0.0h
  ocean-meta.txt                   9     0     0    0.2h
  ocean.txt                       15     0     0    0.2h
- oscillation.txt                 73     0     0    0.3h
- patina.txt                       9     1     0    0.2h
- perf.txt                         9     4     0    0.3h
+ oscillation.txt                 73     0     0    0.4h
+ patina.txt                       8     2     0    0.2h
+ perf.txt                         6     5     2    0.3h
  properties.txt                  72     6     0    0.2h
  resources-12345.txt             32     0     0    0.4h
  resources-777.txt               32     0     0    0.4h
  resources-90210.txt             32     0     0    0.4h
  storms.txt                      77     0     0    0.3h
- sweep.txt                       18     1     0    0.2h
+ sweep.txt                       18     1     0    0.3h
  systems.txt                      3     0     0    0.2h
  teleconnection.txt              50     0     0    0.3h
- telling-12345.txt               12     0     0    0.3h
+ telling-12345.txt               11     0     1    0.4h
  terrain-12345.txt               76     0     0    0.4h
  terrain-777.txt                 75     1     0    0.4h
  terrain-90210.txt               76     0     0    0.4h
  tropics.txt                     67     0     0    0.3h
  wasm-audit.txt                   2     0     0       -
- wasm.txt                         0     1     0    0.1h
- TOTAL                         1268    34     0
+ wasm.txt                         1     0     0    0.1h
+ TOTAL                         1279    41     4
+
+ held rows (each holds the era open):
+   moddag.txt · [FAIL] leaf modules importing crate::world             (E11.8: break the edge or bless the module)
+   perf.txt · [FAIL] gen total ms                         4237 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+   perf.txt · [FAIL] tick rate year 100                   65 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+   telling-12345.txt · [FAIL] every event carries an id                     98.6%   (M6.1 gate: ids = 100%)
 
  structural leg: seed 12345 · 3600 months · chunkings 240/120 vs 180
- towns 16→96 · 802 events in the final decade · 47s for both runs (152 mo/s)
+ towns 16→96 · 778 events in the final decade · 112s for both runs (64 mo/s)
 
 ---- checks ----------------------------------------------------------
-[PASS] every era lane on the table                42 lanes   (M65: a gate over a partial suite proves nothing — run report.sh)
-[PASS] every composed lane actually speaks  42 lanes with rows   (M76: a lane that emitted no check rows proves nothing — a truncated or crashed report may not compose as clean)
-[PASS] composed reports are fresh              oldest 0.5h   (M65: stale rows compose stale verdicts — rerun the suite within 6h)
-[PASS] the veto bites somewhere in the ensemble 2 refused town(s) over 2 civ lane(s) [12345:2 · 777:0]   (M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it)
-[PASS] the suite composes clean             0 fail · 34 warn · 1268 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
+[PASS] every era lane on the table                43 lanes   (M65: a gate over a partial suite proves nothing — run report.sh)
+[PASS] every composed lane actually speaks  43 lanes with rows   (M76: a lane that emitted no check rows proves nothing — a truncated or crashed report may not compose as clean)
+[PASS] composed reports are fresh              oldest 0.4h   (M65: stale rows compose stale verdicts — rerun the suite within 6h)
+[FAIL] the veto bites somewhere in the ensemble 0 refused town(s) over 2 civ lane(s) [12345:0 · 777:0]   (M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it)
+[FAIL] the suite composes clean             4 fail · 41 warn · 1279 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
 [PASS] the wasm audit speaks for shipped bytes     same bytes   (E6.6: audit subject sha256 = shipped wasm — rerun scripts/wasm-audit.sh after a rebuild)
 [PASS] replay identity at era scale              identical   (ADR-0003: 300y under two chunkings ⇒ one state, one town ledger)
 [PASS] fields finite after the centuries        all finite   (M65: height·tmean·precip·discharge·fertility carry no poison)
 [PASS] towns endure                                  16→96   (M65: three centuries leave a living map, not a wiped one)
-[PASS] the chronicle still speaks           802 events / final decade   (M65: an old world keeps making history)
-[PASS] era I seals                                  SEALED   (M65 gate: the deep earth closes only over a clean composed suite)
-CHECKS: 11 pass · 0 warn · 0 fail
+[PASS] the chronicle still speaks           778 events / final decade   (M65: an old world keeps making history)
+[FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
+CHECKS: 8 pass · 0 warn · 3 fail
