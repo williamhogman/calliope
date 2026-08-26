@@ -5736,6 +5736,46 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             format!("{:.2} → {:.2}", bare, full),
             "M81 gate: masonry, aqueducts and engineering buy real freeboard — an engineered town floods in strictly fewer years",
         );
+        // the counterfactual: the same ground, the same following year,
+        // read with and without the silt the spate laid.
+        let mut lifted = 0usize;
+        let mut lift_sum = 0.0f64;
+        let mut tested = 0usize;
+        for r in fl.rows.iter().take(400) {
+            let (y, x) = (r.y as usize, r.x as usize);
+            let g = fl.silt_bonus(r.year + 1, y, x);
+            if g <= 0.0 {
+                continue;
+            }
+            tested += 1;
+            let with = w.year_yield(r.year + 1, y, x);
+            let without = calliope::agriculture::year_yield_factor(
+                calliope::agriculture::CropPackage::from_code(w.fields.crops[[y, x]]),
+                w.fields.tmean[[y, x]] as f64,
+                w.fields.precip[[y, x]] as f64,
+                w.year_site_weather(r.year + 1, y, x).0,
+                {
+                    let (_, dp) = w.year_site_weather(r.year + 1, y, x);
+                    w.fields.precip[[y, x]] as f64 * (1.0 + dp)
+                },
+                w.near_fresh[[y, x]],
+            );
+            if with > without + 1e-9 {
+                lifted += 1;
+                lift_sum += with / without - 1.0;
+            }
+        }
+        let mean_lift = if lifted == 0 { 0.0 } else { lift_sum / lifted as f64 };
+        println!(
+            "  the gift — {}/{} silted grounds harvest better the season after, by {:.1}% on average",
+            lifted, tested, 100.0 * mean_lift
+        );
+        c.must(
+            "the silt is load-bearing on the next harvest",
+            tested > 0 && lifted == tested,
+            format!("{}/{} grounds lifted, mean +{:.1}%", lifted, tested, 100.0 * mean_lift),
+            "M81 gate: counterfactual — the same cell, the same following year, read with and without the sheet: every silted ground must harvest measurably better, or the gift is decoration",
+        );
         c.must(
             "the flood gives the season after",
             fl.rows.iter().any(|r| r.silt > 0.0),
