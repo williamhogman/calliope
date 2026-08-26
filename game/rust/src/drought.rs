@@ -195,6 +195,12 @@ pub struct Droughts {
     pub events: Vec<DroughtEvent>,
     /// The last year mapped (`i64::MIN` before the first pass).
     pub year: i64,
+    /// M80 follow-up — this world's own renormalization of the weighted
+    /// sum, measured once at generation against the sky it will actually
+    /// live in (see [`NORM`]). `0.0` means uncalibrated: the index then
+    /// falls back to the independence baseline.
+    pub norm: f64,
+
     pub(crate) taken: HashSet<String>,
 }
 
