@@ -1332,7 +1332,13 @@ impl GenBuilder {
         world.dirty.clear(Dirty::TERRITORY); // ships with the pack, not the first tick
         // Seed the delta baseline (E4.2/E4.3) to what bootstrap() ships.
         world.prime_sent();
+        // M80 follow-up — measure what this world's own sky does to the
+        // accumulated sum, so `famine::DROUGHT_Z` means the same crossing
+        // rate it meant before the memory existed. Once, at the dawn,
+        // from a fixed window of prehistory: pure in seed × size.
+        world.droughts.norm = world.calibrate_drought_norm();
         self.world = Some(world);
+
     }
 }
 
