@@ -322,6 +322,8 @@ fn hash_state(w: &World) -> u64 {
     for (g, p) in w.economy.market.iter_some() {
         s.push_str(&format!("m{}|{:.2}\n", g, p));
     }
+    // M80 — the drought ledger is state: names, spans, the ground they held.
+    s.push_str(&format!("W{:016x}\n", w.droughts.hash()));
     // M16/ADR-0024 — the plate sketch is state: polygons, kinds, ages.
     s.push_str(&format!("P{:016x}\n", w.plates.hash()));
     // M22 — the seismic ledger is state: seams, clocks, the quake log.
@@ -5208,13 +5210,30 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     // at or below the drought threshold — no private die, no exception.
     if !log.famine_sites.is_empty() {
         let rows = w.fields.tmean.dim().0 as f64;
-        let mut zs: Vec<f64> = Vec::with_capacity(log.famine_sites.len());
-        for &(m, x, y, _) in &log.famine_sites {
-            let year = m / 12;
+        // M80 — the field the harvest verdict reads is the *accumulated*
+        // standardized shortfall, not one year's draw. Re-derived here
+        // from the published per-cell sky law alone, independently of the
+        // simulation's own code path: same declared constants, separate
+        // arithmetic. Everything M72 claimed still has to hold on it.
+        let didx = |year: i64, x: i64, y: i64| -> f64 {
+            let nrows = w.fields.tmean.dim().0;
             let lat = (-90.0 + (y as f64) * 180.0 / (rows - 1.0)).abs();
             let sigma = calliope::climate::anomaly_amp_p(lat).max(1e-6);
-            let dp = w.with_year_sky(year, |_, dp, _| dp[[y as usize, x as usize]]);
-            zs.push(dp / sigma);
+            let mut acc = 0.0;
+            let mut wt = 1.0;
+            for k in 0..calliope::drought::MEMO_YEARS as i64 {
+                let yr = year - k;
+                let (_, dp) = calliope::climate::year_anomaly_at(
+                    w.variability(), nrows, x as usize, y as usize, yr, w.year_osc(yr),
+                );
+                acc += wt * dp / sigma;
+                wt *= calliope::drought::MEM;
+            }
+            acc * calliope::drought::NORM
+        };
+        let mut zs: Vec<f64> = Vec::with_capacity(log.famine_sites.len());
+        for &(m, x, y, _) in &log.famine_sites {
+            zs.push(didx(m / 12, x, y));
         }
         let worst = zs.iter().cloned().fold(f64::INFINITY, f64::min);
         let driest_ok = zs
@@ -5247,11 +5266,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // predicate) is binned by the SPI it actually stood in, and the
         // share that starved is read off per bin. If rain governs, the
         // share is zero above the threshold and climbs as the bins dry.
-        let spi_of = |year: i64, x: i64, y: i64| -> f64 {
-            let lat = (-90.0 + (y as f64) * 180.0 / (rows - 1.0)).abs();
-            let sigma = calliope::climate::anomaly_amp_p(lat).max(1e-6);
-            w.with_year_sky(year, |_, dp, _| dp[[y as usize, x as usize]]) / sigma
-        };
+        let spi_of = |year: i64, x: i64, y: i64| -> f64 { didx(year, x, y) };
         let struck: BTreeSet<(i64, i64, i64)> =
             log.famine_sites.iter().map(|&(m, x, y, _)| (m / 12, x, y)).collect();
         // bins, driest first: ≤−2 (extreme), (−2,−1] (moderate), (−1,0], >0

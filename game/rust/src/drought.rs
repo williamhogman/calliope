@@ -310,7 +310,7 @@ impl World {
             while let Some(i) = stack.pop() {
                 cells.push(i);
                 let (cy, cx) = (i / d.cols, i % d.cols);
-                let mut push = |ny: usize, nx: usize, stack: &mut Vec<usize>, seen: &mut Vec<bool>| {
+                let push = |ny: usize, nx: usize, stack: &mut Vec<usize>, seen: &mut Vec<bool>| {
                     let j = ny * d.cols + nx;
                     if dry[j] && !seen[j] {
                         seen[j] = true;
