@@ -70,12 +70,12 @@ pub const STRIDE: usize = 8;
 /// same line the harvest verdict reads) but HOLDS while the ground is
 /// merely parched. Without the second contour a region flickering across
 /// one line dies and is re-named every other year — the ledger blinks.
-pub const DRY_HOLD: f64 = -0.6;
+pub const DRY_HOLD: f64 = -0.45;
 
 /// The smallest failing core that earns a new name, in lattice nodes:
 /// 24 nodes ≈ 24 500 km², a country's worth of failed harvest, not a
 /// bad week over three valleys.
-pub const MIN_CORE: usize = 24;
+pub const MIN_CORE: usize = 32;
 
 /// The smallest region worth mapping at all, in lattice nodes, once a
 /// drought is alive and only holding.
