@@ -13,6 +13,24 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# M80 — the native harness is measured, not shipped: it must compile at the
+# crate's release profile (-O3), never at the wasm size profile. build.sh and
+# wasm-audit.sh pass `-C opt-level=z` through RUSTFLAGS for the wasm target,
+# and a stray ambient RUSTFLAGS from a shell that ran either of them would
+# silently halve E10.1/E10.2 (measured A/B on identical source, 3 seeds:
+# gen total 2399 → 3892 ms · year-100 tick 111 → 51 mo/s). Strip any inherited
+# opt-level here so the perf lane can only ever read the -O3 binary; anything
+# else the caller set is preserved.
+if [ -n "${RUSTFLAGS:-}" ]; then
+  CLEANED=$(printf '%s' "$RUSTFLAGS" \
+    | sed -E 's/(^|[[:space:]])-C[[:space:]]*opt-level=[^[:space:]]*//g; s/(^|[[:space:]])--codegen[[:space:]]*opt-level=[^[:space:]]*//g' \
+    | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')
+  if [ "$CLEANED" != "$RUSTFLAGS" ]; then
+    echo "== report.sh: stripped opt-level from inherited RUSTFLAGS (native harness builds at the release profile) =="
+  fi
+  if [ -z "$CLEANED" ]; then unset RUSTFLAGS; else export RUSTFLAGS="$CLEANED"; fi
+fi
+
 MODE="${1:-full}"
 FINAL_OUT="${2:-../reports}"
 mkdir -p "$FINAL_OUT"
