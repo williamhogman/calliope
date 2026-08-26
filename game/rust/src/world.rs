@@ -15,7 +15,8 @@ use crate::chronicle::{self, ChronicleState};
 use crate::climate;
 use crate::culture::{self};
 use crate::drought::{
-    DroughtEvent, Droughts, DRY_HOLD, FORMS, MEM, MEMO_YEARS, MIN_CORE, MIN_NODES, NODE_KM2, NORM,
+    DroughtEvent, Droughts, CAL_STRIDE, CAL_YEARS, DRY_HOLD, FORMS, MEM, MEMO_YEARS, MIN_CORE,
+    MIN_NODES, NODE_KM2, NORM,
     STRIDE,
 };
 use crate::economy::{self, Market};
@@ -1332,7 +1333,13 @@ impl GenBuilder {
         world.dirty.clear(Dirty::TERRITORY); // ships with the pack, not the first tick
         // Seed the delta baseline (E4.2/E4.3) to what bootstrap() ships.
         world.prime_sent();
+        // M80 follow-up — measure what this world's own sky does to the
+        // accumulated sum, so `famine::DROUGHT_Z` means the same crossing
+        // rate it meant before the memory existed. Once, at the dawn,
+        // from a fixed window of prehistory: pure in seed × size.
+        world.droughts.norm = world.calibrate_drought_norm();
         self.world = Some(world);
+
     }
 }
 
@@ -3731,6 +3738,80 @@ mod storm_felling_tests {
 // the `impl World` half of M80 lives with the type it extends. The
 // ledger, the lattice and the constants stay in `drought.rs`.
 impl World {
+    /// M80 follow-up — this world's renormalization of the accumulated
+    /// sum, measured against its own sky rather than assumed from
+    /// independent years (see `drought::NORM`). Falls back to the
+    /// independence baseline on an uncalibrated ledger.
+    pub fn drought_norm(&self) -> f64 {
+        if self.droughts.norm > 0.0 {
+            self.droughts.norm
+        } else {
+            NORM
+        }
+    }
+
+    /// Measure the scalar: over a fixed deterministic sample of the
+    /// sky's own prehistory, compare the spread of the weighted sum with
+    /// the spread of the single standardized year it replaces, and
+    /// return the factor that makes them equal. That equality *is* the
+    /// M80 contract — memory changes when the ground fails, never how
+    /// often a threshold is crossed. Pure in seed × size: the sample
+    /// grid, the year window and the land test are all fixed.
+    pub(crate) fn calibrate_drought_norm(&self) -> f64 {
+        let rows = self.fields.tmean.dim().0;
+        let cols = self.fields.tmean.dim().1;
+        let (mut zn, mut z1, mut z2) = (0.0f64, 0.0f64, 0.0f64);
+        let (mut sn, mut s1, mut s2) = (0.0f64, 0.0f64, 0.0f64);
+        for y in (0..rows).step_by(CAL_STRIDE) {
+            let sigma = climate::anomaly_amp_p(row_lat(rows, y)).max(1e-6);
+            for x in (0..cols).step_by(CAL_STRIDE) {
+                if self.fields.height[[y, x]] < 0.0 {
+                    continue;
+                }
+                // The window runs over negative years — the sky exists
+                // before the founding — so the scalar never shifts as the
+                // world ages.
+                let mut ring = [0.0f64; MEMO_YEARS];
+                for t in 0..(CAL_YEARS + MEMO_YEARS as i64) {
+                    let yr = -(CAL_YEARS + MEMO_YEARS as i64) + t;
+                    let (_, dp) = climate::year_anomaly_at(
+                        self.variability(),
+                        rows,
+                        x,
+                        y,
+                        yr,
+                        self.year_osc(yr),
+                    );
+                    let z = dp / sigma;
+                    // newest first
+                    ring.rotate_right(1);
+                    ring[0] = z;
+                    if t < MEMO_YEARS as i64 - 1 {
+                        continue; // window not yet full
+                    }
+                    let mut acc = 0.0f64;
+                    let mut w = 1.0f64;
+                    for k in 0..MEMO_YEARS {
+                        acc += w * ring[k];
+                        w *= MEM;
+                    }
+                    zn += 1.0;
+                    z1 += z;
+                    z2 += z * z;
+                    sn += 1.0;
+                    s1 += acc;
+                    s2 += acc * acc;
+                }
+            }
+        }
+        if zn < 2.0 || sn < 2.0 {
+            return NORM;
+        }
+        let zv = (z2 / zn - (z1 / zn) * (z1 / zn)).max(1e-12);
+        let sv = (s2 / sn - (s1 / sn) * (s1 / sn)).max(1e-12);
+        (zv / sv).sqrt()
+    }
+
     /// The drought index at one cell in one year — the law itself
     /// (see the module header). Pure in seed × cell × year.
     pub fn drought_index(&self, year: i64, y: usize, x: usize) -> f64 {
@@ -3745,8 +3826,9 @@ impl World {
             acc += w * dp / sigma;
             w *= MEM;
         }
-        acc * NORM
+        acc * self.drought_norm()
     }
+
 
     /// The single year's standardized anomaly, kept public because the
     /// harness and the explain layer both want to show the year apart
@@ -3765,7 +3847,9 @@ impl World {
         let year = month_abs / 12;
         let mut d = std::mem::take(&mut self.droughts);
         if d.rows == 0 {
+            let norm = d.norm;
             d = Droughts::new(&self.fields.height);
+            d.norm = norm; // the calibration survives the lazy build
         }
         let out = self.drought_map(&mut d, year, month_abs);
         self.droughts = d;
@@ -3812,7 +3896,7 @@ impl World {
                 acc += w * g[i] as f64;
                 w *= MEM;
             }
-            d.index[i] = (acc * NORM) as f32;
+            d.index[i] = (acc * self.drought_norm()) as f32;
         }
 
         // Two thresholds, not one (hysteresis). A drought must ENTER on
