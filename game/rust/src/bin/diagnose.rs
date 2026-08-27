@@ -6622,6 +6622,21 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // the closest the desert ever came: max over rings of (dry − winner)
         let mut best_margin = f64::NEG_INFINITY;
         let mut margin_at = (0usize, 0usize, 0i64, 0.0f64, 0.0f64);
+        // M81 attribution — of the rings the desert *won*, how many of the
+        // engine's own colonisation gates did that parent actually clear
+        // in that decade? Winning the auction is not founding a town: the
+        // parent must also be crowded (`ppop ≥ 380`, `ppop ≥ 0.72·kland`),
+        // must draw the 2% monthly ticket, and — past the soft cap — the
+        // site must be ore-led. A flood that takes souls off a parent
+        // moves exactly the first two.
+        let mut dw_pop = 0usize;   // ppop ≥ 380
+        let mut dw_crowd = 0usize; // ppop ≥ 0.72·kland
+        let mut dw_both = 0usize;  // both, i.e. an eligible drawer
+        let mut dw_ore = 0usize;   // winner reads ore-led
+        let mut dw_capped = 0usize; // census already at the soft cap
+        let mut dw_short = f64::INFINITY; // smallest crowding shortfall seen
+        let mut dw_short_at = (0usize, 0usize, 0i64, 0i64, 0.0f64);
+
 
         let step = 1usize;
         let mut done = 0usize;
