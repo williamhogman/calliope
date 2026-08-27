@@ -3919,8 +3919,9 @@ impl World {
             let frac = (crate::flood::DMG_GAIN * excess).min(crate::flood::DMG_CAP);
             let hit = ((pop as f64) * frac) as i64;
             let silt = (crate::flood::SILT_GAIN * excess).min(crate::flood::SILT_CAP);
-            // the silt sheet: the drowned ground and the valley floor
-            // around it, feeding next year's season
+            let drown = (crate::flood::DROWN_GAIN * excess).min(crate::flood::DROWN_CAP);
+            // the sheets: the drowned ground and the valley floor around
+            // it lose this year's crop and are fed the next year's season
             let (rows, cols) = self.fields.height.dim();
             for dy in -crate::flood::SILT_REACH..=crate::flood::SILT_REACH {
                 for dx in -crate::flood::SILT_REACH..=crate::flood::SILT_REACH {
@@ -3932,8 +3933,9 @@ impl World {
                         continue;
                     }
                     // the ring is thinner than the channel's own ground
-                    let g = if dy == 0 && dx == 0 { silt } else { silt * 0.6 };
-                    self.floods.lay(year + 1, ny, nx, g);
+                    let thin = if dy == 0 && dx == 0 { 1.0 } else { 0.6 };
+                    self.floods.lay(year + 1, ny, nx, silt * thin);
+                    self.floods.lay_drown(year, ny, nx, drown * thin);
                 }
             }
             if hit > 0 {
@@ -3951,7 +3953,9 @@ impl World {
                 frac,
                 hit,
                 silt,
+                drown,
             });
+
             let text = if hit >= 4 {
                 format!(
                     "The river rises over {} — {} are lost to the water, and the fields it drowns come back richer.",
