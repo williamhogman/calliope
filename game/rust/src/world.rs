@@ -3877,6 +3877,100 @@ impl World {
         out
     }
 
+    /// M81 — the yearly spate. In the fourth month, the melt-and-rain
+    /// stage every river carries this year is read at each river town's
+    /// own cell and compared with the stage its banks and levees hold.
+    /// Where the water is higher the levees are overtopped: souls are
+    /// lost, bounded by [`crate::flood::DMG_CAP`], and the floodplain around the town
+    /// is silted for the *following* growing season.
+    ///
+    /// Runs before the harvest verdict's month, and the silt it lays is
+    /// dated a year ahead, so a flood never flatters the harvest it
+    /// drowned — only the one after it.
+    pub(crate) fn flood_pass(&mut self, month_abs: i64) -> Vec<Event> {
+        let mut events = Vec::new();
+        if month_abs.rem_euclid(12) != 3 {
+            return events;
+        }
+        let year = month_abs / 12;
+        self.floods.sweep(year);
+        for i in 0..self.peoples.settlements.len() {
+            let (y, x, pop, culture, river, name, sid) = {
+                let s = &self.peoples.settlements[i];
+                (s.y, s.x, s.pop, s.people, s.river, s.name.clone(), s.id)
+            };
+            if !river || pop < crate::flood::MIN_POP {
+                continue;
+            }
+            let cap = {
+                let so = self.peoples.societies.get(culture.0);
+                crate::flood::capacity(|t| so.map_or(false, |s| s.knows(t)))
+            };
+            let factor = self.year_site_flow_factor(year, y as usize, x as usize);
+            let excess = factor - cap;
+            if excess <= 0.0 {
+                continue;
+            }
+            let frac = (crate::flood::DMG_GAIN * excess).min(crate::flood::DMG_CAP);
+            let hit = ((pop as f64) * frac) as i64;
+            let silt = (crate::flood::SILT_GAIN * excess).min(crate::flood::SILT_CAP);
+            // the silt sheet: the drowned ground and the valley floor
+            // around it, feeding next year's season
+            let (rows, cols) = self.fields.height.dim();
+            for dy in -crate::flood::SILT_REACH..=crate::flood::SILT_REACH {
+                for dx in -crate::flood::SILT_REACH..=crate::flood::SILT_REACH {
+                    let (ny, nx) = (y + dy, x + dx);
+                    if ny < 0 || nx < 0 || ny >= rows as i64 || nx >= cols as i64 {
+                        continue;
+                    }
+                    if self.fields.height[[ny as usize, nx as usize]] < 0.0 {
+                        continue;
+                    }
+                    // the ring is thinner than the channel's own ground
+                    let g = if dy == 0 && dx == 0 { silt } else { silt * 0.6 };
+                    self.floods.lay(year + 1, ny, nx, g);
+                }
+            }
+            if hit > 0 {
+                self.peoples.settlements[i].pop = (pop - hit).max(30);
+            }
+            self.floods.rows.push(crate::flood::FloodRow {
+                m: month_abs,
+                year,
+                x,
+                y,
+                sid: sid.0 as usize,
+                pop,
+                factor,
+                cap,
+                frac,
+                hit,
+                silt,
+            });
+            let text = if hit >= 4 {
+                format!(
+                    "The river rises over {} — {} are lost to the water, and the fields it drowns come back richer.",
+                    name, hit
+                )
+            } else {
+                format!(
+                    "The river spills its banks at {} — the levees hold what they can, and the silt is laid over the fields.",
+                    name
+                )
+            };
+            events.push(Event {
+                m: month_abs,
+                s: name,
+                k: EventKind::Flood,
+                text,
+                x,
+                y,
+                ..Default::default()
+            });
+        }
+        events
+    }
+
     fn lattice_year(&self, d: &Droughts, year: i64) -> Vec<f32> {
         let rows = self.fields.tmean.dim().0;
         let osc = self.year_osc(year);
