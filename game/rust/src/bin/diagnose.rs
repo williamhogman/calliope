@@ -6737,6 +6737,8 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 let mut win_dry = false;
                 let mut dry_best = f64::NEG_INFINITY;
                 let mut dry_at = (0usize, 0usize);
+                let mut win_at = (0usize, 0usize);
+
                 for y in y0..y1 {
                     for x in x0..x1 {
                         let dyp = y as f64 - parent.y as f64;
