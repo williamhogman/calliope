@@ -1520,8 +1520,12 @@ impl World {
     /// can never be handed more water than the river is stated to carry.
     pub fn year_yield(&self, year: i64, y: usize, x: usize) -> f64 {
         let base = self.year_yield_bare(year, y, x);
-        // M81 — last year's spate pays this year's harvest: the silt sheet
-        // laid on the floodplain lifts the season it feeds, once.
+        // M81 — the water takes the year it stands in: a spate this season
+        // destroys the crop under it before any silt is ever farmed.
+        let drown = self.floods.drown_loss(year, y, x);
+        let base = if drown > 0.0 { base * (1.0 - drown) } else { base };
+        // M81 — and last year's spate pays this year's harvest: the silt
+        // sheet laid on the floodplain lifts the season it feeds, once.
         let silt = self.floods.silt_bonus(year, y, x);
         if silt <= 0.0 {
             base
@@ -1529,6 +1533,7 @@ impl World {
             (base * (1.0 + silt)).min(agriculture::YIELD_CEIL)
         }
     }
+
 
     /// The same harvest read with the floodplain's silt sheet ignored —
     /// the counterfactual the M81 gate measures the gift against.
@@ -3914,8 +3919,9 @@ impl World {
             let frac = (crate::flood::DMG_GAIN * excess).min(crate::flood::DMG_CAP);
             let hit = ((pop as f64) * frac) as i64;
             let silt = (crate::flood::SILT_GAIN * excess).min(crate::flood::SILT_CAP);
-            // the silt sheet: the drowned ground and the valley floor
-            // around it, feeding next year's season
+            let drown = (crate::flood::DROWN_GAIN * excess).min(crate::flood::DROWN_CAP);
+            // the sheets: the drowned ground and the valley floor around
+            // it lose this year's crop and are fed the next year's season
             let (rows, cols) = self.fields.height.dim();
             for dy in -crate::flood::SILT_REACH..=crate::flood::SILT_REACH {
                 for dx in -crate::flood::SILT_REACH..=crate::flood::SILT_REACH {
@@ -3927,8 +3933,9 @@ impl World {
                         continue;
                     }
                     // the ring is thinner than the channel's own ground
-                    let g = if dy == 0 && dx == 0 { silt } else { silt * 0.6 };
-                    self.floods.lay(year + 1, ny, nx, g);
+                    let thin = if dy == 0 && dx == 0 { 1.0 } else { 0.6 };
+                    self.floods.lay(year + 1, ny, nx, silt * thin);
+                    self.floods.lay_drown(year, ny, nx, drown * thin);
                 }
             }
             if hit > 0 {
@@ -3946,7 +3953,9 @@ impl World {
                 frac,
                 hit,
                 silt,
+                drown,
             });
+
             let text = if hit >= 4 {
                 format!(
                     "The river rises over {} — {} are lost to the water, and the fields it drowns come back richer.",

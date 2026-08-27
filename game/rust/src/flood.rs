@@ -73,10 +73,27 @@ pub const SILT_GAIN: f64 = 0.55;
 /// flood is a good year on the floodplain, not a second harvest.
 pub const SILT_CAP: f64 = 0.22;
 
+/// **The drowned season.** The water that lays the silt is standing on
+/// the fields *now*: a breach in the growing season destroys the crop it
+/// covers, and the recompense arrives only with the next sowing. Without
+/// this the spate is a pure gift — a town loses a bounded share of its
+/// people once and is handed a richer harvest forever after, which made
+/// riverside peoples advance faster *because* their river drowned them.
+/// The loss is the mirror of the gift, on the same excess and the same
+/// ground, so the law reads in one breath: the river takes the year it
+/// stands in and pays the year that follows.
+pub const DROWN_GAIN: f64 = SILT_GAIN;
+
+/// The most a spate may take off the standing crop — the mirror of
+/// [`SILT_CAP`]. A drowned field is a failed season on that ground, never
+/// a salted one.
+pub const DROWN_CAP: f64 = SILT_CAP;
+
 /// How far off the drowned cell the silt sheet is laid, in grid cells.
 /// One ring: the valley floor the water actually spread over (the same
 /// reach `agriculture` calls the floodplain).
 pub const SILT_REACH: i64 = 1;
+
 
 /// One flood, as the ledger recorded it — everything the gate needs to
 /// re-derive the event from the seed and to price its cost.
@@ -101,10 +118,13 @@ pub struct FloodRow {
     pub hit: i64,
     /// Silt strength laid on the ground for the following season.
     pub silt: f64,
+    /// Share of *this* season's standing crop the water destroyed on the
+    /// drowned ground (≤ [`DROWN_CAP`]).
+    pub drown: f64,
 }
 
-/// The flood ledger: every spate the world has lived through, and the
-/// silt those spates left on the ground for the season after.
+/// The flood ledger: every spate the world has lived through, the crop it
+/// drowned in its own year, and the silt it left for the season after.
 #[derive(Default)]
 pub struct Floods {
     /// Every flood, in the order they struck.
@@ -114,6 +134,10 @@ pub struct Floods {
     /// it feeds has passed. Lookups only — iteration order never reaches
     /// an output (ADR-0003).
     pub(crate) silt: HashMap<(i64, i64), (i64, f64)>,
+    /// `cell → (the year this loss falls on, its depth)`. The mirror of
+    /// `silt`, dated to the flood's own year. Same discipline: lookups
+    /// only, richer layer wins, spent when the year has passed.
+    pub(crate) drown: HashMap<(i64, i64), (i64, f64)>,
 }
 
 impl Floods {
@@ -121,6 +145,15 @@ impl Floods {
     /// that season's yield factor, zero on unflooded or spent ground.
     pub fn silt_bonus(&self, year: i64, y: usize, x: usize) -> f64 {
         match self.silt.get(&(y as i64, x as i64)) {
+            Some(&(yr, g)) if yr == year => g,
+            _ => 0.0,
+        }
+    }
+
+    /// The share of `year`'s crop the water took on this cell, zero on
+    /// ground no spate stood over.
+    pub fn drown_loss(&self, year: i64, y: usize, x: usize) -> f64 {
+        match self.drown.get(&(y as i64, x as i64)) {
             Some(&(yr, g)) if yr == year => g,
             _ => 0.0,
         }
@@ -135,32 +168,49 @@ impl Floods {
         }
     }
 
+    /// Drown `year`'s crop on this cell to `depth`, keeping the deeper of
+    /// two losses where two spates cover the same ground.
+    pub(crate) fn lay_drown(&mut self, year: i64, y: i64, x: i64, depth: f64) {
+        let e = self.drown.entry((y, x)).or_insert((year, 0.0));
+        if e.0 != year || e.1 < depth {
+            *e = (year, depth);
+        }
+    }
+
     /// Drop layers whose season has passed — the ledger stays bounded and
-    /// the map only ever carries this year's and next year's silt.
+    /// the map only ever carries this year's and next year's sheets.
     pub(crate) fn sweep(&mut self, year: i64) {
         self.silt.retain(|_, v| v.0 >= year);
+        self.drown.retain(|_, v| v.0 >= year);
     }
 
     /// Identity line (ADR-0003): floods are state — who drowned, when,
-    /// how deep, and what the ground was given back.
+    /// how deep, what the water took this year and what the ground was
+    /// given back the next.
     pub fn hash(&self) -> u64 {
         let mut s = String::new();
         for r in &self.rows {
             s.push_str(&format!(
-                "{}|{}|{}|{}|{}|{:.4}|{:.4}|{:.4}|{}|{:.4}\n",
-                r.m, r.sid, r.x, r.y, r.pop, r.factor, r.cap, r.frac, r.hit, r.silt
+                "{}|{}|{}|{}|{}|{:.4}|{:.4}|{:.4}|{}|{:.4}|{:.4}\n",
+                r.m, r.sid, r.x, r.y, r.pop, r.factor, r.cap, r.frac, r.hit, r.silt, r.drown
             ));
         }
-        // The standing silt sheet rides the line too, in a fixed order —
-        // a replay that lost a layer would farm a different next year.
+        // The standing sheets ride the line too, in a fixed order — a
+        // replay that lost a layer would farm a different season.
         let mut cells: Vec<(&(i64, i64), &(i64, f64))> = self.silt.iter().collect();
         cells.sort_by_key(|(k, _)| **k);
         for ((y, x), (yr, g)) in cells {
             s.push_str(&format!("s{}|{}|{}|{:.4}\n", y, x, yr, g));
         }
+        let mut dcells: Vec<(&(i64, i64), &(i64, f64))> = self.drown.iter().collect();
+        dcells.sort_by_key(|(k, _)| **k);
+        for ((y, x), (yr, g)) in dcells {
+            s.push_str(&format!("d{}|{}|{}|{:.4}\n", y, x, yr, g));
+        }
         crate::util::fnv1a64(s.as_bytes())
     }
 }
+
 
 /// The stage a town's banks hold: bankfull plus whatever levee craft its
 /// people have learned. Pure in the town's society, so the harness can
