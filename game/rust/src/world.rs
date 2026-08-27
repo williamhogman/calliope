@@ -3923,6 +3923,7 @@ impl World {
             let drown = (crate::flood::DROWN_GAIN * excess).min(crate::flood::DROWN_CAP);
             // the sheets: the drowned ground and the valley floor around
             // it lose this year's crop and are fed the next year's season
+            let abl = crate::flood::Ablate::get();
             let (rows, cols) = self.fields.height.dim();
             for dy in -crate::flood::SILT_REACH..=crate::flood::SILT_REACH {
                 for dx in -crate::flood::SILT_REACH..=crate::flood::SILT_REACH {
@@ -3935,13 +3936,18 @@ impl World {
                     }
                     // the ring is thinner than the channel's own ground
                     let thin = if dy == 0 && dx == 0 { 1.0 } else { 0.6 };
-                    self.floods.lay(year + 1, ny, nx, silt * thin);
-                    self.floods.lay_drown(year, ny, nx, drown * thin);
+                    if abl.silt {
+                        self.floods.lay(year + 1, ny, nx, silt * thin);
+                    }
+                    if abl.drown {
+                        self.floods.lay_drown(year, ny, nx, drown * thin);
+                    }
                 }
             }
-            if hit > 0 {
+            if hit > 0 && abl.pop_toll {
                 self.peoples.settlements[i].pop = (pop - hit).max(30);
             }
+
             self.floods.rows.push(crate::flood::FloodRow {
                 m: month_abs,
                 year,
