@@ -6653,8 +6653,12 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     .unwrap_or(0.0);
                 births.push((s.id.0, s.y, s.x, table, reach, cf.month));
             }
+            if done % 10 != 0 && done != years {
+                continue;
+            }
             // M58 — judge the desert at the price the hungriest crown
             // would pay for it, not at the market's neutral voice.
+
             let claims_s = cf.claim_pressure();
             let realm_s = claims_s
                 .iter()
