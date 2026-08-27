@@ -94,6 +94,14 @@ pub const DROWN_CAP: f64 = SILT_CAP;
 /// reach `agriculture` calls the floodplain).
 pub const SILT_REACH: i64 = 1;
 
+/// M81 — the share of a spate's toll that is scattered rather than
+/// drowned. Shipped at zero: until the sweep proves a value, every soul
+/// the water takes stays taken.
+pub const RETURN_SHARE: f64 = 0.0;
+
+/// M81 — how many seasons the scattered take to walk home.
+pub const RETURN_YEARS: i64 = 3;
+
 /// Ablation switches for the flood pass — a diagnostic instrument, not a
 /// tuning surface. Every switch defaults to *on*, so the shipped
 /// simulation is exactly the unablated M81 flood; a switch is turned off
@@ -112,6 +120,11 @@ pub struct Ablate {
     pub toll_scale: f64,
     /// calibration sweep only: an override on the toll's cap, shipped DMG_CAP
     pub toll_cap: f64,
+    /// share of the toll that is scattered rather than drowned, and so
+    /// walks home over the years after; 0.0 is the shipped M81
+    pub return_share: f64,
+    /// how many seasons the scattered take to come home
+    pub return_years: i64,
 }
 
 impl Ablate {
@@ -129,6 +142,8 @@ impl Ablate {
             silt: on("CALLIOPE_ABL_FLOOD_SILT"),
             toll_scale: num("CALLIOPE_SWEEP_TOLL_SCALE", 1.0),
             toll_cap: num("CALLIOPE_SWEEP_TOLL_CAP", DMG_CAP),
+            return_share: num("CALLIOPE_SWEEP_RETURN_SHARE", RETURN_SHARE),
+            return_years: num("CALLIOPE_SWEEP_RETURN_YEARS", RETURN_YEARS as f64) as i64,
         }
     }
 
@@ -140,7 +155,13 @@ impl Ablate {
 
     /// True when nothing is ablated — the shipped simulation.
     pub fn whole(&self) -> bool {
-        self.pop_toll && self.drown && self.silt && self.toll_scale == 1.0 && self.toll_cap == DMG_CAP
+        self.pop_toll
+            && self.drown
+            && self.silt
+            && self.toll_scale == 1.0
+            && self.toll_cap == DMG_CAP
+            && self.return_share == RETURN_SHARE
+            && self.return_years == RETURN_YEARS
     }
 }
 
@@ -191,7 +212,14 @@ pub struct Floods {
     /// `silt`, dated to the flood's own year. Same discipline: lookups
     /// only, richer layer wins, spent when the year has passed.
     pub(crate) drown: HashMap<(i64, i64), (i64, f64)>,
+    /// M81 — the return ledger: `(the year they come home, the town, how
+    /// many)`. A spate kills at the water's edge and scatters more than
+    /// it kills; the scattered are off the town's books that year and
+    /// walk back over the seasons after. Kept as a flat, insertion-order
+    /// list so no map iteration ever reaches an output (ADR-0003).
+    pub(crate) returns: Vec<(i64, usize, i64)>,
 }
+
 
 impl Floods {
     /// The silt bonus standing on a cell in `year`: a fraction to add to
@@ -236,6 +264,29 @@ impl Floods {
         self.silt.retain(|_, v| v.0 >= year);
         self.drown.retain(|_, v| v.0 >= year);
     }
+
+    /// Book `souls` to walk back into town `sid` in `year`.
+    pub(crate) fn owe(&mut self, year: i64, sid: usize, souls: i64) {
+        if souls > 0 {
+            self.returns.push((year, sid, souls));
+        }
+    }
+
+    /// Take everyone due home in `year`, dropping the entries as they are
+    /// paid. Insertion order, so the walk is deterministic.
+    pub(crate) fn due(&mut self, year: i64) -> Vec<(usize, i64)> {
+        let mut home = Vec::new();
+        self.returns.retain(|&(y, sid, n)| {
+            if y == year {
+                home.push((sid, n));
+                false
+            } else {
+                y > year
+            }
+        });
+        home
+    }
+
 
     /// Identity line (ADR-0003): floods are state — who drowned, when,
     /// how deep, what the water took this year and what the ground was
