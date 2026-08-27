@@ -6870,6 +6870,13 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             if best_margin.is_finite() { best_margin } else { 0.0 },
             margin_at.0, margin_at.1, margin_at.2, margin_at.3, margin_at.4
         );
+        println!(
+            "the gates behind the auction (M55): of {} desert-winning rings — parent ≥380 souls {} · crowded past 0.72·kland {} · both (a real drawer) {} · winner ore-led {} · census at soft cap {} · nearest miss {:.0} souls short at ({},{}) month {} (pop {} vs kland {:.0})",
+            rings_dry_won, dw_pop, dw_crowd, dw_both, dw_ore, dw_capped,
+            if dw_short.is_finite() { dw_short } else { 0.0 },
+            dw_short_at.0, dw_short_at.1, dw_short_at.2, dw_short_at.3, dw_short_at.4
+        );
+
 
         let cf_dry = cf
             .peoples
