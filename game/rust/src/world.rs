@@ -3917,8 +3917,10 @@ impl World {
             if excess <= 0.0 {
                 continue;
             }
-            let frac = (crate::flood::DMG_GAIN * excess).min(crate::flood::DMG_CAP);
+            let abl = crate::flood::Ablate::get();
+            let frac = (crate::flood::DMG_GAIN * abl.toll_scale * excess).min(abl.toll_cap);
             let hit = ((pop as f64) * frac) as i64;
+
             let silt = (crate::flood::SILT_GAIN * excess).min(crate::flood::SILT_CAP);
             let drown = (crate::flood::DROWN_GAIN * excess).min(crate::flood::DROWN_CAP);
             // the sheets: the drowned ground and the valley floor around
