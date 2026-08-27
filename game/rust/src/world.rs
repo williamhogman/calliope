@@ -304,7 +304,8 @@ pub struct World {
     /// The coastal band (land within 2 cells of sea) — the ground the
     /// shelter field scores; pub so diagnostics read the same mask.
     pub coast: Array2<bool>,
-    max_settlements: usize,
+    /// pub since M81: the harness re-holds the colonisation gates.
+    pub max_settlements: usize,
     /// pub since M46: diagnose re-walks route legs against the current.
     pub trade: trade::TradeGrid,
     pub timings: Vec<(&'static str, f64)>,
