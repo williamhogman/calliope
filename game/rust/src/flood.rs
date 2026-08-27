@@ -73,10 +73,27 @@ pub const SILT_GAIN: f64 = 0.55;
 /// flood is a good year on the floodplain, not a second harvest.
 pub const SILT_CAP: f64 = 0.22;
 
+/// **The drowned season.** The water that lays the silt is standing on
+/// the fields *now*: a breach in the growing season destroys the crop it
+/// covers, and the recompense arrives only with the next sowing. Without
+/// this the spate is a pure gift — a town loses a bounded share of its
+/// people once and is handed a richer harvest forever after, which made
+/// riverside peoples advance faster *because* their river drowned them.
+/// The loss is the mirror of the gift, on the same excess and the same
+/// ground, so the law reads in one breath: the river takes the year it
+/// stands in and pays the year that follows.
+pub const DROWN_GAIN: f64 = SILT_GAIN;
+
+/// The most a spate may take off the standing crop — the mirror of
+/// [`SILT_CAP`]. A drowned field is a failed season on that ground, never
+/// a salted one.
+pub const DROWN_CAP: f64 = SILT_CAP;
+
 /// How far off the drowned cell the silt sheet is laid, in grid cells.
 /// One ring: the valley floor the water actually spread over (the same
 /// reach `agriculture` calls the floodplain).
 pub const SILT_REACH: i64 = 1;
+
 
 /// One flood, as the ledger recorded it — everything the gate needs to
 /// re-derive the event from the seed and to price its cost.
