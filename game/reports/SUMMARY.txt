@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-27 15:09 UTC
+mode: full · size: 512 · generated: 2026-08-27 16:00 UTC
 
-totals: 1356 pass · 40 warn · 7 fail
+totals: 1363 pass · 40 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -13,7 +13,7 @@ totals: 1356 pass · 40 warn · 7 fail
 [WARN] median tick payload                          6778 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
-[WARN] boot to engine ready                               21.9 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
+[WARN] boot to engine ready                               21.6 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
 
 -- build.txt
    all checks pass
@@ -54,7 +54,7 @@ totals: 1356 pass · 40 warn · 7 fail
    all checks pass
 
 -- compute.txt
-   all checks pass
+[WARN] coast law cpu ms                             183 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
 
 -- determinism.txt
    all checks pass
@@ -73,8 +73,6 @@ totals: 1356 pass · 40 warn · 7 fail
 
 -- gate.txt
 [WARN] the veto bites somewhere in the ensemble 0 refused town(s) over 2 civ lane(s) [12345:0 · 777:0]   (M55, held as a want since M81: the veto-lifted run standing ≥1 town beyond its founder's well reach is a contingency of composed history — M81's population toll lawfully moved every canonical desert win past deep-well craft, so nothing is left to refuse; the law itself stays proven by the property lanes and the no-town-drinks-where-it-cannot musts)
-[FAIL] the suite composes clean             5 fail · 39 warn · 1349 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
-[FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
 
 -- hydro-12345.txt
 [WARN] oasis share of arid land %                    25.7%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
@@ -102,12 +100,11 @@ totals: 1356 pass · 40 warn · 7 fail
 [WARN] civ arcs completed per 300 y         5.7 (gold 9 · arcs 17)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
 
 -- perf.txt
-[WARN] stage fertility ms                   190 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage naming ms                      135 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
-[WARN] stage settlements ms                 310 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         3197 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 0                     545 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[WARN] tick rate year 100                   128 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   155 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage settlements ms                 260 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         2733 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     632 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   118 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
@@ -136,11 +133,7 @@ totals: 1356 pass · 40 warn · 7 fail
    all checks pass
 
 -- teleconnection.txt
-[FAIL] the tilt derives exactly · 12345     |forced - counterfactual - bias| max 2.6e-2   (M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding)
-[FAIL] the tilt derives exactly · 777       |forced - counterfactual - bias| max 6.3e-2   (M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding)
-[FAIL] the tilt derives exactly · 31337     |forced - counterfactual - bias| max 3.8e-2   (M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding)
-[FAIL] the tilt derives exactly · 90210     |forced - counterfactual - bias| max 4.4e-2   (M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding)
-[FAIL] the tilt derives exactly · 555       |forced - counterfactual - bias| max 6.5e-2   (M75: the coupling is the declared function of (index, latitude) and nothing else — an unexplained residual is a second mechanism hiding)
+   all checks pass
 
 -- telling-12345.txt
    all checks pass
