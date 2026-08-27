@@ -6802,12 +6802,13 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                         // the engine's own gates, evaluated on this parent
                         // in this decade — the same arithmetic as
                         // `World::try_colonize`, read, never rolled.
-                        let md = calliope::society::mods_for(
-                            cf.peoples
-                                .societies
-                                .get(parent.people.idx())
-                                .unwrap_or(&Default::default()),
-                        );
+                        let md = cf
+                            .peoples
+                            .societies
+                            .get(parent.people.idx())
+                            .map(calliope::society::mods_for)
+                            .unwrap_or_default();
+
                         let kland = calliope::settlements::capacity_at(
                             &cf.fields.crops,
                             &cf.fields.fertility,
