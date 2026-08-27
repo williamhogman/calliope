@@ -94,6 +94,46 @@ pub const DROWN_CAP: f64 = SILT_CAP;
 /// reach `agriculture` calls the floodplain).
 pub const SILT_REACH: i64 = 1;
 
+/// Ablation switches for the flood pass — a diagnostic instrument, not a
+/// tuning surface. Every switch defaults to *on*, so the shipped
+/// simulation is exactly the unablated M81 flood; a switch is turned off
+/// only by a harness run that wants to read one component's causal
+/// contribution in isolation. Read once, from the environment, and never
+/// from the clock: a given environment is a pure function of the run.
+#[derive(Clone, Copy)]
+pub struct Ablate {
+    /// the population toll the spate takes off the town
+    pub pop_toll: bool,
+    /// the drowned year: this season's crop lost under the water
+    pub drown: bool,
+    /// the gift: next season's silt sheet on the floodplain
+    pub silt: bool,
+}
+
+impl Ablate {
+    fn read() -> Self {
+        let on = |k: &str| std::env::var(k).ok().as_deref() != Some("0");
+        Ablate {
+            pop_toll: on("CALLIOPE_ABL_FLOOD_POP"),
+            drown: on("CALLIOPE_ABL_FLOOD_DROWN"),
+            silt: on("CALLIOPE_ABL_FLOOD_SILT"),
+        }
+    }
+
+    /// The switches for this process, read once.
+    pub fn get() -> Self {
+        static CELL: std::sync::OnceLock<Ablate> = std::sync::OnceLock::new();
+        *CELL.get_or_init(Ablate::read)
+    }
+
+    /// True when nothing is ablated — the shipped simulation.
+    pub fn whole(&self) -> bool {
+        self.pop_toll && self.drown && self.silt
+    }
+}
+
+
+
 
 /// One flood, as the ledger recorded it — everything the gate needs to
 /// re-derive the event from the seed and to price its cost.
