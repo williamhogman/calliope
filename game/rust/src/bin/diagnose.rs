@@ -6799,7 +6799,55 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     rings += 1;
                     if win_dry {
                         rings_dry_won += 1;
+                        // the engine's own gates, evaluated on this parent
+                        // in this decade — the same arithmetic as
+                        // `World::try_colonize`, read, never rolled.
+                        let md = calliope::society::mods_for(
+                            cf.peoples
+                                .societies
+                                .get(parent.people.idx())
+                                .unwrap_or(&Default::default()),
+                        );
+                        let kland = calliope::settlements::capacity_at(
+                            &cf.fields.crops,
+                            &cf.fields.fertility,
+                            parent.y as usize,
+                            parent.x as usize,
+                            parent.coastal,
+                            parent.food,
+                            md.kaplan,
+                            md.capacity,
+                        )
+                        .max(180.0);
+                        let pop_ok = parent.pop >= 380;
+                        let crowd_ok = (parent.pop as f64) >= 0.72 * kland;
+                        if pop_ok {
+                            dw_pop += 1;
+                        }
+                        if crowd_ok {
+                            dw_crowd += 1;
+                        }
+                        if pop_ok && crowd_ok {
+                            dw_both += 1;
+                        }
+                        if pull_s[[win_at.0, win_at.1]]
+                            > cf.site_score[[win_at.0, win_at.1]].max(0.0)
+                        {
+                            dw_ore += 1;
+                        }
+                        if cf.peoples.settlements.len() >= cf.max_settlements {
+                            dw_capped += 1;
+                        }
+                        // how far short of the crowding bar this parent
+                        // stood — the margin a flood's toll moves
+                        let short = 0.72 * kland - parent.pop as f64;
+                        if pop_ok && !crowd_ok && short < dw_short {
+                            dw_short = short;
+                            dw_short_at =
+                                (win_at.0, win_at.1, cf.month, parent.pop, kland);
+                        }
                     }
+
                     if dry_best.is_finite() {
                         rings_dry_elig += 1;
                         let m = dry_best - win;
