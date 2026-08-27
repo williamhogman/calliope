@@ -3925,7 +3925,6 @@ impl World {
             let drown = (crate::flood::DROWN_GAIN * excess).min(crate::flood::DROWN_CAP);
             // the sheets: the drowned ground and the valley floor around
             // it lose this year's crop and are fed the next year's season
-            let abl = crate::flood::Ablate::get();
             let (rows, cols) = self.fields.height.dim();
             for dy in -crate::flood::SILT_REACH..=crate::flood::SILT_REACH {
                 for dx in -crate::flood::SILT_REACH..=crate::flood::SILT_REACH {
