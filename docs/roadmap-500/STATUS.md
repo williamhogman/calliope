@@ -47,6 +47,25 @@ the era files are binding; this ledger only records completion.
 
 ## Ready queue
 
+- **M81 silt-sheet probe measures a swept year (found 2026-08-27).** The
+  M81 row `the standing sheet reaches the harvest` FAILs at 0/0 on seed
+  777 despite 146 floods and correct engine wiring. `Floods::sweep` drops
+  layers whose season has passed, so a probe that reads the run's final
+  live year finds sheets only if a flood struck in that very year. This
+  is a harness-side measurement defect in `diagnose.rs:5764`, distinct
+  from the M55 interaction above; the fix is to read each row's own
+  following year rather than a single live year. No engine change.
+- **M55 ensemble breadth vs M81 (decision pending, 2026-08-27).** The
+  ensemble row composes over 2 civ lanes (12345 · 777) and 777 no longer
+  carries a refusal under M81. Options, none adopted: (a) widen the civ
+  ensemble to the third deterministic seed 90210 — which already runs in
+  the climate/hydro/resources/terrain lanes — as M80 did for the same
+  law; (b) re-derive the ore-led/census-cap post-selection so a delayed
+  ore-led window is not silently swallowed by the soft cap, which is a
+  colonisation-mechanism question, not a flood one; (c) accept the WARN
+  and record M81 as landing with a named, understood ensemble narrowing.
+  All three change something load-bearing and need operator direction.
+
 - CPU/GPU lens parity probe (discovered building M63): atlas.rs now
   generates the palettes and WGSL ramps both paths consume, but the
   *blend rules* — MDOW hillshade weighting, undersea province dimming,
@@ -311,6 +330,62 @@ the era files are binding; this ledger only records completion.
 | M80 | The Failed Year Named | 2026-08-26 | A failed year stops being a single bad roll and becomes an event with a shape, a footprint and a name. New `game/rust/src/drought.rs` carries a 12-year SPI memory per cell, so a crossing decays forward instead of resetting, with spatial hysteresis and rate limiting holding the mapped region together year to year; regions are matched across years, closed when they release, and named once through the chronicle naming bank. Direct evidence, seed 777 over the era leg: **96 droughts took hold (96 closed)**, **median span 2 y** (mean 2.7, longest 10) inside the unchanged 2–5 y gate, span histogram 1y 11 · 2y 41 · 3y 30 · 4y 9 · 5y 0 · ≥6y 5; **median extent 52 224 km²**; persistence chain index lag-1 spatial r **0.47**, whole hold-mask Jaccard **0.36**, **matched-region Jaccard 0.51** against the stable-extent gate; naming is one-to-one — **96 droughts · 96 distinct names · 96 chronicle announcements**. The system pays out causally: **26 of 92 famines (28%)** struck in a year whose own rain was above SPI −1 — the ground, not the year, was empty — while M72's hard boundary still holds (0 famines above SPI −1 over 404 wet-side town-years). Two genuine blockers were root-caused rather than tuned away. Per-world calibration of `Droughts::norm` fixed a climate-seesaw lag that had suppressed the M55 dry-frontier veto; the civ ensemble was widened to a third deterministic seed so the veto law is carried across worlds rather than by one history. A verified native tick-rate collapse (111 → 51 mo/s, y100 86 mo/s) was A/B-proved to be `-C opt-level=z` leaking from the WASM build into native diagnostics compilation; `scripts/report.sh` now strips inherited `-C opt-level=` before native builds, so the shipped WASM stays size-optimized and exactly audited while the harness runs at opt-level 3. Shipped wasm **2 839 188 B** (brotli wire 848 254 B, stamp `e4f74dc28a2d`), inside the unchanged 3.4 MiB ceiling; no threshold was moved. Report staging moved out of the working tree to `/tmp/calliope-report-stage` with copy-then-atomic-move publication after repeated environmental kills deleted in-repo staging mid-suite; four runs (8846, 791, 1360/989, 4532, 7006, r3) were discarded as incomplete rather than banked. Closure is the one uninterrupted run **r4**, published 2026-08-26 22:26 UTC: **1298 pass · 35 warn · 0 fail**. The era gate composes **43 lanes, all speaking**, at **1288 pass · 35 warn · 0 fail**, then closes **10 pass · 0 warn · 0 fail**; reports ≤0.4 h old, the 300-year structural leg chunk-invariant (towns 16→96, 707 events in the final decade, 175 mo/s), replay identity holds, and Era I is **SEALED**. M80 is banked; next priority is M81, **The River That Drowns and Gives**. |
 
 ## Notes
+
+- **M81 ⟂ M55: a documented causal incompatibility, not a calibration
+  problem (2026-08-27).** M81's flood population toll is genuine and
+  load-bearing, and it deterministically regresses the M55 dry-frontier
+  veto in civ-777 — but through *trajectory divergence*, not through any
+  quantity that can be tuned. The chain is fully traced. In the truthful
+  pre-M81 baseline (commit `4c7e51f`) seed 777's counterfactual stands
+  1 dry town against the real run's 0: the veto genuinely refused site
+  (114 503), which founded at month 856 as an **ore-led** spillover while
+  the census sat at its soft cap (96/96). Under M81 the same site's
+  earliest desert win slips to month 1080, and across all **82**
+  desert-winning parent rings **zero** are ore-led, so every one is
+  refused by the census cap gate (`world.rs`, `len() >= max_settlements
+  && !ore_led`) rather than by the veto. The cause is M81's population
+  toll: foundings fall 115 → 105 and famine rises 228 → 295, delaying the
+  parent growth that carries the site into its ore-led window before the
+  window lapses. Well-ladder geography is *identical* (68 cells) — the
+  regression is purely temporal. Ablation confirms the toll is causal and
+  must not be deleted: removing it restores the baseline shape (cf 1 /
+  real 0), but the founding then falls inside the founder's reach and the
+  gate still warns.
+
+  **Every local flood calibration tested is non-principled and none was
+  shipped.** Toll magnitude, toll cap and explicitly-modelled delayed
+  recovery (mortality retained at event time, a share of the toll
+  reclassified as scattered and walked home over subsequent seasons) were
+  each swept deterministically on seed 777 over the 300-year leg:
+
+  | candidate | floods | famine | found | cf dry / real | M55 |
+  |---|---|---|---|---|---|
+  | shipped M81 | 146 | 295 | 105 | 0 / 0 | WARN |
+  | toll scale 0.75 | 420 | 440 | 117 | 1 / 1 | non-baseline |
+  | toll cap 0.02 / 0.03 | — | — | 119 / 116 | 1 / 1 | WARN |
+  | return 0.30 · 3 y | 159 | 232 | 113 | 1 / 1 | WARN |
+  | return 0.50 · 3 y | 700 | 193 | 105 | 0 / 0 | WARN |
+  | return 0.70 · 3 y | 179 | 280 | 110 | 1 / 1 | WARN |
+  | return 0.50 · 1 y | 270 | 370 | 115 | 1 / 1 | WARN |
+  | return 0.50 · 5 y | 334 | 329 | 111 | **0 / 1** | PASS |
+
+  The response is violently non-monotone in both axes — returning *more*
+  people yields 159 → 700 → 179 floods across shares 0.30/0.50/0.70, a
+  4.4× swing with no physical reading. The single PASS reads cf 0 against
+  real 1: the real run stands the dry town and the counterfactual does
+  not, so the veto refused nothing and the gate passes on an **inverted**
+  reading — the exact opposite of the baseline shape. Every apparent flip
+  is a coincidence of 777's rerolled trajectory. **Verdict: no valid fix
+  on this axis.** All `CALLIOPE_ABL_*` / `CALLIOPE_SWEEP_*` switches and
+  the return-ledger experiment have been removed from shipped flood code;
+  the tree reproduces unablated M81 exactly (777: floods 146 · foundings
+  105 · famine 295).
+
+  One non-parameter hypothesis was raised and **refuted** in the same
+  pass: that M81 ships its toll but not its gift, leaving the spate
+  net-negative. It does not — `world.rs:1530` reads `silt_bonus` into
+  `year_yield` and `world.rs:1526` reads `drown_loss`, and the M81
+  counterfactual row measures the lift directly.
 
 - ADR numbering: the era specs were drafted before ADR-0018–0023
   landed; where a spec names a `new:` ADR number already taken, the
