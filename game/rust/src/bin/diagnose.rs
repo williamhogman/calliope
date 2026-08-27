@@ -10121,7 +10121,7 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
     // Walls each system writes, by inspection of systems.rs bodies.
     // P=peoples · E=economy · C=chronicle · G=grids · D=deposits ·
     // N=names/features · R=draws the one rng stream · Q=seismic ledger
-    // · U=drought ledger
+    // · U=drought ledger · F=flood ledger + silt sheet
     // (own stream, order-free — M22) · –=scratch only.
     // A system is SERIAL if it writes Peoples or draws the RNG: the single
     // PCG stream is a total order — determinism law makes it unsplittable.
@@ -10130,7 +10130,12 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
         // M80: pure seed×cell×year mapping writes only the drought ledger
         // and emits its onset event; it neither touches Peoples nor draws RNG.
         ("drought", "U·C", false),
+        // M81: the spate is a threshold crossing on the year's own water —
+        // no die is rolled — but it takes souls off the town and writes the
+        // chronicle, so it stands on the serial side with the rest.
+        ("flood", "F·P·C", true),
         ("famine", "P·R", true),
+
         // Q=seismic ledger (own stream). M24: the effects pass also
         // damages Peoples and fells towns into the chronicle: serial.
         ("quakes", "Q·P·C", true),
@@ -10190,8 +10195,11 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
             Cadence::Monthly => "monthly".to_string(),
             Cadence::EveryN { n, .. } => format!("1/{n}mo"),
         };
-        let (aname, walls, serial) = ACCESS[i];
+        // A lattice the table has not caught up with is a FAIL to report,
+        // never an abort: the guard below must get to speak.
+        let (aname, walls, serial) = ACCESS.get(i).copied().unwrap_or(("?", "?", false));
         debug_assert_eq!(aname, sys.name());
+
         if serial {
             serial_time += totals[i];
         }
