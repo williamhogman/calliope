@@ -244,6 +244,29 @@ impl Floods {
         self.drown.retain(|_, v| v.0 >= year);
     }
 
+    /// Book `souls` to walk back into town `sid` in `year`.
+    pub(crate) fn owe(&mut self, year: i64, sid: usize, souls: i64) {
+        if souls > 0 {
+            self.returns.push((year, sid, souls));
+        }
+    }
+
+    /// Take everyone due home in `year`, dropping the entries as they are
+    /// paid. Insertion order, so the walk is deterministic.
+    pub(crate) fn due(&mut self, year: i64) -> Vec<(usize, i64)> {
+        let mut home = Vec::new();
+        self.returns.retain(|&(y, sid, n)| {
+            if y == year {
+                home.push((sid, n));
+                false
+            } else {
+                y > year
+            }
+        });
+        home
+    }
+
+
     /// Identity line (ADR-0003): floods are state — who drowned, when,
     /// how deep, what the water took this year and what the ground was
     /// given back the next.
