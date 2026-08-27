@@ -3900,19 +3900,6 @@ impl World {
         }
         let year = month_abs / 12;
         self.floods.sweep(year);
-        // M81 — the scattered come home before the year's water is read:
-        // the water killed at its own edge, but it also drove people out,
-        // and those it drove out walk back over the seasons after.
-        for (sid, souls) in self.floods.due(year) {
-            if let Some(s) = self
-                .peoples
-                .settlements
-                .iter_mut()
-                .find(|s| s.id.0 as usize == sid)
-            {
-                s.pop += souls;
-            }
-        }
         for i in 0..self.peoples.settlements.len() {
             let (y, x, pop, culture, river, name, sid) = {
                 let s = &self.peoples.settlements[i];
@@ -3930,8 +3917,7 @@ impl World {
             if excess <= 0.0 {
                 continue;
             }
-            let abl = crate::flood::Ablate::get();
-            let frac = (crate::flood::DMG_GAIN * abl.toll_scale * excess).min(abl.toll_cap);
+            let frac = (crate::flood::DMG_GAIN * excess).min(crate::flood::DMG_CAP);
             let hit = ((pop as f64) * frac) as i64;
 
             let silt = (crate::flood::SILT_GAIN * excess).min(crate::flood::SILT_CAP);
@@ -3950,27 +3936,12 @@ impl World {
                     }
                     // the ring is thinner than the channel's own ground
                     let thin = if dy == 0 && dx == 0 { 1.0 } else { 0.6 };
-                    if abl.silt {
-                        self.floods.lay(year + 1, ny, nx, silt * thin);
-                    }
-                    if abl.drown {
-                        self.floods.lay_drown(year, ny, nx, drown * thin);
-                    }
+                    self.floods.lay(year + 1, ny, nx, silt * thin);
+                    self.floods.lay_drown(year, ny, nx, drown * thin);
                 }
             }
-            if hit > 0 && abl.pop_toll {
+            if hit > 0 {
                 self.peoples.settlements[i].pop = (pop - hit).max(30);
-                // of those the water took off the books, a share was
-                // scattered, not drowned — book them home, year by year.
-                let back = ((hit as f64) * abl.return_share) as i64;
-                if back > 0 && abl.return_years > 0 {
-                    let per = back / abl.return_years;
-                    let rem = back % abl.return_years;
-                    for k in 1..=abl.return_years {
-                        let n = per + if k <= rem { 1 } else { 0 };
-                        self.floods.owe(year + k, sid.0 as usize, n);
-                    }
-                }
             }
 
             self.floods.rows.push(crate::flood::FloodRow {
