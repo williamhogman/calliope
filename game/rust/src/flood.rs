@@ -191,7 +191,14 @@ pub struct Floods {
     /// `silt`, dated to the flood's own year. Same discipline: lookups
     /// only, richer layer wins, spent when the year has passed.
     pub(crate) drown: HashMap<(i64, i64), (i64, f64)>,
+    /// M81 — the return ledger: `(the year they come home, the town, how
+    /// many)`. A spate kills at the water's edge and scatters more than
+    /// it kills; the scattered are off the town's books that year and
+    /// walk back over the seasons after. Kept as a flat, insertion-order
+    /// list so no map iteration ever reaches an output (ADR-0003).
+    pub(crate) returns: Vec<(i64, usize, i64)>,
 }
+
 
 impl Floods {
     /// The silt bonus standing on a cell in `year`: a fraction to add to
