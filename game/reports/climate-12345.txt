@@ -43,6 +43,17 @@ interannual variability (M71) · 60 years · land cells only:
   mid-latitudes (23.5–55°)        0.742        0.739          0.131        0.142
   polar (>55°)                    1.243        1.253          0.179        0.179
 
+the slow drift (M83) · walk at seed 12345:
+  law: τ 140 y · σ 0.55 °C · walls ±3.0 °C · y100 -0.17 · y500 +0.09 · y1000 +0.42 · millennium mean -0.085
+  law: τ 140 y · σ 0.55 °C · walls ±3.0 °C · y100 -0.17 · y500 +0.09 · y1000 +0.42 · millennium mean -0.085
+
+belts on the move (M84) · seed 12345:
+  ITCZ rain centroid: baseline 10.95° · warm wall 14.36° (+3.41) · cold wall 8.28° (-2.67)
+  frontal sweep (drift → cells @ centroid): -3:63721@33.7° -2:67132@34.6° -1:70267@35.5° +0:73127@36.3° +1:75762@37.0° +2:80542@38.2° +3:85355@39.4°
+  warm-sea sweep (drift → cells @ centroid): -3:14952@8.7° -2:20111@9.7° -1:24523@10.5° +0:28588@11.2° +1:32275@11.9° +2:35791@12.5° +3:39117@13.1°
+  frontal corridor centroid |lat|: baseline 36.27° · warm +3.08° · cold -2.57°
+  warm-sea band centroid |lat|: baseline 11.22° · warm +1.91° · cold -2.56°
+
 ---- checks ----------------------------------------------------------
 [PASS] desert share of land                          19.8%   (sweet 12–28% · hard 6–38%)
 [PASS] tundra+ice share of land                      26.4%   (sweet 5–30% · hard 1–45%)
@@ -72,4 +83,20 @@ interannual variability (M71) · 60 years · land cells only:
 [PASS] the anomaly field is finite          0 non-finite cells   (M71: every year's draw is a number)
 [PASS] a bad year never takes all the rain  worst -0.66 share   (M71: total failure of the rains is famine's verdict (M2.6), not the sky's noise)
 [PASS] one seed, one year, one sky          redraw identical · memo identical   (M71 gate: repeated runs at one seed reproduce identical per-year anomaly grids bit-for-bit, memo or fresh)
-CHECKS: 27 pass · 1 warn · 0 fail
+[PASS] the drift never leaves its walls     |drift| peaks 1.15 °C over 1000 y (walls ±3.0)   (M83 gate: the configured ±3 °C excursion bound holds over a 1000-year run — reflection is the law, not luck)
+[PASS] the long run remembers the baseline  +0.059 °C mean over 20000 y   (M83 gate: the long-run mean sits within 0.2 °C of baseline — drift is wander, not a trend)
+[PASS] the walk's swing is the declared swing realized σ 0.544 °C vs declared 0.55   (M83: DRIFT_SIGMA means what it says — realized σ over 20 000 y within 20% of the declaration)
+[PASS] the drift is slow — an age outlives a generation lag-25 y autocorrelation 0.82   (M83: century-scale memory — 25 years on, the walk still stands where it stood (OU τ=140 predicts ~0.84))
+[PASS] the drift forgets — no age is forever lag-700 y autocorrelation +0.09   (M83: stationarity — the memory fades well inside a millennium (OU τ=140 predicts ~0.01))
+[PASS] one seed, one century history        redraw identical · point≡scan identical   (M83 gate: hash-stable at fixed seed — the walk re-drawn is the walk, and value(year) is scan[year] to the bit)
+[PASS] the drift enters the sky it claims to enter worst |forced − unforced − drift| 1.7e-16 °C   (M83: the realized dt is the unforced law plus the year's drift, uniformly — a global offset ahead of the M71 anomaly)
+[PASS] a warm age carries the rains poleward ITCZ centroid +3.41° at +3.0 °C   (M84 gate: the ITCZ latitude shifts in the drift's own direction — poleward under warming — by a real amount bounded under 5° at maximum drift)
+[PASS] a cold age narrows the tropics       ITCZ centroid -2.67° at -3.0 °C   (M84 gate: cold drift pulls the rain belt equatorward — same law, opposite sign, same sub-5° wall)
+[PASS] the belt never outruns its wall      max |ITCZ shift| 3.41° · declared camp offset 4.20° at the wall   (M84 gate: shift magnitude stays under 5° across the entire reachable drift range — both the measured centroid and the declared per-°C offset at maximum drift)
+[PASS] drift zero leaves the sky alone      belt_anomaly(·, 0) ≡ 0 exactly   (M84/ADR-0003: the coupling is exactly inert at zero drift — bit-identity of the undrifted lattice is a law, not a tolerance)
+[PASS] the frontal corridor follows its isotherm poleward +3.08° at +3.0 °C   (M84 gate: a warm age moves the storm-genesis band poleward — same direction as the drift's sign, under the 5° wall)
+[PASS] the frontal corridor follows its isotherm equatorward -2.57° at -3.0 °C   (M84 gate: a cold age pulls the storm-genesis band equatorward — opposite sign, same sub-5° wall)
+[PASS] the warm-sea band follows its isotherm poleward +1.91° at +3.0 °C   (M84 gate: a warm age moves the storm-genesis band poleward — same direction as the drift's sign, under the 5° wall)
+[PASS] the warm-sea band follows its isotherm equatorward -2.56° at -3.0 °C   (M84 gate: a cold age pulls the storm-genesis band equatorward — opposite sign, same sub-5° wall)
+[PASS] the frozen reference is the law's own zero recompute at drift→0 reproduces the stored weights   (M84/ADR-0003: the drift-0 fast path and the recompute path are one law — the stored reference weights are the recomputation's own limit, so no formula can drift between constructor and reader)
+CHECKS: 43 pass · 1 warn · 0 fail

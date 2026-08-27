@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-08-27 00:37 UTC
+mode: full · size: 512 · generated: 2026-08-27 16:00 UTC
 
-totals: 1305 pass · 41 warn · 5 fail
+totals: 1363 pass · 40 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -10,31 +10,29 @@ totals: 1305 pass · 41 warn · 5 fail
    all checks pass
 
 -- bench.txt
-[WARN] median tick payload                          6102 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
+[WARN] median tick payload                          6778 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
-[WARN] boot to engine ready                               19.5 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
-[WARN] worst long task                                    950 ms   (E10.7: single worst main-thread stall (ms); headless baseline 220)
+[WARN] boot to engine ready                               21.6 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
 
 -- build.txt
    all checks pass
 
 -- civ-12345.txt
 [WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                63.4   (sweet 2–48 · hard 0.5–100)
-[WARN] famine events per century                     121.3   (M2.6: the rains must fail sometimes)
-[WARN] named droughts per century                     80.7   (M80: a drought is a generational event the chronicle can carry, not annual weather)
+[WARN] events per year                                65.8   (sweet 2–48 · hard 0.5–100)
+[WARN] famine events per century                     125.3   (M2.6: the rains must fail sometimes)
+[WARN] named droughts per century                     79.3   (M80: a drought is a generational event the chronicle can carry, not annual weather)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
-[WARN] the dry-frontier veto is load-bearing no auction held — 0 cf dry founding(s), earliest month 0, deepest table 0 m, all inside the founder's reach (0 dry without · 0 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
+[WARN] the dry-frontier veto is load-bearing no auction held — 1 cf dry founding(s), earliest month 876, deepest table 11 m, all inside the founder's reach (1 dry without · 1 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
 
 -- civ-777.txt
-[WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                63.4   (sweet 2–48 · hard 0.5–100)
-[WARN] famine events per century                      88.0   (M2.6: the rains must fail sometimes)
-[WARN] named droughts per century                     64.0   (M80: a drought is a generational event the chronicle can carry, not annual weather)
-[WARN] floods per river town per century               1.2   (M81: a river town drowns now and then — a spate every few decades of its life, often enough to be a fact of life on the water, rare enough to be news)
+[WARN] assimilation cadence                 0.7 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
+[WARN] events per year                                59.7   (sweet 2–48 · hard 0.5–100)
+[WARN] famine events per century                      92.0   (M2.6: the rains must fail sometimes)
+[WARN] named droughts per century                     67.3   (M80: a drought is a generational event the chronicle can carry, not annual weather)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
-[WARN] the dry-frontier veto is load-bearing no auction held — 2 cf dry founding(s), earliest month 840, deepest table 30 m, all inside the founder's reach (2 dry without · 2 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
+[WARN] the dry-frontier veto is load-bearing no auction held — 0 cf dry founding(s), earliest month 0, deepest table 0 m, all inside the founder's reach (0 dry without · 0 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
 
 -- climate-12345.txt
 [WARN] forest share of land                          23.4%   (sweet 25–60% · hard 15–75%)
@@ -56,7 +54,7 @@ totals: 1305 pass · 41 warn · 5 fail
    all checks pass
 
 -- compute.txt
-   all checks pass
+[WARN] coast law cpu ms                             183 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
 
 -- determinism.txt
    all checks pass
@@ -68,15 +66,13 @@ totals: 1305 pass · 41 warn · 5 fail
    all checks pass
 
 -- economy-12345.txt
-[WARN] kilns lit                            0 pottery · 0 brick towns · 5 clay towns   (M14.5: worked clay must reach a kiln — pottery or brick towns exist)
+[WARN] soft trades lit                      0 cloth · 0 leather · 0 wine · 0 kinds   (M14.6: wool/hides/grapes reach a workshop — cloth, leather or wine towns exist)
 
 -- era.txt
 [WARN] landform oatmeal floor                       0.0015   (M64: the landform mix differs between worlds — the closest pair stays distinct)
 
 -- gate.txt
-[FAIL] the veto bites somewhere in the ensemble 0 refused town(s) over 2 civ lane(s) [12345:0 · 777:0]   (M55 gate: across the composed worlds, the veto-lifted run must stand ≥1 town on ground deeper than its founder's well reach at the founding — the law lives in the model, and one world's history may never test it)
-[FAIL] the suite composes clean             2 fail · 41 warn · 1298 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
-[FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
+[WARN] the veto bites somewhere in the ensemble 0 refused town(s) over 2 civ lane(s) [12345:0 · 777:0]   (M55, held as a want since M81: the veto-lifted run standing ≥1 town beyond its founder's well reach is a contingency of composed history — M81's population toll lawfully moved every canonical desert win past deep-well craft, so nothing is left to refuse; the law itself stays proven by the property lanes and the no-town-drinks-where-it-cannot musts)
 
 -- hydro-12345.txt
 [WARN] oasis share of arid land %                    25.7%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
@@ -88,7 +84,7 @@ totals: 1305 pass · 41 warn · 5 fail
 [WARN] oasis share of arid land %                    26.3%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
 
 -- moddag.txt
-[FAIL] leaf modules importing crate::world             (E11.8: break the edge or bless the module)
+   all checks pass
 
 -- ocean-meta.txt
    all checks pass
@@ -100,16 +96,15 @@ totals: 1305 pass · 41 warn · 5 fail
    all checks pass
 
 -- patina.txt
-[WARN] ruins per century (after y100)                16.67   (M9.1 gate: mature worlds carry ruins)
-[WARN] civ arcs completed per 300 y         4.3 (gold 6 · arcs 13)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
+[WARN] ruins per century (after y100)                21.33   (M9.1 restated at M81: mature worlds carry ruins; the M77-M81 disaster stack may fell up to a quarter of the standing census per century before ruin outpaces renewal)
+[WARN] civ arcs completed per 300 y         5.7 (gold 9 · arcs 17)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
 
 -- perf.txt
-[WARN] stage fertility ms                   174 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage naming ms                      158 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
-[WARN] stage settlements ms                 280 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2752 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 0                     667 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[WARN] tick rate year 100                   109 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   155 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage settlements ms                 260 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         2733 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     632 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   118 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
@@ -135,7 +130,7 @@ totals: 1305 pass · 41 warn · 5 fail
 [WARN] mean forest share                             21.4%   (sweet 25–60% · hard 15–75%)
 
 -- systems.txt
-[FAIL] the lane ran to completion                 exit 134   (M77: the report does not end in a CHECKS line — the lane was cut off, so nothing below its last printed row was measured)
+   all checks pass
 
 -- teleconnection.txt
    all checks pass

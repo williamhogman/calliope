@@ -4,20 +4,20 @@
 interannual σ per latitude belt · declared vs realized · cross-seed spread  (M73)
 
  seed      belt                  σ T °C  declared    σ P frac  declared   σP unforced   cells
- 12345     tropical  <23.5        0.376     0.375      0.1572    0.1543        0.0967   35749
+ 12345     tropical  <23.5        0.376     0.375      0.1573    0.1543        0.0967   35749
  12345     temperate 23.5-55      0.742     0.739      0.1416    0.1432        0.1312   47292
  12345     polar     >=55         1.243     1.253      0.1791    0.1822        0.1791   32588
- 777       tropical  <23.5        0.368     0.377      0.1153    0.1180        0.0943   37787
+ 777       tropical  <23.5        0.368     0.377      0.1163    0.1180        0.0943   37787
  777       temperate 23.5-55      0.719     0.735      0.1308    0.1357        0.1276   50408
  777       polar     >=55         1.213     1.245      0.1774    0.1815        0.1774   30134
- 31337     tropical  <23.5        0.377     0.379      0.1710    0.1672        0.0962   33914
+ 31337     tropical  <23.5        0.377     0.379      0.1713    0.1672        0.0962   33914
  31337     temperate 23.5-55      0.740     0.739      0.1460    0.1461        0.1331   42114
  31337     polar     >=55         1.247     1.261      0.1795    0.1830        0.1795   32250
- 90210     tropical  <23.5        0.371     0.378      0.2091    0.2029        0.0942   33427
- 90210     temperate 23.5-55      0.725     0.736      0.1511    0.1535        0.1271   47241
+ 90210     tropical  <23.5        0.371     0.378      0.2097    0.2029        0.0942   33427
+ 90210     temperate 23.5-55      0.725     0.736      0.1512    0.1535        0.1271   47241
  90210     polar     >=55         1.204     1.255      0.1740    0.1824        0.1740   36976
- 555       tropical  <23.5        0.371     0.376      0.1218    0.1229        0.0951   37674
- 555       temperate 23.5-55      0.742     0.738      0.1341    0.1368        0.1301   47916
+ 555       tropical  <23.5        0.371     0.376      0.1246    0.1229        0.0951   37674
+ 555       temperate 23.5-55      0.742     0.738      0.1343    0.1368        0.1301   47916
  555       polar     >=55         1.230     1.245      0.1775    0.1815        0.1775   28626
 
  belt                  σT mean   spread    σP mean   spread
@@ -28,7 +28,7 @@ interannual σ per latitude belt · declared vs realized · cross-seed spread  (
 ---- checks ----------------------------------------------------------
 [PASS] σT under its cap · 12345 · tropical  <23.5 0.376 < 1.5 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 12345 · tropical  <23.5 +0.1% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
-[PASS] σP is the declared law · 12345 · tropical  <23.5 +1.9% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σP is the declared law · 12345 · tropical  <23.5 +2.0% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
 [PASS] σT under its cap · 12345 · temperate 23.5-55 0.742 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 12345 · temperate 23.5-55 +0.4% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
 [PASS] σP is the declared law · 12345 · temperate 23.5-55 -1.1% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
@@ -41,7 +41,7 @@ interannual σ per latitude belt · declared vs realized · cross-seed spread  (
 [PASS] σP climbs poleward · 12345           0.097 < 0.131 < 0.179   (M73: the unforced rain lane carries the same latitude shape as the heat lane (M75's tilt is a forced term on top, held by its own lane))
 [PASS] σT under its cap · 777 · tropical  <23.5 0.368 < 1.5 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 777 · tropical  <23.5 -2.3% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
-[PASS] σP is the declared law · 777 · tropical  <23.5 -2.4% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σP is the declared law · 777 · tropical  <23.5 -1.5% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
 [PASS] σT under its cap · 777 · temperate 23.5-55 0.719 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 777 · temperate 23.5-55 -2.2% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
 [PASS] σP is the declared law · 777 · temperate 23.5-55 -3.6% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
@@ -54,10 +54,10 @@ interannual σ per latitude belt · declared vs realized · cross-seed spread  (
 [PASS] σP climbs poleward · 777             0.094 < 0.128 < 0.177   (M73: the unforced rain lane carries the same latitude shape as the heat lane (M75's tilt is a forced term on top, held by its own lane))
 [PASS] σT under its cap · 31337 · tropical  <23.5 0.377 < 1.5 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 31337 · tropical  <23.5 -0.5% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
-[PASS] σP is the declared law · 31337 · tropical  <23.5 +2.3% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σP is the declared law · 31337 · tropical  <23.5 +2.4% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
 [PASS] σT under its cap · 31337 · temperate 23.5-55 0.740 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 31337 · temperate 23.5-55 +0.0% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
-[PASS] σP is the declared law · 31337 · temperate 23.5-55 -0.1% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σP is the declared law · 31337 · temperate 23.5-55 -0.0% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
 [PASS] σT under its cap · 31337 · polar     >=55 1.247 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 31337 · polar     >=55 -1.1% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
 [PASS] σP is the declared law · 31337 · polar     >=55 -1.9% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
@@ -67,10 +67,10 @@ interannual σ per latitude belt · declared vs realized · cross-seed spread  (
 [PASS] σP climbs poleward · 31337           0.096 < 0.133 < 0.179   (M73: the unforced rain lane carries the same latitude shape as the heat lane (M75's tilt is a forced term on top, held by its own lane))
 [PASS] σT under its cap · 90210 · tropical  <23.5 0.371 < 1.5 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 90210 · tropical  <23.5 -1.8% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
-[PASS] σP is the declared law · 90210 · tropical  <23.5 +3.1% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σP is the declared law · 90210 · tropical  <23.5 +3.4% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
 [PASS] σT under its cap · 90210 · temperate 23.5-55 0.725 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 90210 · temperate 23.5-55 -1.4% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
-[PASS] σP is the declared law · 90210 · temperate 23.5-55 -1.6% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σP is the declared law · 90210 · temperate 23.5-55 -1.5% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
 [PASS] σT under its cap · 90210 · polar     >=55 1.204 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 90210 · polar     >=55 -4.0% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
 [PASS] σP is the declared law · 90210 · polar     >=55 -4.6% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
@@ -80,10 +80,10 @@ interannual σ per latitude belt · declared vs realized · cross-seed spread  (
 [PASS] σP climbs poleward · 90210           0.094 < 0.127 < 0.174   (M73: the unforced rain lane carries the same latitude shape as the heat lane (M75's tilt is a forced term on top, held by its own lane))
 [PASS] σT under its cap · 555 · tropical  <23.5 0.371 < 1.5 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 555 · tropical  <23.5 -1.1% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
-[PASS] σP is the declared law · 555 · tropical  <23.5 -0.9% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σP is the declared law · 555 · tropical  <23.5 +1.4% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
 [PASS] σT under its cap · 555 · temperate 23.5-55 0.742 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 555 · temperate 23.5-55 +0.5% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
-[PASS] σP is the declared law · 555 · temperate 23.5-55 -1.9% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
+[PASS] σP is the declared law · 555 · temperate 23.5-55 -1.8% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))
 [PASS] σT under its cap · 555 · polar     >=55 1.230 < 4.0 °C   (M73: lively, never chaos — tropical under 1.5 °C, polar under 4 °C)
 [PASS] σT is the declared law · 555 · polar     >=55 -1.2% of declared   (M73: realized σ within 10% of anomaly_amp_t over the same cells — the normalizer cannot drift)
 [PASS] σP is the declared law · 555 · polar     >=55 -2.2% of declared   (M73: the rain lane obeys anomaly_amp_p within 12% (the −0.85 floor clips its low tail))

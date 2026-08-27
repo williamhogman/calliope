@@ -145,3 +145,61 @@ impl World {
         events
     }
 }
+
+// --------------------------------------------------------------- M82 zones
+//
+// Calibrated against the past: the return-time diagnostic judges drought
+// and flood recurrence per climate zone against envelopes the paleoclimate
+// record would recognize. The taxonomy lives here, beside the harvest
+// verdict that consumes the dry side of it: six classes on the two fields
+// every cell already carries — cold before dry (a polar desert is polar
+// first; potential evapotranspiration, not rain, is its law), then the
+// UNEP aridity cuts (arid < 250 mm, semi-arid 250–500 mm), then the warm
+// split at 20 °C, the biome lattice's own tropical edge (TEMP_EDGES).
+
+/// The six climate zones of the return-time table, in classifier order.
+pub const ZONES: &[&str] = &["polar", "boreal", "arid", "semi-arid", "temperate", "tropical"];
+
+/// The climate zone of a cell, from annual mean temperature (°C) and
+/// annual precipitation (mm/y) — the same fields the biome lattice reads.
+pub fn zone_of(tmean_c: f64, precip_mm: f64) -> usize {
+    if tmean_c < -2.0 {
+        0 // polar
+    } else if tmean_c < 5.0 {
+        1 // boreal
+    } else if precip_mm < 250.0 {
+        2 // arid
+    } else if precip_mm < 500.0 {
+        3 // semi-arid
+    } else if tmean_c < 20.0 {
+        4 // temperate
+    } else {
+        5 // tropical
+    }
+}
+
+/// M82 — the Earth envelope for held droughts: acceptable per-place
+/// return time in years, per zone (`ZONES` order), of a node on the
+/// drought lattice crossing from free into held ground.
+///
+/// The event class is M80's: an accumulated multi-year deficit that
+/// takes hold, keeps its footprint through hysteresis, and earns a
+/// name — the *sustained regime* class of the paleo record, not the
+/// single-season SPI dip. Anchors: tree-ring PDSI reconstructions put
+/// multi-year drought regimes at 2–5 per century over the dry
+/// mid-latitudes (Cook et al. 2007 — per-place return ~20–50 y),
+/// SPI-run climatologies read 1–2 moderate-or-worse events per decade
+/// where single seasons count (Spinoni et al. 2014 — return 5–10 y),
+/// and held multi-year events sit between and beyond by zone: dry
+/// lands slip into sustained deficit far more often than humid ones,
+/// and the poleward zones' tiny precipitation totals make any
+/// standardized index read wide. The envelopes span the class
+/// honestly rather than pinning one paper's number.
+pub const DROUGHT_RETURN: &[(f64, f64)] = &[
+    (20.0, 400.0), // polar — thin totals, noisy index; wide by design
+    (15.0, 250.0), // boreal
+    (8.0, 100.0),  // arid — sustained deficit is the steppe's own weather
+    (8.0, 100.0),  // semi-arid
+    (12.0, 200.0), // temperate
+    (12.0, 200.0), // tropical — monsoon failure clusters, then relents
+];

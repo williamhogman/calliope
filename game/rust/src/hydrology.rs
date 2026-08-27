@@ -671,3 +671,26 @@ pub const BANDS: &[Band] = &[
     Band { name: "horton bifurcation ratio", sweet: (2.8, 5.5), hard: (2.0, 8.0), target: "M64: Earth networks run Rb 3–5 (Horton 1945; Strahler 1957) — full tree at A_c 80 km²" },
     Band { name: "hack density ratio", sweet: (0.4, 2.5), hard: (0.15, 6.0), target: "M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold" },
 ];
+
+/// M82 — the Earth envelope for damaging floods: acceptable per-town
+/// return time in years, per climate zone (`famine::ZONES` order), of a
+/// river town's realized flow overtopping its banks and levees
+/// (M81's ledger class — above `capacity`, never mere bankfull).
+///
+/// Anchors: natural channels run bankfull every 1.5–2 y (Leopold,
+/// Wolman & Miller 1964), which is exactly why towns build past it;
+/// chronicle records put damaging floods at settled pre-modern river
+/// towns on decadal scales (Rhine, Danube, Yellow River basin
+/// histories), and engineered levees stretch the interval toward a
+/// century. Monsoon-fed rivers flood their towns most often; exotic
+/// dryland rivers are flashy but their perennial stems carry few
+/// towns and rarer overtoppings; poleward towns are few and their
+/// envelope is wide by design.
+pub const FLOOD_RETURN: &[(f64, f64)] = &[
+    (4.0, 500.0), // polar
+    (4.0, 300.0), // boreal
+    (4.0, 300.0), // arid
+    (4.0, 250.0), // semi-arid
+    (3.0, 200.0), // temperate
+    (2.0, 150.0), // tropical
+];
