@@ -1520,8 +1520,12 @@ impl World {
     /// can never be handed more water than the river is stated to carry.
     pub fn year_yield(&self, year: i64, y: usize, x: usize) -> f64 {
         let base = self.year_yield_bare(year, y, x);
-        // M81 — last year's spate pays this year's harvest: the silt sheet
-        // laid on the floodplain lifts the season it feeds, once.
+        // M81 — the water takes the year it stands in: a spate this season
+        // destroys the crop under it before any silt is ever farmed.
+        let drown = self.floods.drown_loss(year, y, x);
+        let base = if drown > 0.0 { base * (1.0 - drown) } else { base };
+        // M81 — and last year's spate pays this year's harvest: the silt
+        // sheet laid on the floodplain lifts the season it feeds, once.
         let silt = self.floods.silt_bonus(year, y, x);
         if silt <= 0.0 {
             base
@@ -1529,6 +1533,7 @@ impl World {
             (base * (1.0 + silt)).min(agriculture::YIELD_CEIL)
         }
     }
+
 
     /// The same harvest read with the floodplain's silt sheet ignored —
     /// the counterfactual the M81 gate measures the gift against.
