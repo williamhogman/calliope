@@ -108,15 +108,27 @@ pub struct Ablate {
     pub drown: bool,
     /// the gift: next season's silt sheet on the floodplain
     pub silt: bool,
+    /// calibration sweep only: a scale on the toll's magnitude, 1.0 shipped
+    pub toll_scale: f64,
+    /// calibration sweep only: an override on the toll's cap, shipped DMG_CAP
+    pub toll_cap: f64,
 }
 
 impl Ablate {
     fn read() -> Self {
         let on = |k: &str| std::env::var(k).ok().as_deref() != Some("0");
+        let num = |k: &str, d: f64| {
+            std::env::var(k)
+                .ok()
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(d)
+        };
         Ablate {
             pop_toll: on("CALLIOPE_ABL_FLOOD_POP"),
             drown: on("CALLIOPE_ABL_FLOOD_DROWN"),
             silt: on("CALLIOPE_ABL_FLOOD_SILT"),
+            toll_scale: num("CALLIOPE_SWEEP_TOLL_SCALE", 1.0),
+            toll_cap: num("CALLIOPE_SWEEP_TOLL_CAP", DMG_CAP),
         }
     }
 
@@ -128,9 +140,10 @@ impl Ablate {
 
     /// True when nothing is ablated — the shipped simulation.
     pub fn whole(&self) -> bool {
-        self.pop_toll && self.drown && self.silt
+        self.pop_toll && self.drown && self.silt && self.toll_scale == 1.0 && self.toll_cap == DMG_CAP
     }
 }
+
 
 
 
