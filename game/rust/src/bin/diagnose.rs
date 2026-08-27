@@ -6622,6 +6622,21 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // the closest the desert ever came: max over rings of (dry − winner)
         let mut best_margin = f64::NEG_INFINITY;
         let mut margin_at = (0usize, 0usize, 0i64, 0.0f64, 0.0f64);
+        // M81 attribution — of the rings the desert *won*, how many of the
+        // engine's own colonisation gates did that parent actually clear
+        // in that decade? Winning the auction is not founding a town: the
+        // parent must also be crowded (`ppop ≥ 380`, `ppop ≥ 0.72·kland`),
+        // must draw the 2% monthly ticket, and — past the soft cap — the
+        // site must be ore-led. A flood that takes souls off a parent
+        // moves exactly the first two.
+        let mut dw_pop = 0usize;   // ppop ≥ 380
+        let mut dw_crowd = 0usize; // ppop ≥ 0.72·kland
+        let mut dw_both = 0usize;  // both, i.e. an eligible drawer
+        let mut dw_ore = 0usize;   // winner reads ore-led
+        let mut dw_capped = 0usize; // census already at the soft cap
+        let mut dw_short = f64::INFINITY; // smallest crowding shortfall seen
+        let mut dw_short_at = (0usize, 0usize, 0i64, 0i64, 0.0f64);
+
 
         let step = 1usize;
         let mut done = 0usize;
@@ -6737,6 +6752,8 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 let mut win_dry = false;
                 let mut dry_best = f64::NEG_INFINITY;
                 let mut dry_at = (0usize, 0usize);
+                let mut win_at = (0usize, 0usize);
+
                 for y in y0..y1 {
                     for x in x0..x1 {
                         let dyp = y as f64 - parent.y as f64;
@@ -6769,7 +6786,9 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                         if s > win {
                             win = s;
                             win_dry = is_dry;
+                            win_at = (y, x);
                         }
+
                         if is_dry && s > dry_best {
                             dry_best = s;
                             dry_at = (y, x);
@@ -6780,7 +6799,56 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     rings += 1;
                     if win_dry {
                         rings_dry_won += 1;
+                        // the engine's own gates, evaluated on this parent
+                        // in this decade — the same arithmetic as
+                        // `World::try_colonize`, read, never rolled.
+                        let md = cf
+                            .peoples
+                            .societies
+                            .get(parent.people.idx())
+                            .map(calliope::society::mods_for)
+                            .unwrap_or_default();
+
+                        let kland = calliope::settlements::capacity_at(
+                            &cf.fields.crops,
+                            &cf.fields.fertility,
+                            parent.y as usize,
+                            parent.x as usize,
+                            parent.coastal,
+                            parent.food,
+                            md.kaplan,
+                            md.capacity,
+                        )
+                        .max(180.0);
+                        let pop_ok = parent.pop >= 380;
+                        let crowd_ok = (parent.pop as f64) >= 0.72 * kland;
+                        if pop_ok {
+                            dw_pop += 1;
+                        }
+                        if crowd_ok {
+                            dw_crowd += 1;
+                        }
+                        if pop_ok && crowd_ok {
+                            dw_both += 1;
+                        }
+                        if pull_s[[win_at.0, win_at.1]]
+                            > cf.site_score[[win_at.0, win_at.1]].max(0.0)
+                        {
+                            dw_ore += 1;
+                        }
+                        if cf.peoples.settlements.len() >= cf.max_settlements {
+                            dw_capped += 1;
+                        }
+                        // how far short of the crowding bar this parent
+                        // stood — the margin a flood's toll moves
+                        let short = 0.72 * kland - parent.pop as f64;
+                        if pop_ok && !crowd_ok && short < dw_short {
+                            dw_short = short;
+                            dw_short_at =
+                                (win_at.0, win_at.1, cf.month, parent.pop, kland);
+                        }
                     }
+
                     if dry_best.is_finite() {
                         rings_dry_elig += 1;
                         let m = dry_best - win;
@@ -6803,6 +6871,13 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             if best_margin.is_finite() { best_margin } else { 0.0 },
             margin_at.0, margin_at.1, margin_at.2, margin_at.3, margin_at.4
         );
+        println!(
+            "the gates behind the auction (M55): of {} desert-winning rings — parent ≥380 souls {} · crowded past 0.72·kland {} · both (a real drawer) {} · winner ore-led {} · census at soft cap {} · nearest miss {:.0} souls short at ({},{}) month {} (pop {} vs kland {:.0})",
+            rings_dry_won, dw_pop, dw_crowd, dw_both, dw_ore, dw_capped,
+            if dw_short.is_finite() { dw_short } else { 0.0 },
+            dw_short_at.0, dw_short_at.1, dw_short_at.2, dw_short_at.3, dw_short_at.4
+        );
+
 
         let cf_dry = cf
             .peoples
