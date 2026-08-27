@@ -6608,16 +6608,25 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let mut peak_dry = f64::NEG_INFINITY;
         let mut peak_at = (0usize, 0usize, 0i64, 0.0f64, 0.0f64);
         let mut peak_wet = f64::NEG_INFINITY;
-        let step = 10usize;
+        let step = 1usize;
         let mut done = 0usize;
-        // M55 (corrected) — the veto acts at the moment of founding, on the
-        // craft the founder held *then*. Terminal reach is the wrong clock:
-        // a people that learns masonry in its third century would be judged
-        // able to sink a 30 m shaft on ground it settled in its first, when
-        // it could dig twelve metres. So we walk the counterfactual and
-        // record every dry town as it appears, against its people's reach
-        // at that decade's end — an upper bound on the reach it truly had,
-        // which keeps every "REFUSED" verdict conservative.
+        // M55 (corrected twice) — the veto acts at the moment of founding,
+        // on the craft the founder held *then*. Terminal reach is the wrong
+        // clock: a people that learns masonry in its third century would be
+        // judged able to sink a 30 m shaft on ground it settled in its
+        // first, when it could dig twelve metres. Decade-end reach was the
+        // first correction and still the wrong clock by up to nine years —
+        // craft that arrives in year 8 of a decade was credited to a town
+        // founded in year 1 of it. So the counterfactual now walks in
+        // single years (ADR-0003 makes the chunking immaterial to the
+        // world) and records every dry town against its people's reach at
+        // the end of its founding *year* — the tightest upper bound the
+        // harness can take without re-entering the tick, and still
+        // conservative, so every "REFUSED" verdict below is earned.
+        // The grid-wide offer auction (M57) stays on its decade clock: it
+        // is a sweep over every cell and its cost is not worth a tenfold
+        // resampling that measures the same peak.
+
         let mut seen: std::collections::HashSet<i64> = std::collections::HashSet::new();
         for s in cf.peoples.settlements.iter() {
             seen.insert(s.id.0);
