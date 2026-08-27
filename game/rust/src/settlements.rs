@@ -673,7 +673,7 @@ pub struct HarbourEye<'a> {
 }
 
 impl HarbourEye<'_> {
-    fn premium(&self, y: usize, x: usize) -> f64 {
+    pub fn premium(&self, y: usize, x: usize) -> f64 {
         let sh = self.shelter[[y, x]] as f64;
         if sh <= 0.0 {
             return 0.0;

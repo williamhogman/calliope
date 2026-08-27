@@ -6608,6 +6608,21 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let mut peak_dry = f64::NEG_INFINITY;
         let mut peak_at = (0usize, 0usize, 0i64, 0.0f64, 0.0f64);
         let mut peak_wet = f64::NEG_INFINITY;
+        // M55/M56 decision-level probe: a grid-wide peak says what the
+        // desert is worth *somewhere*; it does not say whether any
+        // colonist was ever in a position to take it. Colonisation is a
+        // local auction — one parent, one ring, the best offer that is
+        // both inside the ring and clear of every standing town. So walk
+        // the auctions the way the engine holds them and record, per
+        // parent ring: was any arid-dry cell even eligible, what was the
+        // best offer it could make, and what did it lose to.
+        let mut rings = 0usize;         // parent rings examined
+        let mut rings_dry_elig = 0usize; // rings holding ≥1 eligible arid-dry cell
+        let mut rings_dry_won = 0usize;  // rings whose winner was arid-dry
+        // the closest the desert ever came: max over rings of (dry − winner)
+        let mut best_margin = f64::NEG_INFINITY;
+        let mut margin_at = (0usize, 0usize, 0i64, 0.0f64, 0.0f64);
+
         let step = 1usize;
         let mut done = 0usize;
         // M55 (corrected twice) — the veto acts at the moment of founding,
@@ -6691,11 +6706,104 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     }
                 }
             }
+            // --- the auctions, held the way `colony_site` holds them ---
+
+            for pi in 0..cf.peoples.settlements.len() {
+                let parent = cf.peoples.settlements[pi].clone();
+                let range = cf
+                    .peoples
+                    .societies
+                    .get(parent.people.idx())
+                    .map(|so| calliope::society::mods_for(so).colony_range)
+                    .unwrap_or(1.0);
+                let sea = calliope::settlements::HarbourEye {
+                    shelter: &cf.shelter,
+                    trade: cf
+                        .peoples
+                        .societies
+                        .get(parent.people.idx())
+                        .map(|so| calliope::society::mods_for(so).trade)
+                        .unwrap_or(1.0),
+                };
+                let max_d2 = 3600.0 * range * range;
+                let min_d2 = calliope::settlements::MIN_TOWN_SPACING_CELLS
+                    * calliope::settlements::MIN_TOWN_SPACING_CELLS;
+                let reach_c = max_d2.max(0.0).sqrt().ceil() as isize;
+                let y0 = (parent.y as isize - reach_c).max(0) as usize;
+                let y1 = ((parent.y as isize + reach_c + 1).max(0) as usize).min(rr);
+                let x0 = (parent.x as isize - reach_c).max(0) as usize;
+                let x1 = ((parent.x as isize + reach_c + 1).max(0) as usize).min(cc);
+                let mut win = f64::NEG_INFINITY;
+                let mut win_dry = false;
+                let mut dry_best = f64::NEG_INFINITY;
+                let mut dry_at = (0usize, 0usize);
+                for y in y0..y1 {
+                    for x in x0..x1 {
+                        let dyp = y as f64 - parent.y as f64;
+                        let dxp = x as f64 - parent.x as f64;
+                        let d2p = dyp * dyp + dxp * dxp;
+                        if d2p < 64.0 || d2p > max_d2 {
+                            continue;
+                        }
+                        let base = dry_s.offer(&cf.site_score, &pull_s, y, x);
+                        if base < -1e8 {
+                            continue;
+                        }
+                        let s = base + sea.premium(y, x);
+                        if s <= 2.2 {
+                            continue;
+                        }
+                        let mut clear = true;
+                        for o in cf.peoples.settlements.iter() {
+                            let dy = y as f64 - o.y as f64;
+                            let dx = x as f64 - o.x as f64;
+                            if dy * dy + dx * dx < min_d2 {
+                                clear = false;
+                                break;
+                            }
+                        }
+                        if !clear {
+                            continue;
+                        }
+                        let is_dry = cf.arid_dry[[y, x]];
+                        if s > win {
+                            win = s;
+                            win_dry = is_dry;
+                        }
+                        if is_dry && s > dry_best {
+                            dry_best = s;
+                            dry_at = (y, x);
+                        }
+                    }
+                }
+                if win.is_finite() {
+                    rings += 1;
+                    if win_dry {
+                        rings_dry_won += 1;
+                    }
+                    if dry_best.is_finite() {
+                        rings_dry_elig += 1;
+                        let m = dry_best - win;
+                        if m > best_margin {
+                            best_margin = m;
+                            margin_at = (dry_at.0, dry_at.1, cf.month, dry_best, win);
+                        }
+                    }
+                }
+            }
         }
+
         println!(
             "the desert's best hour (M57): peak arid-dry offer {:.2} at ({},{}) in month {} (pull {:.2} · provision {:.2}) against the best watered site ever seen, {:.2}",
             peak_dry, peak_at.0, peak_at.1, peak_at.2, peak_at.3, peak_at.4, peak_wet
         );
+        println!(
+            "the auctions the desert lost (M56): {} parent rings held over the run · {} held an eligible arid-dry cell · {} chose one · closest call {:+.2} at ({},{}) in month {} (dry {:.2} vs ring winner {:.2})",
+            rings, rings_dry_elig, rings_dry_won,
+            if best_margin.is_finite() { best_margin } else { 0.0 },
+            margin_at.0, margin_at.1, margin_at.2, margin_at.3, margin_at.4
+        );
+
         let cf_dry = cf
             .peoples
             .settlements
