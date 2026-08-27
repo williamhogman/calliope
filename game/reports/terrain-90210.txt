@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TERRAIN                      seed 90210 · 640x512
 ========================================================================
-world: "Aurdor" · generated in 2823 ms
+world: "Aurdor" · generated in 2875 ms
 land: 117644 cells of 327680 (35.9%) · 1882304 km²
 hypsometry (land h): p5 0.013 · p25 0.083 · p50 0.204 · p75 0.328 · p95 0.466 · max 0.743
 bathymetry (sea h): p5 -0.593 · p50 -0.402 · p95 -0.032

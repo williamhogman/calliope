@@ -40,10 +40,20 @@ use crate::society::TechId;
 /// runs in it, so the flow it can hold sits modestly above its own mean —
 /// the geomorphic bankfull recurrence on Earth is ~1.5 years (Leopold,
 /// Wolman & Miller 1964), i.e. a stage an ordinary wet year already
-/// reaches. 1.22 puts the crossing in that neighbourhood on this sky,
-/// where the realized flow multiplier is clamped to
-/// [`crate::climate::FLOW_FACTOR_MAX`].
-pub const BANKFULL: f64 = 1.22;
+/// reaches.
+///
+/// M82 restated the number against the sky the world actually has. The
+/// law's own intent is "an ordinary wet year's stage", and the realized
+/// interannual flow spread is σ ≈ 0.15 of the mean (the M72 variance
+/// identity), so that stage is ~+1σ ≈ 1.15 — the original 1.22 sat a
+/// half-sigma higher and, measured per town through the levee stack
+/// (M82's return-time table), pushed damaging floods out to 160–350 y in
+/// the warm zones where Earth's chronicles read decadal-to-century rates.
+/// At 1.15 the crossing lands where the derivation always claimed it
+/// stood; the year's multiplier stays clamped to
+/// [`crate::climate::FLOW_FACTOR_MAX`], and the tolls and gifts stay
+/// capped by their own laws.
+pub const BANKFULL: f64 = 1.15;
 
 /// What a levee craft adds to the stage the town's banks can hold. These
 /// are earthworks, not miracles: together they buy roughly a third of the

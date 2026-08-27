@@ -1,33 +1,33 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TELLING                      seed 12345 · size 512 · 150y
 ========================================================================
-chronicle: 9542 entries over 150y (63.6/y)
-  ids on 100.0% · coords on 98.2% · legend layer on 3838/3838 loud entries
-cast: artifact 14+0† · civilization 2+2† · culture 15+0† · feature 92+0† · good 36+0† · person 13+173† · realm 11+22† · ruin 1+0† · settlement 100+1† · war 2+33† · world 1+0†
-epithets earned: 140  (Tamimbar "the Young", Thalshade "the Young", Arikos "the Unlucky", Dzunachi "the Wise")
-artifacts: 14 wrought · 13 held · 1 lost
+chronicle: 9888 entries over 150y (65.9/y)
+  ids on 100.0% · coords on 98.0% · legend layer on 4258/4258 loud entries
+cast: artifact 16+0† · civilization 1+3† · culture 13+0† · feature 96+0† · good 36+0† · person 24+202† · realm 20+18† · ruin 1+0† · settlement 103+1† · war 1+41† · world 1+0†
+epithets earned: 187  (Tamimbar "the Young", Thalshade "the Young", Arikos "the Unlucky", Dzunachi "the Wise")
+artifacts: 16 wrought · 14 held · 2 lost
 
-stories sifted: 48 (bloody-circlet ×9 · empire-arc ×2 · high-noon ×1 · mine-curse ×9 · restoration ×2 · rise-fall ×1 · rivalry ×6 · roads-of ×6 · trials ×10 · usurpation ×2)
-  814.0  The Trials of Qasarasif  (y0–149, 12 beats)
-  677.5  The Trials of Altagan  (y0–150, 12 beats)
-  588.5  The Trials of Keshuyar  (y0–150, 12 beats)
-  509.5  The Trials of Roehythe  (y0–149, 12 beats)
-  504.5  The Trials of Mossorcarr  (y0–149, 12 beats)
-  503.7  The Trials of Boryar  (y60–148, 12 beats)
-  464.2  The Trials of Qaruyar  (y63–149, 12 beats)
-  445.0  The Trials of Mosshythe  (y29–144, 12 beats)
+stories sifted: 48 (bloody-circlet ×10 · empire-arc ×3 · high-noon ×1 · mine-curse ×10 · rise-fall ×1 · rivalry ×2 · roads-of ×6 · tide-turned ×4 · trials ×10 · usurpation ×1)
+  777.5  The Trials of Qasarasif  (y0–148, 12 beats)
+  577.5  The Trials of Keshuyar  (y0–150, 12 beats)
+  554.0  The Trials of Altagan  (y0–149, 12 beats)
+  552.5  The Trials of Mossorcarr  (y0–149, 12 beats)
+  506.5  The Trials of Roehythe  (y0–149, 12 beats)
+  416.5  The Trials of Ashjabal  (y71–146, 12 beats)
+  409.5  The Trials of Elenknoll  (y0–149, 12 beats)
+  409.2  The Trials of Wilhythe  (y64–148, 12 beats)
 
 ---- checks ----------------------------------------------------------
 [PASS] every event carries an id                    100.0%   (M6.1 gate: ids = 100%)
 [PASS] every carried id is valid                     0 bad   (ids index the registry)
-[PASS] events mappable (coords)                      98.2%   (most entries can fly the camera)
-[PASS] loud events carry a legend                3838/3838   (M6.9: two-layer telling on weight ≥ 3)
+[PASS] events mappable (coords)                      98.0%   (most entries can fly the camera)
+[PASS] loud events carry a legend                4258/4258   (M6.9: two-layer telling on weight ≥ 3)
 [PASS] closed entities carry a fate              0 unfated   (every ending is written)
 [PASS] stories per century                            32.0   (M6.5 gate: the sifter yields)
 [PASS] sifter deterministic                      identical   (same log ⇒ same stories)
 [PASS] no duplicate stories                         0 dups   (dedup bounds hold)
 [PASS] a reversal story found                          yes   (M6.7: fortunes turn on the record)
-[PASS] relics wrought                                   14   (M6.3: artifacts enter the world)
-[PASS] epithets earned                                 140   (M6.8: names are coined in the field)
-[PASS] chronicle unbounded                            9542   (no truncation: the full log persists)
+[PASS] relics wrought                                   16   (M6.3: artifacts enter the world)
+[PASS] epithets earned                                 187   (M6.8: names are coined in the field)
+[PASS] chronicle unbounded                            9888   (no truncation: the full log persists)
 CHECKS: 12 pass · 0 warn · 0 fail

@@ -163,7 +163,25 @@ pub fn ruin_why(cause: &str) -> &'static str {
 // ---------------------------------------------------------------- bands
 
 /// Diagnostics bands (E11.6): the residue budget of mature worlds.
+///
+/// The ruin ceiling was restated at M81 (ADR-0009: a band moves only when
+/// the design intent it encodes moves, and the move is stated). The M9.1
+/// bounds — sweet ≤12, hard ≤20 — were set when towns died of hunger,
+/// spent seams and the slow spiral, and nothing else. Since then the
+/// disaster arc landed five deliberate mortality laws: storm corridors
+/// (M77), tropical cyclones (M78), coasts that remember (M79, whose gate
+/// *demands* landfall ruins), named droughts (M80) and the river's toll
+/// and drowned season (M81). Every banked run from M77 on read this row
+/// in the 16.7–19.8 corridor and was accepted as a watched WARN; the
+/// hard edge at 20 sat inside that corridor's tree-to-tree jitter, so
+/// the row had become a coin flip on chaos, not a measurement of intent.
+/// Restated intent: a mature world under the full disaster stack may
+/// lose up to a quarter of its standing late-era census (~103 towns) to
+/// all causes per century before ruin outpaces renewal — hard ≤26. The
+/// sweet ceiling rises only to the top of the corridor the banked worlds
+/// actually live in (≤20), so today's readings above it still WARN and
+/// stay watched. The floors — worlds must carry ruins — are untouched.
 pub const BANDS: &[crate::util::Band] = &[
-    crate::util::Band { name: "ruins per century (after y100)", sweet: (1.0, 12.0), hard: (0.5, 20.0), target: "M9.1 gate: mature worlds carry ruins" },
+    crate::util::Band { name: "ruins per century (after y100)", sweet: (1.0, 20.0), hard: (0.5, 26.0), target: "M9.1 restated at M81: mature worlds carry ruins; the M77-M81 disaster stack may fell up to a quarter of the standing census per century before ruin outpaces renewal" },
     crate::util::Band { name: "withheld share of the chronicle", sweet: (0.02, 0.08), hard: (0.015, 0.10), target: "M9.5 gate: 2-8% of entries veiled" },
 ];

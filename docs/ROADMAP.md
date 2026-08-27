@@ -274,6 +274,18 @@ existing suite stays green throughout.
 
 ## Ready (calibration queue)
 
+Finding from the M83 landing (staged, not a gate failure):
+
+- Seed 555 (out of the climate lane's suite set 12345/777/90210) reads
+  the M42 warm-rim rain boost at 0.88× against the 0.98 hard floor —
+  652 warm-rim cells, observed while sweeping the M83 drift lanes.
+  Baseline generation lane, provably untouched by M83 (drift enters
+  only the interannual dt), and the suite composes clean without it.
+  Worth a look on its own session: either 555's warm rims genuinely
+  sit in rain shadows (then the measurement should condition on
+  aspect, as the cold-rim row does) or the Gulf-Stream law has a real
+  low tail the three suite seeds never sample.
+
 Findings from the M22 landing (staged, not gate failures):
 
 - Worst long task in the browser probe reads 588 ms on a quiet run

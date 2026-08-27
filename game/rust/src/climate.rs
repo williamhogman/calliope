@@ -546,8 +546,8 @@ pub fn precipitation(
             let lat_s = -90.0 + (y as f64) * 180.0 / (n - 1.0);
             let t = tmean[[y, x]];
             let mut v = p[[y, x]];
-            let c0 = 1.0 + 1.7 * (-((lat_s - 10.0) / 12.0).powi(2)).exp();
-            let c6 = 1.0 + 1.7 * (-((lat_s + 10.0) / 12.0).powi(2)).exp();
+            let c0 = itcz_camp(lat_s, ITCZ_CAMP_LAT);
+            let c6 = itcz_camp(lat_s, -ITCZ_CAMP_LAT);
             v *= 0.5 * (c0 + c6);
             v *= 1.0 - 0.30 * (-(((lat - 25.0) / 8.0).powi(2))).exp();
             v *= (0.25 + (t + 20.0) / 40.0).clamp(0.25, 1.0);
@@ -689,6 +689,187 @@ pub fn teleconnection_bias(index: f64, lat_signed: f64) -> f64 {
     TELE_GAIN * index * (g(TELE_BELT_LAT) - g(-TELE_BELT_LAT))
 }
 
+// ---- M83 — the slow drift (the century's own temperature) ------------------
+//
+// A world's climate mean is not a constant it never leaves: Earth's
+// Holocene wandered by tenths of a degree over centuries — the Roman warm
+// spell, the medieval optimum, the little ice age — without ever running
+// away. M83 gives every run that history: a slow, bounded, mean-reverting
+// walk around the baseline `tmean`, drawn once from the seed and evaluated
+// per year, entering the temperature pipeline as a global offset *ahead of*
+// the M71 anomaly draw (the year's weather rides on the century's back).
+//
+// The law is an exact-discretization Ornstein–Uhlenbeck step with
+// reflecting walls: v_k = φ·v_{k−1} + σ_step·ξ_k, φ = 1 − 1/DRIFT_TAU,
+// σ_step chosen so the stationary σ is DRIFT_SIGMA, then reflected into
+// ±DRIFT_BOUND. Mean reversion is what keeps the long-run mean at the
+// baseline (the M83/M85 stationarity gates); the walls are the configured
+// hard stop the "no runaway" law names — at 5.5σ they almost never fire,
+// which is exactly what a wall should do. The step noise is an Irwin–Hall
+// 12-sum (bounded at ±6σ), so no single year can jump: the drift is slow
+// by construction, not by luck.
+//
+// Derived state, like the rest of the sky (ADR-0003): nothing stored,
+// hashed or packed. The curve is a pure function of (seed, year) — the
+// walk is re-run from the dawn on demand, and `World::year_drift` memoizes
+// the year's value so the sim pays the walk once per year, not per site.
+// Prehistory (year ≤ 0) reads 0: the dawn *is* the baseline epoch, and the
+// generated fields are the mean climate the walk wanders around.
+
+use rand::{Rng, SeedableRng};
+use rand_pcg::Pcg64Mcg;
+
+/// °C — the reflecting walls. The configured excursion bound the M83/M85
+/// gates check: no year's drift may stand beyond it, ever.
+pub const DRIFT_BOUND: f64 = 3.0;
+/// Years — the walk's memory (mean-reversion e-folding time). Century
+/// scale: a warm age is generations long, not a bad decade.
+pub const DRIFT_TAU: f64 = 140.0;
+/// °C — the walk's stationary σ. Earth's Holocene multicentennial
+/// global-mean swing runs a few tenths of a degree; ~0.5 is lively enough
+/// to be felt in harvests and far short of the walls.
+pub const DRIFT_SIGMA: f64 = 0.55;
+/// Stream key: the drift's draws share nothing with the famine die, the
+/// oscillation or the variability lattice.
+pub const DRIFT_STREAM_KEY: u64 = 0xD21F_7C01_5EC0_1A2u64;
+
+/// The slow drift of one world's climate — a law, not a table.
+pub struct Drift {
+    seed: i64,
+}
+
+impl Drift {
+    /// Draw the walk's identity from the seed. Same seed ⇒ same century
+    /// history, forever.
+    pub fn new(seed: i64) -> Self {
+        Self { seed }
+    }
+
+    /// One step of the walk. Kept as the single site of the arithmetic so
+    /// `value` and `scan` cannot drift apart: both call this, in order.
+    #[inline]
+    fn step(v: f64, rng: &mut Pcg64Mcg) -> f64 {
+        let phi = 1.0 - 1.0 / DRIFT_TAU;
+        let sigma_step = DRIFT_SIGMA * (1.0 - phi * phi).sqrt();
+        // Irwin–Hall 12-sum: mean 6, variance 1 — a bounded gaussian.
+        let mut g = 0.0f64;
+        for _ in 0..12 {
+            g += rng.gen::<f64>();
+        }
+        let mut next = phi * v + sigma_step * (g - 6.0);
+        // Reflecting walls — the configured hard stop.
+        if next > DRIFT_BOUND {
+            next = 2.0 * DRIFT_BOUND - next;
+        }
+        if next < -DRIFT_BOUND {
+            next = -2.0 * DRIFT_BOUND - next;
+        }
+        next
+    }
+
+    fn rng(&self) -> Pcg64Mcg {
+        Pcg64Mcg::seed_from_u64((self.seed as u64) ^ DRIFT_STREAM_KEY)
+    }
+
+    /// The drift at a given year, °C on the baseline `tmean`. O(year):
+    /// the walk is re-run from the dawn — sim callers go through
+    /// `World::year_drift`, which memoizes the year.
+    pub fn value(&self, year: i64) -> f64 {
+        if year <= 0 {
+            return 0.0;
+        }
+        let mut rng = self.rng();
+        let mut v = 0.0f64;
+        for _ in 0..year {
+            v = Self::step(v, &mut rng);
+        }
+        v
+    }
+
+    /// The whole curve in one pass: index = year, `scan(n)[0] = 0.0` (the
+    /// dawn), `scan(n)[k] = value(k)` bit-for-bit. For the diagnostics
+    /// that read millennia.
+    pub fn scan(&self, years: usize) -> Vec<f64> {
+        let mut out = Vec::with_capacity(years + 1);
+        out.push(0.0);
+        let mut rng = self.rng();
+        let mut v = 0.0f64;
+        for _ in 0..years {
+            v = Self::step(v, &mut rng);
+            out.push(v);
+        }
+        out
+    }
+
+    /// A fixed, world-independent read of the walk for the replay identity
+    /// line, exactly as M73/M74 probe their sources: the law's constants
+    /// plus the curve at spaced years. A drift whose keying or arithmetic
+    /// moves breaks replay here.
+    pub fn probe(&self) -> u64 {
+        let mut b: Vec<u8> = Vec::with_capacity(8 * 10);
+        for v in [DRIFT_BOUND, DRIFT_TAU, DRIFT_SIGMA] {
+            b.extend_from_slice(&v.to_bits().to_le_bytes());
+        }
+        for year in [1i64, 37, 211, 997, 4001] {
+            b.extend_from_slice(&self.value(year).to_bits().to_le_bytes());
+        }
+        crate::util::fnv1a64(&b)
+    }
+}
+
+// -------------------------------------------------- M84 · belts on the move
+//
+// The drift is not just a thermometer reading — a warmer world carries its
+// tropics wider and its storm tracks poleward; a colder one pulls both in.
+// M84 couples the M83 drift into the two belt geometries the world already
+// owns: the ITCZ camps (the ±ITCZ_CAMP_LAT convective gaussians the
+// baseline precipitation marched between) and the storm corridors (whose
+// fuel lines — sea-freeze for the frontal engine, TROP_SST_MIN for the
+// warm-sea one — move when the sea under them warms or cools). The rain
+// side is exact: `belt_anomaly` is the fractional change a camp shifted by
+// `BELT_SHIFT_DEG_PER_C · drift` degrees poleward makes against the
+// unshifted climatology, entering the `dp` lane beside the M75 tilt. The
+// storm side names no latitude (M77's law): `storms.rs` re-reads its own
+// fuel ramps at the drifted SST, and the band moves because the fuel line
+// does. Both couplings are pure in (seed, year); drift 0 is exactly the
+// unshifted world, to the bit.
+
+/// The ITCZ camp latitude, degrees off the equator — the two convective
+/// gaussians the baseline precipitation marches between (one per solstice).
+pub const ITCZ_CAMP_LAT: f64 = 10.0;
+/// The camp gaussian's width, degrees of latitude.
+pub const ITCZ_CAMP_WIDTH: f64 = 12.0;
+/// The camp gaussian's convective boost at its centre.
+pub const ITCZ_CAMP_BOOST: f64 = 1.7;
+/// M84 — degrees of latitude the belts walk per °C of drift, poleward when
+/// warm. Earth's models put Hadley-edge/ITCZ migration at roughly 1–2° per
+/// °C of global mean; 1.4 lands the maximum excursion at the ±3 °C walls
+/// on 4.2° — inside the 5° bound the M84 gate holds.
+pub const BELT_SHIFT_DEG_PER_C: f64 = 1.4;
+
+/// One ITCZ camp's convective factor at a signed latitude.
+#[inline]
+pub fn itcz_camp(lat_s: f64, camp_lat: f64) -> f64 {
+    1.0 + ITCZ_CAMP_BOOST * (-((lat_s - camp_lat) / ITCZ_CAMP_WIDTH).powi(2)).exp()
+}
+
+/// M84 — the fractional rain change at a signed latitude when the drift
+/// walks both ITCZ camps `BELT_SHIFT_DEG_PER_C · drift` degrees poleward
+/// (equatorward when the drift is cold). Exactly zero at drift 0: the
+/// moved climatology over the standing one, minus one. A row law — it
+/// joins the `dp` lane beside the M75 teleconnection tilt.
+#[inline]
+pub fn belt_anomaly(lat_s: f64, drift: f64) -> f64 {
+    if drift == 0.0 {
+        return 0.0;
+    }
+    let d = BELT_SHIFT_DEG_PER_C * drift;
+    let base = 0.5 * (itcz_camp(lat_s, ITCZ_CAMP_LAT) + itcz_camp(lat_s, -ITCZ_CAMP_LAT));
+    let moved = 0.5
+        * (itcz_camp(lat_s, ITCZ_CAMP_LAT + d) + itcz_camp(lat_s, -(ITCZ_CAMP_LAT + d)));
+    moved / base - 1.0
+}
+
 /// 1σ of the year-to-year temperature swing at this latitude, °C.
 pub fn anomaly_amp_t(lat_abs: f64) -> f64 {
     ANOM_T_EQ + (ANOM_T_POLE - ANOM_T_EQ) * (lat_abs.abs() / 90.0).clamp(0.0, 1.0).powf(ANOM_LAT_POW)
@@ -715,12 +896,19 @@ pub fn anomaly_draw(noise: &crate::noisegen::Perlin3, x: usize, y: usize, year: 
 /// is degrees added to `tmean` and `dp` is the fractional change applied
 /// to `precip` (`precip * (1 + dp)`). `rows` carries the latitude, which
 /// is a property of the row alone (margins widen columns, never rows).
+/// M83 — `drift` is the century's global offset, entering the temperature
+/// lane ahead of the year's draw; 0.0 asks for the unforced amplitude law
+/// alone (the quantity M71/M73 declare and gate). M84 — the same drift
+/// moves the belts: the rain lane carries `belt_anomaly`, the fractional
+/// change of ITCZ camps walked poleward with the warmth, beside the M75
+/// tilt. Drift 0 is the unshifted rain law to the bit.
 pub fn year_anomaly(
     noise: &crate::noisegen::Perlin3,
     rows: usize,
     cols: usize,
     year: i64,
     osc: f64,
+    drift: f64,
 ) -> (Array2<f64>, Array2<f64>) {
     let mut dt = Array2::<f64>::zeros((rows, cols));
     let mut dp = Array2::<f64>::zeros((rows, cols));
@@ -732,9 +920,11 @@ pub fn year_anomaly(
         let ap = anomaly_amp_p(lat) / ANOM_FBM_SIGMA;
         // M75: the tilt is a property of the row, drawn once per row.
         let tilt = teleconnection_bias(osc, lat_signed);
+        // M84: so is the belt — the camps move with the century, not the cell.
+        let belt = belt_anomaly(lat_signed, drift);
         for x in 0..cols {
-            dt[[y, x]] = anomaly_draw(noise, x, y, year, 0.0) * at;
-            dp[[y, x]] = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE) * ap + tilt)
+            dt[[y, x]] = drift + anomaly_draw(noise, x, y, year, 0.0) * at;
+            dp[[y, x]] = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE) * ap + tilt + belt)
                 .max(ANOM_P_FLOOR);
         }
     }
@@ -745,6 +935,9 @@ pub fn year_anomaly(
 /// weather where people live. This is the same law as the full diagnostic
 /// grid; avoiding hundreds of thousands of unobserved cells is a material
 /// part of the tick budget once weather changes every year.
+/// `drift` as in `year_anomaly`: since M84 the rain lane carries the belt
+/// term too, so rain-reading callers must pass the year's real drift; 0.0
+/// asks for the unforced twin on both lanes.
 #[inline]
 pub fn year_anomaly_at(
     noise: &crate::noisegen::Perlin3,
@@ -753,14 +946,16 @@ pub fn year_anomaly_at(
     y: usize,
     year: i64,
     osc: f64,
+    drift: f64,
 ) -> (f64, f64) {
     let n = rows as f64;
     let lat_signed = -90.0 + (y as f64) * 180.0 / (n - 1.0);
     let lat = lat_signed.abs();
-    let dt = anomaly_draw(noise, x, y, year, 0.0) * anomaly_amp_t(lat) / ANOM_FBM_SIGMA;
+    let dt = drift + anomaly_draw(noise, x, y, year, 0.0) * anomaly_amp_t(lat) / ANOM_FBM_SIGMA;
     let dp = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE) * anomaly_amp_p(lat)
         / ANOM_FBM_SIGMA
-        + teleconnection_bias(osc, lat_signed))
+        + teleconnection_bias(osc, lat_signed)
+        + belt_anomaly(lat_signed, drift))
     .max(ANOM_P_FLOOR);
     (dt, dp)
 }
@@ -768,7 +963,8 @@ pub fn year_anomaly_at(
 /// The separable Gaussian catchment reading at one cell. The arithmetic and
 /// reflect boundary are deliberately identical to `ndimage::gaussian_filter`:
 /// diagnostics may ask for the full field, while ticks pay only for inhabited
-/// cells and receive the same value bit-for-bit.
+/// cells and receive the same value bit-for-bit. `drift` as everywhere since
+/// M84: the catchment must read the same belt-carrying rain the sky rains.
 pub fn catchment_anomaly_at(
     noise: &crate::noisegen::Perlin3,
     rows: usize,
@@ -777,6 +973,7 @@ pub fn catchment_anomaly_at(
     y: usize,
     year: i64,
     osc: f64,
+    drift: f64,
 ) -> f64 {
     let sigma = CATCHMENT_SIGMA;
     let radius = (4.0 * sigma + 0.5) as isize;
@@ -795,7 +992,8 @@ pub fn catchment_anomaly_at(
         let mut horizontal = 0.0;
         for (jx, kx) in kernel.iter().enumerate() {
             let xx = crate::ndimage::reflect(x as isize + jx as isize - radius, cols as isize);
-            horizontal += kx * year_anomaly_at(noise, rows, xx, yy, year, osc).1;
+            // Rain lane, belt included (M84) — bit-equal to the full filter.
+            horizontal += kx * year_anomaly_at(noise, rows, xx, yy, year, osc, drift).1;
         }
         out += ky * horizontal;
     }

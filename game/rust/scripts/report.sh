@@ -447,14 +447,16 @@ echo "-- assay (property proofs) -> assay.txt"
 # ---- module-dependency lint (E11.8) ----------------------------------------
 # Leaf modules must not import `world` — the import DAG stays acyclic by
 # check, not convention. Allowed to speak of World: the orchestrator itself,
-# its impl-extension modules (pack/snapshot/famine/prospecting/explain),
-# the system lattice, and the bins. Everything else is a leaf: it may use
-# `event` (the wire vocabulary), `state` (the walls) and its sibling leaves.
+# its impl-extension modules (pack/snapshot/famine/flood/prospecting/explain
+# — flood joins with M81, the same disaster shape famine carries: its pass
+# is an impl block on World), the system lattice, and the bins. Everything
+# else is a leaf: it may use `event` (the wire vocabulary), `state` (the
+# walls) and its sibling leaves.
 {
   echo "========================================================================"
   echo " CALLIOPE DIAGNOSTIC · MODULE DAG                       E11.8 lint"
   echo "========================================================================"
-  ALLOWED="lib.rs world.rs systems.rs pack.rs snapshot.rs famine.rs prospecting.rs explain.rs"
+  ALLOWED="lib.rs world.rs systems.rs pack.rs snapshot.rs famine.rs flood.rs prospecting.rs explain.rs"
   bad=""
   for f in src/*.rs; do
     b="$(basename "$f")"

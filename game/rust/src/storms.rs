@@ -109,6 +109,27 @@ pub const STORM_SEASON_CONTRAST: f64 = 0.75;
 pub const TROP_SST_MIN: f64 = 26.0;
 /// Fuel saturates this many degrees above the threshold.
 pub const TROP_SST_SPAN: f64 = 3.5;
+/// M84 — how much of a drifted age's temperature the genesis threshold
+/// gives back. The classical 26 °C is not a law of water: genesis cares
+/// about SST *relative to the tropical mean* (the upper troposphere
+/// warms with the sea it sits over — Vecchi & Soden 2007, Johnson & Xie
+/// 2010), so in a uniformly warmer or colder age the threshold moves
+/// with the climate. It does not move fully — full tracking would nail
+/// the band in place and no age would own its storms — so the effective
+/// margin an age adds is `drift × (1 − TROP_SST_TRACK)`. Measured on the
+/// suite seeds: the baseline warm seas top out ~2–3 °C over threshold,
+/// so an untracked −3 °C wall extinguished the storm kind outright
+/// (EMPTY on every seed); at 0.5 the cold wall keeps a real, shrunken,
+/// equator-hugged band and the shift stays inside the spec's 5°.
+pub const TROP_SST_TRACK: f64 = 0.5;
+
+/// M84 — the drift the warm-sea fuel actually feels, after the genesis
+/// threshold has tracked its share of the age. Exactly zero at drift
+/// zero, so the undrifted lattice stays bit-identical.
+#[inline]
+pub fn trop_eff_drift(drift: f64) -> f64 {
+    drift * (1.0 - TROP_SST_TRACK)
+}
 /// Below this latitude the Coriolis parameter is too small to spin a
 /// vortex up, whatever the sea's heat — the equatorial dead band.
 pub const TROP_LAT_MIN: f64 = 5.0;
@@ -240,7 +261,12 @@ pub struct StormClimatology {
     /// Storm fuel 0..1: the sea's heat above its freezing point in the
     /// hemisphere's own storm season, zero under pack ice and on land.
     fuel: Array2<f64>,
-    /// Genesis weight = gradient × fuel.
+    /// M84 — the storm-season sea-surface temperature the fuel was read
+    /// from, °C; −∞ on land. Kept so a drifted year can re-read the fuel
+    /// ramp at `csst + drift` without rebuilding the climatology: the
+    /// belt moves because the freeze line under it does.
+    csst: Array2<f64>,
+    /// Genesis weight = gradient × fuel (the drift-0 reference).
     weight: Array2<f64>,
     /// The reference genesis weight in each hemisphere (north, south).
     peak: (f64, f64),
@@ -370,6 +396,7 @@ impl StormClimatology {
         // law reads, so a cell this module calls frozen is a cell the
         // trade lanes also find shut.
         let mut fuel = Array2::<f64>::zeros((rows, cols));
+        let mut csst = Array2::<f64>::from_elem((rows, cols), f64::NEG_INFINITY);
         let mut weight = Array2::<f64>::zeros((rows, cols));
         let mut wn: Vec<f64> = Vec::new();
         let mut ws: Vec<f64> = Vec::new();
@@ -387,6 +414,7 @@ impl StormClimatology {
                     tamp[[y, x]] as f64 * crate::seaice::SST_DAMP,
                     cm,
                 );
+                csst[[y, x]] = sst;
                 let f = ((sst - crate::seaice::SEA_FREEZE_C) / STORM_FUEL_SPAN).clamp(0.0, 1.0);
                 fuel[[y, x]] = f;
                 let w = grad[[y, x]] * f;
@@ -497,6 +525,7 @@ impl StormClimatology {
             cols,
             grad,
             fuel,
+            csst,
             weight,
             peak,
             cold_month,
@@ -538,7 +567,15 @@ impl StormClimatology {
 
     /// The cells eligible to breed a cyclone in this hemisphere, with the
     /// genesis weight of each. Row-major, so the order is the grid's.
-    pub fn sites(&self, hemi: i8) -> Vec<((usize, usize), f64)> {
+    ///
+    /// M84 — `drift` is the year's climate drift (°C): the fuel ramp is
+    /// re-read at `csst + drift`, so a warm age refuels the steep water
+    /// the ice edge had struck out and the corridor walks poleward; a
+    /// cold age pulls the freeze line — and the belt — equatorward. The
+    /// gradient and the reference peak stay the world's own: the drift
+    /// moves the fuel through the standing yardstick, it never rescales
+    /// it. Drift 0.0 reads the stored reference weights to the bit.
+    pub fn sites(&self, hemi: i8, drift: f64) -> Vec<((usize, usize), f64)> {
         let p = self.peak_gradient(hemi);
         let mut out = Vec::new();
         if p <= 0.0 {
@@ -551,7 +588,14 @@ impl StormClimatology {
                 continue;
             }
             for x in 0..self.cols {
-                let g = self.weight[[y, x]];
+                let g = if drift == 0.0 {
+                    self.weight[[y, x]]
+                } else {
+                    let f = ((self.csst[[y, x]] + drift - crate::seaice::SEA_FREEZE_C)
+                        / STORM_FUEL_SPAN)
+                        .clamp(0.0, 1.0);
+                    self.grad[[y, x]] * f
+                };
                 if g >= cut {
                     out.push(((y, x), g));
                 }
@@ -561,9 +605,10 @@ impl StormClimatology {
     }
 
     /// How many cyclones this hemisphere breeds in a year — a property of
-    /// the size of its baroclinic sea, not of the calendar.
-    pub fn season_count(&self, hemi: i8) -> usize {
-        let n = self.sites(hemi).len() as f64;
+    /// the size of its baroclinic sea (in the year's own climate, M84),
+    /// not of the calendar.
+    pub fn season_count(&self, hemi: i8, drift: f64) -> usize {
+        let n = self.sites(hemi, drift).len() as f64;
         ((n / 1000.0) * STORM_PER_1000_CELLS)
             .round()
             .max(0.0)
@@ -572,10 +617,18 @@ impl StormClimatology {
 
     /// Draw and walk one hemisphere's storms for one year.
     ///
-    /// Pure in `(seed, year, hemi)` and the frozen fields above.
-    pub fn season(&self, seed: i64, year: i64, hemi: i8, height: &Array2<f32>) -> Vec<StormTrack> {
-        let sites = self.sites(hemi);
-        let count = self.season_count(hemi);
+    /// Pure in `(seed, year, hemi)`, the frozen fields above and the
+    /// year's drift (itself pure in seed × year — M84).
+    pub fn season(
+        &self,
+        seed: i64,
+        year: i64,
+        hemi: i8,
+        height: &Array2<f32>,
+        drift: f64,
+    ) -> Vec<StormTrack> {
+        let sites = self.sites(hemi, drift);
+        let count = self.season_count(hemi, drift);
         if sites.is_empty() || count == 0 {
             return Vec::new();
         }
@@ -726,15 +779,37 @@ impl StormClimatology {
 
     /// The cells eligible to breed a tropical cyclone in this hemisphere,
     /// with the genesis weight of each. Row-major.
-    pub fn trop_sites(&self, hemi: i8) -> Vec<((usize, usize), f64)> {
+    ///
+    /// M84 — `drift` moves the warm-sea line: the heat ramp is re-read at
+    /// `tsst + drift·(1−TROP_SST_TRACK)` — the threshold tracks its share
+    /// of the age (see `TROP_SST_TRACK`) — so a warm age carries the
+    /// genesis isotherm, and the band, poleward, and a cold age pulls it
+    /// in without ever emptying the sea inside the drift walls. The spin
+    /// term is latitude physics and never moves. Drift 0.0 reads the
+    /// stored reference weights to the bit.
+    pub fn trop_sites(&self, hemi: i8, drift: f64) -> Vec<((usize, usize), f64)> {
+        let eff = trop_eff_drift(drift);
         let mut out = Vec::new();
         for y in 0..self.rows {
-            let north = lat_of(y as f64, self.rows) >= 0.0;
+            let lat = lat_of(y as f64, self.rows);
+            let north = lat >= 0.0;
             if north != (hemi >= 0) {
                 continue;
             }
             for x in 0..self.cols {
-                let w = self.tweight[[y, x]];
+                let w = if drift == 0.0 {
+                    self.tweight[[y, x]]
+                } else {
+                    // −∞-free: `tsst` is 0 on land, and 0 + eff never
+                    // clears TROP_SST_MIN inside the ±3 °C walls.
+                    let sst = self.tsst[[y, x]] + eff;
+                    if sst < TROP_SST_MIN {
+                        continue;
+                    }
+                    let spin = ((lat.abs() - TROP_LAT_MIN) / TROP_LAT_SPAN).clamp(0.0, 1.0);
+                    let heat = ((sst - TROP_SST_MIN) / TROP_SST_SPAN).clamp(0.0, 1.0);
+                    heat * spin
+                };
                 if w > 0.0 {
                     out.push(((y, x), w));
                 }
@@ -744,9 +819,10 @@ impl StormClimatology {
     }
 
     /// How many tropical cyclones this hemisphere breeds in a year — a
-    /// property of the size of its warm sea.
-    pub fn trop_season_count(&self, hemi: i8) -> usize {
-        let n = self.trop_sites(hemi).len() as f64;
+    /// property of the size of its warm sea (in the year's own climate,
+    /// M84).
+    pub fn trop_season_count(&self, hemi: i8, drift: f64) -> usize {
+        let n = self.trop_sites(hemi, drift).len() as f64;
         ((n / 1000.0) * TROP_PER_1000_CELLS)
             .round()
             .max(0.0)
@@ -754,18 +830,19 @@ impl StormClimatology {
     }
 
     /// Draw and walk one hemisphere's warm-sea cyclones for one year.
-    /// Pure in `(seed, year, hemi)` and the frozen fields above; its own
-    /// key domain, so a tropical season never consumes the frontal
-    /// corridor's draws.
+    /// Pure in `(seed, year, hemi)`, the frozen fields above and the
+    /// year's drift (M84); its own key domain, so a tropical season never
+    /// consumes the frontal corridor's draws.
     pub fn trop_season(
         &self,
         seed: i64,
         year: i64,
         hemi: i8,
         height: &Array2<f32>,
+        drift: f64,
     ) -> Vec<StormTrack> {
-        let sites = self.trop_sites(hemi);
-        let count = self.trop_season_count(hemi);
+        let sites = self.trop_sites(hemi, drift);
+        let count = self.trop_season_count(hemi, drift);
         if sites.is_empty() || count == 0 {
             return Vec::new();
         }
@@ -805,7 +882,7 @@ impl StormClimatology {
                 }
             }
             let vigour = 0.5 + 0.5 * rng.gen_range(0.0..1.0f64);
-            out.push(self.trop_walk(year, hemi, month, (gy, gx), g, vigour, height));
+            out.push(self.trop_walk(year, hemi, month, (gy, gx), g, vigour, height, drift));
         }
         out
     }
@@ -814,6 +891,8 @@ impl StormClimatology {
     /// poleward as it goes, and — if it lives long enough to leave the
     /// tropics — turned back east by the westerlies it runs into. The
     /// recurvature is the wind field's; nothing here bends the path.
+    /// M84 — the sea it feeds on along the way is the drifted year's sea.
+    #[allow(clippy::too_many_arguments)]
     fn trop_walk(
         &self,
         year: i64,
@@ -823,7 +902,9 @@ impl StormClimatology {
         weight: f64,
         vigour: f64,
         height: &Array2<f32>,
+        drift: f64,
     ) -> StormTrack {
+        let eff = trop_eff_drift(drift);
         let rows = self.rows;
         let cols = self.cols;
         let dlat = 180.0 / (rows as f64 - 1.0);
@@ -860,10 +941,12 @@ impl StormClimatology {
                 }
                 landfall = true;
                 inten *= TROP_LAND_KEEP;
-            } else if self.tsst[[cy, cx]] >= TROP_SST_MIN {
-                // still over its fuel: the warm sea keeps feeding it
-                let heat =
-                    ((self.tsst[[cy, cx]] - TROP_SST_MIN) / TROP_SST_SPAN).clamp(0.0, 1.0);
+            } else if self.tsst[[cy, cx]] + eff >= TROP_SST_MIN {
+                // still over its fuel: the warm sea keeps feeding it —
+                // the drifted year's warm sea through the tracked
+                // threshold (M84; drift 0 is exact).
+                let heat = ((self.tsst[[cy, cx]] + eff - TROP_SST_MIN) / TROP_SST_SPAN)
+                    .clamp(0.0, 1.0);
                 inten += TROP_SEA_GROW * heat * (1.0 - inten).max(0.0);
             } else {
                 // out over cool water: the engine starves
@@ -892,16 +975,17 @@ impl StormClimatology {
     }
 
     /// The warm-sea law's replay probe: the seasons, the site counts and
-    /// the tracks of two spaced years, hashed.
+    /// the tracks of two spaced years, hashed. Read at drift 0 — the
+    /// probe pins the reference law; the drifted years ride on it (M84).
     pub fn trop_probe(&self, seed: i64, height: &Array2<f32>) -> u64 {
         let mut b: Vec<u8> = Vec::new();
         for v in [self.warm_month.0, self.warm_month.1] {
             b.extend_from_slice(&v.to_le_bytes());
         }
         for h in [1i8, -1i8] {
-            b.extend_from_slice(&(self.trop_sites(h).len() as u64).to_le_bytes());
+            b.extend_from_slice(&(self.trop_sites(h, 0.0).len() as u64).to_le_bytes());
             for year in [1i64, 97] {
-                for t in self.trop_season(seed, year, h, height) {
+                for t in self.trop_season(seed, year, h, height, 0.0) {
                     b.extend_from_slice(&t.month.to_le_bytes());
                     b.extend_from_slice(&(t.genesis.0 as u32).to_le_bytes());
                     b.extend_from_slice(&(t.genesis.1 as u32).to_le_bytes());
@@ -923,7 +1007,8 @@ impl StormClimatology {
     /// A fixed read of the storm law for the replay identity line: the
     /// hemispheric peaks, the seasons, the site counts, and the full
     /// tracks of two spaced years. A corridor whose constants or keying
-    /// drift breaks replay here.
+    /// drift breaks replay here. Read at drift 0 — the probe pins the
+    /// reference law; the drifted years ride on it (M84).
     pub fn probe(&self, seed: i64, height: &Array2<f32>) -> u64 {
         let mut b: Vec<u8> = Vec::new();
         for v in [self.peak.0, self.peak.1] {
@@ -933,9 +1018,9 @@ impl StormClimatology {
             b.extend_from_slice(&v.to_le_bytes());
         }
         for h in [1i8, -1i8] {
-            b.extend_from_slice(&(self.sites(h).len() as u64).to_le_bytes());
+            b.extend_from_slice(&(self.sites(h, 0.0).len() as u64).to_le_bytes());
             for year in [1i64, 97] {
-                for t in self.season(seed, year, h, height) {
+                for t in self.season(seed, year, h, height, 0.0) {
                     b.extend_from_slice(&(t.month as i64).to_le_bytes());
                     b.extend_from_slice(&(t.genesis.0 as u32).to_le_bytes());
                     b.extend_from_slice(&(t.genesis.1 as u32).to_le_bytes());
@@ -986,20 +1071,27 @@ pub struct Landfall {
 impl StormClimatology {
     /// Every landfall of one calendar year, both hemispheres, both storm
     /// kinds, in a fixed order. Pure in `(seed, year)` and the frozen
-    /// fields: two calls give the same ledger, which is what lets the
-    /// world replay a coast's history without storing it.
+    /// fields (`drift` is itself pure in seed × year — M84): two calls
+    /// give the same ledger, which is what lets the world replay a
+    /// coast's history without storing it.
     ///
     /// A storm born in December may come ashore in January; the month is
     /// therefore returned absolute (`year * 12 + offset`) and may fall in
     /// the following year. The caller keeps the previous year's ledger
     /// alive for exactly that reason.
-    pub fn landfalls(&self, seed: i64, year: i64, height: &Array2<f32>) -> Vec<Landfall> {
+    pub fn landfalls(
+        &self,
+        seed: i64,
+        year: i64,
+        height: &Array2<f32>,
+        drift: f64,
+    ) -> Vec<Landfall> {
         let mut out: Vec<Landfall> = Vec::new();
         for &(trop, hemi) in &[(false, 1i8), (false, -1i8), (true, 1i8), (true, -1i8)] {
             let tracks = if trop {
-                self.trop_season(seed, year, hemi, height)
+                self.trop_season(seed, year, hemi, height, drift)
             } else {
-                self.season(seed, year, hemi, height)
+                self.season(seed, year, hemi, height, drift)
             };
             for t in tracks {
                 let Some((ly, lx, day, inten)) = t.first_land else { continue };

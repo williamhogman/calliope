@@ -218,6 +218,17 @@ pub struct World {
     pub(crate) variability: Perlin3,
     /// M74 — the slow lean of the seas, drawn once from the seed.
     pub(crate) oscillation: crate::oscillation::Oscillation,
+    /// M83 — the century's slow temperature drift: a bounded, mean-
+    /// reverting walk around the baseline `tmean`, drawn once from the
+    /// seed. Derived state (ADR-0003): the curve is re-run on demand,
+    /// never stored, hashed or packed.
+    pub(crate) drift: crate::climate::Drift,
+    /// M83 — the years' drift values, cached so the sim pays the O(year)
+    /// walk once per year instead of once per inhabited site. A map, not
+    /// a slot, since M84: the drought window and the storm ledger read
+    /// several adjacent years in one tick, and a one-slot memo would
+    /// thrash the walk. One f64 per simulated year — bounded and tiny.
+    pub(crate) year_drift_memo: std::sync::Mutex<BTreeMap<i64, f64>>,
     /// M79 — the storm field, solved lazily the first time a month asks
     /// the coast what hit it. Frozen once built (pure in the finished
     /// climate), so the landfall ledger of any year can be re-derived.
@@ -1122,6 +1133,8 @@ impl GenBuilder {
             wire_buf: Vec::new(),
             variability: Perlin3::new(seed + 7717),
             oscillation: crate::oscillation::Oscillation::new(seed),
+            drift: crate::climate::Drift::new(seed),
+            year_drift_memo: std::sync::Mutex::new(BTreeMap::new()),
             storm_clim: None,
             storm_year: i64::MIN,
             storm_now: Vec::new(),
@@ -1379,18 +1392,48 @@ impl World {
 
     pub fn year_anomaly_fresh(&self, year: i64) -> (Array2<f64>, Array2<f64>) {
         let (rows, cols) = self.fields.tmean.dim();
-        climate::year_anomaly(&self.variability, rows, cols, year, self.year_osc(year))
+        climate::year_anomaly(
+            &self.variability,
+            rows,
+            cols,
+            year,
+            self.year_osc(year),
+            self.year_drift(year),
+        )
     }
 
-    /// M75 — the same year with the seesaw held at zero: the unforced
-    /// latitude law alone, which is the quantity M71's amplitude law
-    /// declares. The forced field (`year_anomaly_fresh`) is what the sim
-    /// runs on; this is its counterfactual twin, used by diagnostics to
-    /// separate the noise law from the tilt laid over it.
+    /// M75/M83 — the same year with the seesaw *and* the drift held at
+    /// zero: the unforced latitude law alone, which is the quantity M71's
+    /// amplitude law declares. The forced field (`year_anomaly_fresh`) is
+    /// what the sim runs on; this is its counterfactual twin, used by
+    /// diagnostics to separate the noise law from the forcings laid over
+    /// it (the M75 tilt on the rain lane, the M83 drift on temperature).
     pub fn year_anomaly_unforced(&self, year: i64) -> (Array2<f64>, Array2<f64>) {
         let (rows, cols) = self.fields.tmean.dim();
-        climate::year_anomaly(&self.variability, rows, cols, year, 0.0)
+        climate::year_anomaly(&self.variability, rows, cols, year, 0.0, 0.0)
     }
+
+    /// M83 — the century's temperature drift in `year`, °C on the baseline
+    /// `tmean`. The law is `climate::Drift` (pure in seed × year); this is
+    /// the sim's read, cached per year so the O(year) walk is paid once
+    /// per year, never per site. Prehistory reads 0 without touching the
+    /// cache — the dawn is the baseline epoch by law.
+    pub fn year_drift(&self, year: i64) -> f64 {
+        if year <= 0 {
+            return 0.0;
+        }
+        let mut cache = self.year_drift_memo.lock().unwrap();
+        *cache
+            .entry(year)
+            .or_insert_with(|| self.drift.value(year))
+    }
+
+    /// M83 — the walk itself, for the harness: to gate the law directly
+    /// and to fold its probe into the replay identity line (ADR-0003).
+    pub fn drift(&self) -> &crate::climate::Drift {
+        &self.drift
+    }
+
 
 
     /// M71 — hand the caller the year's anomaly grids, computing them once
@@ -1415,8 +1458,14 @@ impl World {
         };
         if stale {
             let (rows, cols) = self.fields.tmean.dim();
-            let (dt, dp) =
-                climate::year_anomaly(&self.variability, rows, cols, year, self.year_osc(year));
+            let (dt, dp) = climate::year_anomaly(
+                &self.variability,
+                rows,
+                cols,
+                year,
+                self.year_osc(year),
+                self.year_drift(year),
+            );
             let dq = crate::ndimage::gaussian_filter(&dp, climate::CATCHMENT_SIGMA);
             *slot = Some((year, dt, dp, dq));
         }
@@ -1435,8 +1484,15 @@ impl World {
         let (_, sites) = slot.as_mut().unwrap();
         let entry = sites.entry((y, x)).or_insert_with(|| {
             let rows = self.fields.tmean.dim().0;
-            let (dt, dp) =
-                climate::year_anomaly_at(&self.variability, rows, x, y, year, self.year_osc(year));
+            let (dt, dp) = climate::year_anomaly_at(
+                &self.variability,
+                rows,
+                x,
+                y,
+                year,
+                self.year_osc(year),
+                self.year_drift(year),
+            );
             (dt, dp, None)
         });
         (entry.0, entry.1)
@@ -1450,8 +1506,17 @@ impl World {
         let (_, sites) = slot.as_mut().unwrap();
         let entry = sites.entry((y, x)).or_insert_with(|| {
             let rows = self.fields.tmean.dim().0;
-            let (dt, dp) =
-                climate::year_anomaly_at(&self.variability, rows, x, y, year, self.year_osc(year));
+            // Same fill as `year_site_weather` — the entry is shared, so
+            // the dt lane must carry the drift here too (M83).
+            let (dt, dp) = climate::year_anomaly_at(
+                &self.variability,
+                rows,
+                x,
+                y,
+                year,
+                self.year_osc(year),
+                self.year_drift(year),
+            );
             (dt, dp, None)
         });
         if entry.2.is_none() {
@@ -1464,6 +1529,7 @@ impl World {
                 y,
                 year,
                 self.year_osc(year),
+                self.year_drift(year),
             ));
         }
         entry.2.unwrap_or(0.0)
@@ -1551,6 +1617,38 @@ impl World {
         };
         agriculture::year_yield_factor(pack, t, p, dt, rain, irrigated)
     }
+
+    /// M81 harness probe — the live consumption path, one recorded row at
+    /// a time. `Floods::sweep` keeps only the last seasons' sheets on the
+    /// map, so a post-run gate cannot read a historical row's lift through
+    /// `year_yield` unless the sheet is stood back up first. This re-stands
+    /// the sheet exactly as the ledger recorded it, takes the live read at
+    /// the year it feeds, and restores the map to the byte — the world is
+    /// unperturbed for every later check and hash. Diagnostics-only: the
+    /// simulation never calls it.
+    ///
+    /// The comparison toggles the sheet and nothing else: with-sheet
+    /// versus without-sheet through the same `year_yield`, every other
+    /// law left standing. Reading the "without" side from
+    /// `year_yield_bare` conflated the sheet's gift with a co-incident
+    /// spate's drown — a town flooded in consecutive years still carries
+    /// the feed-year's drown entry, and the sheet was being asked to
+    /// out-lift the destruction of a flood it never caused (M82: one
+    /// holdout row on seed 12345 at paleoclimate flood rates).
+    pub fn probe_silt_lift(&mut self, feed: i64, y: usize, x: usize, strength: f64) -> bool {
+        let key = (y as i64, x as i64);
+        let saved = self.floods.silt.insert(key, (feed, strength));
+        let with_sheet = self.year_yield(feed, y, x);
+        self.floods.silt.remove(&key);
+        let without_sheet = self.year_yield(feed, y, x);
+        let lifted = with_sheet > without_sheet + 1e-9;
+        if let Some(prior) = saved {
+            self.floods.silt.insert(key, prior);
+        }
+        lifted
+    }
+
+
 
     /// M72 — `year_flow_factor` at one cell without materializing the grid:
     /// the same gain, the same clamp, over the per-site catchment reading.
@@ -3244,8 +3342,10 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                 )));
             }
             let seed = self.seed;
+            let drift = self.year_drift(year);
             let clim = self.storm_clim.as_ref().expect("climatology solved");
-            let next = clim.landfalls(seed, year, &self.fields.height);
+            // M84 — the year's corridor is the drifted year's corridor.
+            let next = clim.landfalls(seed, year, &self.fields.height, drift);
             // Only the immediately previous year can still owe a January.
             self.storm_prev = if self.storm_year == year - 1 {
                 std::mem::take(&mut self.storm_now)
@@ -3801,6 +3901,10 @@ impl World {
                 let mut ring = [0.0f64; MEMO_YEARS];
                 for t in 0..(CAL_YEARS + MEMO_YEARS as i64) {
                     let yr = -(CAL_YEARS + MEMO_YEARS as i64) + t;
+                    // Prehistory: the drift is zero by law there (M83), so
+                    // this is the unshifted rain law — and since M84 the
+                    // norm stays what it was: a property of the unforced
+                    // sky the walk wanders around.
                     let (_, dp) = climate::year_anomaly_at(
                         self.variability(),
                         rows,
@@ -3808,6 +3912,7 @@ impl World {
                         y,
                         yr,
                         self.year_osc(yr),
+                        self.year_drift(yr),
                     );
                     let z = dp / sigma;
                     // newest first
@@ -3849,7 +3954,11 @@ impl World {
         for k in 0..MEMO_YEARS as i64 {
             let yr = year - k;
             let (_, dp) =
-                climate::year_anomaly_at(self.variability(), rows, x, y, yr, self.year_osc(yr));
+                // M84 — the belt rides `dp`: an age that walks the rain
+                // belts off a flank *is* that flank's drought, and the
+                // ledger must read the same sky the harvests felt.
+                climate::year_anomaly_at(
+                    self.variability(), rows, x, y, yr, self.year_osc(yr), self.year_drift(yr));
             acc += w * dp / sigma;
             w *= MEM;
         }
@@ -3986,6 +4095,9 @@ impl World {
     fn lattice_year(&self, d: &Droughts, year: i64) -> Vec<f32> {
         let rows = self.fields.tmean.dim().0;
         let osc = self.year_osc(year);
+        // M84 — the belt rides `dp`; the map must show the drought the
+        // index (and the harvests) actually felt.
+        let drift = self.year_drift(year);
         let mut z = vec![0.0f32; d.rows * d.cols];
         for cy in 0..d.rows {
             let y = cy * STRIDE;
@@ -3995,7 +4107,8 @@ impl World {
                     continue;
                 }
                 let x = cx * STRIDE;
-                let (_, dp) = climate::year_anomaly_at(self.variability(), rows, x, y, year, osc);
+                let (_, dp) =
+                    climate::year_anomaly_at(self.variability(), rows, x, y, year, osc, drift);
                 z[cy * d.cols + cx] = (dp / sigma) as f32;
             }
         }

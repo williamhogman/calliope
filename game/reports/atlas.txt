@@ -3,9 +3,9 @@
 ========================================================================
  arid column sweep (60 mm · 24 °C): 101 elevations · max hue 43° at h=0.00 · 0 in green band
  gpu upload order (11): height · tmean · tamp · precip · discharge · fertility · strahler · flags · rock · soil · landform
- seed  12345: pack 7174664 B · max ids rock 3 soil 10 landform 26 · hash 0ff90fc754780e3d
- seed    777: pack 7174532 B · max ids rock 3 soil 10 landform 26 · hash 4e7935f70f54c5d5
- seed  90210: pack 7174880 B · max ids rock 3 soil 10 landform 26 · hash f0e4872db2e2edc5
+ seed  12345: pack 7174664 B · max ids rock 3 soil 10 landform 26 · hash 0c87c5b6b23a8553
+ seed    777: pack 7174532 B · max ids rock 3 soil 10 landform 26 · hash 160e9bc218dc1001
+ seed  90210: pack 7174880 B · max ids rock 3 soil 10 landform 26 · hash 1e060b201d47c2cd
 
 ---- checks ----------------------------------------------------------
 [PASS] palettes cover their vocabularies    4+11+27 swatches   (M63: rock, soil, landform lenses — one distinct swatch per word)
