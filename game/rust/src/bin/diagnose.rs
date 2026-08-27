@@ -6769,7 +6769,9 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                         if s > win {
                             win = s;
                             win_dry = is_dry;
+                            win_at = (y, x);
                         }
+
                         if is_dry && s > dry_best {
                             dry_best = s;
                             dry_at = (y, x);
