@@ -45,7 +45,31 @@ interannual variability (M71) · 60 years · land cells only:
 
 the slow drift (M83) · walk at seed 777:
   law: τ 140 y · σ 0.55 °C · walls ±3.0 °C · y100 -0.06 · y500 +0.60 · y1000 +0.59 · millennium mean +0.236
-  law: τ 140 y · σ 0.55 °C · walls ±3.0 °C · y100 -0.06 · y500 +0.60 · y1000 +0.59 · millennium mean +0.236
+
+no runaway (M85) · millennium sample at seed 777:
+  y100 -0.05 · y200 -0.99 · y300 -0.14 · y400 -0.55 · y500 +0.62 · y600 +0.16 · y700 +0.25 · y800 +0.61 · y900 +0.37 · y1000 +0.60
+
+the ages (M86/M87) · seed 777:
+  90 winters · 39 optima to y30000 · first: y177–231 (54 y · -1.00 °C) · y364–441 (77 y · -0.84 °C) · y606–656 (50 y · -0.83 °C) · y831–921 (90 y · +0.60 °C)
+  the named ages (M88) — 129 christened · 129 distinct · first three: The Deep Night · The Hungry Dark · The Crow Freeze
+  margins: 240 rain-fed cold-edge cells · optimum lift ×1.029 (97% up, 1440 reads) · winter ×0.957 (0% up, 1440 reads)
+
+the margins respond (M89) · seed 777:
+  belt  0–15°: snowline 4208 m · walk +154 m/°C
+  belt 15–30°: snowline 3840 m · walk +154 m/°C
+  belt 30–45°: snowline 3098 m · walk +154 m/°C
+  belt 45–60°: snowline 1931 m · walk +154 m/°C
+  belt 60–75°: snowline 344 m · walk +154 m/°C
+  arc y177–231 (winter): sky -0.67 °C at mid · snowline -103 m · 154 m/°C
+  arc y364–441 (winter): sky -0.53 °C at mid · snowline -82 m · 154 m/°C
+  arc y606–656 (winter): sky -0.30 °C at mid · snowline -45 m · 154 m/°C
+  arc y831–921 (optimum): sky +1.15 °C at mid · snowline +177 m · 154 m/°C
+  arc y1244–1311 (winter): sky -1.45 °C at mid · snowline -223 m · 154 m/°C
+  arc y1960–2034 (optimum): sky +0.77 °C at mid · snowline +118 m · 154 m/°C
+  arc y2943–3068 (optimum): sky +0.48 °C at mid · snowline +74 m · 154 m/°C
+  arc y3283–3426 (optimum): sky +0.85 °C at mid · snowline +131 m · 154 m/°C
+  the pack: cell-months 244335 (−1°) / 236125 (dawn) / 228352 (+1°) · swing 3.4%/°C
+  the cold rim: land cells 46997 (−1°) / 44263 (dawn) / 41500 (+1°) · swing 6.2%/°C
 
 belts on the move (M84) · seed 777:
   ITCZ rain centroid: baseline 10.95° · warm wall 14.36° (+3.41) · cold wall 8.28° (-2.67)
@@ -53,6 +77,18 @@ belts on the move (M84) · seed 777:
   warm-sea sweep (drift → cells @ centroid): -3:14563@8.6° -2:19468@9.6° -1:23637@10.4° +0:27541@11.1° +1:30995@11.8° +2:34232@12.4° +3:37384@13.0°
   frontal corridor centroid |lat|: baseline 36.48° · warm +3.20° · cold -2.52°
   warm-sea band centroid |lat|: baseline 11.13° · warm +1.89° · cold -2.51°
+
+the ice remembers time (M91) · seed 777:
+  margin ledger: 12352 flip cells · 9505 stable core · dawn extent 15831 cells (mask 15831)
+  arc y177–231 (winter): sky -0.67 °C at mid · extent 17355 · +1524 cells vs dawn
+  arc y364–441 (winter): sky -0.53 °C at mid · extent 17042 · +1211 cells vs dawn
+  arc y606–656 (winter): sky -0.30 °C at mid · extent 16525 · +694 cells vs dawn
+  arc y831–921 (optimum): sky +1.15 °C at mid · extent 12961 · -2870 cells vs dawn
+  arc y1244–1311 (winter): sky -1.45 °C at mid · extent 19398 · +3567 cells vs dawn
+  arc y1960–2034 (optimum): sky +0.77 °C at mid · extent 13865 · -1966 cells vs dawn
+  arc y2943–3068 (optimum): sky +0.48 °C at mid · extent 14543 · -1288 cells vs dawn
+  arc y3283–3426 (optimum): sky +0.85 °C at mid · extent 13667 · -2164 cells vs dawn
+  snapshots: 148 rows · first y1 (-0.09 °C → 16048 cells) · last y150 (+0.05 °C → 15714 cells) · 18441 cells walked
 
 ---- checks ----------------------------------------------------------
 [PASS] desert share of land                          20.1%   (sweet 12–28% · hard 6–38%)
@@ -89,7 +125,35 @@ belts on the move (M84) · seed 777:
 [PASS] the drift is slow — an age outlives a generation lag-25 y autocorrelation 0.84   (M83: century-scale memory — 25 years on, the walk still stands where it stood (OU τ=140 predicts ~0.84))
 [PASS] the drift forgets — no age is forever lag-700 y autocorrelation +0.03   (M83: stationarity — the memory fades well inside a millennium (OU τ=140 predicts ~0.01))
 [PASS] one seed, one century history        redraw identical · point≡scan identical   (M83 gate: hash-stable at fixed seed — the walk re-drawn is the walk, and value(year) is scan[year] to the bit)
-[PASS] the drift enters the sky it claims to enter worst |forced − unforced − drift| 1.1e-16 °C   (M83: the realized dt is the unforced law plus the year's drift, uniformly — a global offset ahead of the M71 anomaly)
+[PASS] the drift enters the sky it claims to enter worst |forced − unforced − forcing| 1.1e-16 °C   (M83 (restated at M86): the realized dt is the unforced law plus the year's owned forcing — drift and the age's offset, uniformly, a global term ahead of the M71 anomaly)
+[PASS] no sampled century leaves the walls  worst |global mean dt| 0.99 °C over 10 century samples (walls ±4.0 = drift ±3.0 + age 1.0)   (M85 gate (restated at M86): zero excursions beyond the declared bound in the millennium sample — the composed sky honors the walls its laws add up to)
+[PASS] the millennium remembers the baseline +0.086 °C sample mean over 1000 y   (M85 gate: global mean temperature drift under 0.5 °C over the full run — the composed mean is stationary)
+[PASS] the centuries do not march one way   7 direction reversals across 9 century steps   (M85 gate: absence of monotonic trend — the sampled centuries reverse direction; a runaway never looks back)
+[PASS] no secular trend the law cannot own  fitted trend +1.276 °C per millennium (law's own 3σ envelope ±2.49)   (M85 gate: the OLS fit across the century samples stays inside the envelope the declared drift law implies — wander is owned, a runaway is not)
+[PASS] the sky's wander is the forcing's wander worst |global mean dt − forcing| 0.026 °C   (M85 (restated at M86): the composed global mean tracks the owned forcing — drift plus the age's offset — the lattice and oscillation add texture, not a second secular source)
+[PASS] every winter is a generation         90 cold arcs · durations 21–80 y   (M86 gate: every cold-age duration stands inside the 20–80 year band — longer is a regime, shorter is weather)
+[PASS] every optimum is a century           39 warm arcs · durations 61–157 y   (M87 gate: every warm-optimum duration stands inside the 60–160 year band — the generous *centuries*, longer than any winter, shorter than a regime)
+[PASS] one age at a time                    0 overlaps · narrowest gap 82 y (floor 40)   (M86 gate (restated at M87): at most one age active per world, winter or optimum — exclusivity is a property of the shared renewal draw, and the gap floor holds)
+[PASS] each age keeps its bounds            deepest offset -1.00 · warmest +0.80 °C · 0 leaks over 30000 scanned years   (M86 (restated at M87): the offset is the arc's own bounded, sign-correct term inside its dates and exactly zero outside them — no winter bleeds, no kindness leaks)
+[PASS] cold share of the centuries          15.0% of 30000 y   (sweet 10–19% · hard 6–26% (M86, recalibrated at M87: years under an active winter over the horizon — the timeline now shares its arcs with the optima))
+[PASS] warm share of the centuries          14.2% of 30000 y   (sweet 11–23% · hard 6–30% (M87: years under an active optimum — rarer arcs, each holding longer, so kindness rivals frost in years held))
+[PASS] a winter's generation span           49.9 y mean over 90 arcs   (sweet 42–58 y · hard 35–65 (M86: mean cold-arc duration — the draw is uniform 20–80, so the schedule mean stands near 50))
+[PASS] an optimum's century span            109.0 y mean over 39 arcs   (sweet 95–125 y · hard 75–145 (M87: mean warm-arc duration — the draw is uniform 60–160, the generous *centuries* of the spec))
+[PASS] winters per millennium                         3.00   (sweet 2.2–3.6 · hard 1.6–4.4 (M86, recalibrated at M87: cold-onset rate over the horizon — the Spörer/Maunder/Dalton cadence on a shared timeline))
+[PASS] optima per millennium                          1.30   (sweet 1.0–2.1 · hard 0.6–2.8 (M87: warm-onset rate — the Minoan/Roman/Medieval cadence, one-to-two a millennium))
+[PASS] the winters are the seed's own       cb204dd002fe0e89   (M86 gate: redraw identity — same seed, same schedule (kinds and all), same probe (hash-stable, ADR-0003))
+[PASS] every age bears a name               129 arcs · 129 names   (M88 gate: every recorded age instance carries a chronicle name — no arc goes unchristened to the horizon)
+[PASS] no two ages share a name             129 names · 129 distinct over the horizon   (M88 gate: no repeats within a single world — every winter and every optimum is remembered apart)
+[PASS] the names speak their season         90 winter names · 39 optimum names, each composing from its own bank   (M88 gate: a winter's name composes from the winter bank and an optimum's from the warm bank — the register matches the season, and a fallback name would read off-bank here)
+[PASS] the names are the seed's own         129 christenings identical on redraw   (M88 gate: reproducible at fixed seed — the same world remembers the same ages by the same names (ADR-0003; the probe folds the christening))
+[PASS] the winter reaches the sky           worst |Δ(grid mean dt) − age offset| 1.4e-14 over 3 plateau probes   (M86: the cooling the schedule declares is the cooling the composed field carries — additivity holds through the whole anomaly pipeline)
+[PASS] the optimum reaches the sky          worst |Δ(grid mean dt) − age offset| 2.9e-14 over 3 plateau probes   (M87: the warmth the schedule declares is the warmth the composed field carries — the same wire, sign and all)
+[PASS] the optimum opens the uplands        ×1.029 mean yield against the age-free twin · 97% of 1440 cell-years up   (M87 gate: at the optimum's plateau the cold-margin harvest beats its counterfactual — the kindness the sky declares is bread, through the same yield law the world farms by)
+[PASS] the winter closes the fields         ×0.957 mean yield against the age-free twin · 0% of 1440 cell-years up   (M87 (the mirror): the same margins under a winter's plateau fall below the twin — the coupling is sign-correct, not a one-way bonus)
+[PASS] the snowline walks with the sky      +154 m/°C over 5 belts · 0 non-monotone   (M89 gate: a degree of warmth lifts every belt's balance-zero elevation, near the lapse-law 154 m/°C, through the same solver the M34 lane banks at dt = 0)
+[PASS] the snowline answers the recorded ages 8 arcs tested (4 winters · 4 optima · 2 drift-masked skipped) · wrong-signed 0 · slope 154–154 m/°C   (M89 gate: snowline drops during active cold ages and rises during warm optima, proportional to the age's composed depth within one bounded lapse band — the spec's sentence, measured at each arc's plateau through the live solver)
+[PASS] the pack opens and closes with the sky 244335 > 236125 > 228352 cell-months · 3.4%/°C   (M89 gate: a colder sky freezes more sea-cell months and a warmer frees them, by a real bounded fraction, through the freeze law the route calendars obey)
+[PASS] the cold rim gives ground to warmth  46997 > 44263 > 41500 land cells · 6.2%/°C   (M89 gate: the 4 °C rim — the edge the dress greys at and the margin fields open from — shrinks under warmth and grows under cold by a real bounded share)
 [PASS] a warm age carries the rains poleward ITCZ centroid +3.41° at +3.0 °C   (M84 gate: the ITCZ latitude shifts in the drift's own direction — poleward under warming — by a real amount bounded under 5° at maximum drift)
 [PASS] a cold age narrows the tropics       ITCZ centroid -2.67° at -3.0 °C   (M84 gate: cold drift pulls the rain belt equatorward — same law, opposite sign, same sub-5° wall)
 [PASS] the belt never outruns its wall      max |ITCZ shift| 3.41° · declared camp offset 4.20° at the wall   (M84 gate: shift magnitude stays under 5° across the entire reachable drift range — both the measured centroid and the declared per-°C offset at maximum drift)
@@ -99,4 +163,9 @@ belts on the move (M84) · seed 777:
 [PASS] the warm-sea band follows its isotherm poleward +1.89° at +3.0 °C   (M84 gate: a warm age moves the storm-genesis band poleward — same direction as the drift's sign, under the 5° wall)
 [PASS] the warm-sea band follows its isotherm equatorward -2.51° at -3.0 °C   (M84 gate: a cold age pulls the storm-genesis band equatorward — opposite sign, same sub-5° wall)
 [PASS] the frozen reference is the law's own zero recompute at drift→0 reproduces the stored weights   (M84/ADR-0003: the drift-0 fast path and the recompute path are one law — the stored reference weights are the recomputation's own limit, so no formula can drift between constructor and reader)
-CHECKS: 42 pass · 2 warn · 0 fail
+[PASS] the margin is solved and owns the dawn 12352 cells · 0 inconsistent · ledger dawn 15831 vs stamped mask 15831   (M91: the ledger's verdict at forcing 0.0 is the stamped M34 mask to the cell — one law, solved once, no drift between the dawn and the walk)
+[PASS] the ice answers the recorded ages    8 arcs tested (4 winters · 4 optima · 2 drift-masked skipped) · wrong-signed 0 · unmoved 0   (M91 gate: glacial extent correlates with age depth — expanding in cold ages, contracting in warm optima, measured at each recorded arc's own composed forcing through the solved ledger)
+[PASS] the ice moves and the rock does not  height 3714463493624a4a → 3714463493624a4a · flags∖ice 2811288f62979676 → 2811288f62979676 over 150 y   (M91 gate: base terrain height hashes (and every non-ice flag) unchanged across the run — the edge walks a flag, never the ground)
+[PASS] the ice edge is the ledger's, live   sky +0.05 °C at y150 · 0 stale cells · grid 15714 vs law 15714   (M91: after a real run every GLACIER flag stands exactly where the solved threshold puts it at the current composed forcing — the walk is reconciliation, never accumulation)
+[PASS] the edge was written down            148 snapshot rows · 18441 cells walked over 150 y   (M91: extent snapshots for the atlas — every year the edge moved wrote its row, and 150 years of real sky moved it)
+CHECKS: 75 pass · 2 warn · 0 fail

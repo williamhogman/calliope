@@ -29,6 +29,9 @@ export const [stories, setStories] = createSignal([]);
 export const [entities, setEntities] = createSignal([]);
 export const [artifacts, setArtifacts] = createSignal([]);
 export const [month, setMonth] = createSignal(0);
+// M89 — the year's composed forcing (°C on the dawn mean, drift + the
+// active age): the renderer's snowline, pack and dress breathe with it.
+export const [sky, setSky] = createSignal(0);
 export const [playing, setPlaying] = createSignal(false);
 export const [speed, setSpeed] = createSignal(1);
 export const [worldSize, setWorldSize] = createSignal(640);

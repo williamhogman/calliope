@@ -62,6 +62,10 @@ export const EVENT_KINDS = [
   { name: "eruption", family: "nature", weight: 3 },
   { name: "drought", family: "nature", weight: 3 },
   { name: "flood", family: "nature", weight: 3 },
+  { name: "age", family: "nature", weight: 4 },
+  { name: "optimum", family: "nature", weight: 4 },
+  { name: "clearing", family: "nature", weight: 2 },
+  { name: "abandon", family: "nature", weight: 2 },
 ];
 
 export const ENTITY_KINDS = ["artifact", "culture", "feature", "good", "person", "ruin", "settlement", "war", "world", "realm", "civilization"];

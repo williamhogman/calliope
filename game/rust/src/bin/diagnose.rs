@@ -386,6 +386,10 @@ fn hash_state(w: &World) -> u64 {
     // here: the law's constants plus the curve at spaced years. A walk
     // whose keying or arithmetic moves breaks replay on this line.
     s.push_str(&format!("D{:016x}\n", w.drift().probe()));
+    // M86 — the cold-age schedule is likewise derived, so its probe rides
+    // here: the law's constants plus every arc's dates and depth. A
+    // schedule whose keying or arithmetic moves breaks replay on this line.
+    s.push_str(&format!("A{:016x}\n", w.ages().probe()));
     // M77 — a storm season is derived from the frozen genesis field and
     // the year (ADR-0003), so the identity line carries a probe of the
     // corridor rather than a track grid: the hemispheric gradients, the
@@ -789,23 +793,13 @@ fn cmd_earth(size: usize, years: usize, seeds: Vec<i64>) {
             }
             let n = b_land[b] as f64;
             let (t0, ta, pr, pa) = (b_t0[b] / n, b_ta[b] / n, b_pr[b] / n, b_pa[b] / n);
-            let bal = |h: f64| calliope::climate::ice_balance(t0 - 26.0 * h, ta, pr, pa);
-            if bal(2.5) <= 0.0 {
-                continue; // no snowline below the ceiling in this belt
-            }
-            if bal(0.0) > 0.0 {
-                continue; // cap country: ice at the shore, no alpine snowline
-            }
-            let mut hi = 2.5f64;
-            let mut lo = 0.0f64;
-            for _ in 0..48 {
-                let mid = 0.5 * (lo + hi);
-                if bal(mid) > 0.0 {
-                    hi = mid;
-                } else {
-                    lo = mid;
-                }
-            }
+            // M89 — the solver moved into the crate (`climate::belt_snowline`)
+            // so the live margins and this lane speak one law; dt = 0 here
+            // reproduces the banked bisection bit for bit (same bracket,
+            // same 48 halvings, same skip reasons folded into None).
+            let Some(hi) = calliope::climate::belt_snowline(t0, ta, pr, pa, 0.0) else {
+                continue; // no snowline in this belt: ceiling or cap country
+            };
             off_sum += (b_gh[b] / b_gn[b] as f64 - hi) * 4000.0 * b_gn[b] as f64;
             off_n += b_gn[b];
         }
@@ -1512,6 +1506,9 @@ struct RunLog {
     peoples_rose: bool,
     /// M80 — every drought the chronicle announced, by the name it spoke.
     drought_named: Vec<String>,
+    /// M86 — every age turn the chronicle spoke: (month, world-subject?,
+    /// subject line — the christened name since M88).
+    age_spoken: Vec<(i64, bool, String)>,
     // ---- M82 return-time telemetry ----
     /// Land nodes of the drought lattice per climate zone (`famine::ZONES`).
     dz_nodes: Vec<u64>,
@@ -1622,6 +1619,12 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
             }
             if e.k == calliope::event::EventKind::Drought {
                 log.drought_named.push(e.s.clone());
+            }
+            if matches!(
+                e.k,
+                calliope::event::EventKind::Age | calliope::event::EventKind::Optimum
+            ) {
+                log.age_spoken.push((e.m, !e.ids.is_empty(), e.s.clone()));
             }
             match e.k.name() {
                 "discovery" => log.strikes += 1,
@@ -3038,7 +3041,7 @@ fn cmd_terrain(seed: i64, size: usize, explain: bool) {
 // ================================================================ climate
 
 fn cmd_climate(seed: i64, size: usize) {
-    let w = World::generate(seed, size);
+    let mut w = World::generate(seed, size);
     header("CLIMATE", &format!("seed {} · {}x{}", seed, w.width, size));
 
     let land = land_mask(&w);
@@ -3693,17 +3696,20 @@ fn cmd_climate(seed: i64, size: usize) {
         );
 
         // The wiring: the forced sky is the unforced sky plus exactly the
-        // drift, uniformly across the grid — the offset enters ahead of
-        // the draw, it does not modulate it.
+        // owned forcing, uniformly across the grid — the offset enters
+        // ahead of the draw, it does not modulate it. M86 restates the
+        // reference from the drift alone to `year_forcing` (drift + the
+        // cold age's offset): same claim — every degree in the sky is a
+        // degree a declared law put there — one more declared law.
         let rows = w.fields.tmean.dim().0;
         let mut worst_wire = 0.0f64;
         for &yr in &[3i64, 41, 500] {
             let (dtf, _) = w.year_anomaly_fresh(yr);
             let (dtu, _) = w.year_anomaly_unforced(yr);
-            let drift = w.year_drift(yr);
+            let forcing = w.year_forcing(yr);
             for y in (0..rows).step_by(97) {
                 for x in (0..w.width).step_by(89) {
-                    let err = ((dtf[[y, x]] - dtu[[y, x]]) - drift).abs();
+                    let err = ((dtf[[y, x]] - dtu[[y, x]]) - forcing).abs();
                     if err > worst_wire {
                         worst_wire = err;
                     }
@@ -3713,13 +3719,8 @@ fn cmd_climate(seed: i64, size: usize) {
         c.must(
             "the drift enters the sky it claims to enter",
             worst_wire <= 1e-9,
-            format!("worst |forced − unforced − drift| {:.1e} °C", worst_wire),
-            "M83: the realized dt is the unforced law plus the year's drift, uniformly — a global offset ahead of the M71 anomaly",
-        );
-        let mil_mean = curve[1..].iter().sum::<f64>() / SIM_YEARS as f64;
-        println!(
-            "  law: τ {} y · σ {:.2} °C · walls ±{:.1} °C · y100 {:+.2} · y500 {:+.2} · y1000 {:+.2} · millennium mean {:+.3}",
-            clim::DRIFT_TAU, clim::DRIFT_SIGMA, clim::DRIFT_BOUND, curve[100], curve[500], curve[1000], mil_mean
+            format!("worst |forced − unforced − forcing| {:.1e} °C", worst_wire),
+            "M83 (restated at M86): the realized dt is the unforced law plus the year's owned forcing — drift and the age's offset, uniformly, a global term ahead of the M71 anomaly",
         );
         let mil_mean = curve[1..].iter().sum::<f64>() / SIM_YEARS as f64;
         println!(
@@ -3727,6 +3728,728 @@ fn cmd_climate(seed: i64, size: usize) {
             clim::DRIFT_TAU, clim::DRIFT_SIGMA, clim::DRIFT_BOUND, curve[100], curve[500], curve[1000], mil_mean
         );
     }
+
+    // ---- M85: no runaway ----------------------------------------------
+    // The composed sky, not the walk in isolation: sample the global mean
+    // of the *forced* temperature anomaly — drift + M71 lattice + M74
+    // oscillation shape, exactly what `year_anomaly_fresh` hands the
+    // simulation — every MILLEN_STEP years across a millennium, and hold
+    // it to the discipline the drift promises. Three rows: the walls
+    // (zero excursions beyond ±DRIFT_BOUND), the mean (stationary within
+    // the envelope), the trend (no secular movement the envelope cannot
+    // hold). The M83 lane gates the law; this lane gates the world the
+    // law actually makes — a rectifying coupling anywhere in the
+    // composition would fail here while every term's own lane stayed
+    // green.
+    {
+        println!();
+        println!("no runaway (M85) · millennium sample at seed {}:", seed);
+        let rows = w.fields.tmean.dim().0;
+        let cells = (rows * w.width) as f64;
+        let mut samples: Vec<(usize, f64)> = Vec::new();
+        let mut year = clim::MILLEN_STEP;
+        while year <= clim::MILLEN_YEARS {
+            let (dt, _) = w.year_anomaly_fresh(year as i64);
+            samples.push((year, dt.iter().sum::<f64>() / cells));
+            year += clim::MILLEN_STEP;
+        }
+        println!(
+            "  {}",
+            samples
+                .iter()
+                .map(|&(y, m)| format!("y{} {:+.2}", y, m))
+                .collect::<Vec<_>>()
+                .join(" · ")
+        );
+
+        // The walls: no sampled century's global mean leaves them. Since
+        // M86 the composed forcing owns one term beyond the drift — the
+        // active cold age's bounded offset — so the walls the laws
+        // declare are DRIFT_BOUND plus AGE_DEPTH_MAX; the row's intent
+        // (the composed sky stays inside the declared envelope) is
+        // unchanged, the envelope gained the term the new law declares.
+        let walls = clim::DRIFT_BOUND + calliope::ages::AGE_DEPTH_MAX;
+        let worst = samples.iter().fold(0.0f64, |a, &(_, m)| a.max(m.abs()));
+        c.must(
+            "no sampled century leaves the walls",
+            worst <= walls,
+            format!(
+                "worst |global mean dt| {:.2} °C over {} century samples (walls ±{:.1} = drift ±{:.1} + age {:.1})",
+                worst,
+                samples.len(),
+                walls,
+                clim::DRIFT_BOUND,
+                calliope::ages::AGE_DEPTH_MAX
+            ),
+            "M85 gate (restated at M86): zero excursions beyond the declared bound in the millennium sample — the composed sky honors the walls its laws add up to",
+        );
+
+        // Stationarity: the millennium's sample mean stands at the
+        // baseline, inside the declared envelope.
+        let n = samples.len() as f64;
+        let mean = samples.iter().map(|&(_, m)| m).sum::<f64>() / n;
+        c.must(
+            "the millennium remembers the baseline",
+            mean.abs() <= clim::MILLEN_TREND_BOUND,
+            format!("{:+.3} °C sample mean over {} y", mean, clim::MILLEN_YEARS),
+            "M85 gate: global mean temperature drift under 0.5 °C over the full run — the composed mean is stationary",
+        );
+
+        // No monotonic trend — two teeth, both derived from the mechanism
+        // rather than a hand-picked figure. (1) Monotonicity itself: a
+        // runaway's signature is centuries that march one way; a lawful
+        // walk reverses direction. (2) The OLS fit through the century
+        // samples must stay inside the envelope the *declared law* can
+        // promise: the banked M83 constants imply an OLS-trend dispersion
+        // of ~0.83 °C per millennium on a perfectly stationary walk
+        // (`millen_trend_sigma`, analytic), so the wall stands at
+        // MILLEN_TREND_Z σ of that — a 0.5 °C wall on this estimator
+        // would fail half of all lawful seeds and contradict the law the
+        // M83 lane already proved. A genuine runaway grows without bound
+        // and breaks both rows regardless of where its noise falls.
+        let mut reversals = 0usize;
+        let mut last_sign = 0i32;
+        for k in 1..samples.len() {
+            let d = samples[k].1 - samples[k - 1].1;
+            let s = if d > 0.0 { 1 } else if d < 0.0 { -1 } else { 0 };
+            if s != 0 && last_sign != 0 && s != last_sign {
+                reversals += 1;
+            }
+            if s != 0 {
+                last_sign = s;
+            }
+        }
+        c.must(
+            "the centuries do not march one way",
+            reversals >= 1,
+            format!("{} direction reversals across {} century steps", reversals, samples.len() - 1),
+            "M85 gate: absence of monotonic trend — the sampled centuries reverse direction; a runaway never looks back",
+        );
+
+        let ty = samples.iter().map(|&(y, _)| y as f64).sum::<f64>() / n;
+        let mut num = 0.0f64;
+        let mut den = 0.0f64;
+        for &(y, m) in &samples {
+            num += (y as f64 - ty) * (m - mean);
+            den += (y as f64 - ty) * (y as f64 - ty);
+        }
+        let trend = num / den.max(1e-12) * clim::MILLEN_YEARS as f64;
+        let trend_wall = clim::MILLEN_TREND_Z * clim::millen_trend_sigma();
+        c.must(
+            "no secular trend the law cannot own",
+            trend.abs() <= trend_wall,
+            format!(
+                "fitted trend {:+.3} °C per millennium (law's own 3σ envelope ±{:.2})",
+                trend, trend_wall
+            ),
+            "M85 gate: the OLS fit across the century samples stays inside the envelope the declared drift law implies — wander is owned, a runaway is not",
+        );
+
+        // The composition is honest: the sampled global mean is the
+        // owned forcing — drift plus the cold age's offset since M86 —
+        // plus only the near-zero-mean residue of the lattice and the
+        // oscillation's shape. The sky's wander IS the gated laws'
+        // wander, not a second, unaccounted source.
+        let mut worst_res = 0.0f64;
+        for &(y, m) in &samples {
+            let res = (m - w.year_forcing(y as i64)).abs();
+            if res > worst_res {
+                worst_res = res;
+            }
+        }
+        c.must(
+            "the sky's wander is the forcing's wander",
+            worst_res <= 0.25,
+            format!("worst |global mean dt − forcing| {:.3} °C", worst_res),
+            "M85 (restated at M86): the composed global mean tracks the owned forcing — drift plus the age's offset — the lattice and oscillation add texture, not a second secular source",
+        );
+    }
+
+    // ---- M86/M87: the cold ages and the generous centuries -------------
+    // The schedule is a law drawn once from the seed: winters a
+    // generation long, optima a century or more, one age at a time,
+    // dated at generation. The rows read the schedule directly — it is
+    // pure, state-free arithmetic — then prove containment over every
+    // year to the horizon, redraw identity, the wiring (the offset the
+    // schedule declares is the offset the composed field carries, both
+    // signs), and the M87 claim itself: at an optimum's plateau the
+    // cold-margin fields yield more, at a winter's they yield less —
+    // measured through the same published yield law the world farms by,
+    // against a counterfactual sky with the age removed and nothing
+    // else touched.
+    {
+        println!();
+        println!("the ages (M86/M87) · seed {}:", seed);
+        let ages = w.ages();
+        let arcs = ages.arcs();
+        
+        let winters: Vec<&calliope::ages::AgeArc> = arcs.iter().filter(|a| !a.warm).collect();
+        let optima: Vec<&calliope::ages::AgeArc> = arcs.iter().filter(|a| a.warm).collect();
+        let head: Vec<String> = arcs
+            .iter()
+            .take(4)
+            .map(|a| {
+                format!(
+                    "y{}–{} ({} y · {:+.2} °C)",
+                    a.onset,
+                    a.release,
+                    a.duration(),
+                    a.signed_depth()
+                )
+            })
+            .collect();
+        println!(
+            "  {} winters · {} optima to y{} · first: {}",
+            winters.len(),
+            optima.len(),
+            calliope::ages::AGES_HORIZON,
+            head.join(" · ")
+        );
+
+        // Every winter inside the spec's 20–80 band.
+        let bad_dur = winters
+            .iter()
+            .filter(|a| {
+                a.duration() < calliope::ages::AGE_MIN_YEARS
+                    || a.duration() > calliope::ages::AGE_MAX_YEARS
+            })
+            .count();
+        let (dmin, dmax) = winters
+            .iter()
+            .fold((i64::MAX, 0i64), |(lo, hi), a| (lo.min(a.duration()), hi.max(a.duration())));
+        c.must(
+            "every winter is a generation",
+            bad_dur == 0 && !winters.is_empty(),
+            format!("{} cold arcs · durations {}–{} y", winters.len(), dmin, dmax),
+            "M86 gate: every cold-age duration stands inside the 20–80 year band — longer is a regime, shorter is weather",
+        );
+
+        // M87 — every optimum inside its own 60–160 band: the spec says
+        // *centuries*, and the floor stands past the longest winters.
+        let bad_opt = optima
+            .iter()
+            .filter(|a| {
+                a.duration() < calliope::ages::OPT_MIN_YEARS
+                    || a.duration() > calliope::ages::OPT_MAX_YEARS
+            })
+            .count();
+        let (omin, omax) = optima
+            .iter()
+            .fold((i64::MAX, 0i64), |(lo, hi), a| (lo.min(a.duration()), hi.max(a.duration())));
+        c.must(
+            "every optimum is a century",
+            bad_opt == 0 && !optima.is_empty(),
+            format!("{} warm arcs · durations {}–{} y", optima.len(), omin, omax),
+            "M87 gate: every warm-optimum duration stands inside the 60–160 year band — the generous *centuries*, longer than any winter, shorter than a regime",
+        );
+
+        // Exclusivity: at most one active, proven on the drawn schedule.
+        // Winters and optima share one renewal timeline by construction.
+        let mut overlap = 0usize;
+        let mut worst_gap = i64::MAX;
+        for k in 1..arcs.len() {
+            let gap = arcs[k].onset - arcs[k - 1].release;
+            worst_gap = worst_gap.min(gap);
+            if gap < 0 {
+                overlap += 1;
+            }
+        }
+        c.must(
+            "one age at a time",
+            overlap == 0 && worst_gap >= calliope::ages::AGE_GAP_MIN,
+            format!(
+                "0 overlaps · narrowest gap {} y (floor {})",
+                worst_gap,
+                calliope::ages::AGE_GAP_MIN
+            ),
+            "M86 gate (restated at M87): at most one age active per world, winter or optimum — exclusivity is a property of the shared renewal draw, and the gap floor holds",
+        );
+
+        // Containment: every depth inside its kind's declared bounds,
+        // and the offset sign-correct — ≤ 0 under a winter, ≥ 0 under
+        // an optimum, bounded by its own arc's depth, exactly zero in
+        // the gaps — scanned year by year to the horizon.
+        let bad_depth = arcs
+            .iter()
+            .filter(|a| {
+                let (lo, hi) = if a.warm {
+                    (calliope::ages::OPT_DEPTH_MIN, calliope::ages::OPT_DEPTH_MAX)
+                } else {
+                    (calliope::ages::AGE_DEPTH_MIN, calliope::ages::AGE_DEPTH_MAX)
+                };
+                a.depth < lo - 1e-12 || a.depth > hi + 1e-12
+            })
+            .count();
+        let mut bad_offset = 0usize;
+        let mut deepest = 0.0f64;
+        let mut warmest = 0.0f64;
+        for year in 1..=calliope::ages::AGES_HORIZON {
+            let off = ages.offset(year);
+            deepest = deepest.min(off);
+            warmest = warmest.max(off);
+            let ok = match ages.active(year) {
+                Some(a) if a.warm => off >= 0.0 && off <= a.depth + 1e-12,
+                Some(a) => off <= 0.0 && off >= -a.depth - 1e-12,
+                None => off == 0.0,
+            };
+            if !ok {
+                bad_offset += 1;
+            }
+        }
+        c.must(
+            "each age keeps its bounds",
+            bad_depth == 0 && bad_offset == 0,
+            format!(
+                "deepest offset {:+.2} · warmest {:+.2} °C · 0 leaks over {} scanned years",
+                deepest,
+                warmest,
+                calliope::ages::AGES_HORIZON
+            ),
+            "M86 (restated at M87): the offset is the arc's own bounded, sign-correct term inside its dates and exactly zero outside them — no winter bleeds, no kindness leaks",
+        );
+
+        // Rarity and span — the calibration the module doc states, per
+        // kind, on the shared timeline.
+        let cold_years: i64 = winters.iter().map(|a| a.duration()).sum();
+        let warm_years: i64 = optima.iter().map(|a| a.duration()).sum();
+        let horizon = calliope::ages::AGES_HORIZON as f64;
+        c.band(
+            "cold share of the centuries",
+            100.0 * cold_years as f64 / horizon,
+            format!("{:.1}% of {} y", 100.0 * cold_years as f64 / horizon, calliope::ages::AGES_HORIZON),
+        );
+        c.band(
+            "warm share of the centuries",
+            100.0 * warm_years as f64 / horizon,
+            format!("{:.1}% of {} y", 100.0 * warm_years as f64 / horizon, calliope::ages::AGES_HORIZON),
+        );
+        c.band(
+            "a winter's generation span",
+            cold_years as f64 / winters.len().max(1) as f64,
+            format!("{:.1} y mean over {} arcs", cold_years as f64 / winters.len().max(1) as f64, winters.len()),
+        );
+        c.band(
+            "an optimum's century span",
+            warm_years as f64 / optima.len().max(1) as f64,
+            format!("{:.1} y mean over {} arcs", warm_years as f64 / optima.len().max(1) as f64, optima.len()),
+        );
+        c.band(
+            "winters per millennium",
+            winters.len() as f64 * 1000.0 / horizon,
+            format!("{:.2}", winters.len() as f64 * 1000.0 / horizon),
+        );
+        c.band(
+            "optima per millennium",
+            optima.len() as f64 * 1000.0 / horizon,
+            format!("{:.2}", optima.len() as f64 * 1000.0 / horizon),
+        );
+
+        // Hash-stable at fixed seed: an independent redraw carries the
+        // same winters, the same optima and the same probe.
+        let again = calliope::ages::Ages::new(seed);
+        let same = again.arcs() == arcs && again.probe() == ages.probe();
+        c.must(
+            "the winters are the seed's own",
+            same,
+            format!("{:016x}", ages.probe()),
+            "M86 gate: redraw identity — same seed, same schedule (kinds and all), same probe (hash-stable, ADR-0003)",
+        );
+
+        // ---- M88: the named ages -----------------------------------
+        // The chronicle christens every arc. Names draw on their own
+        // stream (the schedule's dates never move), compose from the
+        // per-kind banks, and must be unique across the whole horizon,
+        // in-register for their season, and identical on redraw.
+        let names = ages.names();
+        let distinct: std::collections::HashSet<&str> =
+            names.iter().map(|s| s.as_str()).collect();
+        println!(
+            "  the named ages (M88) — {} christened · {} distinct · first three: {} · {} · {}",
+            names.len(),
+            distinct.len(),
+            names.first().map(|s| s.as_str()).unwrap_or("—"),
+            names.get(1).map(|s| s.as_str()).unwrap_or("—"),
+            names.get(2).map(|s| s.as_str()).unwrap_or("—"),
+        );
+        c.must(
+            "every age bears a name",
+            names.len() == arcs.len() && names.iter().all(|n| n.starts_with("The ") && n.len() > 6),
+            format!("{} arcs · {} names", arcs.len(), names.len()),
+            "M88 gate: every recorded age instance carries a chronicle name — no arc goes unchristened to the horizon",
+        );
+        c.must(
+            "no two ages share a name",
+            distinct.len() == names.len(),
+            format!("{} names · {} distinct over the horizon", names.len(), distinct.len()),
+            "M88 gate: no repeats within a single world — every winter and every optimum is remembered apart",
+        );
+        let fit = arcs.iter().zip(names.iter()).all(|(a, n)| {
+            let (adj, noun) = calliope::naming::age_bank(a.warm);
+            n.strip_prefix("The ")
+                .and_then(|r| r.split_once(' '))
+                .map(|(w1, w2)| adj.contains(&w1) && noun.contains(&w2))
+                .unwrap_or(false)
+        });
+        c.must(
+            "the names speak their season",
+            fit,
+            format!(
+                "{} winter names · {} optimum names, each composing from its own bank",
+                winters.len(),
+                optima.len()
+            ),
+            "M88 gate: a winter's name composes from the winter bank and an optimum's from the warm bank — the register matches the season, and a fallback name would read off-bank here",
+        );
+        c.must(
+            "the names are the seed's own",
+            again.names() == names,
+            format!("{} christenings identical on redraw", names.len()),
+            "M88 gate: reproducible at fixed seed — the same world remembers the same ages by the same names (ADR-0003; the probe folds the christening)",
+        );
+
+        // The wiring, per kind: at plateau midpoints, the composed
+        // grid's global mean sits away from its drift-only twin by
+        // exactly the schedule's signed offset — the M83 additivity
+        // proof, extended to the age term in both directions. The
+        // cooling and the kindness are wired, not intended.
+        let (rows, cols) = w.fields.tmean.dim();
+        let grid_mean = |forcing: f64, year: i64| -> f64 {
+            let (dt, _) = clim::year_anomaly(w.variability(), rows, cols, year, w.year_osc(year), forcing);
+            dt.iter().sum::<f64>() / (rows * cols) as f64
+        };
+        let wire_worst = |list: &[&calliope::ages::AgeArc]| -> (f64, usize) {
+            let mut worst = 0.0f64;
+            let mut probed = 0usize;
+            for a in list.iter().take(3) {
+                let mid = (a.onset + a.release) / 2;
+                let forced = grid_mean(w.year_forcing(mid), mid);
+                let bare = grid_mean(w.year_drift(mid), mid);
+                worst = worst.max(((forced - bare) - ages.offset(mid)).abs());
+                probed += 1;
+            }
+            (worst, probed)
+        };
+        let (worst_cold, probed_cold) = wire_worst(&winters);
+        c.must(
+            "the winter reaches the sky",
+            probed_cold > 0 && worst_cold <= 1e-12,
+            format!(
+                "worst |Δ(grid mean dt) − age offset| {:.1e} over {} plateau probes",
+                worst_cold, probed_cold
+            ),
+            "M86: the cooling the schedule declares is the cooling the composed field carries — additivity holds through the whole anomaly pipeline",
+        );
+        let (worst_warm, probed_warm) = wire_worst(&optima);
+        c.must(
+            "the optimum reaches the sky",
+            probed_warm > 0 && worst_warm <= 1e-12,
+            format!(
+                "worst |Δ(grid mean dt) − age offset| {:.1e} over {} plateau probes",
+                worst_warm, probed_warm
+            ),
+            "M87: the warmth the schedule declares is the warmth the composed field carries — the same wire, sign and all",
+        );
+
+        // M87 — the kindness reaches the ground: at an optimum's
+        // plateau the cold-margin fields yield more, at a winter's they
+        // yield less. Measured through the same published law the world
+        // farms by (`agriculture::year_yield_factor` on the composed
+        // year anomaly), against a counterfactual sky with the age term
+        // removed and nothing else touched — the M81 counterfactual
+        // pattern, so drift luck and lattice texture cancel exactly.
+        // Margin cells: cropped, rain-fed land on the cold edge (dawn
+        // mean 2–10 °C) — the uplands the spec says the optimum opens.
+        {
+            use calliope::agriculture::{self, CropPackage};
+            let mut cells: Vec<(usize, usize)> = Vec::new();
+            'cells: for y in (0..rows).step_by(2) {
+                for x in (0..cols).step_by(2) {
+                    let t = w.fields.tmean[[y, x]] as f64;
+                    if w.fields.crops[[y, x]] == CropPackage::Wildland.code()
+                        || w.fields.height[[y, x]] < 0.0
+                        || !(2.0..=10.0).contains(&t)
+                        || w.irrigable(y, x)
+                    {
+                        continue;
+                    }
+                    cells.push((y, x));
+                    if cells.len() >= 240 {
+                        break 'cells;
+                    }
+                }
+            }
+            let mids = |list: &[&calliope::ages::AgeArc]| -> Vec<i64> {
+                list.iter().take(6).map(|a| (a.onset + a.release) / 2).collect()
+            };
+            let uplift = |years: &[i64]| -> (f64, f64, usize) {
+                let mut sum = 0.0f64;
+                let mut up = 0usize;
+                let mut n = 0usize;
+                for &yr in years {
+                    for &(y, x) in &cells {
+                        let t = w.fields.tmean[[y, x]] as f64;
+                        let p = w.fields.precip[[y, x]] as f64;
+                        let (dtf, dpf) = clim::year_anomaly_at(
+                            w.variability(), rows, x, y, yr, w.year_osc(yr), w.year_forcing(yr));
+                        let (dtu, dpu) = clim::year_anomaly_at(
+                            w.variability(), rows, x, y, yr, w.year_osc(yr), w.year_drift(yr));
+                        let pack = CropPackage::from_code(w.fields.crops[[y, x]]);
+                        let yf = agriculture::year_yield_factor(pack, t, p, dtf, dpf, false);
+                        let yu = agriculture::year_yield_factor(pack, t, p, dtu, dpu, false);
+                        if yu > 1e-9 {
+                            sum += yf / yu;
+                            if yf > yu {
+                                up += 1;
+                            }
+                            n += 1;
+                        }
+                    }
+                }
+                (sum / n.max(1) as f64, up as f64 / n.max(1) as f64, n)
+            };
+            let (warm_lift, warm_up, warm_n) = uplift(&mids(&optima));
+            let (cold_lift, cold_up, cold_n) = uplift(&mids(&winters));
+            println!(
+                "  margins: {} rain-fed cold-edge cells · optimum lift ×{:.3} ({:.0}% up, {} reads) · winter ×{:.3} ({:.0}% up, {} reads)",
+                cells.len(), warm_lift, 100.0 * warm_up, warm_n, cold_lift, 100.0 * cold_up, cold_n
+            );
+            c.must(
+                "the optimum opens the uplands",
+                !cells.is_empty() && warm_n > 0 && warm_lift >= 1.02 && warm_up >= 0.6,
+                format!(
+                    "×{:.3} mean yield against the age-free twin · {:.0}% of {} cell-years up",
+                    warm_lift, 100.0 * warm_up, warm_n
+                ),
+                "M87 gate: at the optimum's plateau the cold-margin harvest beats its counterfactual — the kindness the sky declares is bread, through the same yield law the world farms by",
+            );
+            c.must(
+                "the winter closes the fields",
+                cold_n > 0 && cold_lift <= 0.98 && cold_up <= 0.4,
+                format!(
+                    "×{:.3} mean yield against the age-free twin · {:.0}% of {} cell-years up",
+                    cold_lift, 100.0 * cold_up, cold_n
+                ),
+                "M87 (the mirror): the same margins under a winter's plateau fall below the twin — the coupling is sign-correct, not a one-way bonus",
+            );
+        }
+    }
+
+    // ---- M89: the margins respond --------------------------------------
+    // The three edges the composed sky rewrites, each measured through the
+    // law the world actually runs — no renderer, no proxy. Sign first
+    // (warmth lifts the snowline, opens the pack, shrinks the cold rim),
+    // then a magnitude that is real but bounded. The live-web leg (the
+    // route calendars the Margins system maintains) is gated in the civ
+    // lane; here the laws themselves answer for their sensitivity.
+    {
+        println!();
+        println!("the margins respond (M89) · seed {}:", seed);
+
+        // -- the snowline walk: belt-mean climate per 15° |lat| belt
+        //    (sea-level-equivalent temperature, phase-aligned amplitudes —
+        //    the M34 aggregation exactly), then the balance-zero elevation
+        //    under a −1/0/+1 °C sky through `clim::belt_snowline`, the
+        //    very solver the M34 lane banks at dt = 0. Pure lapse predicts
+        //    4000 m ÷ 26 °C ≈ 154 m/°C; precipitation curvature bends it,
+        //    the walls keep it honest.
+        let mut b_cl = [[0.0f64; 4]; 6];
+        let mut b_n = [0usize; 6];
+        let nrows = rows as f64;
+        for y in 0..rows {
+            let lat = (-90.0 + (y as f64) * 180.0 / (nrows - 1.0)).abs();
+            let belt = ((lat / 15.0) as usize).min(5);
+            for x in 0..cols {
+                let h = w.fields.height[[y, x]] as f64;
+                if h < 0.0 {
+                    continue;
+                }
+                let ta = w.fields.tamp[[y, x]] as f64;
+                let sg = if ta < 0.0 { -1.0 } else { 1.0 };
+                b_cl[belt][0] += w.fields.tmean[[y, x]] as f64 + 26.0 * h;
+                b_cl[belt][1] += ta * sg;
+                b_cl[belt][2] += w.fields.precip[[y, x]] as f64;
+                b_cl[belt][3] += w.fields.pamp[[y, x]] as f64 * sg;
+                b_n[belt] += 1;
+            }
+        }
+        let mut walk_sum = 0.0f64;
+        let mut walk_n = 0usize;
+        let mut mono_bad = 0usize;
+        for b in 0..6 {
+            if b_n[b] == 0 {
+                continue;
+            }
+            let n = b_n[b] as f64;
+            let (t0, ta, pr, pa) =
+                (b_cl[b][0] / n, b_cl[b][1] / n, b_cl[b][2] / n, b_cl[b][3] / n);
+            let lo = clim::belt_snowline(t0, ta, pr, pa, -1.0);
+            let mid = clim::belt_snowline(t0, ta, pr, pa, 0.0);
+            let hi = clim::belt_snowline(t0, ta, pr, pa, 1.0);
+            if let (Some(l), Some(m0), Some(h1)) = (lo, mid, hi) {
+                if !(l < m0 && m0 < h1) {
+                    mono_bad += 1;
+                }
+                let wlk = (h1 - l) * 0.5 * 4000.0;
+                walk_sum += wlk;
+                walk_n += 1;
+                println!(
+                    "  belt {:>2}–{:>2}°: snowline {:.0} m · walk {:+.0} m/°C",
+                    b * 15, b * 15 + 15, m0 * 4000.0, wlk
+                );
+            }
+        }
+        let walk = walk_sum / walk_n.max(1) as f64;
+        c.must(
+            "the snowline walks with the sky",
+            walk_n >= 1 && mono_bad == 0 && (100.0..=220.0).contains(&walk),
+            format!("{:+.0} m/°C over {} belts · {} non-monotone", walk, walk_n, mono_bad),
+            "M89 gate: a degree of warmth lifts every belt's balance-zero elevation, near the lapse-law 154 m/°C, through the same solver the M34 lane banks at dt = 0",
+        );
+
+        // -- the spec's own sentence: at each recorded arc's plateau the
+        //    composed forcing (drift + the age's offset, the exact wire
+        //    M86 banked) moves the snowline in the arc's own direction,
+        //    by an amount proportional to its depth — the shift divided
+        //    by the forcing must land in the same lapse band for every
+        //    arc, winter or optimum. Arcs whose composed forcing the
+        //    drift happens to cancel (<0.05 °C) are reported and skipped:
+        //    there is no depth there for the snowline to answer.
+        {
+            let shift_at = |f: f64| -> Option<f64> {
+                let mut s = 0.0f64;
+                let mut n = 0usize;
+                for b in 0..6 {
+                    if b_n[b] == 0 {
+                        continue;
+                    }
+                    let m = b_n[b] as f64;
+                    let (t0, ta, pr, pa) =
+                        (b_cl[b][0] / m, b_cl[b][1] / m, b_cl[b][2] / m, b_cl[b][3] / m);
+                    if let (Some(h0), Some(hf)) = (
+                        clim::belt_snowline(t0, ta, pr, pa, 0.0),
+                        clim::belt_snowline(t0, ta, pr, pa, f),
+                    ) {
+                        s += (hf - h0) * 4000.0;
+                        n += 1;
+                    }
+                }
+                if n == 0 { None } else { Some(s / n as f64) }
+            };
+            let ages = w.ages();
+            let arcs = ages.arcs();
+            let mut tested = 0usize;
+            let mut skipped = 0usize;
+            let mut sign_bad = 0usize;
+            let mut slope_lo = f64::MAX;
+            let mut slope_hi = f64::MIN;
+            let (mut nw, mut no) = (0usize, 0usize);
+            for a in arcs.iter() {
+                if a.warm && no >= 4 || !a.warm && nw >= 4 {
+                    continue;
+                }
+                if nw >= 4 && no >= 4 {
+                    break;
+                }
+                let mid = (a.onset + a.release) / 2;
+                let f = w.year_forcing(mid);
+                // An arc only counts when the composed sky carries its
+                // own sign at the plateau: a winter the drift cancels or
+                // overwhelms has no cold for the snowline to answer —
+                // reported, skipped, never a false FAIL and never a
+                // silent pass.
+                if f.abs() < 0.05 || (a.warm && f < 0.0) || (!a.warm && f > 0.0) {
+                    skipped += 1;
+                    continue;
+                }
+                let Some(sh) = shift_at(f) else { continue };
+                if a.warm { no += 1 } else { nw += 1 }
+                tested += 1;
+                if (a.warm && sh <= 0.0) || (!a.warm && sh >= 0.0) {
+                    sign_bad += 1;
+                }
+                let slope = sh / f;
+                slope_lo = slope_lo.min(slope);
+                slope_hi = slope_hi.max(slope);
+                println!(
+                    "  arc y{}–{} ({}): sky {:+.2} °C at mid · snowline {:+.0} m · {:.0} m/°C",
+                    a.onset, a.release, if a.warm { "optimum" } else { "winter" }, f, sh, slope
+                );
+            }
+            c.must(
+                "the snowline answers the recorded ages",
+                tested >= 2 && sign_bad == 0 && slope_lo >= 100.0 && slope_hi <= 220.0,
+                format!(
+                    "{} arcs tested ({} winters · {} optima · {} drift-masked skipped) · wrong-signed {} · slope {:.0}–{:.0} m/°C",
+                    tested, nw, no, skipped, sign_bad, slope_lo, slope_hi
+                ),
+                "M89 gate: snowline drops during active cold ages and rises during warm optima, proportional to the age's composed depth within one bounded lapse band — the spec's sentence, measured at each arc's plateau through the live solver",
+            );
+        }
+
+
+        // -- the pack breathes: frozen cell-months over the open sea under
+        //    a −1/0/+1 °C sky, through `seaice::cell_mask` — the exact law
+        //    the route calendars are frozen from (SST damping and all).
+        let mut mo = [0u64; 3];
+        for y in (0..rows).step_by(2) {
+            for x in (0..cols).step_by(2) {
+                if w.fields.height[[y, x]] >= 0.0 {
+                    continue;
+                }
+                let t = w.fields.tmean[[y, x]] as f64;
+                let ta = w.fields.tamp[[y, x]] as f64;
+                let mm = calliope::seaice::MONTHS_MASK;
+                mo[0] += (calliope::seaice::cell_mask(t - 1.0, ta) & mm).count_ones() as u64;
+                mo[1] += (calliope::seaice::cell_mask(t, ta) & mm).count_ones() as u64;
+                mo[2] += (calliope::seaice::cell_mask(t + 1.0, ta) & mm).count_ones() as u64;
+            }
+        }
+        let swing = (mo[0] as f64 - mo[2] as f64) / (2.0 * mo[1].max(1) as f64) * 100.0;
+        println!(
+            "  the pack: cell-months {} (−1°) / {} (dawn) / {} (+1°) · swing {:.1}%/°C",
+            mo[0], mo[1], mo[2], swing
+        );
+        c.must(
+            "the pack opens and closes with the sky",
+            mo[1] > 0 && mo[0] > mo[1] && mo[1] > mo[2] && (0.5..=30.0).contains(&swing),
+            format!("{} > {} > {} cell-months · {:.1}%/°C", mo[0], mo[1], mo[2], swing),
+            "M89 gate: a colder sky freezes more sea-cell months and a warmer frees them, by a real bounded fraction, through the freeze law the route calendars obey",
+        );
+
+        // -- the cold rim gives ground: land inside the 4 °C isotherm —
+        //    the edge the tundra dress and the M90 margin ledger both read
+        //    — under the same −1/0/+1 °C sky.
+        let mut rim = [0u64; 3];
+        for y in 0..rows {
+            for x in 0..cols {
+                if w.fields.height[[y, x]] < 0.0 {
+                    continue;
+                }
+                let t = w.fields.tmean[[y, x]] as f64;
+                if t - 1.0 < 4.0 {
+                    rim[0] += 1;
+                }
+                if t < 4.0 {
+                    rim[1] += 1;
+                }
+                if t + 1.0 < 4.0 {
+                    rim[2] += 1;
+                }
+            }
+        }
+        let rim_swing = (rim[0] as f64 - rim[2] as f64) / (2.0 * rim[1].max(1) as f64) * 100.0;
+        println!(
+            "  the cold rim: land cells {} (−1°) / {} (dawn) / {} (+1°) · swing {:.1}%/°C",
+            rim[0], rim[1], rim[2], rim_swing
+        );
+        c.must(
+            "the cold rim gives ground to warmth",
+            rim[1] > 0 && rim[0] > rim[1] && rim[1] > rim[2] && (0.5..=25.0).contains(&rim_swing),
+            format!("{} > {} > {} land cells · {:.1}%/°C", rim[0], rim[1], rim[2], rim_swing),
+            "M89 gate: the 4 °C rim — the edge the dress greys at and the margin fields open from — shrinks under warmth and grows under cold by a real bounded share",
+        );
+    }
+
 
     // ---- M84: belts on the move ---------------------------------------
     // The drifted century owns a geography of weather: the ITCZ camps ride
@@ -3939,6 +4662,174 @@ fn cmd_climate(seed: i64, size: usize) {
                 if zero_bit && limit_ok { "reproduces" } else { "DIVERGES from" }
             ),
             "M84/ADR-0003: the drift-0 fast path and the recompute path are one law — the stored reference weights are the recomputation's own limit, so no formula can drift between constructor and reader",
+        );
+    }
+
+    // ---- M91: the ice remembers time -----------------------------------
+    // Era I's glaciers join the flow of history. Every land cell whose
+    // frozen verdict flips inside ±ICE_REACH °C carries a solved
+    // balance-zero threshold (the ice-margin ledger), and a yearly pass
+    // walks the GLACIER flag to the composed forcing — advance in the
+    // cold ages, retreat in the optima, no die anywhere. Gated in three
+    // legs: the ledger's law at the recorded arcs (extent correlates
+    // with age depth), the live grid after a real 150-year run (the
+    // flag is the ledger's verdict, never stale), and the ground itself
+    // (base terrain hashes unchanged across the run — the ice moves,
+    // the rock does not).
+    {
+        println!();
+        println!("the ice remembers time (M91) · seed {}:", seed);
+        let bit = CellFlags::GLACIER.bits();
+        let dawn_mask = w.fields.flags.iter().filter(|&&fl| fl & bit != 0).count() as u64;
+        let dawn = w.ice_ledger.extent_at(0.0);
+        println!(
+            "  margin ledger: {} flip cells · {} stable core · dawn extent {} cells (mask {})",
+            w.ice_ledger.cells.len(),
+            w.ice_ledger.stable,
+            dawn,
+            dawn_mask
+        );
+        c.must(
+            "the margin is solved and owns the dawn",
+            !w.ice_ledger.cells.is_empty() && w.ice_ledger.inconsistent == 0 && dawn == dawn_mask,
+            format!(
+                "{} cells · {} inconsistent · ledger dawn {} vs stamped mask {}",
+                w.ice_ledger.cells.len(),
+                w.ice_ledger.inconsistent,
+                dawn,
+                dawn_mask
+            ),
+            "M91: the ledger's verdict at forcing 0.0 is the stamped M34 mask to the cell — one law, solved once, no drift between the dawn and the walk",
+        );
+
+        // -- the spec's sentence at the schedule: at each recorded
+        //    arc's plateau the composed forcing must move the law's
+        //    extent from the dawn in the arc's own direction — winters
+        //    advance the ice, optima give it back. Arcs whose composed
+        //    sky the drift cancels or contradicts are reported and
+        //    skipped (M89's convention exactly).
+        {
+            let arcs = w.ages().arcs();
+            let (mut tested, mut skipped, mut sign_bad, mut still) =
+                (0usize, 0usize, 0usize, 0usize);
+            let (mut nw, mut no) = (0usize, 0usize);
+            for a in arcs.iter() {
+                if a.warm && no >= 4 || !a.warm && nw >= 4 {
+                    continue;
+                }
+                if nw >= 4 && no >= 4 {
+                    break;
+                }
+                let mid = (a.onset + a.release) / 2;
+                let f = w.year_forcing(mid);
+                if f.abs() < 0.05 || (a.warm && f < 0.0) || (!a.warm && f > 0.0) {
+                    skipped += 1;
+                    continue;
+                }
+                if a.warm { no += 1 } else { nw += 1 }
+                tested += 1;
+                let ext = w.ice_ledger.extent_at(f);
+                let d = ext as i64 - dawn as i64;
+                if (a.warm && d > 0) || (!a.warm && d < 0) {
+                    sign_bad += 1;
+                }
+                if d == 0 {
+                    still += 1;
+                }
+                println!(
+                    "  arc y{}–{} ({}): sky {:+.2} °C at mid · extent {} · {:+} cells vs dawn",
+                    a.onset,
+                    a.release,
+                    if a.warm { "optimum" } else { "winter" },
+                    f,
+                    ext,
+                    d
+                );
+            }
+            c.must(
+                "the ice answers the recorded ages",
+                tested >= 2 && sign_bad == 0 && still == 0,
+                format!(
+                    "{} arcs tested ({} winters · {} optima · {} drift-masked skipped) · wrong-signed {} · unmoved {}",
+                    tested, nw, no, skipped, sign_bad, still
+                ),
+                "M91 gate: glacial extent correlates with age depth — expanding in cold ages, contracting in warm optima, measured at each recorded arc's own composed forcing through the solved ledger",
+            );
+        }
+
+        // -- the run itself: 150 years under the real lattice, with
+        //    the ground hashed on both sides. The ice may walk; the
+        //    rock may not — and the flag grid must stand exactly where
+        //    the ledger's law puts it at the final forcing.
+        let hash_height = |w: &World| -> u64 {
+            let mut b: Vec<u8> = Vec::with_capacity(w.fields.height.len() * 4);
+            for v in w.fields.height.iter() {
+                b.extend_from_slice(&v.to_bits().to_le_bytes());
+            }
+            calliope::util::fnv1a64(&b)
+        };
+        let hash_flags_sans_ice = |w: &World| -> u64 {
+            let b: Vec<u8> = w.fields.flags.iter().map(|&fl| fl & !bit).collect();
+            calliope::util::fnv1a64(&b)
+        };
+        let (h0, g0) = (hash_height(&w), hash_flags_sans_ice(&w));
+        for _ in 0..150 {
+            let _ = w.tick(12);
+        }
+        let (h1, g1) = (hash_height(&w), hash_flags_sans_ice(&w));
+        c.must(
+            "the ice moves and the rock does not",
+            h0 == h1 && g0 == g1,
+            format!(
+                "height {:016x} → {:016x} · flags∖ice {:016x} → {:016x} over 150 y",
+                h0, h1, g0, g1
+            ),
+            "M91 gate: base terrain height hashes (and every non-ice flag) unchanged across the run — the edge walks a flag, never the ground",
+        );
+
+        let f_now = w.year_forcing(w.month.div_euclid(12));
+        let mut stale = 0usize;
+        for cell in &w.ice_ledger.cells {
+            let cur = w.fields.flags[[cell.y as usize, cell.x as usize]] & bit != 0;
+            if cur != cell.frozen_at(f_now) {
+                stale += 1;
+            }
+        }
+        let mask_now = w.fields.flags.iter().filter(|&&fl| fl & bit != 0).count() as u64;
+        let law_now = w.ice_ledger.extent_at(f_now);
+        c.must(
+            "the ice edge is the ledger's, live",
+            stale == 0 && mask_now == law_now,
+            format!(
+                "sky {:+.2} °C at y150 · {} stale cells · grid {} vs law {}",
+                f_now, stale, mask_now, law_now
+            ),
+            "M91: after a real run every GLACIER flag stands exactly where the solved threshold puts it at the current composed forcing — the walk is reconciliation, never accumulation",
+        );
+
+        let moved: usize = w.ice_log.iter().map(|r| r.advanced + r.retreated).sum();
+        if let (Some(first), Some(last)) = (w.ice_log.first(), w.ice_log.last()) {
+            println!(
+                "  snapshots: {} rows · first y{} ({:+.2} °C → {} cells) · last y{} ({:+.2} °C → {} cells) · {} cells walked",
+                w.ice_log.len(),
+                first.year,
+                first.f,
+                first.extent,
+                last.year,
+                last.f,
+                last.extent,
+                moved
+            );
+        }
+        c.must(
+            "the edge was written down",
+            !w.ice_log.is_empty() && moved > 0,
+            format!(
+                "{} snapshot rows · {} cells walked over 150 y",
+                w.ice_log.len(),
+                moved
+            ),
+            "M91: extent snapshots for the atlas — every year the edge moved wrote its row, and 150 years of real sky moved it",
         );
     }
 
@@ -4930,11 +5821,15 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     // M72 — the routed river, as the dawn solved it. Every year's flow is
     // a read-time multiplier; if a tick ever wrote back into the routing,
     // these bits would move and the gate below would say so.
+    // The flags leg masks GLACIER out: since M91 the ice edge is licensed
+    // to walk with the composed forcing, and this gate's sentence names
+    // the river map — order, discharge, endorheic calls — not the ice.
+    // Every other flag bit stays in the measure, byte for byte.
     let river_dawn = {
         let mut b: Vec<u8> = Vec::new();
         for v in w.fields.discharge.iter() { b.extend_from_slice(&v.to_le_bytes()); }
         for v in w.fields.strahler.iter() { b.push(*v); }
-        for v in w.fields.flags.iter() { b.push(*v); }
+        for v in w.fields.flags.iter() { b.push(*v & !CellFlags::GLACIER.bits()); }
         (w.fields.discharge.dim(), fnv(&b))
     };
     header("CIVILIZATION", &format!("seed {} · {}x{} · {}y", seed, w.width, size, years));
@@ -5610,9 +6505,16 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     }
 
     // ---- M2.6 famine: dry years starve somewhere, but not everywhere ----
+    // M92 — two famine classes share the event kind now: the rain-fed
+    // verdict keeps its original band, the paddies' cadence gets its own —
+    // distinct mechanisms stay measured as distinct.
     if years >= 100 {
-        let per_c = log.famines as f64 * 100.0 / years.max(1) as f64;
+        let mons_n = w.famine_ledger.iter().filter(|r| r.monsoon).count();
+        let per_c =
+            log.famines.saturating_sub(mons_n) as f64 * 100.0 / years.max(1) as f64;
         c.band("famine events per century", per_c, format!("{:.1}", per_c));
+        let mons_c = mons_n as f64 * 100.0 / years.max(1) as f64;
+        c.band("monsoon famines per century", mons_c, format!("{:.1}", mons_c));
     }
 
     // ---- M72 famine causality: every hunger answers to the year's rain ----
@@ -5621,6 +6523,21 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     // spread. So each logged famine must sit at a cell-year whose SPI is
     // at or below the drought threshold — no private die, no exception.
     if !log.famine_sites.is_empty() {
+        // M92 — the paddies answer to their own sky (the monsoon index),
+        // not the SPI memory: their rows leave every SPI leg here and are
+        // judged by the M92 gates instead. The ledger names which is which.
+        let mons_set: BTreeSet<(i64, i64, i64)> = w
+            .famine_ledger
+            .iter()
+            .filter(|r| r.monsoon)
+            .map(|r| (r.m, r.x, r.y))
+            .collect();
+        let rain_sites: Vec<(i64, i64, i64, i64)> = log
+            .famine_sites
+            .iter()
+            .copied()
+            .filter(|&(m, x, y, _)| !mons_set.contains(&(m, x, y)))
+            .collect();
         let rows = w.fields.tmean.dim().0 as f64;
         // M80 — the field the harvest verdict reads is the *accumulated*
         // standardized shortfall, not one year's draw. Re-derived here
@@ -5639,7 +6556,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     // M84 — the belt rides `dp`: the mirror must read the
                     // same drifted sky the famine verdict read.
                     w.variability(), nrows, x as usize, y as usize, yr, w.year_osc(yr),
-                    w.year_drift(yr),
+                    w.year_forcing(yr),
                 );
                 acc += wt * dp / sigma;
                 wt *= calliope::drought::MEM;
@@ -5649,35 +6566,43 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             // the independence baseline the constant carries.
             acc * w.drought_norm()
         };
-        let mut zs: Vec<f64> = Vec::with_capacity(log.famine_sites.len());
-        for &(m, x, y, _) in &log.famine_sites {
+        let mut zs: Vec<f64> = Vec::with_capacity(rain_sites.len());
+        for &(m, x, y, _) in &rain_sites {
             zs.push(didx(m / 12, x, y));
         }
-        let worst = zs.iter().cloned().fold(f64::INFINITY, f64::min);
-        let driest_ok = zs
-            .iter()
-            .filter(|z| **z <= calliope::famine::DROUGHT_Z + 1e-9)
-            .count();
-        let mean_z = zs.iter().sum::<f64>() / zs.len() as f64;
         println!();
-        println!(
-            "M72 · famine causality — {} famines · mean SPI {:.2} · worst {:.2}",
-            zs.len(),
-            mean_z,
-            worst
-        );
-        c.must(
-            "every famine stands in a failed year",
-            driest_ok == zs.len(),
-            format!("{}/{} at SPI ≤ {:.1}", driest_ok, zs.len(), calliope::famine::DROUGHT_Z),
-            "M72: hunger is the year's realized rain read as SPI, never a private die",
-        );
-        c.must(
-            "famine years are meaningfully dry",
-            mean_z <= calliope::famine::DROUGHT_Z,
-            format!("mean SPI {:.2}", mean_z),
-            "M72: the mean famine year sits at or beyond moderate drought",
-        );
+        if zs.is_empty() {
+            println!(
+                "M72 · famine causality — all {} famines this run are monsoon-fed; the M92 gates judge them",
+                log.famine_sites.len()
+            );
+        } else {
+            let worst = zs.iter().cloned().fold(f64::INFINITY, f64::min);
+            let driest_ok = zs
+                .iter()
+                .filter(|z| **z <= calliope::famine::DROUGHT_Z + 1e-9)
+                .count();
+            let mean_z = zs.iter().sum::<f64>() / zs.len() as f64;
+            println!(
+                "M72 · famine causality — {} rain-fed famines ({} monsoon-fed, judged by the M92 law) · mean SPI {:.2} · worst {:.2}",
+                zs.len(),
+                mons_set.len(),
+                mean_z,
+                worst
+            );
+            c.must(
+                "every famine stands in a failed year",
+                driest_ok == zs.len(),
+                format!("{}/{} at SPI ≤ {:.1}", driest_ok, zs.len(), calliope::famine::DROUGHT_Z),
+                "M72: hunger is the year's realized rain read as SPI, never a private die",
+            );
+            c.must(
+                "famine years are meaningfully dry",
+                mean_z <= calliope::famine::DROUGHT_Z,
+                format!("mean SPI {:.2}", mean_z),
+                "M72: the mean famine year sits at or beyond moderate drought",
+            );
+        }
 
         // ---- dose-response: dryness governs hunger, it does not merely
         // accompany it. Every eligible town-year (the famine pass's own
@@ -5686,7 +6611,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // share is zero above the threshold and climbs as the bins dry.
         let spi_of = |year: i64, x: i64, y: i64| -> f64 { didx(year, x, y) };
         let struck: BTreeSet<(i64, i64, i64)> =
-            log.famine_sites.iter().map(|&(m, x, y, _)| (m / 12, x, y)).collect();
+            rain_sites.iter().map(|&(m, x, y, _)| (m / 12, x, y)).collect();
         // bins, driest first: ≤−2 (extreme), (−2,−1] (moderate), (−1,0], >0
         let edges = [-2.0f64, -1.0, 0.0];
         let names = ["SPI ≤ −2", "−2 < SPI ≤ −1", "−1 < SPI ≤ 0", "SPI > 0"];
@@ -5733,11 +6658,33 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // itself (the pass's ledger: souls at risk, the anomaly it read,
         // the granary factor it applied, the toll it took).
         let led = &w.famine_ledger;
-        // (a) the ledger is the harvest verdict, reproduced exactly.
+        // (a) the ledger is the harvest verdict, reproduced exactly — each
+        // row against its own law: the SPI ramp for the rain-fed, the M92
+        // monsoon ramp (cell sky for open paddies, the M81 catchment sky
+        // for riverine ones) for the paddies. One toll arithmetic either way.
         let mut exact = 0usize;
         for r in led {
-            let z_here = spi_of(r.m / 12, r.x, r.y);
-            let sf = (((-z_here) - (-calliope::famine::DROUGHT_Z)) / (-calliope::famine::DROUGHT_Z)).min(1.0);
+            let sf = if r.monsoon {
+                let riv = w
+                    .peoples
+                    .settlements
+                    .iter()
+                    .find(|s| s.x == r.x && s.y == r.y)
+                    .map(|s| s.river);
+                match riv {
+                    Some(riv) => {
+                        let msi =
+                            w.monsoon_index(r.m / 12, r.y as usize, r.x as usize, riv);
+                        ((calliope::climate::MONSOON_FAIL - msi)
+                            / (calliope::climate::MONSOON_FAIL - calliope::climate::MONSOON_SAT))
+                            .min(1.0)
+                    }
+                    None => f64::NAN,
+                }
+            } else {
+                let z_here = spi_of(r.m / 12, r.x, r.y);
+                (((-z_here) - (-calliope::famine::DROUGHT_Z)) / (-calliope::famine::DROUGHT_Z)).min(1.0)
+            };
             let hit = ((r.pop as f64) * (0.05 + 0.16 * sf) * r.granary) as i64;
             let dead = (hit as f64 * 0.55) as i64;
             if (sf - r.shortfall).abs() < 1e-9 && hit == r.hit && dead == r.dead {
@@ -5747,8 +6694,8 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         c.must(
             "the toll is the shortfall's own arithmetic",
             exact == led.len() && !led.is_empty(),
-            format!("{}/{} famines reproduced exactly from the year's SPI", exact, led.len()),
-            "M72: every toll re-derives from the realized rain at that cell — no residual, no die",
+            format!("{}/{} famines reproduced exactly from the year's sky", exact, led.len()),
+            "M72: every toll re-derives from the realized sky at that cell — SPI for the rain-fed, the monsoon index for the paddies — no residual, no die",
         );
         // (b) the dose, read continuously: per-capita toll against depth.
         // Normalizing by the granary factor removes the craft's blunting,
@@ -5818,35 +6765,37 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // must not: the real famine years are drought-selected, the
         // counterfactual ones are the world's ordinary base rate.
         // Deterministic offsets, no die.
-        let horizon = (years as i64).max(1);
-        let mut cf_dry = 0usize;
-        let mut cf_n = 0usize;
-        for (i, &(m, x, y, _)) in log.famine_sites.iter().enumerate() {
-            let year = m / 12;
-            for k in 1..=4i64 {
-                let alt = ((year + k * 7 + i as i64 * 3).rem_euclid(horizon)).max(1);
-                if alt == year {
-                    continue;
-                }
-                cf_n += 1;
-                if spi_of(alt, x, y) <= calliope::famine::DROUGHT_Z {
-                    cf_dry += 1;
+        if !rain_sites.is_empty() {
+            let horizon = (years as i64).max(1);
+            let mut cf_dry = 0usize;
+            let mut cf_n = 0usize;
+            for (i, &(m, x, y, _)) in rain_sites.iter().enumerate() {
+                let year = m / 12;
+                for k in 1..=4i64 {
+                    let alt = ((year + k * 7 + i as i64 * 3).rem_euclid(horizon)).max(1);
+                    if alt == year {
+                        continue;
+                    }
+                    cf_n += 1;
+                    if spi_of(alt, x, y) <= calliope::famine::DROUGHT_Z {
+                        cf_dry += 1;
+                    }
                 }
             }
+            let cf_rate = if cf_n == 0 { 1.0 } else { cf_dry as f64 / cf_n as f64 };
+            println!(
+                "  counterfactual sky — the same {} hungry cells under {} wrong-year skies: {:.0}% would have been dry (real 100%)",
+                rain_sites.len(),
+                cf_n,
+                100.0 * cf_rate
+            );
+            c.must(
+                "the year, not the place, makes the famine",
+                cf_rate <= 0.50,
+                format!("{:.0}% of wrong-year skies dry vs 100% of the real ones", 100.0 * cf_rate),
+                "M72: swap the year and the drought mostly vanishes — hunger is selected by the realized sky, not by the cell",
+            );
         }
-        let cf_rate = if cf_n == 0 { 1.0 } else { cf_dry as f64 / cf_n as f64 };
-        println!(
-            "  counterfactual sky — the same {} hungry cells under {} wrong-year skies: {:.0}% would have been dry (real 100%)",
-            log.famine_sites.len(),
-            cf_n,
-            100.0 * cf_rate
-        );
-        c.must(
-            "the year, not the place, makes the famine",
-            cf_rate <= 0.50,
-            format!("{:.0}% of wrong-year skies dry vs 100% of the real ones", 100.0 * cf_rate),
-            "M72: swap the year and the drought mostly vanishes — hunger is selected by the realized sky, not by the cell",
-        );
     }
 
 
@@ -5872,7 +6821,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                     // M84 — the belt rides `dp`: the mirror must read the
                     // same drifted sky the drought ledger read.
                     w.variability(), rows, x as usize, y as usize, yr, w.year_osc(yr),
-                    w.year_drift(yr),
+                    w.year_forcing(yr),
                 );
                 acc += wt * dp / sigma;
                 wt *= calliope::drought::MEM;
@@ -6056,33 +7005,129 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         // The causal claim: memory is load-bearing. How many famines stood
         // in a year whose *own* rain was not drought — a harvest that only
         // failed because the years behind it had already emptied the ground.
+        // M92 — monsoon rows sit out: a paddy fails on its monsoon index,
+        // not the SPI memory, so it would read as false carry-over here.
         let mut carried = 0usize;
+        let mut rain_led = 0usize;
         for r in &w.famine_ledger {
+            if r.monsoon {
+                continue;
+            }
+            rain_led += 1;
             let yr = r.m / 12;
             if w.year_spi(yr, r.y as usize, r.x as usize) > calliope::famine::DROUGHT_Z {
                 carried += 1;
             }
         }
-        let share = if w.famine_ledger.is_empty() {
+        let share = if rain_led == 0 {
             0.0
         } else {
-            carried as f64 / w.famine_ledger.len() as f64
+            carried as f64 / rain_led as f64
         };
         println!(
-            "  carry-over — {}/{} famines ({:.0}%) struck in a year whose own rain was above SPI −1: the ground, not the year, was empty",
+            "  carry-over — {}/{} rain-fed famines ({:.0}%) struck in a year whose own rain was above SPI −1: the ground, not the year, was empty",
             carried,
-            w.famine_ledger.len(),
+            rain_led,
             100.0 * share
         );
-        c.must(
-            "the ground remembers the year before",
-            carried > 0,
-            format!("{} famines carried by memory alone ({:.0}%)", carried, 100.0 * share),
-            "M80: persistence is load-bearing — remove the memory and these harvests would not have failed",
-        );
-        c.band("drought carry-over share of famines", share, format!("{:.2}", share));
+        if rain_led > 0 {
+            c.must(
+                "the ground remembers the year before",
+                carried > 0,
+                format!("{} famines carried by memory alone ({:.0}%)", carried, 100.0 * share),
+                "M80: persistence is load-bearing — remove the memory and these harvests would not have failed",
+            );
+            c.band("drought carry-over share of famines", share, format!("{:.2}", share));
+        }
         let per_c = ds.events.len() as f64 * 100.0 / (years.max(1) as f64);
         c.band("named droughts per century", per_c, format!("{:.1}", per_c));
+    }
+
+    // ---- M86/M87: the ages the chronicle speaks ------------------------
+    // The schedule dates every onset and release at generation — winters
+    // and optima alike; the run must speak each dated turn that falls
+    // inside it — exactly once, in that year's first month, with the
+    // world itself as the subject (winters as Age, optima as Optimum). A
+    // horizon with no scheduled turn passes on an empty ledger with the
+    // next turn quoted: the law is rare by design, and silence outside
+    // the dates is part of the claim.
+    {
+        let horizon = years as i64;
+        let due: Vec<i64> = w
+            .ages()
+            .arcs()
+            .iter()
+            .flat_map(|a| [a.onset, a.release])
+            .filter(|&y| y >= 1 && y <= horizon)
+            .collect();
+        let mut matched = 0usize;
+        for &y in &due {
+            if log
+                .age_spoken
+                .iter()
+                .filter(|(m, _, _)| *m == y * 12)
+                .count()
+                == 1
+            {
+                matched += 1;
+            }
+        }
+        let subj_ok = log.age_spoken.iter().all(|(_, has, _)| *has);
+        println!(
+            "  the ages spoken — {} dated turns inside {} y · {} age/optimum entries · first onset y{}",
+            due.len(),
+            horizon,
+            log.age_spoken.len(),
+            w.ages().arcs().first().map(|a| a.onset).unwrap_or(0)
+        );
+        c.must(
+            "every dated turn of the age is spoken once",
+            matched == due.len() && log.age_spoken.len() == due.len() && subj_ok,
+            format!(
+                "{}/{} dated turns spoken · {} age/optimum entries · world-subject on all",
+                matched,
+                due.len(),
+                log.age_spoken.len()
+            ),
+            "M86 gate (extended at M87): each onset and release the schedule dates inside the run — winter or optimum — surfaces as exactly one chronicle entry, in that year's first month, owned by the world — none invented, none missed, none outside the dates",
+        );
+
+        // M88 — the chronicle calls the age by its christened name:
+        // every spoken turn's subject line is exactly the schedule's
+        // name for the arc dated to that year, so onset and release
+        // bind to one remembered thing. An empty ledger passes on
+        // silence, like the row above — the law is rare by design.
+        let mut named = 0usize;
+        let mut named_ok = true;
+        let mut sample = String::from("—");
+        for (m, _, s) in &log.age_spoken {
+            let y = *m / 12;
+            match w
+                .ages()
+                .arcs()
+                .iter()
+                .position(|a| a.onset == y || a.release == y)
+            {
+                Some(i) if s.as_str() == w.ages().name(i) => {
+                    named += 1;
+                    if sample == "—" {
+                        sample = s.clone();
+                    }
+                }
+                _ => named_ok = false,
+            }
+        }
+        c.must(
+            "the chronicle calls the age by its name",
+            named_ok,
+            format!(
+                "{}/{} entries subject-lined with the christening · first: {}",
+                named,
+                log.age_spoken.len(),
+                sample
+            ),
+            "M88 gate: every spoken turn carries the schedule's own christening as its subject — the name the world remembers the age by, stable at fixed seed",
+        );
     }
 
     // ---- M81: the river that drowns and gives ------------------------
@@ -6525,7 +7570,9 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             let mut b: Vec<u8> = Vec::new();
             for v in w.fields.discharge.iter() { b.extend_from_slice(&v.to_le_bytes()); }
             for v in w.fields.strahler.iter() { b.push(*v); }
-            for v in w.fields.flags.iter() { b.push(*v); }
+            // GLACIER masked: the ice walks by M91's license; the
+            // river map it rides over may not (mirrors the dawn side).
+            for v in w.fields.flags.iter() { b.push(*v & !CellFlags::GLACIER.bits()); }
             (w.fields.discharge.dim(), fnv(&b))
         };
         c.must(
@@ -7636,6 +8683,327 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         );
     }
 
+
+    // ---- M90 fields at the edge: the margin is the ledger's, live ------
+    // Reconciliation first: every margin cell's live package must equal
+    // the threshold law at the year's composed forcing — the yearly pass
+    // ran and its change gate never went stale. Then the spec's sentence
+    // measured at the schedule itself: warmed plateaus open dawn-wildland
+    // ground and genuinely cold plateaus shut every opened cell (the
+    // builder's invariant that no opened cell farms under a negative sky,
+    // measured live, not assumed). Drift-masked plateaus are reported and
+    // skipped, never silently passed — the M89 discipline. Last, the
+    // run's own record: where the law dates a reversal within a year of
+    // a winter's onset the pass must have shed ground in that window, and
+    // any pass that moved enough cells must have spoken into the
+    // chronicle that same year.
+    {
+        let year_now = w.month.div_euclid(12);
+        let f_now = w.year_forcing(year_now);
+        let led = &w.fields_ledger;
+        println!();
+        println!(
+            "fields at the edge (M90): sky {:+.2} °C at year {} · ledger {} cells ({} multi-crossing skipped · {} inconsistent) · farming {} · opened beyond dawn {}",
+            f_now, year_now, led.cells.len(), led.multi, led.inconsistent,
+            led.farmed_at(f_now), led.opened_at(f_now)
+        );
+        if led.cells.is_empty() {
+            println!("  (no single-crossing margin cells in this world — the ledger idles)");
+        } else {
+            let mut recon_bad = 0usize;
+            for cl in &led.cells {
+                if w.fields.crops[[cl.y as usize, cl.x as usize]] != cl.code_at(f_now) {
+                    recon_bad += 1;
+                }
+            }
+            c.must(
+                "the crops grid is the ledger's, live",
+                recon_bad == 0 && led.inconsistent == 0,
+                format!(
+                    "{} of {} cells mismatched · {} dawn-inconsistent",
+                    recon_bad, led.cells.len(), led.inconsistent
+                ),
+                "M90 gate: every margin cell's live package equals the threshold law at the year's composed forcing — the yearly pass ran and never went stale",
+            );
+
+            let mut masked = 0usize;
+            let (mut warm_n, mut warm_expand, mut warm_wrong) = (0usize, 0usize, 0usize);
+            let (mut cold_n, mut cold_open) = (0usize, 0usize);
+            for a in w.ages().arcs() {
+                let mid = a.onset + a.duration() / 2;
+                let (f_eve, f_mid) = (w.year_forcing(a.onset - 1), w.year_forcing(mid));
+                if a.warm {
+                    if f_mid - f_eve < 0.05 {
+                        masked += 1;
+                        continue;
+                    }
+                    warm_n += 1;
+                    let (o_eve, o_mid) = (led.opened_at(f_eve), led.opened_at(f_mid));
+                    if o_mid < o_eve {
+                        warm_wrong += 1;
+                    }
+                    if o_mid > o_eve {
+                        warm_expand += 1;
+                    }
+                } else {
+                    if f_mid >= 0.0 {
+                        masked += 1;
+                        continue;
+                    }
+                    cold_n += 1;
+                    cold_open += led.opened_at(f_mid);
+                }
+            }
+            println!(
+                "  schedule: {} warm plateaus ({} expand · {} wrong-signed) · {} cold plateaus ({} opened cells remain) · {} drift-masked skipped",
+                warm_n, warm_expand, warm_wrong, cold_n, cold_open, masked
+            );
+            if warm_n > 0 {
+                c.must(
+                    "warm optima open the margin",
+                    warm_wrong == 0 && warm_expand >= 1,
+                    format!(
+                        "{} of {} plateaus expand · {} wrong-signed",
+                        warm_expand, warm_n, warm_wrong
+                    ),
+                    "M90 gate: at every warmed plateau the dawn-wildland margin farms at least as wide as on the age's eve, and at least one optimum genuinely expands it",
+                );
+            }
+            if cold_n > 0 {
+                c.must(
+                    "cold peaks shut the margin to zero",
+                    cold_open == 0,
+                    format!("{} opened cells across {} cold plateaus", cold_open, cold_n),
+                    "M90 gate: under a genuinely cold plateau sky no dawn-wildland cell farms — the opened margin contracts to zero, the builder's threshold invariant measured live",
+                );
+            }
+
+            // The run's own record. `due` counts winters whose onset the
+            // law dates to shed ground within a year; each must show a
+            // shedding pass in [onset, onset+1] in the fields log.
+            let log = &w.fields_log;
+            let moved: usize = log.iter().map(|r| r.opened + r.shut).sum();
+            let (mut due, mut late) = (0usize, 0usize);
+            for a in w.ages().arcs() {
+                if a.warm || a.onset < 1 || a.onset + 1 > year_now {
+                    continue;
+                }
+                let f_eve = w.year_forcing(a.onset - 1);
+                let f_on1 = w.year_forcing(a.onset + 1);
+                let shed1 = led
+                    .cells
+                    .iter()
+                    .filter(|cl| cl.farms_at(f_eve) && !cl.farms_at(f_on1))
+                    .count();
+                if shed1 == 0 {
+                    continue;
+                }
+                due += 1;
+                let prompt = log
+                    .iter()
+                    .any(|r| (r.year == a.onset || r.year == a.onset + 1) && r.shut > 0);
+                if !prompt {
+                    late += 1;
+                }
+            }
+            println!(
+                "  run: {} passes moved ground ({} flips) · {} winter onsets due within a year · {} late",
+                log.len(),
+                moved,
+                due,
+                late
+            );
+            if due > 0 {
+                c.must(
+                    "abandonment is dated to the onset",
+                    late == 0,
+                    format!("{} of {} due onsets missed the year window", late, due),
+                    "M90 gate: every winter whose onset the law dates to a reversal within a year shows a shedding pass in that window — abandonment events dated to age onset within one year",
+                );
+            }
+
+            // Any pass that moved enough ground must have spoken: the
+            // world row is the chronicle's, dated to the pass's own month.
+            let mut mute = 0usize;
+            for r in log {
+                let m0 = r.year * 12;
+                if r.shut >= calliope::world::FIELDS_WORLD_MIN
+                    && !w.chronicle.events.iter().any(|e| {
+                        e.k == calliope::event::EventKind::Abandon && e.m == m0
+                    })
+                {
+                    mute += 1;
+                }
+                if r.opened >= calliope::world::FIELDS_WORLD_MIN
+                    && !w.chronicle.events.iter().any(|e| {
+                        e.k == calliope::event::EventKind::Clearing && e.m == m0
+                    })
+                {
+                    mute += 1;
+                }
+            }
+            c.must(
+                "the margin speaks when it moves",
+                mute == 0,
+                format!("{} loud passes went unspoken of {}", mute, log.len()),
+                "M90 gate: every pass that opened or shed at least the world threshold of cells left a dated Clearing/Abandon in the chronicle that same month",
+            );
+        }
+    }
+
+    // ---- M92 monsoon fortune: the failed monsoon is the cause, named ---
+    // The pass's own rows first: every monsoon verdict must carry an index
+    // the pure law reproduces bit-for-bit below the threshold — the
+    // famine's cause is the same number this harness computes from seed ×
+    // cell × year, never a die. Then the leak check: the verdict never
+    // leaves the paddies (rice, open sky, a real lean). Then the coupling,
+    // live: across every monsoon-fed paddy town-year the index must run
+    // lower when the year's own mode-and-belt term forces dry than when it
+    // forces wet — the M74/M83 coupling measured at the towns, not
+    // asserted. Last the record's cadence: the per-place return time of a
+    // below-threshold monsoon lands inside the M82 tropical envelope.
+    {
+        let years_run = w.month.div_euclid(12);
+        let rows_dim = w.fields.tmean.dim().0;
+        let rice_code = calliope::agriculture::CropPackage::Rice.code();
+        let mons: Vec<&calliope::world::FamineRow> =
+            w.famine_ledger.iter().filter(|r| r.monsoon).collect();
+        // composition first: every rice town, its water and its lean —
+        // the eligible set must be visible before the gates read it
+        let rice_towns: Vec<(i64, i64, bool, f64)> = w
+            .peoples
+            .settlements
+            .iter()
+            .filter(|s| w.fields.crops[[s.y as usize, s.x as usize]] == rice_code)
+            .map(|s| {
+                let lean = w.fields.pamp[[s.y as usize, s.x as usize]] as f64;
+                (s.x, s.y, s.river, lean)
+            })
+            .collect();
+        let paddies: Vec<(i64, i64, bool)> = rice_towns
+            .iter()
+            .filter(|&&(_, _, _, lean)| {
+                lean.abs() >= calliope::climate::MONSOON_LEAN_MIN
+            })
+            .map(|&(x, y, river, _)| (x, y, river))
+            .collect();
+        let riverine = rice_towns.iter().filter(|t| t.2).count();
+        let elig_riv = paddies.iter().filter(|t| t.2).count();
+        let lean_max = rice_towns.iter().map(|t| t.3.abs()).fold(0.0f64, f64::max);
+        println!();
+        println!(
+            "monsoon fortune (M92): {} rice towns ({} riverine · strongest lean {:.2}) · {} monsoon-fed ({} open-sky · {} catchment-read) · {} monsoon verdicts in {} y · fail below {:.2} of a normal year",
+            rice_towns.len(), riverine, lean_max, paddies.len(),
+            paddies.len() - elig_riv, elig_riv, mons.len(), years_run,
+            calliope::climate::MONSOON_FAIL
+        );
+        if paddies.is_empty() && mons.is_empty() {
+            println!("  (no monsoon-fed paddy towns in this world — the verdict idles)");
+        } else {
+            if !mons.is_empty() {
+                let mut unproven = 0usize;
+                let mut leaked = 0usize;
+                for r in &mons {
+                    // the row's town: the river flag decides which sky the
+                    // pure law reads (cell vs catchment) — same lookup the
+                    // famine pass made when it wrote the row
+                    let riv = w
+                        .peoples
+                        .settlements
+                        .iter()
+                        .find(|s| s.x == r.x && s.y == r.y)
+                        .map(|s| s.river);
+                    let again = match riv {
+                        Some(riv) => {
+                            w.monsoon_index(r.m.div_euclid(12), r.y as usize, r.x as usize, riv)
+                        }
+                        None => f64::NAN,
+                    };
+                    if again.to_bits() != r.msi.to_bits()
+                        || !(r.msi < calliope::climate::MONSOON_FAIL)
+                    {
+                        unproven += 1;
+                    }
+                    let lean = w.fields.pamp[[r.y as usize, r.x as usize]] as f64;
+                    if w.fields.crops[[r.y as usize, r.x as usize]] != rice_code
+                        || lean.abs() < calliope::climate::MONSOON_LEAN_MIN
+                    {
+                        leaked += 1;
+                    }
+                }
+                c.must(
+                    "the failed monsoon carries its cause",
+                    unproven == 0,
+                    format!("{} of {} verdicts unproven", unproven, mons.len()),
+                    "M92 gate: every monsoon famine's recorded index is reproduced bit-for-bit by the pure law at that cell-year (cell sky for open paddies, the M81 catchment sky for riverine ones) and sits below the failure threshold — the cause is the number, not a die",
+                );
+                c.must(
+                    "the verdict never leaves the paddies",
+                    leaked == 0,
+                    format!("{} of {} verdicts off the paddies", leaked, mons.len()),
+                    "M92 gate: monsoon famine strikes only rice with a real seasonal lean — wheat and maize never read the monsoon verdict",
+                );
+            } else {
+                println!("  (no monsoon verdicts this run — cause and leak legs idle)");
+            }
+            if !paddies.is_empty() {
+                let (mut nf, mut sum_dry, mut n_dry, mut sum_wet, mut n_wet) =
+                    (0usize, 0.0f64, 0usize, 0.0f64, 0usize);
+                let mut town_years = 0usize;
+                for &(x, y, riv) in &paddies {
+                    let lat_s = -90.0 + (y as f64) * 180.0 / (rows_dim as f64 - 1.0);
+                    for yr in 0..years_run {
+                        let msi = w.monsoon_index(yr, y as usize, x as usize, riv);
+                        town_years += 1;
+                        if msi < calliope::climate::MONSOON_FAIL {
+                            nf += 1;
+                        }
+                        let forced = calliope::climate::teleconnection_bias(
+                            w.year_osc(yr),
+                            lat_s,
+                        ) + calliope::climate::belt_anomaly(lat_s, w.year_forcing(yr));
+                        if forced < 0.0 {
+                            sum_dry += msi;
+                            n_dry += 1;
+                        } else if forced > 0.0 {
+                            sum_wet += msi;
+                            n_wet += 1;
+                        }
+                    }
+                }
+                if n_dry > 0 && n_wet > 0 {
+                    let (md, mw) = (sum_dry / n_dry as f64, sum_wet / n_wet as f64);
+                    c.must(
+                        "the fortune rides the mode and the belt",
+                        md < mw,
+                        format!(
+                            "dry-forced mean {:.3} vs wet-forced {:.3} over {} town-years",
+                            md, mw, town_years
+                        ),
+                        "M92 gate: across every monsoon-fed paddy town-year the index runs lower when the year's own teleconnection-plus-belt term forces dry than when it forces wet — the M74 mode and the M83 drift reach the paddies through the sky, measured live",
+                    );
+                }
+                if nf > 0 {
+                    let ret = town_years as f64 / nf as f64;
+                    let (lo, hi) = calliope::famine::DROUGHT_RETURN[5];
+                    c.must(
+                        "the failed monsoon keeps the record's cadence",
+                        ret >= lo && ret <= hi,
+                        format!(
+                            "return {:.0} y per paddy ({} failed of {} town-years)",
+                            ret, nf, town_years
+                        ),
+                        "M92 gate: the per-place return time of a below-threshold monsoon lands inside the M82 tropical drought envelope (12–200 y) — a failed monsoon is generational fortune, not annual weather",
+                    );
+                } else {
+                    println!(
+                        "  (no below-threshold years across {} town-years — cadence leg idle)",
+                        town_years
+                    );
+                }
+            }
+        }
+    }
     c.print();
 }
 
@@ -7724,6 +9092,20 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         .map(|r| (r.a, r.b, r.cost, r.closed, r.season, r.shut.clone()))
         .collect();
     let cal0 = calendar_hash(&w.routes);
+    // M89 — the zero: on the dawn web, a refreeze under the dawn's own
+    // sky (dt = 0) must change nothing — the live law nests the M37
+    // build bit for bit. Measured here at the dawn, gated with the other
+    // margin gates after the run.
+    let m89_zero_moved = {
+        let mut dawn_routes = w.routes.clone();
+        calliope::trade::refreeze_routes(
+            &mut dawn_routes,
+            &w.fields.height,
+            &w.fields.tmean,
+            &w.fields.tamp,
+            0.0,
+        )
+    };
     // Snapshot M46 before history starts. Storms, quakes and abandonment may
     // later remove towns and re-knit the web; that evolved result is printed
     // as a counterfactual below, while the gate remains on its stated subject.
@@ -8238,6 +9620,72 @@ fn cmd_economy(seed: i64, size: usize, years: usize) {
         format!("{} mismatched route-months", ice_mism),
         "M37/M48 gate: flow zero when shut — ice or gale — alive when the water opens",
     );
+    // ---- M89 the margins respond: the ledger is the law's, live --------
+    // Reconciliation: recompute every lane's ice mask from the current
+    // composed forcing through the same law the Margins system applies,
+    // and demand bit equality with what the run left in the ledger —
+    // proving the pass ran, its change gate never went stale, and lanes
+    // born mid-run were frozen under the sky of their birth. Coupling:
+    // the same web under a ±1 °C sky must shed route-months when warmed
+    // and grow them when chilled, and actually move lanes.
+    {
+        let dt_now = w.year_forcing(w.month.div_euclid(12));
+        let mut recon_bad = 0usize;
+        let mut moved = 0usize;
+        let (mut mo_cold, mut mo_now, mut mo_warm) = (0u32, 0u32, 0u32);
+        for r in &w.routes {
+            let want = calliope::trade::route_ice_mask(
+                r, &w.fields.height, &w.fields.tmean, &w.fields.tamp, dt_now);
+            let got = r
+                .shut
+                .iter()
+                .find_map(|s| match s {
+                    calliope::trade::SeasonalClosure::Ice(m) => Some(*m),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            if want != got {
+                recon_bad += 1;
+            }
+            let cold = calliope::trade::route_ice_mask(
+                r, &w.fields.height, &w.fields.tmean, &w.fields.tamp, dt_now - 1.0);
+            let warm = calliope::trade::route_ice_mask(
+                r, &w.fields.height, &w.fields.tmean, &w.fields.tamp, dt_now + 1.0);
+            mo_cold += cold.count_ones();
+            mo_now += got.count_ones();
+            mo_warm += warm.count_ones();
+            if cold != warm {
+                moved += 1;
+            }
+        }
+        println!();
+        println!(
+            "the margins respond (M89): sky {:+.2} °C at year {} · dawn-web zero refreeze moved {} · ledger vs law {} mismatched · route-months {} (−1°) / {} (now) / {} (+1°) · {} lanes breathe",
+            dt_now, w.month.div_euclid(12), m89_zero_moved, recon_bad, mo_cold, mo_now, mo_warm, moved
+        );
+        c.must(
+            "the live law nests the dawn build",
+            m89_zero_moved == 0,
+            format!("{} routes moved under dt = 0", m89_zero_moved),
+            "M89 gate: refreezing the dawn web under the dawn's own sky is a bit-exact no-op — the M37 calendars are the dt = 0 case of the one law",
+        );
+        c.must(
+            "the ledger is the law's, live",
+            recon_bad == 0,
+            format!("{} of {} lanes mismatched", recon_bad, w.routes.len()),
+            "M89 gate: every lane's stored ice calendar equals the freeze law at the year's composed forcing — the Margins pass ran and its change gate never went stale",
+        );
+        if mo_cold == 0 && mo_warm == 0 && mo_now == 0 {
+            println!("  (no lane touches freezing water within ±1 °C — the pack idles on this web)");
+        } else {
+            c.must(
+                "the pack rewrites the calendar",
+                mo_cold >= mo_now && mo_now >= mo_warm && mo_cold > mo_warm && moved >= 1,
+                format!("{} ≥ {} ≥ {} route-months · {} lanes change", mo_cold, mo_now, mo_warm, moved),
+                "M89 gate: on the real web a colder sky closes more route-months and a warmer opens them — the coupling is live, sign-correct, and moves actual lanes",
+            );
+        }
+    }
     if m_lanes.is_empty() {
         println!(" (no monsoon lanes in this world — the calendar bands idle)");
     } else {
@@ -9320,8 +10768,8 @@ fn cmd_perf(size: usize, seeds: Vec<i64>) {
     header("PERF", &format!("size {} · {} seeds · native release", size, seeds.len()));
 
     const STAGES: &[&str] = &[
-        "terrain", "erosion", "climate", "hydrology", "biomes",
-        "fertility", "naming", "resources", "settlements",
+        "terrain", "erosion", "climate", "icemargin", "hydrology", "biomes",
+        "fertility", "margins", "naming", "resources", "settlements",
     ];
 
     // ---- E10.1: per-stage generation budgets ----
@@ -9462,6 +10910,8 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         /// M48 — lanes sailing the monsoon calendar, and malformed bursts
         mons: usize,
         mons_bad: usize,
+        /// M92 — monsoon famines (paddy verdicts) among `famines`
+        mons_fam: usize,
     }
     let mut rows: Vec<Row> = Vec::new();
 
@@ -9560,7 +11010,7 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
 
         println!("{:>7} {:>6.1} {:>6.1} {:>6.1} {:>5.1} {:>5} {:>4} {:>2}→{:<2} {:>9} {:>6.2} {:>5} {:>4} {:>4} {:>4} {:>4} {:>4} {:>5.1} {:>6}  {}", seed, 100.0 * land_frac, 100.0 * desert, 100.0 * forest, 100.0 * mtn, li.n, w.deposits.len(), setts0, w.peoples.settlements.len(), pop1, growth, era, arts, log.strikes, log.camps, log.wars, w.routes.len(), evyr, gen_ms, flags);
 
-        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags, sundered: log.peoples_rose, iced, ice_bad, mons: mons_lanes, mons_bad });
+        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags, sundered: log.peoples_rose, iced, ice_bad, mons: mons_lanes, mons_bad, mons_fam: w.famine_ledger.iter().filter(|r| r.monsoon).count() });
     }
 
     let n = rows.len() as f64;
@@ -9641,8 +11091,18 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         // but famine must stay an event, not a climate.
         let famine_seeds = rows.iter().filter(|r| r.famines > 0).count();
         c.want("famine strikes somewhere (≥60% of seeds)", famine_seeds * 10 >= rows.len() * 6, format!("{}/{}", famine_seeds, rows.len()), "M2.6: failed rains have a price");
-        let worst_fam = rows.iter().map(|r| r.famines as f64 * 100.0 / years as f64).fold(0.0f64, f64::max);
-        c.want("famine bounded (<150/century worst seed)", worst_fam < 150.0, format!("{:.0}/century", worst_fam), "M2.6: hunger is a visitation, not the weather");
+        // M92 — the two famine classes bound separately: the paddies' own
+        // cadence gets the band's hard ceiling (per-place return is gated in
+        // civ). The rain-fed ceiling is recalibrated for the coupled world:
+        // monsoon famines walk migrants into kin-towns (the M2.6 law in
+        // famine.rs), pumping the rain-fed margins — counterfactually
+        // measured on seed 90210/100y: 114/c with the paddies inert, 166/c
+        // with them live (+52/c of coupling, all through migration). The
+        // per-place M82 return envelope stays the real teeth.
+        let worst_fam = rows.iter().map(|r| r.famines.saturating_sub(r.mons_fam) as f64 * 100.0 / years as f64).fold(0.0f64, f64::max);
+        c.want("famine bounded (<190/century worst seed)", worst_fam < 190.0, format!("{:.0}/century", worst_fam), "M2.6: hunger is a visitation, not the weather — ceiling carries the M92 migration coupling (measured 166 coupled · 114 uncoupled on the worst seed)");
+        let worst_mf = rows.iter().map(|r| r.mons_fam as f64 * 100.0 / years as f64).fold(0.0f64, f64::max);
+        c.want("monsoon famine bounded (<220/century worst seed)", worst_mf < 220.0, format!("{:.0}/century", worst_mf), "M92: the paddies' verdict is a visitation too, never the weather");
     }
     // M2.3 across seeds: mean rank-size slope where measurable
     let zipfs: Vec<f64> = rows.iter().map(|r| r.zipf).filter(|z| z.is_finite()).collect();
@@ -10897,6 +12357,12 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
     // A system is SERIAL if it writes Peoples or draws the RNG: the single
     // PCG stream is a total order — determinism law makes it unsplittable.
     const ACCESS: &[(&str, &str, bool)] = &[
+        // M90: solved threshold crossings on the composed forcing write
+        // the crops grid and speak into the chronicle; no die, no Peoples.
+        ("fields", "G·C", false),
+        // M91 — ice: walks the GLACIER bit from the composed forcing.
+        // Grids only — no RNG, no Peoples, no chronicle.
+        ("ice", "G", false),
         ("towns", "P·R", true),
         // M80: pure seed×cell×year mapping writes only the drought ledger
         // and emits its onset event; it neither touches Peoples nor draws RNG.
@@ -10905,6 +12371,9 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
         // no die is rolled — but it takes souls off the town and writes the
         // chronicle, so it stands on the serial side with the rest.
         ("flood", "F·P·C", true),
+        // M86 — pure chronicle: reads the derived schedule, writes events
+        // only, draws no die. Parallel-safe by construction.
+        ("ages", "C", false),
         ("famine", "P·R", true),
 
         // Q=seismic ledger (own stream). M24: the effects pass also
@@ -10939,6 +12408,10 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
         ("second-reading", "C", false),
         ("veil", "C", false),
         ("heat", "–", false),
+        // M89 — margins: rewrites the route ledger's ice calendars (the
+        // web the economy reads) from the composed forcing. No RNG, no
+        // Peoples — parallel-safe; E for the shared trade/economy web.
+        ("margins", "E", false),
     ];
 
     let mut w = World::generate(seed, size);
@@ -11165,7 +12638,7 @@ fn cmd_teleconnection(size: usize, years: i64, seeds: Vec<i64>) {
                 // unforced twin is tilt + belt, and any residual beyond
                 // that pair is still a second mechanism hiding.
                 let expect = calliope::climate::teleconnection_bias(osc, lat_of(y, rows))
-                    + calliope::climate::belt_anomaly(lat_of(y, rows), w.year_drift(year));
+                    + calliope::climate::belt_anomaly(lat_of(y, rows), w.year_forcing(year));
                 resid_max = resid_max.max((a - b - expect).abs());
             }
             ns.push(belt_mean(&dp, &north));

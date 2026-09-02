@@ -95,7 +95,60 @@ pub struct FamineRow {
     /// the toll: struck = dead + walked
     pub hit: i64,
     pub dead: i64,
+    /// M92 — true when the verdict was the monsoon's, not the SPI's
+    pub monsoon: bool,
+    /// M92 — the monsoon-strength index the pass read (1.0 = a normal
+    /// year); 0.0 on SPI rows, which never consult it
+    pub msi: f64,
 }
+
+/// M90 — one row per yearly fields pass whose forcing moved: what the
+/// margin did that year, measured at the mechanism. Diagnostics-only
+/// observation; never hashed, never packed.
+#[derive(Clone, Copy, Debug)]
+pub struct FieldsRow {
+    /// calendar year of the pass
+    pub year: i64,
+    /// the composed forcing the pass applied, °C
+    pub f: f64,
+    /// ledger cells flipped to farmable this pass
+    pub opened: usize,
+    /// ledger cells flipped back to wildland this pass
+    pub shut: usize,
+    /// dawn-wildland ledger cells farming after the pass
+    pub open_now: usize,
+    /// all ledger cells farming after the pass
+    pub farm_now: usize,
+}
+
+/// M91 — one row per yearly ice pass that moved the edge: the year,
+/// the forcing read, the flips taken, and the law's whole extent
+/// after — the atlas's extent snapshots. Diagnostics-only
+/// observation; never hashed, never packed.
+#[derive(Clone, Copy, Debug)]
+pub struct IceRow {
+    /// calendar year of the pass
+    pub year: i64,
+    /// the composed forcing the pass applied, °C
+    pub f: f64,
+    /// glacier extent after the pass, cells (stable core + margin)
+    pub extent: u64,
+    /// margin cells the ice took this pass
+    pub advanced: usize,
+    /// margin cells the ice gave back this pass
+    pub retreated: usize,
+}
+
+/// M90 — a town claims margin flips within this many cells of itself:
+/// twice the work radius of a grown town, the day's walk to an upland
+/// field.
+pub const FIELDS_TOWN_REACH: f64 = 6.0;
+/// M90 — the fewest one-way flips a town's margin must gather in one
+/// pass before the chronicle speaks of that town.
+pub const FIELDS_EVENT_MIN: usize = 3;
+/// M90 — the fewest one-way flips a pass must gather for the world row.
+pub const FIELDS_WORLD_MIN: usize = 8;
+
 
 /// M79 diagnostics: one direct-harbour landfall considered for permanent
 /// felling, with the local empirical evidence the exceptionality rule read.
@@ -198,6 +251,12 @@ pub struct World {
     pub flows: resources::Flows,
     /// Years each route has gone without realized flow (M9.4).
     route_idle: Vec<u16>,
+    /// M89 — the forcing the route ice calendars were last frozen under,
+    /// and the route count at that freeze: the Margins system refreezes
+    /// only when either moved. Bookkeeping, never hashed or packed —
+    /// the calendars themselves are the state.
+    pub(crate) margins_dt: f64,
+    pub(crate) margins_web: u64,
     /// M6.4 — narrative heat: decaying sum of the month's weighted events;
     /// quiet years reach for omens, loud years let the wars speak.
     pub(crate) heat: f64,
@@ -229,6 +288,10 @@ pub struct World {
     /// several adjacent years in one tick, and a one-slot memo would
     /// thrash the walk. One f64 per simulated year — bounded and tiny.
     pub(crate) year_drift_memo: std::sync::Mutex<BTreeMap<i64, f64>>,
+    /// M86 — the cold-age schedule: multidecadal winters drawn once from
+    /// the seed. Derived law like the drift (ADR-0003): never stored,
+    /// hashed or packed; `year_forcing` composes it over the walk.
+    pub(crate) ages: crate::ages::Ages,
     /// M79 — the storm field, solved lazily the first time a month asks
     /// the coast what hit it. Frozen once built (pure in the finished
     /// climate), so the landfall ledger of any year can be re-derived.
@@ -254,6 +317,31 @@ pub struct World {
     /// who drowned, how deep, what the ground was given — are state, and
     /// ride the replay identity line.
     pub floods: crate::flood::Floods,
+    /// M90 — the margin ledger: every cell whose farmable verdict is a
+    /// single solved threshold on the composed forcing. Derived state —
+    /// a pure function of the dawn grids, regenerated bit-identically —
+    /// never hashed, never packed; the flips it drives land in
+    /// `fields.crops`, which is both.
+    pub fields_ledger: crate::agriculture::MarginLedger,
+    /// The forcing `fields.crops` currently stands at: bit-exact the
+    /// last value `fields_pass` applied. 0.0 is the dawn.
+    pub fields_sky: f64,
+    /// M90 — one row per yearly fields pass that moved anything: the
+    /// forcing read, the flips taken, the ledger's standing after.
+    /// Diagnostics observation, never hashed, never packed.
+    pub fields_log: Vec<FieldsRow>,
+    /// M91 — the ice-margin ledger: every cell whose glacier verdict
+    /// is a single solved threshold on the composed forcing. Derived
+    /// state — a pure function of the dawn grids, regenerated
+    /// bit-identically — never hashed, never packed; the flips it
+    /// drives land in `fields.flags`' GLACIER bit, which is both.
+    pub ice_ledger: crate::ice::IceLedger,
+    /// The forcing the GLACIER flags currently stand at: bit-exact
+    /// the last value `ice_pass` applied. 0.0 is the dawn.
+    pub ice_sky: f64,
+    /// M91 — one row per yearly ice pass that moved the edge: extent
+    /// snapshots for the atlas. Never hashed, never packed.
+    pub ice_log: Vec<IceRow>,
     /// M79 — local strike history at event strength, before an existing
     /// harbour wound is added. Permanent felling reads this ledger's
     /// empirical severe-hit return interval; bounded and deterministic.
@@ -353,6 +441,10 @@ pub struct GenBuilder {
     hydro: Option<hydrology::Hydrology>,
     biome_map: Option<Array2<u8>>,
     crops: Option<Array2<u8>>,
+    /// M90 — the margin ledger, solved beside the crop classification.
+    margins: Option<agriculture::MarginLedger>,
+    /// M91 — the ice-margin ledger, solved beside the modern mask.
+    ice_margin: Option<crate::ice::IceLedger>,
     // resting-width f32 fields (after the E3.2 drop)
     height: Option<Array2<f32>>,
     tmean: Option<Array2<f32>>,
@@ -410,6 +502,8 @@ impl GenBuilder {
             hydro: None,
             biome_map: None,
             crops: None,
+            margins: None,
+            ice_margin: None,
             height: None,
             tmean: None,
             tamp: None,
@@ -580,7 +674,23 @@ impl GenBuilder {
             self.pamp64.as_ref().unwrap(),
         );
         self.ice.as_mut().expect("glacial stage ran").modern = modern;
-        self.timings.push(("climate", now_ms() - t1));
+        // M91 — the ice-margin ledger: solved here, over the exact f64
+        // grids the modern mask was just stamped from, so the ledger's
+        // dawn verdict IS the mask. Timed as its own stage row so the
+        // climate budget stays the climate budget.
+        let tm = now_ms();
+        let ledger = crate::ice::ice_ledger(
+            self.water.as_ref().unwrap(),
+            self.tmean64.as_ref().unwrap(),
+            self.tamp64.as_ref().unwrap(),
+            self.precip64.as_ref().unwrap(),
+            self.pamp64.as_ref().unwrap(),
+            &self.ice.as_ref().unwrap().modern,
+        );
+        let icemargin_ms = now_ms() - tm;
+        self.ice_margin = Some(ledger);
+        self.timings.push(("climate", now_ms() - t1 - icemargin_ms));
+        self.timings.push(("icemargin", icemargin_ms));
     }
 
     #[inline(never)]
@@ -646,6 +756,7 @@ impl GenBuilder {
             self.plates.as_ref().unwrap(),
             &height32,
         );
+        let margin_ms;
         {
             let height = self.height64.as_ref().unwrap();
             let tmean = self.tmean64.as_ref().unwrap();
@@ -681,6 +792,17 @@ impl GenBuilder {
             );
             let crops =
                 agriculture::crop_packages(height, tmean, precip, &hydro.rivers, &hydro.lakes, &soil);
+            // M90 — the margin ledger, solved right here against the
+            // same grids the classification just read: every cell whose
+            // farmable verdict is a single threshold on the forcing.
+            // Timed as its own stage row so the fertility budget stays
+            // the fertility budget.
+            let tm = now_ms();
+            let margins = agriculture::margin_ledger(
+                height, tmean, precip, &hydro.rivers, &hydro.lakes, &soil, &crops,
+            );
+            margin_ms = now_ms() - tm;
+            self.margins = Some(margins);
             self.fertility = Some(fert.mapv(|x| x as f32));
             self.crops = Some(crops);
             // M54 — the water beneath: a steady-state Darcy head over
@@ -700,7 +822,8 @@ impl GenBuilder {
         }
         self.rock = Some(rock);
         self.height = Some(height32);
-        self.timings.push(("fertility", now_ms() - t4));
+        self.timings.push(("fertility", now_ms() - t4 - margin_ms));
+        self.timings.push(("margins", margin_ms));
 
 
         // E3.2 — the physical stages are done; the world's float grids
@@ -1124,6 +1247,8 @@ impl GenBuilder {
             rebuild_log: Vec::new(),
             scars: Vec::new(),
             route_idle: Vec::new(),
+            margins_dt: 0.0,
+            margins_web: 0,
             heat: 0.0,
             rng,
             taken,
@@ -1135,6 +1260,7 @@ impl GenBuilder {
             oscillation: crate::oscillation::Oscillation::new(seed),
             drift: crate::climate::Drift::new(seed),
             year_drift_memo: std::sync::Mutex::new(BTreeMap::new()),
+            ages: crate::ages::Ages::new(seed),
             storm_clim: None,
             storm_year: i64::MIN,
             storm_now: Vec::new(),
@@ -1142,6 +1268,12 @@ impl GenBuilder {
             storm_marks: Vec::new(),
             droughts: crate::drought::Droughts::default(),
             floods: crate::flood::Floods::default(),
+            fields_ledger: self.margins.take().expect("fertility stage ran"),
+            fields_sky: 0.0,
+            fields_log: Vec::new(),
+            ice_ledger: self.ice_margin.take().expect("climate stage ran"),
+            ice_sky: 0.0,
+            ice_log: Vec::new(),
             storm_bites: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             storm_fell_probe: Vec::new(),
@@ -1398,7 +1530,7 @@ impl World {
             cols,
             year,
             self.year_osc(year),
-            self.year_drift(year),
+            self.year_forcing(year),
         )
     }
 
@@ -1434,6 +1566,23 @@ impl World {
         &self.drift
     }
 
+    /// M86 — the cold-age schedule, for the harness: to gate the law
+    /// directly and to fold its probe into the replay identity line.
+    pub fn ages(&self) -> &crate::ages::Ages {
+        &self.ages
+    }
+
+    /// M86/M87 — the composed global forcing in `year`, °C on the
+    /// baseline `tmean`: the M83 drift plus the active age's ramped
+    /// offset — a winter cools it, an optimum warms it. This is the
+    /// single value the forced sky rides — every `year_anomaly` call
+    /// site that used to take the drift alone takes this instead, so an
+    /// age moves temperatures *and* walks the belts through one law,
+    /// not two.
+    pub fn year_forcing(&self, year: i64) -> f64 {
+        self.year_drift(year) + self.ages.offset(year)
+    }
+
 
 
     /// M71 — hand the caller the year's anomaly grids, computing them once
@@ -1464,7 +1613,7 @@ impl World {
                 cols,
                 year,
                 self.year_osc(year),
-                self.year_drift(year),
+                self.year_forcing(year),
             );
             let dq = crate::ndimage::gaussian_filter(&dp, climate::CATCHMENT_SIGMA);
             *slot = Some((year, dt, dp, dq));
@@ -1491,7 +1640,7 @@ impl World {
                 y,
                 year,
                 self.year_osc(year),
-                self.year_drift(year),
+                self.year_forcing(year),
             );
             (dt, dp, None)
         });
@@ -1515,7 +1664,7 @@ impl World {
                 y,
                 year,
                 self.year_osc(year),
-                self.year_drift(year),
+                self.year_forcing(year),
             );
             (dt, dp, None)
         });
@@ -1529,7 +1678,7 @@ impl World {
                 y,
                 year,
                 self.year_osc(year),
-                self.year_drift(year),
+                self.year_forcing(year),
             ));
         }
         entry.2.unwrap_or(0.0)
@@ -1704,6 +1853,20 @@ impl World {
         }
         let (h, w) = self.fields.height.dim();
         let p = pad as isize;
+
+        // M90 — the margin ledger's coordinates ride the same shift the
+        // interior takes: `pad` columns of open ocean enter west of x=0,
+        // and every solved cell keeps naming the same ground.
+        for c in self.fields_ledger.cells.iter_mut() {
+            c.x += pad as u32;
+        }
+
+        // M91 — the ice-margin ledger rides the same shift: every
+        // solved threshold keeps naming the same ground.
+        for c in self.ice_ledger.cells.iter_mut() {
+            c.x += pad as u32;
+        }
+
 
         /// Widen any copyable grid: interior cells shift east by `pad`,
         /// margin cells get `margin(edge_value, t)` with t rising 0→1
@@ -3342,7 +3505,7 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
                 )));
             }
             let seed = self.seed;
-            let drift = self.year_drift(year);
+            let drift = self.year_forcing(year);
             let clim = self.storm_clim.as_ref().expect("climatology solved");
             // M84 — the year's corridor is the drifted year's corridor.
             let next = clim.landfalls(seed, year, &self.fields.height, drift);
@@ -3912,7 +4075,7 @@ impl World {
                         y,
                         yr,
                         self.year_osc(yr),
-                        self.year_drift(yr),
+                        self.year_forcing(yr),
                     );
                     let z = dp / sigma;
                     // newest first
@@ -3958,7 +4121,7 @@ impl World {
                 // belts off a flank *is* that flank's drought, and the
                 // ledger must read the same sky the harvests felt.
                 climate::year_anomaly_at(
-                    self.variability(), rows, x, y, yr, self.year_osc(yr), self.year_drift(yr));
+                    self.variability(), rows, x, y, yr, self.year_osc(yr), self.year_forcing(yr));
             acc += w * dp / sigma;
             w *= MEM;
         }
@@ -3973,6 +4136,326 @@ impl World {
         let rows = self.fields.tmean.dim().0;
         let sigma = climate::anomaly_amp_p(row_lat(rows, y)).max(1e-6);
         self.year_rain_anomaly_site(year, y, x) / sigma
+    }
+
+    /// M92 — the monsoon-strength index at one cell in one year (1.0 =
+    /// a normal year): the composed sky's rain anomaly read against the
+    /// gale-grade monsoon scale, with the dawn's own `pamp` at the cell
+    /// as the lean. A riverine paddy (`catchment` = true) reads the
+    /// basin's sky — the exact gaussian the M81 floods read — because
+    /// the pulse that fills it is the monsoon over the whole catchment.
+    /// Pure in seed × cell × year either way.
+    pub fn monsoon_index(&self, year: i64, y: usize, x: usize, catchment: bool) -> f64 {
+        let (rows, cols) = self.fields.tmean.dim();
+        let lean = self.fields.pamp[[y, x]] as f64;
+        if catchment {
+            climate::monsoon_index_catchment(
+                self.variability(),
+                rows,
+                cols,
+                x,
+                y,
+                year,
+                self.year_osc(year),
+                self.year_forcing(year),
+                lean,
+            )
+        } else {
+            climate::monsoon_index(
+                self.variability(),
+                rows,
+                x,
+                y,
+                year,
+                self.year_osc(year),
+                self.year_forcing(year),
+                lean,
+            )
+        }
+    }
+
+    /// M90 — fields at the edge: the year's composed forcing walks the
+    /// margin ledger and the crops grid answers, before any town
+    /// harvests. Every flip is a solved threshold crossing — the pass
+    /// draws no die, and re-applying the same forcing is a no-op, so
+    /// `fields.crops` at any month is a pure function of seed × the
+    /// forcing history. Opens and failures gather into chronicle
+    /// entries: a town within reach claims its own margin; a year that
+    /// moves the world without a witness speaks with the world's voice.
+    pub(crate) fn fields_pass(&mut self, month_abs: i64) -> Vec<Event> {
+        let mut events = Vec::new();
+        if month_abs.rem_euclid(12) != 0 {
+            return events;
+        }
+        let year = month_abs.div_euclid(12);
+        let f = self.year_forcing(year);
+        if f == self.fields_sky {
+            return events;
+        }
+        let wild = agriculture::CropPackage::Wildland.code();
+        // (x, y) of every cell that opened / failed this pass.
+        let mut opened: Vec<(i64, i64)> = Vec::new();
+        let mut shut: Vec<(i64, i64)> = Vec::new();
+        for c in &self.fields_ledger.cells {
+            let want = c.code_at(f);
+            let cur = self.fields.crops[[c.y as usize, c.x as usize]];
+            if want == cur {
+                continue;
+            }
+            self.fields.crops[[c.y as usize, c.x as usize]] = want;
+            if cur == wild {
+                opened.push((c.x as i64, c.y as i64));
+            } else if want == wild {
+                shut.push((c.x as i64, c.y as i64));
+            }
+        }
+        self.fields_sky = f;
+        if opened.is_empty() && shut.is_empty() {
+            return events;
+        }
+
+        // The chronicle speaks where the change gathers: each living
+        // town within reach claims its nearest flips; a year that moved
+        // enough ground speaks the world row too.
+        let setts = &self.peoples.settlements;
+        let nearest = |x: i64, y: i64| -> Option<usize> {
+            let r2 = FIELDS_TOWN_REACH * FIELDS_TOWN_REACH;
+            let mut best = None;
+            let mut bd = r2 + 1.0;
+            for (i, s) in setts.iter().enumerate() {
+                if s.pop <= 0 {
+                    continue;
+                }
+                let d = ((s.x - x) as f64).powi(2) + ((s.y - y) as f64).powi(2);
+                if d <= r2 && d < bd {
+                    bd = d;
+                    best = Some(i);
+                }
+            }
+            best
+        };
+        let mut town_open: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut town_shut: BTreeMap<usize, usize> = BTreeMap::new();
+        for &(x, y) in &opened {
+            if let Some(i) = nearest(x, y) {
+                *town_open.entry(i).or_insert(0) += 1;
+            }
+        }
+        for &(x, y) in &shut {
+            if let Some(i) = nearest(x, y) {
+                *town_shut.entry(i).or_insert(0) += 1;
+            }
+        }
+        for (kind, tally) in [
+            (EventKind::Clearing, &town_open),
+            (EventKind::Abandon, &town_shut),
+        ] {
+            for (&si, &n) in tally {
+                if n < FIELDS_EVENT_MIN {
+                    continue;
+                }
+                let s = &self.peoples.settlements[si];
+                let ids: EventIds = self
+                    .chronicle
+                    .registry
+                    .find_alive(EntityKind::Settlement, s.x, s.y)
+                    .into_iter()
+                    .collect();
+                let text = if kind == EventKind::Clearing {
+                    format!(
+                        "The sky turns kind and the ploughs walk uphill: {} marginal fields open above {}.",
+                        n, s.name
+                    )
+                } else {
+                    format!(
+                        "The margin fails above {}: {} upland fields go back to the wild.",
+                        s.name, n
+                    )
+                };
+                events.push(Event {
+                    m: month_abs,
+                    s: s.name.clone(),
+                    k: kind,
+                    text,
+                    ids,
+                    x: s.x,
+                    y: s.y,
+                    ..Default::default()
+                });
+            }
+        }
+        let world_ids: EventIds = self
+            .chronicle
+            .registry
+            .find_kind(EntityKind::World, &self.world_name)
+            .into_iter()
+            .collect();
+        if opened.len() >= FIELDS_WORLD_MIN {
+            events.push(Event {
+                m: month_abs,
+                s: self.world_name.clone(),
+                k: EventKind::Clearing,
+                text: format!(
+                    "Across {} the long warmth opens {} fields at the edge of the plough-lands.",
+                    self.world_name,
+                    opened.len()
+                ),
+                ids: world_ids.clone(),
+                ..Default::default()
+            });
+        }
+        if shut.len() >= FIELDS_WORLD_MIN {
+            events.push(Event {
+                m: month_abs,
+                s: self.world_name.clone(),
+                k: EventKind::Abandon,
+                text: format!(
+                    "The cold takes {} marginal fields across {}, and the wild walks back down.",
+                    shut.len(),
+                    self.world_name
+                ),
+                ids: world_ids,
+                ..Default::default()
+            });
+        }
+        self.fields_log.push(FieldsRow {
+            year,
+            f,
+            opened: opened.len(),
+            shut: shut.len(),
+            open_now: self.fields_ledger.opened_at(f),
+            farm_now: self.fields_ledger.farmed_at(f),
+        });
+        events
+    }
+
+    /// M91 — the ice remembers time: the year's composed forcing walks
+    /// the ice-margin ledger and the GLACIER flag answers — advance in
+    /// the cold ages, retreat in the optima. Every flip is a solved
+    /// threshold crossing; the pass draws no die, re-applying the same
+    /// forcing is a no-op, and the base terrain is never touched — the
+    /// ice walks a flag, never the ground. Rows land in `ice_log`: the
+    /// atlas's extent snapshots.
+    pub(crate) fn ice_pass(&mut self, month_abs: i64) {
+        if month_abs.rem_euclid(12) != 0 {
+            return;
+        }
+        let year = month_abs.div_euclid(12);
+        let f = self.year_forcing(year);
+        if f == self.ice_sky {
+            return;
+        }
+        let bit = CellFlags::GLACIER.bits();
+        let mut advanced = 0usize;
+        let mut retreated = 0usize;
+        for c in &self.ice_ledger.cells {
+            let want = c.frozen_at(f);
+            let cur = self.fields.flags[[c.y as usize, c.x as usize]] & bit != 0;
+            if want == cur {
+                continue;
+            }
+            if want {
+                self.fields.flags[[c.y as usize, c.x as usize]] |= bit;
+                advanced += 1;
+            } else {
+                self.fields.flags[[c.y as usize, c.x as usize]] &= !bit;
+                retreated += 1;
+            }
+        }
+        self.ice_sky = f;
+        if advanced == 0 && retreated == 0 {
+            return;
+        }
+        self.ice_log.push(IceRow {
+            year,
+            f,
+            extent: self.ice_ledger.extent_at(f),
+            advanced,
+            retreated,
+        });
+    }
+
+    /// M86/M87/M88 — the year the sky turns: if the schedule dates an
+    /// onset or a release to this year, the chronicle speaks it —
+    /// exactly once, in the year's first month, before any harvest
+    /// reads the changed sky. The subject is the age's own christened
+    /// name (M88), so onset and release bind to one remembered thing;
+    /// the world's entity id owns both entries: an age belongs to
+    /// everyone. A winter speaks as `Age` (fortune falling), an optimum
+    /// as `Optimum` (fortune rising).
+    pub(crate) fn ages_pass(&mut self, month_abs: i64) -> Vec<Event> {
+        let mut events = Vec::new();
+        if month_abs.rem_euclid(12) != 0 {
+            return events;
+        }
+        let year = month_abs.div_euclid(12);
+        let subject = self
+            .chronicle
+            .registry
+            .find_kind(EntityKind::World, &self.world_name);
+        if let Some(i) = self.ages.arcs().iter().position(|a| a.onset == year) {
+            let a = self.ages.arcs()[i];
+            let name = self.ages.name(i).to_string();
+            let (k, text) = if a.warm {
+                (
+                    EventKind::Optimum,
+                    format!(
+                        "The sky turns kind over {}: the summers lengthen, the snows draw back, and the chroniclers set down the first of {}.",
+                        self.world_name, name
+                    ),
+                )
+            } else {
+                (
+                    EventKind::Age,
+                    format!(
+                        "The sky forgets the sun: a great winter settles over {}, and the chroniclers, shivering, give it its name — {}.",
+                        self.world_name, name
+                    ),
+                )
+            };
+            events.push(Event {
+                m: month_abs,
+                s: name,
+                k,
+                text,
+                ids: subject.iter().copied().collect(),
+                ..Default::default()
+            });
+        }
+        if let Some(i) = self.ages.arcs().iter().position(|a| a.release == year) {
+            let a = self.ages.arcs()[i];
+            let name = self.ages.name(i).to_string();
+            let (k, text) = if a.warm {
+                (
+                    EventKind::Optimum,
+                    format!(
+                        "After {} years {} closes over {}, and the uplands are let go to the frost, field by field.",
+                        a.duration(),
+                        name,
+                        self.world_name
+                    ),
+                )
+            } else {
+                (
+                    EventKind::Age,
+                    format!(
+                        "After {} years {} loosens its grip on {}, and the high pastures open again.",
+                        a.duration(),
+                        name,
+                        self.world_name
+                    ),
+                )
+            };
+            events.push(Event {
+                m: month_abs,
+                s: name,
+                k,
+                text,
+                ids: subject.iter().copied().collect(),
+                ..Default::default()
+            });
+        }
+        events
     }
 
     /// M80 — the yearly mapping pass: read the index over the lattice,
@@ -4097,7 +4580,7 @@ impl World {
         let osc = self.year_osc(year);
         // M84 — the belt rides `dp`; the map must show the drought the
         // index (and the harvests) actually felt.
-        let drift = self.year_drift(year);
+        let drift = self.year_forcing(year);
         let mut z = vec![0.0f32; d.rows * d.cols];
         for cy in 0..d.rows {
             let y = cy * STRIDE;

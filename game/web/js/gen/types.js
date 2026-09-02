@@ -37,6 +37,7 @@
  * @property {number} seed
  * @property {Array<{coastal: boolean, connections: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, quarry: string, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} settlements
  * @property {number} size
+ * @property {number} sky
  * @property {Array<number>} territory
  * @property {Array<unknown>} wars
  * @property {number} width
@@ -62,6 +63,7 @@
  * @property {Array<{a: number, b: number, closed?: number, cost: number, goods: Array<string>, m: Array<number>, path: Array<Array<number>>, ramp: number, sea: number, season?: number, shut?: Array<{ice?: number, monsoon?: number}>, w: number}>} [routes]
  * @property {Array<Array<number | null>>} s_hot
  * @property {Array<{coastal: boolean, connections: number, ety: string, exports: string, failing: boolean, food: number, fort: number, goods: Array<string>, id: number, k: number, name: string, namer: number, people: number, pop: number, port: boolean, quarry: string, realm: number, river: boolean, tier: string, wealth: number, x: number, y: number}>} [settlements]
+ * @property {number} [sky]
  * @property {Array<number>} [territory]
  * @property {Array<{a: number, b: number, ent: number, name: string, score: number, start: number, until: number}>} [wars]
  */

@@ -224,14 +224,18 @@ export function buildSatellite(R) {
 }
 
 export function monthTemp(R, month) {
+  // M89 — the sky offset rides the month temperature: snowline, pack
+  // edge and the temperature lens all breathe with the age.
+  const sky = R.sky || 0;
   const m = ((month % 12) + 12) % 12;
-  if (R.tmonthCache.has(m)) return R.tmonthCache.get(m);
+  const key = m + "|" + Math.round(sky * 100);
+  if (R.tmonthCache.has(key)) return R.tmonthCache.get(key);
   const { tmean, tamp } = R.world.arrays;
   const c = Math.cos((2 * Math.PI * m) / 12);
   const out = new Float32Array(tmean.length);
-  for (let i = 0; i < tmean.length; i++) out[i] = tmean[i] + tamp[i] * c;
+  for (let i = 0; i < tmean.length; i++) out[i] = tmean[i] + tamp[i] * c + sky;
   if (R.tmonthCache.size > 12) R.tmonthCache.clear();
-  R.tmonthCache.set(m, out);
+  R.tmonthCache.set(key, out);
   return out;
 }
 
@@ -466,10 +470,16 @@ export function tintRgba(R, version) {
 
 export function composite(R, state) {
   const { layer, overlays, month, version } = state;
+  // M89 — the composed forcing (°C): the margins breathe on the CPU
+  // fallback too. It keys the cache, shifts the month temperature and
+  // the cold dress below, exactly the wgpu shader's law.
+  const sky = state.sky || 0;
+  R.sky = sky;
   const monthDependent = layer === "temperature" || overlays.snow;
   const base = [
     layer, overlays.rivers, overlays.snow, overlays.hillshade,
     monthDependent ? ((month % 12) + 12) % 12 : "-",
+    Math.round(sky * 100),
   ].join("|");
   const vKey = layer === "political" ? version
     : layer === "culture" ? "p" + (R.peoplesEpoch || 0) : "-";
@@ -601,7 +611,7 @@ export function composite(R, state) {
           r = gc[0] + (ac[0] - gc[0]) * arid;
           g = gc[1] + (ac[1] - gc[1]) * arid;
           b = gc[2] + (ac[2] - gc[2]) * arid;
-          const chill = Math.min(1, Math.max(0, (-2 - tmean[i]) / 14)) * 0.85;
+          const chill = Math.min(1, Math.max(0, (-2 - (tmean[i] + sky)) / 14)) * 0.85;
           const h01 = Math.min(1, Math.max(0, h));
           r += (153 + 84 * h01 - r) * chill;
           g += (163 + 77 * h01 - g) * chill;

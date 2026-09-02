@@ -85,6 +85,7 @@ pub fn all_bands() -> impl Iterator<Item = &'static Band> {
         .chain(crate::plates::BANDS)
         .chain(crate::rock::BANDS)
         .chain(crate::climate::BANDS)
+        .chain(crate::ages::BANDS)
         .chain(crate::biomes::BANDS)
         .chain(crate::agriculture::BANDS)
         .chain(crate::drought::BANDS)

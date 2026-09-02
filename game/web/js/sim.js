@@ -13,7 +13,7 @@ import {
 import {
   world, setWorld, setSettlements, setCultures, setRealms, setCivs, setWars,
   setEvents, events,
-  setRuins, month, setMonth, playing, setPlaying, speed, worldSize,
+  setRuins, month, setMonth, setSky, playing, setPlaying, speed, worldSize,
   setBusy, setSelection, market, setMarket, setAreas, setMerchants,
   setDepositsTick, setMarketTick, pushToast, setSeenEvents,
   setStories, setEntities, setArtifacts, notif,
@@ -103,6 +103,7 @@ function applyWorld(w, { fit = true } = {}) {
   batch(() => {
     setWorld(w);
     setMonth(w.header.month || 0);
+    setSky(w.header.sky || 0);
     ctx.version.n++;
     setEvents(w.header.events || []);
     setSeenEvents((w.header.events || []).length);
@@ -172,6 +173,8 @@ export async function advance(months) {
     // per setter.
     batch(() => {
       setMonth(res.month);
+      // M89 — the sky scalar crosses only when it moved (E4.2)
+      if (res.sky !== undefined) setSky(res.sky);
       // Tick v2 (E4.2): settlements arrive as a delta — merge by id into the
       // array we hold, drop the gone, append the newly founded in order.
       if (res.settlements || res.settlements_gone || res.s_hot) {

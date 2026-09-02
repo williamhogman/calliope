@@ -1429,3 +1429,156 @@ pub fn modern_glaciers(
     }
     out
 }
+
+// ============================================================== M91
+
+/// M91 — the ice remembers time: how far (°C of composed forcing)
+/// the margin ledger reaches on either side of the dawn. Beyond the
+/// reach a cell's verdict never flips inside any age the schedule can
+/// legally compose (M83 walls at ±3 °C are excursion bounds the
+/// realized sky brushes, not lives at).
+pub const ICE_REACH: f64 = 2.5;
+/// Threshold resolution, °C — 2⁻⁸ ≈ 4 mK · 3: forcing moves in far
+/// larger steps than the bisection's final bracket.
+pub const ICE_TOL: f64 = 1.0 / 256.0;
+
+/// One margin cell: the solved crossing. Frozen at forcing `f` iff
+/// `f <= dt` — colder skies keep the ice, warmer skies take it.
+#[derive(Clone, Copy, Debug)]
+pub struct IceMarginCell {
+    pub y: u32,
+    pub x: u32,
+    /// The warmest composed forcing (°C) at which this cell still
+    /// holds ice, solved to `ICE_TOL`.
+    pub dt: f64,
+}
+
+impl IceMarginCell {
+    #[inline]
+    pub fn frozen_at(&self, f: f64) -> bool {
+        f <= self.dt
+    }
+}
+
+/// M91 — the ice-margin ledger. Every land cell whose glacier verdict
+/// flips somewhere inside ±`ICE_REACH` °C carries its balance-zero
+/// crossing, solved once at the dawn by bisection on the very law the
+/// modern mask was stamped from (`climate::ice_balance`, M34). Cells
+/// frozen across the whole reach are the stable core and stay stamped
+/// forever; cells bare across it are never touched. Derived state — a
+/// pure function of the dawn grids, regenerated bit-identically every
+/// generation — never hashed, never packed; the flips it drives land
+/// in `fields.flags`' GLACIER bit, which is both.
+pub struct IceLedger {
+    /// The flip cells, row-major dawn order — deterministic.
+    pub cells: Vec<IceMarginCell>,
+    /// Land cells frozen across the whole reach: the stable core,
+    /// stamped at the dawn and never walked.
+    pub stable: u32,
+    /// Cells whose endpoint verdicts defy the law's monotonicity or
+    /// whose solved threshold disagrees with the dawn mask — always
+    /// 0; counted, never hidden, gated in the climate lane.
+    pub inconsistent: u32,
+}
+
+impl IceLedger {
+    pub fn empty() -> Self {
+        IceLedger {
+            cells: Vec::new(),
+            stable: 0,
+            inconsistent: 0,
+        }
+    }
+
+    /// Ledger cells frozen under forcing `f`.
+    pub fn frozen_at(&self, f: f64) -> usize {
+        self.cells.iter().filter(|c| c.frozen_at(f)).count()
+    }
+
+    /// The law's whole extent under forcing `f`, cells: the stable
+    /// core plus the margin's verdicts.
+    pub fn extent_at(&self, f: f64) -> u64 {
+        self.stable as u64 + self.frozen_at(f) as u64
+    }
+}
+
+/// Solve the ledger over the pre-widen f64 grids — the same inputs,
+/// in the same order, `modern_glaciers` just read. The bisection
+/// bracket is seeded at 0.0, so the dawn's own verdict is always an
+/// endpoint and `frozen_at(0.0)` cannot disagree with the stamped
+/// mask (`t + 0.0 ≡ t` in IEEE — the M89 argument exactly).
+pub fn ice_ledger(
+    water: &Array2<bool>,
+    tmean: &Array2<f64>,
+    tamp: &Array2<f64>,
+    precip: &Array2<f64>,
+    pamp: &Array2<f64>,
+    modern: &Array2<f32>,
+) -> IceLedger {
+    let (rows, cols) = water.dim();
+    let mut cells = Vec::new();
+    let mut stable = 0u32;
+    let mut inconsistent = 0u32;
+    for y in 0..rows {
+        for x in 0..cols {
+            if water[[y, x]] {
+                continue;
+            }
+            let (t, ta, p, pa) = (
+                tmean[[y, x]],
+                tamp[[y, x]],
+                precip[[y, x]],
+                pamp[[y, x]],
+            );
+            let frozen = |f: f64| crate::climate::ice_balance(t + f, ta, p, pa) > 0.0;
+            let cold = frozen(-ICE_REACH);
+            let warm = frozen(ICE_REACH);
+            if cold && warm {
+                stable += 1;
+                continue;
+            }
+            if !cold && !warm {
+                continue;
+            }
+            if !cold && warm {
+                // Warmth grows ice? The balance law is monotone in
+                // temperature; this never happens — and is never
+                // hidden if it somehow does.
+                inconsistent += 1;
+                continue;
+            }
+            // The crossing lives in (−REACH, +REACH); seed the bracket
+            // at the dawn so its verdict is an endpoint, then bisect
+            // the half that holds the crossing. `lo` stays frozen,
+            // `hi` stays bare — dt = lo is the warmest frozen forcing.
+            let (mut lo, mut hi) = if frozen(0.0) {
+                (0.0, ICE_REACH)
+            } else {
+                (-ICE_REACH, 0.0)
+            };
+            while hi - lo > ICE_TOL {
+                let mid = 0.5 * (lo + hi);
+                if frozen(mid) {
+                    lo = mid;
+                } else {
+                    hi = mid;
+                }
+            }
+            let dt = lo;
+            if (0.0 <= dt) != (modern[[y, x]] > 0.0) {
+                inconsistent += 1;
+                continue;
+            }
+            cells.push(IceMarginCell {
+                y: y as u32,
+                x: x as u32,
+                dt,
+            });
+        }
+    }
+    IceLedger {
+        cells,
+        stable,
+        inconsistent,
+    }
+}

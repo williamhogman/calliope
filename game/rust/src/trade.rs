@@ -895,6 +895,103 @@ pub fn route_entry(
     }
 }
 
+/// M89 — the pack-ice calendar one lane earns under forcing `dt`: the
+/// OR of `seaice::cell_mask` over every sailed sea cell of the path,
+/// masked to the year. This is the single freeze law — the dawn build
+/// and the live refreeze both speak it, and the civ lane reconciles the
+/// ledger against it directly.
+pub fn route_ice_mask(
+    r: &Route,
+    height: &Array2<f32>,
+    tmean: &Array2<f32>,
+    tamp: &Array2<f32>,
+    dt: f64,
+) -> u16 {
+    let (hh, ww) = tmean.dim();
+    let mut ice: u16 = 0;
+    for (p, &m) in r.path.iter().zip(r.m.iter()) {
+        if m == MODE_SEA
+            && p[0] >= 0
+            && p[1] >= 0
+            && (p[0] as usize) < ww
+            && (p[1] as usize) < hh
+            && height[[p[1] as usize, p[0] as usize]] < 0.0
+        {
+            ice |= crate::seaice::cell_mask(
+                tmean[[p[1] as usize, p[0] as usize]] as f64 + dt,
+                tamp[[p[1] as usize, p[0] as usize]] as f64,
+            );
+        }
+    }
+    ice & crate::seaice::MONTHS_MASK
+}
+
+/// A fingerprint of the web's identity — which lanes exist, by endpoint
+/// pair and path length — for the Margins system's change gate. A
+/// same-count swap (one lane dies, one is born, the same month) must
+/// not slip past the refreeze, so the count alone is not enough.
+pub fn web_fingerprint(routes: &[Route]) -> u64 {
+    let mut b: Vec<u8> = Vec::with_capacity(routes.len() * 24);
+    for r in routes {
+        b.extend_from_slice(&r.a.0.to_le_bytes());
+        b.extend_from_slice(&r.b.0.to_le_bytes());
+        b.extend_from_slice(&(r.path.len() as u64).to_le_bytes());
+    }
+    crate::util::fnv1a64(&b)
+}
+
+/// M89 — the margins respond: rewrite every route's pack-ice calendar
+/// under the year's composed forcing `dt` (°C on `tmean`, M83 drift +
+/// the M86 age's offset), by the same per-cell freeze law the dawn grid
+/// was built from — `seaice::cell_mask` on the sailed leg, SST damping
+/// and all — so a cold age lengthens the shut season and a warm optimum
+/// opens water the dawn never sailed. Monsoon closures are wind, not
+/// temperature: they stand unchanged. Returns how many routes' calendars
+/// moved; `dt = 0` is a proven no-op on dawn routes (the civ lane gates
+/// it), so the law nests the M37 bank exactly.
+pub fn refreeze_routes(
+    routes: &mut [Route],
+    height: &Array2<f32>,
+    tmean: &Array2<f32>,
+    tamp: &Array2<f32>,
+    dt: f64,
+) -> usize {
+    let mut changed = 0usize;
+    for r in routes.iter_mut() {
+        let ice = route_ice_mask(r, height, tmean, tamp, dt);
+        let old_ice = r
+            .shut
+            .iter()
+            .find_map(|s| match s {
+                SeasonalClosure::Ice(m) => Some(*m),
+                _ => None,
+            })
+            .unwrap_or(0);
+        if ice == old_ice {
+            continue;
+        }
+        let monsoon = r
+            .shut
+            .iter()
+            .find_map(|s| match s {
+                SeasonalClosure::Monsoon(m) => Some(*m),
+                _ => None,
+            })
+            .unwrap_or(0);
+        let mut shut = Vec::new();
+        if ice != 0 {
+            shut.push(SeasonalClosure::Ice(ice));
+        }
+        if monsoon != 0 {
+            shut.push(SeasonalClosure::Monsoon(monsoon));
+        }
+        r.shut = shut;
+        r.closed = ice | monsoon;
+        changed += 1;
+    }
+    changed
+}
+
 pub fn recount_connections(settlements: &mut [Settlement], routes: &[Route]) {
     let mut conn: HashMap<SettlementId, i64> = settlements.iter().map(|s| (s.id, 0)).collect();
     for r in routes {
