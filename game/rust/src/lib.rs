@@ -5,6 +5,7 @@
 //! `pack()` emits the same binary format the Python server used, so the
 //! client unpacker is unchanged.
 
+pub mod ages;
 pub mod agriculture;
 pub mod artifact;
 pub mod biomes;

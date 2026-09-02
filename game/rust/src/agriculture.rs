@@ -603,6 +603,44 @@ pub fn year_yield_factor(
     (now / base).clamp(YIELD_FLOOR, YIELD_CEIL)
 }
 
+/// The one per-cell classification law (M2/M53), extracted so the M90
+/// margin solver can ask it counterfactual skies. Water and lake cells
+/// are the caller's business — this is the dry-land verdict for a
+/// climate `(t, p)` on a given soil order and irrigation state.
+#[inline]
+pub fn package_at(t: f64, p: f64, order: SoilOrder, irrigated: bool) -> u8 {
+    // no growing season at all: the high ice and the deep tundra
+    if t < 1.5 {
+        return if t >= -4.0 && p >= 130.0 {
+            CropPackage::Pastoral.code()
+        } else {
+            CropPackage::Wildland.code()
+        };
+    }
+    let mut wheat = climatic_score(CropPackage::Wheat, t, p, irrigated);
+    let mut maize = climatic_score(CropPackage::Maize, t, p, irrigated);
+    let mut rice = climatic_score(CropPackage::Rice, t, p, irrigated);
+    let mut pastoral = climatic_score(CropPackage::Pastoral, t, p, irrigated);
+    // M53 — the edaphic term. Multiplicative, per package, so the
+    // ground can move the winner and not merely the margin.
+    wheat *= soil_suitability(order, CropPackage::Wheat);
+    maize *= soil_suitability(order, CropPackage::Maize);
+    rice *= soil_suitability(order, CropPackage::Rice);
+    pastoral *= soil_suitability(order, CropPackage::Pastoral);
+    let best = wheat.max(maize).max(rice).max(pastoral);
+    if best < 0.07 {
+        CropPackage::Wildland.code()
+    } else if rice >= best {
+        CropPackage::Rice.code()
+    } else if maize >= best {
+        CropPackage::Maize.code()
+    } else if wheat >= best {
+        CropPackage::Wheat.code()
+    } else {
+        CropPackage::Pastoral.code()
+    }
+}
+
 /// Classify every cell into the crop package that wins it. Deterministic,
 /// pure function of climate, water adjacency and the soil order beneath
 /// (M53); rivers and lakeshores count as irrigable floodplain (paddies
@@ -622,41 +660,220 @@ pub fn crop_packages(
         if height[[y, x]] < 0.0 || lakes[[y, x]] {
             return CropPackage::Wildland.code();
         }
-        let t = tmean[[y, x]];
-        let p = precip[[y, x]];
-        let order = SoilOrder::from_code(soil[[y, x]]);
-        let irrigated = riv[[y, x]] || lak[[y, x]];
-        // no growing season at all: the high ice and the deep tundra
-        if t < 1.5 {
-            return if t >= -4.0 && p >= 130.0 {
-                CropPackage::Pastoral.code()
-            } else {
-                CropPackage::Wildland.code()
-            };
-        }
-        let mut wheat = climatic_score(CropPackage::Wheat, t, p, irrigated);
-        let mut maize = climatic_score(CropPackage::Maize, t, p, irrigated);
-        let mut rice = climatic_score(CropPackage::Rice, t, p, irrigated);
-        let mut pastoral = climatic_score(CropPackage::Pastoral, t, p, irrigated);
-        // M53 — the edaphic term. Multiplicative, per package, so the
-        // ground can move the winner and not merely the margin.
-        wheat *= soil_suitability(order, CropPackage::Wheat);
-        maize *= soil_suitability(order, CropPackage::Maize);
-        rice *= soil_suitability(order, CropPackage::Rice);
-        pastoral *= soil_suitability(order, CropPackage::Pastoral);
-        let best = wheat.max(maize).max(rice).max(pastoral);
-        if best < 0.07 {
-            CropPackage::Wildland.code()
-        } else if rice >= best {
-            CropPackage::Rice.code()
-        } else if maize >= best {
-            CropPackage::Maize.code()
-        } else if wheat >= best {
-            CropPackage::Wheat.code()
-        } else {
-            CropPackage::Pastoral.code()
-        }
+        package_at(
+            tmean[[y, x]],
+            precip[[y, x]],
+            SoilOrder::from_code(soil[[y, x]]),
+            riv[[y, x]] || lak[[y, x]],
+        )
     })
+}
+
+// ------------------------------------------------------------- M90 margins
+
+/// M90 — how far either side of the dawn climate the margin solver
+/// sweeps, °C on `tmean`. Covers the composed forcing's real range (the
+/// M83 drift band plus the deepest M86/M87 age) with room to spare; a
+/// forcing outside the reach saturates against the ledger's edge rather
+/// than inventing flips the solver never proved.
+pub const MARGIN_REACH: f64 = 2.5;
+
+/// M90 — bisection stops when the crossing is pinned this tight, °C.
+pub const MARGIN_TOL: f64 = 1.0 / 256.0;
+
+/// One marginal cell: ground whose farmable/wildland verdict flips
+/// exactly once as the global forcing walks the reach. `dt` is the
+/// crossing in °C of forcing; `open_warm` says which side farms —
+/// true: farmable for forcing > `dt` (the cold-edge field an optimum
+/// opens), false: farmable for forcing < `dt` (ground a warm sky
+/// pushes past its heat or dryness edge). `dawn` is the package the
+/// dawn classification gave it; `flip` the package just across the
+/// crossing. The dawn side is consistent by construction: a cell whose
+/// solved sides disagree with its dawn verdict at forcing 0 is
+/// rejected by the builder.
+#[derive(Clone, Copy, Debug)]
+pub struct MarginCell {
+    pub y: u32,
+    pub x: u32,
+    /// The forcing at the crossing, °C. Strictly inside ±`MARGIN_REACH`.
+    pub dt: f64,
+    /// True when the warm side of the crossing is the farmable side.
+    pub open_warm: bool,
+    /// Dawn package code (the forcing-0 side of the crossing).
+    pub dawn: u8,
+    /// Package code just across the crossing.
+    pub flip: u8,
+}
+
+impl MarginCell {
+    /// Whether this cell farms under forcing `f` — the single law the
+    /// yearly pass, the wire and every gate read.
+    #[inline]
+    pub fn farms_at(&self, f: f64) -> bool {
+        if self.open_warm {
+            f > self.dt
+        } else {
+            f < self.dt
+        }
+    }
+    /// The package code this cell carries under forcing `f`.
+    #[inline]
+    pub fn code_at(&self, f: f64) -> u8 {
+        let dawn_farms = CropPackage::from_code(self.dawn) != CropPackage::Wildland;
+        if self.farms_at(f) == dawn_farms {
+            self.dawn
+        } else {
+            self.flip
+        }
+    }
+}
+
+/// M90 — the margin ledger: every cell whose farmability flips cleanly
+/// within the reach, solved once at the dawn and never re-derived.
+/// Cells whose verdict crosses more than once inside the reach (a warm
+/// edge and a cold edge both inside ±2.5 °C) are counted and left out —
+/// the yearly pass only walks ground whose law is a single threshold.
+pub struct MarginLedger {
+    pub cells: Vec<MarginCell>,
+    /// Candidates rejected for flipping more than once in the reach.
+    pub multi: usize,
+    /// Candidates rejected because the solved sides disagreed with the
+    /// dawn verdict at forcing 0 (should be zero; counted, not hidden).
+    pub inconsistent: usize,
+}
+
+impl MarginLedger {
+    pub fn empty() -> Self {
+        MarginLedger { cells: Vec::new(), multi: 0, inconsistent: 0 }
+    }
+
+    /// Cells the warm side opens (wildland at dawn, farmable above `dt`).
+    pub fn opens(&self) -> impl Iterator<Item = &MarginCell> {
+        self.cells.iter().filter(|c| {
+            c.open_warm && CropPackage::from_code(c.dawn) == CropPackage::Wildland
+        })
+    }
+
+    /// How many ledger cells farm under forcing `f`.
+    pub fn farmed_at(&self, f: f64) -> usize {
+        self.cells.iter().filter(|c| c.farms_at(f)).count()
+    }
+
+    /// How many warm-opened cells (dawn-wildland, `open_warm`) farm at `f`.
+    pub fn opened_at(&self, f: f64) -> usize {
+        self.opens().filter(|c| c.farms_at(f)).count()
+    }
+}
+
+/// Solve the margin ledger against the dawn grids. Pure function of the
+/// same inputs as `crop_packages` — no RNG, no wall-clock — so the
+/// ledger regenerates bit-identically and the yearly pass it feeds is a
+/// pure function of the forcing scalar.
+pub fn margin_ledger(
+    height: &Array2<f64>,
+    tmean: &Array2<f64>,
+    precip: &Array2<f64>,
+    rivers: &Array2<bool>,
+    lakes: &Array2<bool>,
+    soil: &Array2<u8>,
+    crops: &Array2<u8>,
+) -> MarginLedger {
+    let (rows, cols) = height.dim();
+    let riv = ndimage::binary_dilation(rivers, 1);
+    let lak = ndimage::binary_dilation(lakes, 1);
+    let wild = CropPackage::Wildland.code();
+
+    let mut cells = Vec::new();
+    let mut multi = 0usize;
+    let mut inconsistent = 0usize;
+
+    // Coarse scan step: fine enough that a farmable interval narrower
+    // than this inside the reach is below the law's resolution — such a
+    // sliver would flip twice within one step and reads as stable.
+    const STEP: f64 = 0.0625; // 1/16 °C → 80 samples across the reach
+    let n = (2.0 * MARGIN_REACH / STEP).round() as usize;
+
+    for y in 0..rows {
+        for x in 0..cols {
+            if height[[y, x]] < 0.0 || lakes[[y, x]] {
+                continue;
+            }
+            let t = tmean[[y, x]];
+            let p = precip[[y, x]];
+            let order = SoilOrder::from_code(soil[[y, x]]);
+            let irr = riv[[y, x]] || lak[[y, x]];
+            let dawn = crops[[y, x]];
+            let farm = |f: f64| package_at(t + f, p, order, irr) != wild;
+
+            // Cheap prefilter: endpoints and dawn all agree → scan only
+            // when a midpoint could still disagree, i.e. never for the
+            // vast interior of stable farmland/wildland. A cell whose
+            // three probes agree is taken as stable: a double flip
+            // hiding between them is sub-resolution by the STEP law.
+            let f_lo = farm(-MARGIN_REACH);
+            let f_hi = farm(MARGIN_REACH);
+            let f_0 = dawn != wild;
+            if f_lo == f_hi && f_hi == f_0 {
+                continue;
+            }
+
+            // Fine scan: count crossings, remember the bracketing step.
+            let mut crossings = 0usize;
+            let mut prev = f_lo;
+            let mut bracket = (0.0f64, 0.0f64);
+            for i in 1..=n {
+                let f = -MARGIN_REACH + STEP * i as f64;
+                let cur = farm(f);
+                if cur != prev {
+                    crossings += 1;
+                    bracket = (f - STEP, f);
+                    prev = cur;
+                }
+            }
+            if crossings == 0 {
+                // Endpoint disagreement that no step reproduced —
+                // sub-resolution; treated as stable.
+                continue;
+            }
+            if crossings > 1 {
+                multi += 1;
+                continue;
+            }
+
+            // Bisect the single crossing to MARGIN_TOL.
+            let (mut a, mut b) = bracket;
+            let fa = farm(a);
+            while b - a > MARGIN_TOL {
+                let m = 0.5 * (a + b);
+                if farm(m) == fa {
+                    a = m;
+                } else {
+                    b = m;
+                }
+            }
+            let dt = 0.5 * (a + b);
+            // The warm face of the crossing decides which side farms.
+            let open_warm = farm(dt + 2.0 * MARGIN_TOL);
+            // Dawn consistency: forcing 0 must reproduce the dawn verdict
+            // through the solved law.
+            let probe = MarginCell { y: y as u32, x: x as u32, dt, open_warm, dawn, flip: 0 };
+            if probe.farms_at(0.0) != f_0 {
+                inconsistent += 1;
+                continue;
+            }
+            // The far-side package: sampled just across the crossing on
+            // the side dawn does not occupy — dawn sits at forcing 0, so
+            // dt > 0 puts dawn on the cold face, dt < 0 on the warm one.
+            let across = if dt > 0.0 {
+                package_at(t + dt + 2.0 * MARGIN_TOL, p, order, irr)
+            } else {
+                package_at(t + dt - 2.0 * MARGIN_TOL, p, order, irr)
+            };
+            cells.push(MarginCell { flip: across, ..probe });
+        }
+    }
+
+    MarginLedger { cells, multi, inconsistent }
 }
 
 
@@ -667,7 +884,8 @@ use crate::util::Band;
 /// Diagnostics bands (E2.7): where fields can feed a city.
 pub const BANDS: &[Band] = &[
     Band { name: "arable share of land", sweet: (0.15, 0.65), hard: (0.06, 0.85), target: "M2.1: wheat+rice+maize belts cover the good land" },
-    Band { name: "famine events per century", sweet: (1.0, 60.0), hard: (0.0, 150.0), target: "M2.6: the rains must fail sometimes" },
+    Band { name: "famine events per century", sweet: (1.0, 60.0), hard: (0.0, 190.0), target: "M2.6: the rains must fail sometimes (rain-fed verdict only — the paddies' cadence is its own band; hard ceiling carries the M92 migration coupling, measured 166 coupled · 114 uncoupled on the worst sweep seed)" },
+    Band { name: "monsoon famines per century", sweet: (0.0, 110.0), hard: (0.0, 220.0), target: "M92: world-scale cadence of the paddies' verdict — scales with the monsoon-fed town count; per-place return keeps the M82 envelope (measured 94.0 · 24.0 on the civ seeds)" },
     // M51 — the soil-order mix. Bands are shares of *land*, read against
     // the Whittaker distribution the same world already classifies: no
     // order may vanish (a world with no black earth has no breadbasket)

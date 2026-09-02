@@ -22,6 +22,10 @@ impl World {
             "width": self.width,
             "height_cells": self.size,
             "month": self.month,
+            // M89 — the composed forcing at the header's month, so a
+            // client bootstrapping mid-history dresses the map under
+            // the sky the world is actually living.
+            "sky": crate::util::round2(self.year_forcing(self.month.div_euclid(12))),
             "months": constants::MONTHS,
             "sea_level": 0.0,
             "metres_per_unit": constants::METRES_PER_UNIT,

@@ -56,6 +56,10 @@ pub(crate) struct SentCache {
     /// (pack at dawn, then every shipped patch); tile diffs run against
     /// this, never against a guess.
     territory: ndarray::Array2<i16>,
+    /// M89 — the composed forcing as last shipped, at wire precision
+    /// (×100): the sky scalar crosses only when the value the client
+    /// can see has moved.
+    sky: i64,
 }
 
 impl World {
@@ -271,6 +275,12 @@ impl World {
         #[derive(Serialize)]
         struct Payload {
             month: i64,
+            /// M89 — the year's composed forcing (°C on the dawn mean,
+            /// M83 drift + the M86 age's offset), shipped only when its
+            /// wire-precision value moved: the renderer's snowline,
+            /// pack ice and tundra dress breathe with it.
+            #[serde(skip_serializing_if = "Option::is_none")]
+            sky: Option<f64>,
             /// Chronicle cursor [from, to): the client pulls the slice via
             /// `events_range` (E4.4) — event arrays left the tick payload.
             ev: [u64; 2],
@@ -608,8 +618,19 @@ impl World {
         };
 
         let dep = self.dirty.take(Dirty::DEPOSITS);
+        // M89 — the sky scalar: composed forcing at the current year,
+        // crossing only when the rounded value moved (E4.2 discipline).
+        let sky_now = round2(self.year_forcing(self.month.div_euclid(12)));
+        let sky_q = (sky_now * 100.0).round() as i64;
+        let sky = if sky_q != self.sent.sky {
+            self.sent.sky = sky_q;
+            Some(sky_now)
+        } else {
+            None
+        };
         let payload = Payload {
             month: self.month,
+            sky,
             ev: [ev_from as u64, ev_to as u64],
             headlines: heads,
             settlements: if changed.is_empty() {

@@ -4,7 +4,7 @@
 seam-invariant properties (M8.1) and metamorphic checks (M8.2)
 
 seed  12345: 5023 river cells · 0 uphill · 0 cycles · 0 dry terminals
-seed  12345: 19 towns · 30 routes · 0 isolated · 1 components
+seed  12345: 19 towns · 31 routes · 0 isolated · 1 components
 seed  12345: rain ×1.25 ⇒ river cells 5023 → 5911 · discharge 2082309 → 2732049
 seed  12345: hypsometry mean 932 m · below 1 km 58.9%
 seed  12345: streams (A_c 80 km²) N_k [8222, 1589, 351, 70, 11] · Rb 5.13
@@ -13,7 +13,7 @@ seed  12345: silt ladder ≥1/5/10 m: 36.8/4.6/2.20% of land · plain 449 bodies
 seed  12345: coast frontage 6245 cells · storied 47.7% · [raised beach 2205 · fjord 97 · tidal flat 65 · estuary 51 · delta plain 453 · spit 91 · barrier island 5 · lagoon 10] · shore 3268
 
 seed    777: 5033 river cells · 0 uphill · 0 cycles · 0 dry terminals
-seed    777: 18 towns · 22 routes · 0 isolated · 1 components
+seed    777: 17 towns · 20 routes · 0 isolated · 1 components
 seed    777: rain ×1.25 ⇒ river cells 5033 → 6129 · discharge 2130723 → 2749149
 seed    777: hypsometry mean 1014 m · below 1 km 50.2%
 seed    777: streams (A_c 80 km²) N_k [8603, 1691, 389, 94, 19, 1] · Rb 5.58
@@ -22,7 +22,7 @@ seed    777: silt ladder ≥1/5/10 m: 37.4/4.5/2.16% of land · plain 423 bodies
 seed    777: coast frontage 6570 cells · storied 52.5% · [raised beach 2791 · fjord 53 · tidal flat 37 · estuary 21 · delta plain 454 · spit 89 · barrier island 5 · lagoon 2] · shore 3118
 
 seed  90210: 5155 river cells · 0 uphill · 0 cycles · 0 dry terminals
-seed  90210: 19 towns · 26 routes · 0 isolated · 1 components
+seed  90210: 17 towns · 24 routes · 0 isolated · 1 components
 seed  90210: rain ×1.25 ⇒ river cells 5155 → 6055 · discharge 2108990 → 2649609
 seed  90210: hypsometry mean 861 m · below 1 km 59.8%
 seed  90210: streams (A_c 80 km²) N_k [8439, 1586, 333, 81, 16, 1] · Rb 5.62
@@ -31,7 +31,7 @@ seed  90210: silt ladder ≥1/5/10 m: 34.7/4.1/1.95% of land · plain 407 bodies
 seed  90210: coast frontage 6334 cells · storied 47.1% · [raised beach 2081 · fjord 166 · tidal flat 82 · estuary 93 · delta plain 460 · spit 84 · barrier island 10 · lagoon 8] · shore 3350
 
 seed  12345: 240 months of deltas · 19 towns replayed · 0 reships · 0 cursor breaks
-seed  12345: territory over 240 months · 11 full ships · 12 tile ships
+seed  12345: territory over 240 months · 10 full ships · 13 tile ships
 
 
 ---- checks ----------------------------------------------------------
@@ -39,12 +39,12 @@ seed  12345: territory over 240 months · 11 full ships · 12 tile ships
 [PASS] rivers reach an outlet (12345)                0 dry   (M8.1: sea, lake or salt basin)
 [PASS] no isolated settlement (12345)            0 cut off   (M8.1: every town trades)
 [PASS] route graph connected (12345)               1 comps   (M8.1: one world, one web)
-[PASS] pack is stable (12345)                    7176544 B   (M8.1: same world ⇒ same bytes)
-[PASS] pack v3 + crc32 (12345)                crc 9c61adbe   (E3.6: stamped and checksummed)
+[PASS] pack is stable (12345)                    7176924 B   (M8.1: same world ⇒ same bytes)
+[PASS] pack v3 + crc32 (12345)                crc 369a44ea   (E3.6: stamped and checksummed)
 [PASS] unpack layout sound (12345)               19 arrays   (M8.1: offsets contiguous, sizes exact)
 [PASS] raw sections bit-equal (12345)            bit-equal   (M8.1: arrays survive the wire)
 [PASS] quantization ≤ ε (12345)             worst 0.500·scale   (E3.4: quantized wire loses ≤ half a step)
-[PASS] territory RLE exact (12345)                975 runs   (E3.5: borders compress, nothing drifts)
+[PASS] territory RLE exact (12345)               1043 runs   (E3.5: borders compress, nothing drifts)
 [PASS] rain↑ ⇒ rivers not↓ (12345)             5023 → 5911   (M8.2: metamorphic monotonicity)
 [PASS] rain↑ ⇒ discharge↑ (12345)                    ×1.31   (M8.2: more water flows)
 [PASS] land below 1 km % (12345)                     58.9%   (M64: one seed is one continent — Earth's continents run ~50–95% under 1 km)
@@ -61,12 +61,12 @@ seed  12345: territory over 240 months · 11 full ships · 12 tile ships
 [PASS] rivers reach an outlet (777)                  0 dry   (M8.1: sea, lake or salt basin)
 [PASS] no isolated settlement (777)              0 cut off   (M8.1: every town trades)
 [PASS] route graph connected (777)                 1 comps   (M8.1: one world, one web)
-[PASS] pack is stable (777)                      7176688 B   (M8.1: same world ⇒ same bytes)
-[PASS] pack v3 + crc32 (777)                  crc 6f614356   (E3.6: stamped and checksummed)
+[PASS] pack is stable (777)                      7176484 B   (M8.1: same world ⇒ same bytes)
+[PASS] pack v3 + crc32 (777)                  crc fee0badc   (E3.6: stamped and checksummed)
 [PASS] unpack layout sound (777)                 19 arrays   (M8.1: offsets contiguous, sizes exact)
 [PASS] raw sections bit-equal (777)              bit-equal   (M8.1: arrays survive the wire)
 [PASS] quantization ≤ ε (777)               worst 0.500·scale   (E3.4: quantized wire loses ≤ half a step)
-[PASS] territory RLE exact (777)                  999 runs   (E3.5: borders compress, nothing drifts)
+[PASS] territory RLE exact (777)                  963 runs   (E3.5: borders compress, nothing drifts)
 [PASS] rain↑ ⇒ rivers not↓ (777)               5033 → 6129   (M8.2: metamorphic monotonicity)
 [PASS] rain↑ ⇒ discharge↑ (777)                      ×1.29   (M8.2: more water flows)
 [PASS] land below 1 km % (777)                       50.2%   (M64: one seed is one continent — Earth's continents run ~50–95% under 1 km)
@@ -83,12 +83,12 @@ seed  12345: territory over 240 months · 11 full ships · 12 tile ships
 [PASS] rivers reach an outlet (90210)                0 dry   (M8.1: sea, lake or salt basin)
 [PASS] no isolated settlement (90210)            0 cut off   (M8.1: every town trades)
 [PASS] route graph connected (90210)               1 comps   (M8.1: one world, one web)
-[PASS] pack is stable (90210)                    7177172 B   (M8.1: same world ⇒ same bytes)
-[PASS] pack v3 + crc32 (90210)                crc 00a36399   (E3.6: stamped and checksummed)
+[PASS] pack is stable (90210)                    7176784 B   (M8.1: same world ⇒ same bytes)
+[PASS] pack v3 + crc32 (90210)                crc 4bc246d8   (E3.6: stamped and checksummed)
 [PASS] unpack layout sound (90210)               19 arrays   (M8.1: offsets contiguous, sizes exact)
 [PASS] raw sections bit-equal (90210)            bit-equal   (M8.1: arrays survive the wire)
 [PASS] quantization ≤ ε (90210)             worst 0.500·scale   (E3.4: quantized wire loses ≤ half a step)
-[PASS] territory RLE exact (90210)               1101 runs   (E3.5: borders compress, nothing drifts)
+[PASS] territory RLE exact (90210)               1027 runs   (E3.5: borders compress, nothing drifts)
 [PASS] rain↑ ⇒ rivers not↓ (90210)             5155 → 6055   (M8.2: metamorphic monotonicity)
 [PASS] rain↑ ⇒ discharge↑ (90210)                    ×1.26   (M8.2: more water flows)
 [PASS] land below 1 km % (90210)                     59.8%   (M64: one seed is one continent — Earth's continents run ~50–95% under 1 km)
@@ -108,9 +108,9 @@ seed  12345: territory over 240 months · 11 full ships · 12 tile ships
 [PASS] sweep mean: floodplain %                      2.10%   (M64: Earth's mapped alluvium ≈2% of land; 100-yr belts ~7% (silt ≥10 m))
 [PASS] sweep mean: built belt %                       8.7%   (M64: Earth's drift-built belt ≈10% of open coast by length (Stutz & Pilkey 2011) — frontage census)
 [PASS] tick deltas replay to truth (12345)        19 towns   (E4.2: merge(bootstrap, deltas) = engine state)
-[PASS] market replays to truth (12345)            16 goods   (E4.3: merge(bootstrap, m_hot) = engine ledger)
+[PASS] market replays to truth (12345)            14 goods   (E4.3: merge(bootstrap, m_hot) = engine ledger)
 [PASS] area prices replay to truth (12345)          1 hubs   (E4.3: per-good hub patches rebuild the areas)
-[PASS] territory replays to truth (12345)   11 full · 12 tiles   (E4.7: full RLE and tile patches must leave the client's grid exactly the engine's)
+[PASS] territory replays to truth (12345)   10 full · 13 tiles   (E4.7: full RLE and tile patches must leave the client's grid exactly the engine's)
 [PASS] no unchanged section reships (12345)      0 reships   (E4.2/E4.3: a section crosses only when it moved)
-[PASS] event cursor tiles the log (12345)            → 277   (E4.4: ranges concatenate without gap or overlap)
+[PASS] event cursor tiles the log (12345)            → 338   (E4.4: ranges concatenate without gap or overlap)
 CHECKS: 72 pass · 6 warn · 0 fail

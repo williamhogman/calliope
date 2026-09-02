@@ -134,6 +134,7 @@ class GpuEngine {
       state.overlays.snow ? 1 : 0,
       state.overlays.hillshade ? 1 : 0,
       this.hasTint && tinted ? 1 : 0,
+      state.sky ?? 0, // M89 — the composed forcing, °C
     );
   }
 }

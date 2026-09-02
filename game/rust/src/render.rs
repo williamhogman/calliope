@@ -35,7 +35,7 @@ struct Uni {
   cam:  vec4<f32>,  // world-cell bounds of the viewport: left, right, top, bottom
   geo:  vec4<f32>,  // W, H, layer, month
   anim: vec4<f32>,  // time, rivers, snow, shade
-  opts: vec4<f32>,  // hasTint, shadeK, srgb, unused
+  opts: vec4<f32>,  // hasTint, shadeK, srgb, sky (M89 composed forcing °C)
 };
 
 @group(0) @binding(0) var<uniform> U: Uni;
@@ -228,21 +228,26 @@ fn sea_surface(p: vec2<f32>, h: f32, tmean: f32, coast: f32, t: f32, cpp: f32) -
 }
 
 fn land_surface(p: vec2<f32>, h: f32, clim: vec4<f32>, cpp: f32) -> vec3<f32> {
+  // M89 — the margins respond: the composed forcing (U.opts.w) shifts
+  // every temperature the dress reads, so a cold age greys the uplands
+  // toward tundra and an optimum greens them, live, without touching
+  // the dawn grids.
+  let tsky = clim.x + U.opts.w;
   let moist = clamp((clim.z - 130.0) / 1050.0, 0.0, 1.0);
-  let warm = clamp((clim.x + 9.0) / 27.0, 0.0, 1.0);
+  let warm = clamp((tsky + 9.0) / 27.0, 0.0, 1.0);
   let veg = clamp(clamp(moist * (0.3 + 0.7 * warm), 0.0, 1.0) * 0.8 + clim.w * 0.3, 0.0, 1.0);
   var col = veg_ramp(veg);
 
   // cold lands grey toward tundra, then pale into the ice sheet
-  let chill = clamp((4.0 - clim.x) / 16.0, 0.0, 1.0) * 0.65;
+  let chill = clamp((4.0 - tsky) / 16.0, 0.0, 1.0) * 0.65;
   col = mix(col, vec3<f32>(127.0, 117.0, 99.0) / 255.0, chill);
-  let frozen = clamp((-9.0 - clim.x) / 9.0, 0.0, 1.0);
+  let frozen = clamp((-9.0 - tsky) / 9.0, 0.0, 1.0);
   col = mix(col, vec3<f32>(213.0, 218.0, 224.0) / 255.0, frozen);
 
   // altitude: bare rock above the treeline, firn on the peaks
   let rock = clamp((h - 0.5) / 0.32, 0.0, 1.0) * 0.85;
   col = mix(col, vec3<f32>(118.0, 108.0, 98.0) / 255.0, rock);
-  let firn = clamp((h - 0.7) / 0.22, 0.0, 1.0) * clamp((8.0 - clim.x) / 18.0 + 0.2, 0.0, 1.0);
+  let firn = clamp((h - 0.7) / 0.22, 0.0, 1.0) * clamp((8.0 - tsky) / 18.0 + 0.2, 0.0, 1.0);
   col = mix(col, vec3<f32>(237.0, 240.0, 245.0) / 255.0, firn);
 
   // mottled canopy and field texture at four world scales, plus zoom-gated
@@ -282,7 +287,9 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
   let h = sample_h(p);
   let clim = sample_clim(p);
   let misc = sample_misc(p);
-  let tnow = clim.x + clim.y * cos(6.2831853 * month / 12.0);
+  // M89 — the current month's temperature under the composed forcing:
+  // the seasonal snowline and the pack edge breathe with the age.
+  let tnow = clim.x + U.opts.w + clim.y * cos(6.2831853 * month / 12.0);
   let coast = misc.w * 32.0;
   let land_m = smoothstep(-0.006, 0.006, h);
   // misc.z encodes standing water: 1 fresh lake, 0.55 salt flat, -1 wadi bed
@@ -302,7 +309,7 @@ fn fs(in: VOut) -> @location(0) vec4<f32> {
   var col = vec3<f32>(0.0);
 
   if (layer == 0 || layer == 1) {
-    let sea = sea_surface(p, h, clim.x, coast, t, cpp);
+    let sea = sea_surface(p, h, clim.x + U.opts.w, coast, t, cpp);
     let land = land_surface(p, h, clim, cpp);
     col = mix(sea, land, land_m);
     // lakes ride on top of land
@@ -887,6 +894,7 @@ impl Orbital {
         snow: u32,
         shade: u32,
         has_tint: u32,
+        sky: f32,
     ) {
         if self.bind.is_none() || px_w == 0 || px_h == 0 {
             return;
@@ -926,7 +934,7 @@ impl Orbital {
             has_tint as f32,
             shade_k,
             self.srgb,
-            0.0,
+            sky,
         ];
         self.queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&uni));
 

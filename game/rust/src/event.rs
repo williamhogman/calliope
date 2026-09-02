@@ -65,6 +65,20 @@ pub enum EventKind {
     /// M81 — the river that drowns and gives: a spate overtops the levees
     /// and leaves silt behind it. Appended last; wire discriminants hold.
     Flood,
+    /// M86 — the cold ages: a multidecadal winter settles or releases,
+    /// dated by the schedule the seed drew. Appended last; wire
+    /// discriminants hold.
+    Age,
+    /// M87 — the generous centuries: a warm optimum opens or closes,
+    /// dated by the same schedule. Appended last; wire discriminants
+    /// hold.
+    Optimum,
+    /// M90 — fields at the edge: a kind sky opens marginal ground to
+    /// the plough. Appended last; wire discriminants hold.
+    Clearing,
+    /// M90 — the margin fails: upland fields go back to the wild under
+    /// a cold sky. Appended last; wire discriminants hold.
+    Abandon,
 }
 
 impl EventKind {
@@ -124,6 +138,12 @@ event_table! {
     Eruption  => family nature,  weight 3, fortune -1;
     Drought   => family nature,  weight 3, fortune -1;
     Flood     => family nature,  weight 3, fortune -1;
+    Age       => family nature,  weight 4, fortune -1;
+    Optimum   => family nature,  weight 4, fortune 1;
+    // M90 — fields at the edge: the margin opens under a kind sky…
+    Clearing  => family nature,  weight 2, fortune 1;
+    // …and fails under a cold one. Appended last: wire codes are stable.
+    Abandon   => family nature,  weight 2, fortune -1;
 }
 
 /// E5.5 — inline storage for the common 0–2 entity ids per event.
@@ -177,6 +197,8 @@ pub fn headline_worthy(k: EventKind) -> bool {
             | EventKind::Quake
             | EventKind::Eruption
             | EventKind::Drought
+            | EventKind::Age
+            | EventKind::Optimum
     )
 }
 

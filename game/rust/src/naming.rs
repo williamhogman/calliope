@@ -1204,6 +1204,51 @@ pub fn exonym_pass(
     out
 }
 
+// ---------------------------------------------------- the named ages (M88)
+
+/// M88 — the winter bank's adjectives. A christening composes as
+/// "The {adjective} {noun}"; 16 × 12 = 192 combinations, above the
+/// hardest winter count the M86 cadence wall admits over the 30 000 y
+/// horizon (4.4 per millennium ⇒ 132), so world-wide uniqueness never
+/// runs dry. Disjoint from the warm adjectives: no full name can ever
+/// compose in both registers.
+pub const AGE_WINTER_ADJ: [&str; 16] = [
+    "Long", "Iron", "Black", "White", "Grey", "Bitter", "Silent", "Starving",
+    "Sunless", "Wolf", "Blue", "Deep", "Hungry", "Pale", "Old", "Crow",
+];
+/// M88 — the winter bank's nouns.
+pub const AGE_WINTER_NOUN: [&str; 12] = [
+    "Winter", "Frost", "Snows", "Cold", "Freeze", "Chill",
+    "Dark", "Ice", "Fast", "Years", "Night", "Sleep",
+];
+/// M88 — the warm bank's adjectives: 12 × 9 = 108 combinations against
+/// a hard-wall maximum of 84 optima to the horizon.
+pub const AGE_WARM_ADJ: [&str; 12] = [
+    "Wine", "Honey", "Golden", "Green", "Bright", "Gentle",
+    "High", "Sweet", "Laughing", "Amber", "Kind", "Open",
+];
+/// M88 — the warm bank's nouns.
+pub const AGE_WARM_NOUN: [&str; 9] = [
+    "Years", "Summers", "Seasons", "Harvests", "Calm", "Plenty",
+    "Bloom", "Peace", "Sun",
+];
+
+/// M88 — the bank an age draws from: winters keep their own register
+/// and the optima theirs — "The Long Winter" can never be mistaken for
+/// "The Wine Years".
+pub fn age_bank(warm: bool) -> (&'static [&'static str], &'static [&'static str]) {
+    if warm {
+        (&AGE_WARM_ADJ, &AGE_WARM_NOUN)
+    } else {
+        (&AGE_WINTER_ADJ, &AGE_WINTER_NOUN)
+    }
+}
+
+/// M88 — compose one christening from its bank words.
+pub fn age_name(adj: &str, noun: &str) -> String {
+    format!("The {} {}", adj, noun)
+}
+
 // ---------------------------------------------------------------- bands
 
 /// Diagnostics bands (E11.6): the tongue must own its toponyms.

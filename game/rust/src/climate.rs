@@ -395,6 +395,37 @@ pub fn ice_balance(tmean: f64, tamp_signed: f64, p_annual: f64, pamp_signed: f64
     (acc - DDF_MELT * pdd) / 1000.0
 }
 
+/// M89 — the balance-zero elevation ("snowline") for one latitude belt's
+/// mean climate under a composed forcing `dt` (°C on `tmean`): the
+/// height `h ∈ (0, 2.5]` where `ice_balance(t0 + dt − 26·h, ta, pr, pa)`
+/// crosses zero, solved by the same 48-step bisection the M34 lane has
+/// always run — `dt = 0` reproduces the banked M34 arithmetic bit for
+/// bit (`t0 + 0.0 ≡ t0` in IEEE). `t0` is the belt's sea-level-equivalent
+/// mean temperature; 26 °C per height unit is the standing lapse
+/// (6.5 °C/km over the 4 km unit). `None` when the belt holds no alpine
+/// snowline: the balance never turns positive below the ceiling, or the
+/// shore itself accumulates (cap country — ice at sea level).
+pub fn belt_snowline(t0: f64, ta: f64, pr: f64, pa: f64, dt: f64) -> Option<f64> {
+    let bal = |h: f64| ice_balance(t0 + dt - 26.0 * h, ta, pr, pa);
+    if bal(2.5) <= 0.0 {
+        return None; // no snowline below the ceiling in this belt
+    }
+    if bal(0.0) > 0.0 {
+        return None; // cap country: ice at the shore, no alpine snowline
+    }
+    let mut hi = 2.5f64;
+    let mut lo = 0.0f64;
+    for _ in 0..48 {
+        let mid = 0.5 * (lo + hi);
+        if bal(mid) > 0.0 {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    Some(hi)
+}
+
 /// M35 — how a glacier cell hands its water to the rivers below.
 /// Splits the cell's year into the snow bank and the rain lane over
 /// the same COS12 cycle as `ice_balance`, and phases the bank's
@@ -817,6 +848,64 @@ impl Drift {
     }
 }
 
+// ------------------------------------------------------- M85 · no runaway
+//
+// The drift's discipline, declared where the law lives so the millennium
+// lane in `diagnose climate` reads the same envelope the law promises.
+// M83 gates the walk in isolation; M85 gates the *composed* sky — the
+// forced temperature field the world actually breathes, drift plus the
+// year's anomaly lattice plus the oscillation's shape — sampled at
+// century cadence across a millennium. A runaway would show here even if
+// every isolated term behaved: a coupling that rectifies (a term whose
+// grid mean rides the drift's sign, say) would walk the global mean off
+// the baseline while each law's own lane stayed green.
+
+/// M85 — the millennium probe's horizon, years.
+pub const MILLEN_YEARS: usize = 1000;
+/// M85 — the probe's cadence: the composed sky is sampled every
+/// this-many years (the spec's 100-year intervals).
+pub const MILLEN_STEP: usize = 100;
+/// M85 — °C: the envelope on the millennium's *mean* — "global mean
+/// temperature drift under 0.5 °C over the full run" is a statement
+/// about where the run's mean stands, and this is that 0.5.
+pub const MILLEN_TREND_BOUND: f64 = 0.5;
+/// M85 — how many of the law's own σ the fitted trend may reach. The
+/// envelope for the *trend* row is not a hand-picked °C figure: it is
+/// derived from the declared law itself (`millen_trend_sigma`), because
+/// the banked M83 constants (σ 0.55, τ 140) mathematically imply that a
+/// perfectly lawful, stationary millennium carries an OLS-trend
+/// dispersion of ~0.83 °C — a fixed 0.5 °C bound on that estimator
+/// would contradict the law the M83 lane already proved. 3σ contains
+/// every lawful realization; a genuine runaway grows without bound and
+/// fails it regardless.
+pub const MILLEN_TREND_Z: f64 = 3.0;
+
+/// M85 — the analytic dispersion (°C per millennium) of the OLS trend
+/// fitted through the century samples, under the declared drift law:
+/// AR(1) with per-year φ = 1 − 1/DRIFT_TAU and stationary σ =
+/// DRIFT_SIGMA, so cov(sample_i, sample_j) = σ²·φ^|Δyears|. The
+/// reflecting walls only ever *shrink* this dispersion (they fold the
+/// tails inward), so a bound stated on the unreflected law contains the
+/// walled walk a fortiori. Pure arithmetic on the declared constants —
+/// change the law and the envelope moves with the declaration.
+pub fn millen_trend_sigma() -> f64 {
+    let n = MILLEN_YEARS / MILLEN_STEP;
+    let phi = 1.0 - 1.0 / DRIFT_TAU;
+    let years: Vec<f64> = (1..=n).map(|k| (k * MILLEN_STEP) as f64).collect();
+    let mean_y = years.iter().sum::<f64>() / n as f64;
+    let den: f64 = years.iter().map(|y| (y - mean_y) * (y - mean_y)).sum();
+    let mut s = 0.0f64;
+    for i in 0..n {
+        for j in 0..n {
+            let cov = DRIFT_SIGMA * DRIFT_SIGMA * phi.powf((years[i] - years[j]).abs());
+            s += (years[i] - mean_y) * (years[j] - mean_y) * cov;
+        }
+    }
+    (s / (den * den)).sqrt() * MILLEN_YEARS as f64
+}
+
+
+
 // -------------------------------------------------- M84 · belts on the move
 //
 // The drift is not just a thermometer reading — a warmer world carries its
@@ -868,6 +957,90 @@ pub fn belt_anomaly(lat_s: f64, drift: f64) -> f64 {
     let moved = 0.5
         * (itcz_camp(lat_s, ITCZ_CAMP_LAT + d) + itcz_camp(lat_s, -(ITCZ_CAMP_LAT + d)));
     moved / base - 1.0
+}
+
+// -------------------------------------------------- M92 · monsoon fortune
+//
+// The monsoon is the seasonal lean the dawn already measured (`pamp`, the
+// signed share of the year's rain that arrives with the local summer as
+// the ITCZ marches). M92 names the year's fortune for that lean: the
+// composed rain anomaly — the M71 draw, the M75 tilt (the mode's grip),
+// the M84 belt walk (the drift's) — read as the delivery of the monsoon
+// against the gale-grade scale the trade law already fixed (M48's
+// MONSOON_GALE: |pamp| 0.40 is a full monsoon in this world — one scale
+// for land and sea, the one-lattice-law discipline of ADR-0026). A paddy
+// on a river reads the catchment's sky, not its own cell: the flood
+// pulse that fills it is the monsoon over the whole basin (the Nile
+// fails when Ethiopia's rains do), so the channel widens the sky that
+// must fail — it does not exempt the paddy from it.
+
+/// A cell is monsoon-fed when at least this share of its rain leans into
+/// the local summer (|pamp|). The scale is the trade law's own: M48's
+/// MONSOON_LANE (0.12) is where a sea lane starts sailing the monsoon
+/// calendar, and a paddy needs a slightly firmer lean than a sail.
+/// Below it there is no monsoon to fail — the paddy drinks steady rain
+/// and keeps its old immunity.
+pub const MONSOON_LEAN_MIN: f64 = 0.15;
+
+/// The lean at which the index reads the year's anomaly at full
+/// strength — M48's gale grade (MONSOON_GALE = 0.40), the deepest
+/// monsoon this world carries. Weaker leans measure their fortune on
+/// the same scale: their monsoon is a smaller share of the rain, and
+/// the steadier remainder buffers the paddy in exactly that proportion.
+pub const MONSOON_REF: f64 = 0.40;
+
+/// The failed-monsoon threshold: below this share of a normal year's
+/// monsoon the paddies do not fill, and the shortfall saturates at
+/// MONSOON_SAT, where the harvest is simply gone. Calibrated the M82
+/// way — against the record's cadence, not the eye: the pair must land
+/// the per-place return time of a failed monsoon inside the tropical
+/// drought envelope (DROUGHT_RETURN: 12–200 y) on the report seeds.
+/// 0.55 read 13%/y on seed 12345, whose paddies sit in a
+/// teleconnection hot zone (dry-forced mean index 0.704) — an ordinary
+/// dry-mode year is not a famine; 0.45 keeps "failed" famine-grade.
+pub const MONSOON_FAIL: f64 = 0.45;
+pub const MONSOON_SAT: f64 = 0.20;
+
+/// M92 — the monsoon-strength index at one cell in one year: the share
+/// of its normal monsoon the year delivered, 1.0 = a normal year. Pure
+/// in (seed, cell, year): the same composed sky every rain reader
+/// consumes (`year_anomaly_at` — draw + tilt + belt), read against the
+/// gale-grade lean (`MONSOON_REF`); a deeper lean than the reference
+/// steadies the core, exactly as the record has it — the famine belt
+/// is the margin of the monsoon, never its heart.
+#[inline]
+pub fn monsoon_index(
+    noise: &crate::noisegen::Perlin3,
+    rows: usize,
+    x: usize,
+    y: usize,
+    year: i64,
+    osc: f64,
+    drift: f64,
+    lean: f64,
+) -> f64 {
+    let (_, dp) = year_anomaly_at(noise, rows, x, y, year, osc, drift);
+    1.0 + dp / lean.abs().max(MONSOON_REF)
+}
+
+/// M92 — the riverine paddy's index: the same law, but the rain is the
+/// basin's (`catchment_anomaly_at`, the exact gaussian the M81 floods
+/// read) — the flood pulse integrates the monsoon over the catchment,
+/// so a delta paddy fails only when the wider sky does.
+#[inline]
+pub fn monsoon_index_catchment(
+    noise: &crate::noisegen::Perlin3,
+    rows: usize,
+    cols: usize,
+    x: usize,
+    y: usize,
+    year: i64,
+    osc: f64,
+    drift: f64,
+    lean: f64,
+) -> f64 {
+    let dp = catchment_anomaly_at(noise, rows, cols, x, y, year, osc, drift);
+    1.0 + dp / lean.abs().max(MONSOON_REF)
 }
 
 /// 1σ of the year-to-year temperature swing at this latitude, °C.
@@ -1012,6 +1185,12 @@ pub const BANDS: &[Band] = &[
     Band { name: "mean seasonal swing", sweet: (4.0, 14.0), hard: (2.0, 20.0), target: "sweet 4–14°C · hard 2–20°C" },
     Band { name: "tropical monsoon amplitude", sweet: (0.12, 0.55), hard: (0.05, 0.85), target: "sweet .12–.55 · hard .05–.85" },
     Band { name: "warm-coast heat delta", sweet: (0.75, 6.0), hard: (0.3, 10.0), target: "sweet +0.75..+6 °C · hard +0.3..+10 (M41: mean bias over land the warm rims reach (≥ +0.5); Gulf-Stream coasts run a few degrees over their zonal law)" },
+    // M89 — the margins respond: sensitivities of the three margin laws
+    // to a ±1 °C composed forcing, measured on the dawn fields. Bands
+    // calibrated on the report seeds after measurement (ADR-0009 loop).
+    Band { name: "snowline walk m per degC", sweet: (80.0, 260.0), hard: (40.0, 400.0), target: "M89: belt-mean balance-zero elevation rise per +1 °C — Earth's glaciers read ~120–200 m/°C ELA shift" },
+    Band { name: "treeline breathing pp per degC", sweet: (0.5, 6.0), hard: (0.15, 12.0), target: "M89: percentage points of land crossing GDD-500 tree eligibility per +1 °C — the cold margin, not the whole forest" },
+    Band { name: "pack breathing pp per degC", sweet: (0.3, 5.0), hard: (0.1, 10.0), target: "M89: percentage points of ocean area (cos-weighted) leaving the ever-frozen pack per +1 °C of warming" },
     Band { name: "cold-coast heat delta", sweet: (-6.0, -0.75), hard: (-10.0, -0.3), target: "sweet −6..−0.75 °C · hard −10..−0.3 (M41: mean bias over land the cold rims reach (≤ −0.5); Humboldt/Benguela coasts run a few degrees under)" },
     Band { name: "heat transport net bias", sweet: (0.0, 0.3), hard: (0.0, 0.6), target: "sweet ≤0.3 °C · hard ≤0.6 (M41: |world-mean bias| — advection redistributes heat, it must not mint it)" },
     Band { name: "cold-rim rain suppression", sweet: (0.25, 0.80), hard: (0.10, 0.95), target: "sweet 0.25–0.80 · hard 0.10–0.95 (M42: sub-polar cold-rim coastal land against aspect-matched neutral coasts at its latitude — the Atacama law)" },

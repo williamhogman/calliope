@@ -3,6 +3,7 @@
 //! Moved verbatim out of `world.rs`; behavior and event text unchanged.
 
 use crate::agriculture;
+use crate::climate;
 use crate::resources;
 use crate::society;
 use crate::world::{Event, EventKind, World};
@@ -17,8 +18,9 @@ impl World {
     /// rain-fed farming town faces the sky it actually got: a deterministic
     /// standardized rain anomaly (SPI over the M71 sky) decides where the rains
     /// failed. Failure starves, spikes grain, and sends folk down the roads.
-    /// Floodplains irrigate, paddies flood, herders walk to the grass and
-    /// fishers never planted — only wheat and maize under open sky can fail.
+    /// Floodplains irrigate, herders walk to the grass and fishers never
+    /// planted — wheat and maize under open sky fail on the SPI, and since
+    /// M92 the monsoon-fed paddies fail with the monsoon itself.
     pub(crate) fn famine_pass(&mut self, month_abs: i64) -> Vec<Event> {
         let mut events = Vec::new();
         if month_abs.rem_euclid(12) != 7 {
@@ -63,15 +65,41 @@ impl World {
             let rainfed = (pack == agriculture::CropPackage::Wheat.code()
                 || pack == agriculture::CropPackage::Maize.code())
                 && !river;
-            if !rainfed || pop <= 90 {
+            // M92 — the paddies join the verdict: rice whose rain genuinely
+            // leans into the monsoon faces the monsoon it actually got. The
+            // channel does not exempt a riverine paddy — the pulse that
+            // fills it is the monsoon over the whole basin, so it reads the
+            // catchment's sky (the M81 gaussian) and fails only when the
+            // wider sky does. Wheat and maize on rivers keep the old
+            // immunity: channel irrigation is base flow, not the pulse.
+            let lean = self.fields.pamp[[y as usize, x as usize]] as f64;
+            let paddies = pack == agriculture::CropPackage::Rice.code()
+                && lean.abs() >= climate::MONSOON_LEAN_MIN;
+            if !(rainfed || paddies) || pop <= 90 {
                 continue;
             }
             let z = town_spi[i];
-            if z >= DROUGHT_Z {
-                continue;
-            }
-            // saturates at SPI −2, the conventional edge of extreme drought
-            let shortfall = (((-z) - (-DROUGHT_Z)) / (-DROUGHT_Z)).min(1.0);
+            let (shortfall, msi) = if rainfed {
+                if z >= DROUGHT_Z {
+                    continue;
+                }
+                // saturates at SPI −2, the conventional edge of extreme drought
+                ((((-z) - (-DROUGHT_Z)) / (-DROUGHT_Z)).min(1.0), 0.0)
+            } else {
+                // M92 — the failed monsoon: the year delivered this share
+                // of a normal monsoon; the shortfall opens at MONSOON_FAIL
+                // and saturates at MONSOON_SAT, where the paddies stand dry.
+                let msi = self.monsoon_index(year, y as usize, x as usize, river);
+                if msi >= climate::MONSOON_FAIL {
+                    continue;
+                }
+                (
+                    ((climate::MONSOON_FAIL - msi)
+                        / (climate::MONSOON_FAIL - climate::MONSOON_SAT))
+                        .min(1.0),
+                    msi,
+                )
+            };
             worst = worst.max(shortfall);
             // granaries (pottery) blunt a failed year
             let granary = if self
@@ -102,6 +130,8 @@ impl World {
                 granary,
                 hit,
                 dead,
+                monsoon: paddies,
+                msi,
             });
 
             // the hungry walk to the nearest kin-town outside the blight —
@@ -113,9 +143,22 @@ impl World {
             });
             let text = if let Some((j, _)) = target {
                 migrations.push((j, walked));
+                if paddies {
+                    format!(
+                        "The monsoon fails over {} — {} starve among the empty paddies, and {} take the road to {}.",
+                        name, dead, walked, self.peoples.settlements[j].name
+                    )
+                } else {
+                    format!(
+                        "The rains fail over {} — {} starve, and {} take the road to {}.",
+                        name, dead, walked, self.peoples.settlements[j].name
+                    )
+                }
+            } else if paddies {
                 format!(
-                    "The rains fail over {} — {} starve, and {} take the road to {}.",
-                    name, dead, walked, self.peoples.settlements[j].name
+                    "The monsoon fails over {} — {} starve among the empty paddies.",
+                    name,
+                    dead + walked
                 )
             } else {
                 format!(

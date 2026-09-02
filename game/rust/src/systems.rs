@@ -117,9 +117,12 @@ pub trait System: Sync {
 
 /// The month, top to bottom. Reordering is a balance change.
 pub static SYSTEMS: &[&dyn System] = &[
+    &FieldsAtEdge,
+    &IceAtEdge,
     &Towns,
     &Drought,
     &Flood,
+    &Ages,
     &Famine,
     &Quakes,
     &Volcanoes,
@@ -146,9 +149,46 @@ pub static SYSTEMS: &[&dyn System] = &[
     &SecondReading,
     &Veil,
     &Heat,
+    &Margins,
 ];
 
 // ---------------------------------------------------------------- systems
+
+/// M90 — fields at the edge: in the year's first month the composed
+/// forcing walks the margin ledger and the crops grid answers, before
+/// any town harvests — so the year's capacity reads the year's fields.
+/// No die is drawn; every flip is a solved threshold crossing.
+struct FieldsAtEdge;
+impl System for FieldsAtEdge {
+    fn name(&self) -> &'static str {
+        "fields"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        if w.month.rem_euclid(12) == 0 {
+            let evs = w.fields_pass(w.month);
+            sink.emit(evs);
+        }
+    }
+}
+
+/// M91 — the ice remembers time: in the year's first month the
+/// composed forcing walks the ice-margin ledger and the GLACIER flag
+/// answers — the edge advances in cold ages and gives ground in warm
+/// optima, by solved threshold, never by die. Right after the fields
+/// pass: the same sky, read in the same breath.
+struct IceAtEdge;
+impl System for IceAtEdge {
+    fn name(&self) -> &'static str {
+        "ice"
+    }
+    fn run(&self, ctx: &mut SimCtx, _sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        if w.month.rem_euclid(12) == 0 {
+            w.ice_pass(w.month);
+        }
+    }
+}
 
 /// Growth, decline, plague, fire — every town's own month.
 struct Towns;
@@ -193,6 +233,24 @@ impl System for Flood {
         let w = &mut *ctx.world;
         if w.month.rem_euclid(12) == 3 {
             let evs = w.flood_pass(w.month);
+            sink.emit(evs);
+        }
+    }
+}
+
+/// M86 — the cold ages: the schedule's dated onsets and releases are
+/// spoken in the year's first month. Pure chronicle — the offset itself
+/// is derived law read through `World::year_forcing`, so this system
+/// mutates nothing and its position carries no balance weight.
+struct Ages;
+impl System for Ages {
+    fn name(&self) -> &'static str {
+        "ages"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        if w.month.rem_euclid(12) == 0 {
+            let evs = w.ages_pass(w.month);
             sink.emit(evs);
         }
     }
@@ -707,6 +765,42 @@ impl System for Heat {
     }
 }
 
+/// M89 — the margins respond: the year's composed forcing (M83 drift +
+/// the M86 age's offset) rewrites the route pack-ice calendars through
+/// `trade::refreeze_routes`. Runs last in the month, so a lane born this
+/// month is frozen under the sky it was born to; work only happens when
+/// the forcing or the route set moved (yearly at most, plus the months
+/// routes appear). No RNG, no Peoples — pure derived rewrite of the
+/// route ledger, so it stands on the parallel-safe side of the lattice.
+struct Margins;
+impl System for Margins {
+    fn name(&self) -> &'static str {
+        "margins"
+    }
+    fn run(&self, ctx: &mut SimCtx, _sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        let dt = w.year_forcing(w.month.div_euclid(12));
+        // The change gate reads the web's identity, not its count: a
+        // same-count lane swap must still be frozen under today's sky.
+        let fp = trade::web_fingerprint(&w.routes);
+        if dt.to_bits() == w.margins_dt.to_bits() && fp == w.margins_web {
+            return;
+        }
+        let n = trade::refreeze_routes(
+            &mut w.routes,
+            &w.fields.height,
+            &w.fields.tmean,
+            &w.fields.tamp,
+            dt,
+        );
+        w.margins_dt = dt;
+        w.margins_web = fp;
+        if n > 0 {
+            w.dirty.mark(Dirty::ROUTES);
+        }
+    }
+}
+
 // ---------------------------------------------------------------- bands
 
 use crate::util::Band;
@@ -727,6 +821,8 @@ pub const BANDS: &[Band] = &[
     Band { name: "stage hydrology ms", sweet: (0.0, 250.0), hard: (0.0, 600.0), target: "E10.1: D8 routing, accumulation, lakes" },
     Band { name: "stage biomes ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: Whittaker classification" },
     Band { name: "stage fertility ms", sweet: (0.0, 80.0), hard: (0.0, 250.0), target: "E10.1: soil + floodplain kernel" },
+    Band { name: "stage margins ms", sweet: (0.0, 120.0), hard: (0.0, 400.0), target: "M90: the margin ledger's dawn solve — prefilter + bisection on the flip cells only" },
+    Band { name: "stage icemargin ms", sweet: (0.0, 120.0), hard: (0.0, 400.0), target: "M91: the ice-margin ledger's dawn solve — endpoint prefilter + bisection on the flip cells only" },
     Band { name: "stage naming ms", sweet: (0.0, 120.0), hard: (0.0, 350.0), target: "E10.1: feature detection + toponymy" },
     Band { name: "stage resources ms", sweet: (0.0, 650.0), hard: (0.0, 1200.0), target: "E10.1: rock classify + geology-seated placement (M18/M19; measured ~450-500 ms, was ~300 pre-geology)" },
     Band { name: "stage settlements ms", sweet: (0.0, 250.0), hard: (0.0, 700.0), target: "E10.1: founding, cultures, goods, routes" },

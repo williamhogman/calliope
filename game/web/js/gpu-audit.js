@@ -11,7 +11,7 @@
 
 import { createGpu, recreateGpuOnGl } from "./gpu.js";
 import {
-  world, layer, overlays, month, playing, selection,
+  world, layer, overlays, month, sky, playing, selection,
 } from "./ui/state.js";
 
 export function initGpu(ctx) {
@@ -217,7 +217,7 @@ export function initGpu(ctx) {
       }
       try {
         gpu.render(
-          { layer: layer(), overlays, month: month() },
+          { layer: layer(), overlays, month: month(), sky: sky() },
           ctx.view, canvas.clientWidth, canvas.clientHeight,
         );
         window.__calliope.gpuFrames = (window.__calliope.gpuFrames || 0) + 1;
@@ -257,6 +257,7 @@ export function initGpu(ctx) {
         layer: layer(),
         overlays,
         month: month(),
+        sky: sky(),
         version: ctx.version.n,
         playing: isPlaying,
         selectedId: sel?.kind === "settlement" ? sel.id : null,
