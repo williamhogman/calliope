@@ -2,10 +2,10 @@
  CALLIOPE DIAGNOSTIC · COMPUTE                      M67 lane · size 512
 ========================================================================
  adapter: Vulkan · llvmpipe (LLVM 21.1.7, 256 bits) · Cpu
- fixture 96×64: gpu 8.3 ms · cpu twin 1.0 ms · 6144 cells
- seed 12345: grid 640×512 · coast law cpu 100 ms · max |jfa−exact| 0.938 cells · 19 of 212051 sea cells miss (0.0%)
- seed 777: grid 640×512 · coast law cpu 76 ms · max |jfa−exact| 0.592 cells · 17 of 209351 sea cells miss (0.0%)
- seed 90210: grid 640×512 · coast law cpu 79 ms · max |jfa−exact| 0.592 cells · 23 of 210036 sea cells miss (0.0%)
+ fixture 96×64: gpu 9.1 ms · cpu twin 1.0 ms · 6144 cells
+ seed 12345: grid 640×512 · coast law cpu 71 ms · max |jfa−exact| 0.938 cells · 19 of 212051 sea cells miss (0.0%)
+ seed 777: grid 640×512 · coast law cpu 64 ms · max |jfa−exact| 0.592 cells · 17 of 209351 sea cells miss (0.0%)
+ seed 90210: grid 640×512 · coast law cpu 90 ms · max |jfa−exact| 0.592 cells · 23 of 210036 sea cells miss (0.0%)
  golden: 4 case(s) · 7913563 B -> /tmp/calliope-coast-golden.bin
 
 ---- checks ----------------------------------------------------------
@@ -15,5 +15,5 @@
 [PASS] seed 90210 gpu/cpu parity                     agree   (M67 gate: GPU and CPU walk one seed field on a real world)
 [PASS] jfa max err cells                       0.938 cells   (sweet ≤1 · hard ≤2 (M67: worst |jfa−exact| over sea cells — sub-cell is invisible under bilinear resampling; measured 0.764 worst-of-seeds))
 [PASS] jfa wrong cell share                           0.0%   (sweet ≤0.1% · hard ≤1% (M67: share of sea cells whose exact squared distance differs from the EDT referee's; measured ≤0.001%))
-[PASS] coast law cpu ms                             100 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
+[PASS] coast law cpu ms                              90 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
 CHECKS: 7 pass · 0 warn · 0 fail

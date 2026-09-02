@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · ERA I GATE                   size 512 · 300y leg · seed 12345
 ========================================================================
- composing /tmp/calliope-report-stage/.reports.run.63398
+ composing /tmp/calliope-report-stage/.reports.run.12953
 
  lane                          pass  warn  fail     age
  assay.txt                        1     0     0    0.0h
@@ -18,7 +18,7 @@
  coastjs.txt                      4     0     0    0.1h
  compile.txt                      1     0     0    0.1h
  compute.txt                      7     0     0    0.1h
- determinism.txt                  3     0     0    0.2h
+ determinism.txt                  3     0     0    0.3h
  earth-wasm.txt                   2     0     0    0.1h
  earth.txt                       51     0     0    0.2h
  economy-12345.txt               55     0     0    0.3h
@@ -31,13 +31,13 @@
  ocean.txt                       15     0     0    0.2h
  oscillation.txt                 73     0     0    0.3h
  patina.txt                      10     0     0    0.2h
- perf.txt                        12     3     0    0.2h
+ perf.txt                        11     4     0    0.2h
  properties.txt                  72     6     0    0.2h
  resources-12345.txt             32     0     0    0.3h
  resources-777.txt               32     0     0    0.3h
  resources-90210.txt             32     0     0    0.3h
  storms.txt                      77     0     0    0.3h
- sweep.txt                       17     3     0    0.2h
+ sweep.txt                       18     2     0    0.2h
  systems.txt                      3     0     0    0.2h
  teleconnection.txt              50     0     0    0.3h
  telling-12345.txt               12     0     0    0.3h
@@ -50,7 +50,7 @@
  TOTAL                         1488    33     0
 
  structural leg: seed 12345 · 3600 months · chunkings 240/120 vs 180
- towns 16→96 · 879 events in the final decade · 53s for both runs (135 mo/s)
+ towns 16→96 · 879 events in the final decade · 55s for both runs (132 mo/s)
 
 ---- checks ----------------------------------------------------------
 [PASS] every era lane on the table                43 lanes   (M65: a gate over a partial suite proves nothing — run report.sh)

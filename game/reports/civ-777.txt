@@ -236,7 +236,7 @@ monsoon fortune (M92): 33 rice towns (31 riverine · strongest lean 0.43) · 28 
 [PASS] numbers stay finite                             yes   (no NaN pops, wealth or prices)
 [PASS] rank-size slope (Zipf)               -1.13 over 99 towns   (M2.3 gate: −1.3…−0.8)
 [PASS] median town spacing                           44 km   (M2.5: market-town band ~15–30 km in settled cores)
-[WARN] famine events per century                      89.3   (M2.6: the rains must fail sometimes (rain-fed verdict only — the paddies' cadence is its own band))
+[WARN] famine events per century                      89.3   (M2.6: the rains must fail sometimes (rain-fed verdict only — the paddies' cadence is its own band; hard ceiling carries the M92 migration coupling, measured 166 coupled · 114 uncoupled on the worst sweep seed))
 [PASS] monsoon famines per century                    24.0   (M92: world-scale cadence of the paddies' verdict — scales with the monsoon-fed town count; per-place return keeps the M82 envelope (measured 94.0 · 24.0 on the civ seeds))
 [PASS] every famine stands in a failed year 134/134 at SPI ≤ -1.0   (M72: hunger is the year's realized rain read as SPI, never a private die)
 [PASS] famine years are meaningfully dry    mean SPI -1.75   (M72: the mean famine year sits at or beyond moderate drought)
