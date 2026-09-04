@@ -1,5 +1,5 @@
 ========================================================================
- CALLIOPE DIAGNOSTIC · HYDROLOGY                    seed 777 · 640x512
+ CALLIOPE DIAGNOSTIC · HYDROLOGY                    seed 777 · 640x512 · lakes 240y
 ========================================================================
 river cells: 5033 (4.3% of land) · lake cells: 1974 (1.7% of land)
 river systems (≥12 cells): 106 · longest network 202 cells ≈ 808 km
@@ -19,6 +19,48 @@ aquifer (M54): median depth 10.3 m · p10 0.0 · p90 95.9 · within 10 m of surf
   spearman: vs HAND (height above nearest drainage) 0.58 · vs raw elevation 0.28 · vs elevation at 400-900mm 0.17 (25970 cells)
 
 springs & oases (M55): 1285 springs (1.09% of land) · 16268 oases (28.9% of arid land) · arid land with any water 32.3%
+
+LAKES THAT BREATHE (M93) · 21 basins · 240 years
+  Lake Lordor                  @(211,147) ·    7 cells    112 km² · catchment    3664 km² · fill  26.9 m · T 11.1 °C · E₀ 0.96 m/y · τ 1.25 y · h₀ 1.79 m
+  The Mirror of Aldun          @(227,162) ·    7 cells    112 km² · catchment    1136 km² · fill  32.0 m · T 15.1 °C · E₀ 1.18 m/y · τ 1.33 y · h₀ 2.36 m
+  The Mirror of Zarara         @(234,167) ·   18 cells    288 km² · catchment    3616 km² · fill  33.9 m · T 15.9 °C · E₀ 1.22 m/y · τ 1.37 y · h₀ 2.51 m
+  Lake Auraath                 @(428,170) ·   45 cells    720 km² · catchment    2224 km² · fill  67.6 m · T  9.1 °C · E₀ 0.85 m/y · τ 1.93 y · h₀ 2.46 m
+  Lake Dorath                  @(201,180) ·   21 cells    336 km² · catchment    5168 km² · fill  31.8 m · T 11.2 °C · E₀ 0.97 m/y · τ 1.33 y · h₀ 1.93 m
+  The Fariys Mere              @(454,185) ·  215 cells   3440 km² · catchment   14704 km² · fill  89.7 m · T 12.4 °C · E₀ 1.03 m/y · τ 2.20 y · h₀ 3.41 m
+  Lake Aurmar                  @(411,192) ·   31 cells    496 km² · catchment   17792 km² · fill  27.6 m · T 15.0 °C · E₀ 1.17 m/y · τ 1.26 y · h₀ 2.22 m
+  The Aurieth Mere             @(170,198) ·   10 cells    160 km² · catchment    1920 km² · fill  38.9 m · T 13.5 °C · E₀ 1.09 m/y · τ 1.45 y · h₀ 2.37 m
+  Lake Aureth                  @(182,203) ·    4 cells     64 km² · catchment     576 km² · fill  38.4 m · T 13.6 °C · E₀ 1.10 m/y · τ 1.44 y · h₀ 2.37 m
+  The Quelys Mere              @(449,294) ·   27 cells    432 km² · catchment    4896 km² · fill  27.9 m · T 13.0 °C · E₀ 1.07 m/y · τ 1.26 y · h₀ 2.02 m
+  Lake Loriaath                @(177,298) ·    2 cells     32 km² · catchment    2816 km² · fill  26.5 m · T 11.8 °C · E₀ 1.00 m/y · τ 1.24 y · h₀ 1.87 m
+  The Faros Mere               @(185,301) ·    7 cells    112 km² · catchment     384 km² · fill  28.6 m · T 11.5 °C · E₀ 0.98 m/y · τ 1.28 y · h₀ 1.88 m
+  Lake Calador                 @(199,310) ·   31 cells    496 km² · catchment   10368 km² · fill  42.3 m · T 13.6 °C · E₀ 1.10 m/y · τ 1.51 y · h₀ 2.47 m
+  The Galaos Mere              @(449,313) ·   89 cells   1424 km² · catchment    6256 km² · fill  49.6 m · T 10.6 °C · E₀ 0.93 m/y · τ 1.63 y · h₀ 2.27 m
+  The Galnor Mere              @(228,322) ·   13 cells    208 km² · catchment   12112 km² · fill  25.8 m · T 17.8 °C · E₀ 1.33 m/y · τ 1.23 y · h₀ 2.45 m
+  Lake Doreth                  @(462,342) ·   64 cells   1024 km² · catchment   18352 km² · fill  50.2 m · T  8.9 °C · E₀ 0.84 m/y · τ 1.64 y · h₀ 2.07 m
+  basin                          std m    lag   r@lag    hi m    lo m  lines
+  Lake Lordor                    0.196      0    0.90   +0.52   -0.50      0
+  The Mirror of Aldun            0.253      0    0.89   +0.53   -0.68      0
+  The Mirror of Zarara           0.295      0    0.89   +0.74   -1.09      0
+  Lake Auraath                   0.237      0    0.81   +0.63   -0.82      0
+  Lake Dorath                    0.212      0    0.89   +0.43   -0.79      1
+  The Fariys Mere                0.243      0    0.79   +0.57   -0.80      0
+  Lake Aurmar                    0.252      0    0.91   +0.51   -0.93      1
+  The Aurieth Mere               0.285      0    0.88   +0.64   -0.93      1
+  Lake Aureth                    0.308      0    0.88   +0.60   -1.08      1
+  The Quelys Mere                0.260      0    0.91   +0.50   -0.84      0
+  Lake Loriaath                  0.201      0    0.90   +0.51   -0.70      1
+  The Faros Mere                 0.236      0    0.91   +0.67   -0.91      1
+  Lake Calador                   0.269      0    0.87   +0.63   -0.91      0
+  The Galaos Mere                0.271      0    0.86   +0.61   -0.99      1
+  The Galnor Mere                0.278      0    0.92   +0.56   -0.75      0
+  Lake Doreth                    0.173      0    0.84   +0.38   -0.57      1
+  strandlines: 11 dated (0 rising · 11 falling) · ledger 11 · dup 0 · in burn-in 0 · 0.25 per basin-century
+    y45   Lake Dorueth — Lake Dorueth shrinks below its lowest remembered shore — the water stands 0.8 m under its founding mark, the lowest in 45 years, and a white strandline of salt shows where the old beach lay.
+    y47   Lake Theseiossa — Lake Theseiossa shrinks below its lowest remembered shore — the water stands 1.0 m under its founding mark, the lowest in 47 years, and a white strandline of salt shows where the old beach lay.
+    y48   Lake Aureth — Lake Aureth shrinks below its lowest remembered shore — the water stands 1.0 m under its founding mark, the lowest in 48 years, and a white strandline of salt shows where the old beach lay.
+    y49   The Aurieth Mere — The Aurieth Mere shrinks below its lowest remembered shore — the water stands 0.9 m under its founding mark, the lowest in 49 years, and a white strandline of salt shows where the old beach lay.
+  lake ledger hash 4c0ee2873595be00
+
 
 ---- checks ----------------------------------------------------------
 [PASS] river share of land                            4.3%   (sweet 0.8–5% · hard 0.3–10%)
@@ -46,4 +88,14 @@ springs & oases (M55): 1285 springs (1.09% of land) · 16268 oases (28.9% of ari
 [PASS] every spring stands on a shallow table      1285/1285   (M55 gate: a spring is the table daylighting — depth to water ≤2 m at every marked cell, by construction and by audit)
 [PASS] no oasis outside the dry country        16268 oases   (M55 gate: oases exist only where the year is arid (desert biome or <300 mm))
 [PASS] aquifer joins the state hash                    yes   (M54 gate: the field is CRC-stable and part of hash_state)
-CHECKS: 24 pass · 1 warn · 0 fail
+[PASS] every terminal basin is named        21 basins · 0 unnamed · 0 duplicate   (M93: a shore the chronicle dates must answer to a name — a named lake's, or one coined in the nearest tongue)
+[PASS] basin catchments are land, disjoint  21 basins · 0 overlapping cells · 0 wet cells · 0 with no land at all   (M93: every land cell's water ends in at most one terminal basin, and no basin counts its own water as catchment)
+[PASS] lake levels finite                            0 bad   (M93: the balance never blows up — floored at the playa residual, substepped)
+[PASS] lake level lag years                 0 y (worst basin)   (M93 gate: worst-basin lag of level behind the catchment's wet/dry year, argmax cross-correlation — under two years)
+[PASS] lake level tracking r                0.75 (worst basin)   (M93: worst-basin peak correlation of level with the catchment rain anomaly — the shore answers the sky)
+[PASS] lake level swing m                   0.24 m median std   (M93: median basin's level std over the run — playa lakes breathe decimetres to metres (Eyre 0–6 m, Great Salt Lake ±2 m/century))
+[PASS] strandlines per basin-century                  0.25   (M93: dated terraces per basin per 100 y after burn-in — a handful a century, never one a year)
+[PASS] strandlines dated and anchored       0 of 11 undated   (M93 gate: every strandline event carries its month, its basin and a map anchor)
+[PASS] strandlines never duplicated         0 dup · ledger 11 vs chronicle 11   (M93 gate: one line per (basin, sign, year), and the ledger and the chronicle agree to the count)
+[PASS] strandlines are records, stepped apart monotone true · spaced true · burn-in 0   (M93: each terrace stands ≥STRANDLINE_STEP_M beyond the last of its sign, in date order, none before the watched generation)
+CHECKS: 34 pass · 1 warn · 0 fail

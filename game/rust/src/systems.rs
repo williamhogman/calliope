@@ -122,6 +122,7 @@ pub static SYSTEMS: &[&dyn System] = &[
     &Towns,
     &Drought,
     &Flood,
+    &Lakes,
     &Ages,
     &Famine,
     &Quakes,
@@ -233,6 +234,25 @@ impl System for Flood {
         let w = &mut *ctx.world;
         if w.month.rem_euclid(12) == 3 {
             let evs = w.flood_pass(w.month);
+            sink.emit(evs);
+        }
+    }
+}
+
+/// M93 — lakes that breathe: in the year's last month every terminal
+/// basin's balance is struck from the year's own sky — inflow by M72's
+/// runoff law, evaporation by the water's temperature — and a strandline
+/// is dated when the level passes a remembered extreme. No die, no
+/// Peoples: the lake ledger and the chronicle are all it writes.
+struct Lakes;
+impl System for Lakes {
+    fn name(&self) -> &'static str {
+        "lakes"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        if w.month.rem_euclid(12) == 11 {
+            let evs = w.lake_pass(w.month);
             sink.emit(evs);
         }
     }

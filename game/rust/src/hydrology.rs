@@ -694,3 +694,390 @@ pub const FLOOD_RETURN: &[(f64, f64)] = &[
     (3.0, 200.0), // temperate
     (2.0, 150.0), // tropical
 ];
+
+// ---------------------------------------------------------------- M93: lakes that breathe
+
+/// M93 — "Lakes That Breathe". The dawn's hydrology decides *which*
+/// lakes are terminal (dry warm country, no road to the sea) and freezes
+/// the mask (ADR-0005). What it never had was a pulse: a terminal lake
+/// is the one place on a map where the sky's whole year is written in a
+/// single number, because every drop that reaches it can only leave as
+/// haze. Wet centuries raise its shore; dry ones shrink it to a white
+/// pan; and every extreme it ever reached is left behind as a beach
+/// terrace nobody built — a strandline, the oldest dated record a
+/// landscape keeps (Bonneville's terraces above the Great Salt Lake,
+/// the Aral's stranded quays, the Dead Sea's Lisan marls).
+///
+/// The law is a water balance on the basin, one year at a time:
+///
+/// ```text
+///   dh/dt = I(t) / A(h)  −  E(t)                 (metres of level per year)
+///   A(h)  = A₀ · (h/h₀)^a                         (bowl bathymetry)
+///   I(t)  = I₀ · (1 + LAKE_INFLOW_GAIN · dp)      (closed-basin runoff elasticity)
+///   E(t)  = E₀ · (1 + LAKE_EVAP_T_GAIN · dT)      (warmer air drinks harder)
+/// ```
+///
+/// At the dawn's mean climate the lake stands at `h₀` with `I₀ = E₀·A₀`;
+/// nothing about the absolute inflow needs to be known beyond that
+/// identity, only the *ratios* the year moves. Linearised about `h₀` the
+/// level relaxes with `τ = h₀ / (a·E₀)`, and the contract wants the shore
+/// to answer the sky within two years, so the full stand is *derived*
+/// from a chosen response time rather than the reverse — the deeper the
+/// depression the ice left, the slower (and deeper) its lake.
+///
+/// A strandline is *not* every new record. The records themselves are
+/// kept exactly (highest and lowest stand ever, with their years), but a
+/// dated event is cut only when the level has climbed or fallen at least
+/// [`STRANDLINE_STEP_M`] beyond the stand at the *last* strandline of the
+/// same sign, and never in the first [`STRANDLINE_BURN_IN_YEARS`] — a
+/// shore is not "the highest anyone remembers" until someone has watched
+/// it for a generation. So the chronicle gets one line per terrace,
+/// never two for the same water in consecutive wet years.
+///
+/// The ledger is path-dependent state (the level remembers), so it is
+/// hashed into the determinism law like the drought and flood ledgers.
+
+/// Bowl exponent `a` in `A(h) = A₀·(h/h₀)^a`: 1 is a paraboloid, 2 a
+/// cone; playa basins sit between, with flat floors and gentle rims.
+pub const LAKE_SHAPE: f64 = 1.5;
+
+/// Response time envelope in years — the shallowest depression the mask
+/// admits (24 m of fill) answers in 1.2 years, the deepest in 2.2, so
+/// the whole population tracks the sky inside the contract's two years
+/// (the argmax lag of a first-order integrator against a weakly red
+/// forcing stays at 0–1 for τ this short) while still banking enough of
+/// a wet decade to leave a terrace worth naming.
+pub const LAKE_TAU_YEARS: (f64, f64) = (1.2, 2.2);
+
+/// Fractional inflow change per unit of the catchment's rain anomaly.
+/// Rivers take M72's gain of 1.5; a closed dryland basin's runoff is a
+/// threshold process and its precipitation elasticity sits at 2–3
+/// (Sankarasubramanian, Vogel & Limbrunner 2001; Chiew 2006 for arid
+/// Australian basins), which is why Eyre fills in one wet year and is a
+/// pan the next. Clamped so no year brings less than a trickle or more
+/// than a flood-and-a-half.
+pub const LAKE_INFLOW_GAIN: f64 = 2.5;
+pub const LAKE_INFLOW_FACTOR: (f64, f64) = (0.15, 3.5);
+
+/// Fill depth (m) across which the response time runs its envelope.
+pub const LAKE_TAU_DEPTH_M: (f64, f64) = (24.0, 84.0);
+
+/// Open-water evaporation at 10 °C (m/y) and its slope per °C of mean
+/// air temperature; clamped to a plausible envelope (Great Salt Lake
+/// ~1.1 at 11 °C, Dead Sea ~1.4 at 24 °C, Lake Eyre ~2.4 at 22 °C dry
+/// air — the slope is a middle reading of that scatter).
+pub const LAKE_EVAP_REF_M: f64 = 0.90;
+pub const LAKE_EVAP_SLOPE_M: f64 = 0.055;
+pub const LAKE_EVAP_RANGE_M: (f64, f64) = (0.6, 2.6);
+
+/// Fractional evaporation change per °C of the year's anomaly; the
+/// factor is clamped so no single year drinks a lake dry.
+pub const LAKE_EVAP_T_GAIN: f64 = 0.045;
+pub const LAKE_EVAP_FACTOR: (f64, f64) = (0.6, 1.5);
+
+/// The playa residual: the level never falls below this share of the
+/// full stand (a salt crust with a wet floor is still a lake to the
+/// bathymetry), and the area law is evaluated no lower.
+pub const LAKE_FLOOR_FRAC: f64 = 0.05;
+
+/// Substeps per year in the balance integration — the restoring term
+/// steepens near the floor, and a quarter-year step keeps it honest.
+pub const LAKE_SUBSTEPS: usize = 4;
+
+/// Sample points per basin when the year's forcing is read: the
+/// catchment and the water are each walked at a stride that yields
+/// about this many cells, every one through the pointwise anomaly law.
+/// Smaller catchments are read whole. The full-grid sky is a whole map's
+/// work per call and belongs to diagnostics, not the monthly clock.
+pub const LAKE_FORCING_SAMPLES: usize = 48;
+
+/// Metres a record must move beyond the last strandline of its sign
+/// before a new terrace is dated.
+pub const STRANDLINE_STEP_M: f64 = 0.30;
+
+/// Years the shore is watched before any stand is called a record.
+pub const STRANDLINE_BURN_IN_YEARS: i64 = 30;
+
+/// One dated terrace.
+#[derive(Clone, Debug)]
+pub struct Strandline {
+    pub year: i64,
+    /// Level at the cut, metres relative to the founding full stand
+    /// (positive = above it).
+    pub rel_m: f64,
+    /// True for a highstand terrace, false for a lowstand shore.
+    pub rising: bool,
+}
+
+/// One terminal basin: the geometry the dawn solved and the level it
+/// has carried since.
+#[derive(Clone, Debug, Default)]
+pub struct Basin {
+    pub id: usize,
+    /// The map's name for it (a named lake feature's, or coined at dawn).
+    pub name: String,
+    /// Anchor: the deepest lake cell, for fly-to and naming.
+    pub x: i64,
+    pub y: i64,
+    /// Lake cells (x, y) and every land cell whose water ends here.
+    pub cells: Vec<(u16, u16)>,
+    pub catchment: Vec<(u16, u16)>,
+    /// Mean fill depth of the depression (m) — the ice's bowl.
+    pub fill_m: f64,
+    /// Mean air temperature over the water (°C) and the reference
+    /// evaporation it sets (m/y).
+    pub tmean_c: f64,
+    pub evap_m: f64,
+    /// Linearised response time (y) and the founding full stand h₀ (m).
+    pub tau_y: f64,
+    pub full_m: f64,
+    /// Current level h (m above the floor).
+    pub level_m: f64,
+    /// Exact records: highest and lowest stand ever and their years.
+    pub hi_m: f64,
+    pub hi_year: i64,
+    pub lo_m: f64,
+    pub lo_year: i64,
+    /// Stand at the last dated strandline of each sign.
+    pub mark_hi_m: f64,
+    pub mark_lo_m: f64,
+    /// The last year's forcing, for the report: catchment rain anomaly
+    /// (fraction), lake temperature anomaly (°C), and the inflow and
+    /// evaporation factors the balance actually used.
+    pub last_dp: f64,
+    pub last_dt: f64,
+    pub last_inflow: f64,
+    pub last_evap: f64,
+    pub strandlines: Vec<Strandline>,
+}
+
+impl Basin {
+    /// Area of the water now, as a share of the founding area.
+    pub fn area_frac(&self) -> f64 {
+        (self.level_m / self.full_m).max(LAKE_FLOOR_FRAC).powf(LAKE_SHAPE)
+    }
+    /// Level relative to the founding full stand, metres.
+    pub fn rel_m(&self) -> f64 {
+        self.level_m - self.full_m
+    }
+    pub fn area_km2(&self) -> f64 {
+        self.cells.len() as f64 * crate::constants::KM_PER_CELL * crate::constants::KM_PER_CELL
+    }
+    pub fn catchment_km2(&self) -> f64 {
+        self.catchment.len() as f64 * crate::constants::KM_PER_CELL * crate::constants::KM_PER_CELL
+    }
+
+    /// Advance the balance one year under the given inflow and
+    /// evaporation factors (ratios to the dawn's), returning the level
+    /// change in metres. Four substeps; the level is floored at the playa
+    /// residual.
+    pub fn advance(&mut self, inflow: f64, evap: f64) -> f64 {
+        let before = self.level_m;
+        let dt = 1.0 / LAKE_SUBSTEPS as f64;
+        for _ in 0..LAKE_SUBSTEPS {
+            let a = self.area_frac();
+            // I₀/A₀ = E₀ at the founding, so inflow per unit area is E₀·(I/I₀)/(A/A₀).
+            let dh = self.evap_m * (inflow / a - evap) * dt;
+            let floor = self.full_m * LAKE_FLOOR_FRAC;
+            self.level_m = (self.level_m + dh).max(floor);
+        }
+        self.level_m - before
+    }
+}
+
+/// The ledger the world carries.
+#[derive(Clone, Debug, Default)]
+pub struct Lakes {
+    pub basins: Vec<Basin>,
+    /// The last year the balance was struck (-1 = never).
+    pub last_year: i64,
+}
+
+impl Lakes {
+    /// Every path-dependent number, in a fixed order.
+    pub fn hash(&self) -> u64 {
+        let mut s = String::new();
+        s.push_str(&format!("y{}\n", self.last_year));
+        for b in &self.basins {
+            s.push_str(&format!(
+                "{}|{}|{}|{}|{:.5}|{:.5}|{}|{:.5}|{}|{:.5}|{:.5}|{:.5}|{:.5}\n",
+                b.id, b.x, b.y, b.cells.len(), b.level_m, b.hi_m, b.hi_year, b.lo_m, b.lo_year,
+                b.mark_hi_m, b.mark_lo_m, b.last_inflow, b.last_evap
+            ));
+            for t in &b.strandlines {
+                s.push_str(&format!("t{}|{:.5}|{}\n", t.year, t.rel_m, t.rising as u8));
+            }
+        }
+        crate::util::fnv1a64(s.as_bytes())
+    }
+
+    /// Strandlines dated across all basins.
+    pub fn strandline_count(&self) -> usize {
+        self.basins.iter().map(|b| b.strandlines.len()).sum()
+    }
+}
+
+/// Reference open-water evaporation for a lake at this mean air
+/// temperature, m/y.
+pub fn lake_evaporation(tmean_c: f64) -> f64 {
+    (LAKE_EVAP_REF_M + LAKE_EVAP_SLOPE_M * (tmean_c - 10.0))
+        .clamp(LAKE_EVAP_RANGE_M.0, LAKE_EVAP_RANGE_M.1)
+}
+
+/// Response time for a depression of this mean fill depth, years.
+pub fn lake_response_years(fill_m: f64) -> f64 {
+    let (d0, d1) = LAKE_TAU_DEPTH_M;
+    let (t0, t1) = LAKE_TAU_YEARS;
+    let f = ((fill_m - d0) / (d1 - d0)).clamp(0.0, 1.0);
+    t0 + (t1 - t0) * f
+}
+
+/// Solve the terminal basins off the dawn's hydrology: one `Basin` per
+/// 4-connected salt component (the same components the mask was cut
+/// from), each with its lake cells, its whole D8 catchment, and the
+/// balance constants its climate sets. Names are left empty — the dawn
+/// gives them once the map's own lake names and the peoples' tongues
+/// are known. Deterministic: components in scan order, catchments by
+/// exact descent along `dirs`.
+pub fn endorheic_basins(
+    hydro: &Hydrology,
+    height: &Array2<f64>,
+    water: &Array2<bool>,
+    tmean: &Array2<f64>,
+) -> Vec<Basin> {
+    let size = hydro.salt.dim().0;
+    let n = size * size;
+    // 0 = unlabelled; k+1 = lake cells of basin k.
+    let mut label = vec![0u32; n];
+    let mut basins: Vec<Basin> = Vec::new();
+    for y in 0..size {
+        for x in 0..size {
+            if !hydro.salt[[y, x]] || label[y * size + x] != 0 {
+                continue;
+            }
+            let k = basins.len();
+            let mut comp = vec![(y, x)];
+            label[y * size + x] = (k + 1) as u32;
+            let mut qi = 0usize;
+            while qi < comp.len() {
+                let (cy, cx) = comp[qi];
+                qi += 1;
+                for (dy, dx) in crate::grid::N4 {
+                    let ny = cy as isize + dy;
+                    let nx = cx as isize + dx;
+                    if ny < 0 || nx < 0 || ny >= size as isize || nx >= size as isize {
+                        continue;
+                    }
+                    let (ny, nx) = (ny as usize, nx as usize);
+                    if hydro.salt[[ny, nx]] && label[ny * size + nx] == 0 {
+                        label[ny * size + nx] = (k + 1) as u32;
+                        comp.push((ny, nx));
+                    }
+                }
+            }
+            let m = comp.len() as f64;
+            let fill_m = comp
+                .iter()
+                .map(|&(a, b)| (hydro.filled[[a, b]] - height[[a, b]]) * crate::constants::METRES_PER_UNIT)
+                .sum::<f64>()
+                / m;
+            let tmean_c = comp.iter().map(|&(a, b)| tmean[[a, b]]).sum::<f64>() / m;
+            // anchor: the deepest cell (largest fill), scan-order tie
+            let &(ay, ax) = comp
+                .iter()
+                .max_by(|&&(a1, b1), &&(a2, b2)| {
+                    let d1 = hydro.filled[[a1, b1]] - height[[a1, b1]];
+                    let d2 = hydro.filled[[a2, b2]] - height[[a2, b2]];
+                    d1.partial_cmp(&d2).unwrap().then((a2, b2).cmp(&(a1, b1)))
+                })
+                .unwrap();
+            let evap_m = lake_evaporation(tmean_c);
+            let tau_y = lake_response_years(fill_m);
+            let full_m = tau_y * LAKE_SHAPE * evap_m;
+            basins.push(Basin {
+                id: k,
+                name: String::new(),
+                x: ax as i64,
+                y: ay as i64,
+                cells: comp.iter().map(|&(a, b)| (b as u16, a as u16)).collect(),
+                catchment: Vec::new(),
+                fill_m,
+                tmean_c,
+                evap_m,
+                tau_y,
+                full_m,
+                level_m: full_m,
+                hi_m: full_m,
+                hi_year: 0,
+                lo_m: full_m,
+                lo_year: 0,
+                mark_hi_m: full_m,
+                mark_lo_m: full_m,
+                last_dp: 0.0,
+                last_dt: 0.0,
+                last_inflow: 1.0,
+                last_evap: 1.0,
+                strandlines: Vec::new(),
+            });
+        }
+    }
+    if basins.is_empty() {
+        return basins;
+    }
+    // Catchments: every land cell's water walks the D8 tree until it
+    // reaches a terminal; a terminal on a salt cell belongs to that
+    // basin, anything else (the sea, a spill) belongs to none. Paths are
+    // labelled as they resolve, so every cell is walked once. Label
+    // u32::MAX marks "drains elsewhere".
+    const NONE: u32 = u32::MAX;
+    let mut path: Vec<usize> = Vec::new();
+    for start in 0..n {
+        if label[start] != 0 {
+            continue;
+        }
+        let (sy, sx) = (start / size, start % size);
+        if water[[sy, sx]] {
+            label[start] = NONE;
+            continue;
+        }
+        path.clear();
+        let mut cur = start;
+        let owner = loop {
+            let l = label[cur];
+            if l != 0 {
+                break l;
+            }
+            path.push(cur);
+            let (cy, cx) = (cur / size, cur % size);
+            let d = hydro.dirs[[cy, cx]];
+            if d < 0 {
+                break NONE;
+            }
+            let (dy, dx) = N8[d as usize];
+            let ny = cy as isize + dy;
+            let nx = cx as isize + dx;
+            if ny < 0 || nx < 0 || ny >= size as isize || nx >= size as isize {
+                break NONE;
+            }
+            cur = ny as usize * size + nx as usize;
+        };
+        for &p in &path {
+            label[p] = owner;
+        }
+        if owner != NONE {
+            let b = &mut basins[(owner - 1) as usize];
+            for &p in &path {
+                b.catchment.push(((p % size) as u16, (p / size) as u16));
+            }
+        }
+    }
+    basins
+}
+
+/// M93 — diagnostics bands for the breathing lakes.
+pub const LAKE_BANDS: &[Band] = &[
+    Band { name: "lake level lag years", sweet: (0.0, 1.0), hard: (0.0, 1.99), target: "M93 gate: worst-basin lag of level behind the catchment's wet/dry year, argmax cross-correlation — under two years" },
+    Band { name: "lake level tracking r", sweet: (0.5, 1.0), hard: (0.3, 1.0), target: "M93: worst-basin peak correlation of level with the catchment rain anomaly — the shore answers the sky" },
+    Band { name: "lake level swing m", sweet: (0.15, 4.0), hard: (0.05, 12.0), target: "M93: median basin's level std over the run — playa lakes breathe decimetres to metres (Eyre 0–6 m, Great Salt Lake ±2 m/century)" },
+    Band { name: "strandlines per basin-century", sweet: (0.2, 4.0), hard: (0.02, 12.0), target: "M93: dated terraces per basin per 100 y after burn-in — a handful a century, never one a year" },
+];

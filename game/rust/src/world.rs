@@ -317,6 +317,12 @@ pub struct World {
     /// who drowned, how deep, what the ground was given — are state, and
     /// ride the replay identity line.
     pub floods: crate::flood::Floods,
+    /// M93 — the lake ledger: every terminal basin's level, struck once
+    /// a year from inflow minus evaporation under the year's sky, with
+    /// the exact records it has reached and the strandlines it dated.
+    /// The geometry is the dawn's; the *level* remembers, so the ledger
+    /// rides the replay identity line.
+    pub lakes: hydrology::Lakes,
     /// M90 — the margin ledger: every cell whose farmable verdict is a
     /// single solved threshold on the composed forcing. Derived state —
     /// a pure function of the dawn grids, regenerated bit-identically —
@@ -439,6 +445,9 @@ pub struct GenBuilder {
     /// longer so the biome pass can read the permafrost table depth.
     cont64: Option<Array2<f64>>,
     hydro: Option<hydrology::Hydrology>,
+    /// M93 — the terminal basins, solved beside the hydrology; named
+    /// and handed to the world at dawn.
+    basins: Option<Vec<hydrology::Basin>>,
     biome_map: Option<Array2<u8>>,
     crops: Option<Array2<u8>>,
     /// M90 — the margin ledger, solved beside the crop classification.
@@ -500,6 +509,7 @@ impl GenBuilder {
             pamp64: None,
             cont64: None,
             hydro: None,
+            basins: None,
             biome_map: None,
             crops: None,
             margins: None,
@@ -714,6 +724,17 @@ impl GenBuilder {
             ice.melt = hydro.melt.mapv(|x| x as f32);
             ice.melt_amp = hydro.melt_amp.mapv(|x| x as f32);
         }
+        // M93 — the terminal basins keep their geometry: lake cells,
+        // whole D8 catchments and the balance constants their climate
+        // sets. Solved here, while `dirs` and the filled surface still
+        // exist; the world only ever sees the ledger.
+        let basins = hydrology::endorheic_basins(
+            &hydro,
+            self.height64.as_ref().unwrap(),
+            self.water.as_ref().unwrap(),
+            self.tmean64.as_ref().unwrap(),
+        );
+        self.basins = Some(basins);
         self.hydro = Some(hydro);
         self.timings.push(("hydrology", now_ms() - t2));
     }
@@ -1145,6 +1166,47 @@ impl GenBuilder {
         chron.rulers =
             chronicle::init_rulers(&mut rng, &realms, &cultures, &mut taken, &mut registry);
 
+        // M93 — the terminal lakes take their names: a basin that holds
+        // a named lake feature answers to it; the rest are coined in the
+        // tongue of the nearest people within reach (M3.1's rule), or in
+        // the Old Tongue where no one lives near. Named from a stream of
+        // their own so no other name on the map moves. Each unnamed
+        // basin joins the cast so its strandlines link to a place.
+        let lakes = {
+            let mut rng93 = crate::util::rng(seed + 9300);
+            let mut basins = self.basins.take().expect("hydrology stage ran");
+            for b in basins.iter_mut() {
+                let inside = |fx: i64, fy: i64| {
+                    b.cells.iter().any(|&(cx, cy)| cx as i64 == fx && cy as i64 == fy)
+                };
+                if let Some(f) = features.iter().find(|f| f.t == "lake" && inside(f.x, f.y)) {
+                    b.name = f.name.clone();
+                    continue;
+                }
+                let mut style = "old".to_string();
+                let mut best = f64::INFINITY;
+                for s in &setts {
+                    let d2 = ((s.x - b.x) as f64).powi(2) + ((s.y - b.y) as f64).powi(2);
+                    if d2 < best {
+                        best = d2;
+                        style = cultures[s.people.idx()].style.clone();
+                    }
+                }
+                if best.sqrt() > naming::TONGUE_REACH {
+                    style = "old".to_string();
+                }
+                let c = naming::coin(&mut rng93, &style, &mut taken);
+                let mut name = naming::styled_phrase(&mut rng93, &style, "lake", &c.word);
+                if !taken.insert(name.clone()) {
+                    name = format!("{} Pan", c.word);
+                    taken.insert(name.clone());
+                }
+                b.name = name;
+                registry.add(EntityKind::Feature, &b.name, 0, None, b.x, b.y);
+            }
+            hydrology::Lakes { basins, last_year: -1 }
+        };
+
         let mut events: Vec<Event> =
             chronicle::founding_myths(&mut rng, &cultures, &features, &world_name);
         for (si, s) in setts.iter().enumerate() {
@@ -1268,6 +1330,7 @@ impl GenBuilder {
             storm_marks: Vec::new(),
             droughts: crate::drought::Droughts::default(),
             floods: crate::flood::Floods::default(),
+            lakes,
             fields_ledger: self.margins.take().expect("fertility stage ran"),
             fields_sky: 0.0,
             fields_log: Vec::new(),
@@ -1865,6 +1928,18 @@ impl World {
         // solved threshold keeps naming the same ground.
         for c in self.ice_ledger.cells.iter_mut() {
             c.x += pad as u32;
+        }
+
+        // M93 — the lake ledger's cells, catchments and anchors ride it
+        // too: a basin keeps naming the same water.
+        for b in self.lakes.basins.iter_mut() {
+            b.x += pad as i64;
+            for c in b.cells.iter_mut() {
+                c.0 += pad as u16;
+            }
+            for c in b.catchment.iter_mut() {
+                c.0 += pad as u16;
+            }
         }
 
 
@@ -4569,6 +4644,149 @@ impl World {
                 text,
                 x,
                 y,
+                ..Default::default()
+            });
+        }
+        events
+    }
+
+    /// M93 — lakes that breathe. In the year's last month every terminal
+    /// basin's balance is struck: the catchment's rain anomaly (weighted
+    /// by the rain each cell normally gets) sets the inflow through the
+    /// closed-basin runoff elasticity, the water's temperature anomaly sets the
+    /// evaporation, and the level answers by the bowl's bathymetry. The
+    /// records are kept exactly; a strandline is dated only when the
+    /// level has moved [`hydrology::STRANDLINE_STEP_M`] beyond the stand
+    /// at the last terrace of its sign, and never inside the burn-in.
+    /// No die is drawn: every level is re-derivable from the seed.
+    pub(crate) fn lake_pass(&mut self, month_abs: i64) -> Vec<Event> {
+        let mut events = Vec::new();
+        if month_abs.rem_euclid(12) != 11 || self.lakes.basins.is_empty() {
+            return events;
+        }
+        let year = month_abs / 12;
+        if self.lakes.last_year >= year {
+            return events;
+        }
+        // The year's forcing per basin, read off the same pointwise sky
+        // law the rivers and harvests read (dt in °C, dp as a fraction).
+        // The full-grid sky is a diagnostics path and costs a whole map
+        // per call; here the catchment is sampled at a fixed stride
+        // through its cell list (a few dozen points per basin — the
+        // anomaly field is smooth at the scale of a catchment) and every
+        // sample is weighted by the rain that cell normally gets.
+        let rows = self.fields.tmean.dim().0;
+        let osc = self.year_osc(year);
+        let drift = self.year_forcing(year);
+        let anom = |cx: u16, cy: u16| -> (f64, f64) {
+            climate::year_anomaly_at(
+                &self.variability,
+                rows,
+                cx as usize,
+                cy as usize,
+                year,
+                osc,
+                drift,
+            )
+        };
+        let forcing: Vec<(f64, f64)> = self
+            .lakes
+            .basins
+            .iter()
+            .map(|b| {
+                let mut wsum = 0.0f64;
+                let mut psum = 0.0f64;
+                let mut tsum = 0.0f64;
+                let mut tn = 0usize;
+                let stride = |n: usize| (n / hydrology::LAKE_FORCING_SAMPLES).max(1);
+                for &(cx, cy) in b.catchment.iter().step_by(stride(b.catchment.len())) {
+                    let w = self.fields.precip[[cy as usize, cx as usize]].max(0.0) as f64;
+                    let (_, dp) = anom(cx, cy);
+                    wsum += w * dp;
+                    psum += w;
+                }
+                for &(cx, cy) in b.cells.iter().step_by(stride(b.cells.len())) {
+                    let w = self.fields.precip[[cy as usize, cx as usize]].max(0.0) as f64;
+                    let (dt, dp) = anom(cx, cy);
+                    wsum += w * dp;
+                    psum += w;
+                    tsum += dt;
+                    tn += 1;
+                }
+                let dpb = if psum > 0.0 { wsum / psum } else { 0.0 };
+                let dtb = if tn > 0 { tsum / tn as f64 } else { 0.0 };
+                (dtb, dpb)
+            })
+            .collect();
+        let burn_in = year < hydrology::STRANDLINE_BURN_IN_YEARS;
+        let mut lines: Vec<(usize, i64, bool, f64)> = Vec::new();
+        for (i, b) in self.lakes.basins.iter_mut().enumerate() {
+            let (dtb, dpb) = forcing[i];
+            let inflow = (1.0 + hydrology::LAKE_INFLOW_GAIN * dpb)
+                .clamp(hydrology::LAKE_INFLOW_FACTOR.0, hydrology::LAKE_INFLOW_FACTOR.1);
+            let evap = (1.0 + hydrology::LAKE_EVAP_T_GAIN * dtb)
+                .clamp(hydrology::LAKE_EVAP_FACTOR.0, hydrology::LAKE_EVAP_FACTOR.1);
+            b.advance(inflow, evap);
+            b.last_dp = dpb;
+            b.last_dt = dtb;
+            b.last_inflow = inflow;
+            b.last_evap = evap;
+            let h = b.level_m;
+            if h > b.hi_m {
+                b.hi_m = h;
+                b.hi_year = year;
+                if !burn_in && h - b.mark_hi_m >= hydrology::STRANDLINE_STEP_M {
+                    b.mark_hi_m = h;
+                    b.strandlines.push(hydrology::Strandline { year, rel_m: h - b.full_m, rising: true });
+                    lines.push((i, year, true, h - b.full_m));
+                }
+            }
+            if h < b.lo_m {
+                b.lo_m = h;
+                b.lo_year = year;
+                if !burn_in && b.mark_lo_m - h >= hydrology::STRANDLINE_STEP_M {
+                    b.mark_lo_m = h;
+                    b.strandlines.push(hydrology::Strandline { year, rel_m: h - b.full_m, rising: false });
+                    lines.push((i, year, false, h - b.full_m));
+                }
+            }
+            if burn_in {
+                // the watched generation: records set, no terrace dated
+                b.mark_hi_m = b.mark_hi_m.max(h);
+                b.mark_lo_m = b.mark_lo_m.min(h);
+            }
+        }
+        self.lakes.last_year = year;
+        for (i, year, rising, rel) in lines {
+            let b = &self.lakes.basins[i];
+            // how long since a stand this extreme: the previous terrace of
+            // this sign, or the dawn if there was none
+            let since = b
+                .strandlines
+                .iter()
+                .rev()
+                .skip(1)
+                .find(|t| t.rising == rising)
+                .map(|t| year - t.year)
+                .unwrap_or(year);
+            let text = if rising {
+                format!(
+                    "{} rises past every shore the living remember — the water stands {:.1} m above its founding mark, the highest in {} years, and a new strandline is cut along the hills.",
+                    b.name, rel, since
+                )
+            } else {
+                format!(
+                    "{} shrinks below its lowest remembered shore — the water stands {:.1} m under its founding mark, the lowest in {} years, and a white strandline of salt shows where the old beach lay.",
+                    b.name, -rel, since
+                )
+            };
+            events.push(Event {
+                m: month_abs,
+                s: b.name.clone(),
+                k: EventKind::Strandline,
+                text,
+                x: b.x,
+                y: b.y,
                 ..Default::default()
             });
         }

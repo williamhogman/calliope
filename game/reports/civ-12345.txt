@@ -17,10 +17,10 @@ world "Talomar" · 4 peoples · 4 realms · 16 settlements at dawn
   66   104969     58     100      61286      1497     47    155    61
   72   160365     81     143      95096      2138     51    157    83
   78   216141     97     174     142182      3811     67    158    72
-  84   278614     98     175     192195      5741     69    162   114
+  84   278614     98     175     192195      5741     69    162   115
   90   374955    100     177     263292     12844     74    164   102
   96   446622    103     180     379328     19636     76    166   109
- 102   568444    103     180     503054     36781     76    168    90
+ 102   568444    103     180     503054     36781     76    168    91
  108   701244    103     180     652427     56541     76    168    92
  114   799900    103     180     846748     78448     76    169    93
  120   849394    103     180    1098789    102488     77    169    96
@@ -30,7 +30,7 @@ world "Talomar" · 4 peoples · 4 realms · 16 settlements at dawn
  144   932252    104     181    1885155    222286    139    170    88
  150   986972    104     178    2084011    247300    171    170   109
 
-event census: abandon:204 · age:1 · clearing:197 · depletion:127 · disaster:1857 · discovery:86 · drought:124 · economy:50 · era:13 · famine:343 · festival:149 · flood:898 · found:89 · growth:1323 · kindred:13 · myth:41 · omen:12 · quake:1 · realm:392 · ruler:82 · society:403 · tech:64 · trade:2853 · war:500 · wonder:393
+event census: abandon:204 · age:1 · clearing:197 · depletion:127 · disaster:1857 · discovery:86 · drought:124 · economy:50 · era:13 · famine:343 · festival:149 · flood:898 · found:89 · growth:1323 · kindred:13 · myth:41 · omen:12 · quake:1 · realm:392 · ruler:82 · society:403 · strandline:8 · tech:64 · trade:2853 · war:500 · wonder:393
 strikes 86 · depletions 127 · mining camps 2 · wars 500
 statecraft: 500 war events · 266 towns changed hands · 28 secessions · polities 4–14 · coalitions yes · vassals ≤2
 longest silence between events: 8 months
@@ -213,7 +213,7 @@ monsoon fortune (M92): 22 rice towns (20 riverine · strongest lean 0.43) · 18 
 [PASS] civ membership is a partition        0 shared tongues   (M13.1: kinship-closure — one tongue, one civilization)
 [PASS] no crownless civilization stands           0 hollow   (M13.4: losing every crown opens the interregnum)
 [PASS] successor realms per collapse        1.0 over 1 falls   (M13.4: fragmentation through the M11 ladder, not deletion)
-[WARN] events per year                                68.1   (sweet 2–48 · hard 0.5–100)
+[WARN] events per year                                68.2   (sweet 2–48 · hard 0.5–100)
 [PASS] no long silences                               8 mo   (≤36 months between chronicle entries)
 [PASS] strikes happened                                 86   (the age of prospectors must actually happen)
 [PASS] era advanced past Stone                the High Age   (≥ Age of Bronze by now)

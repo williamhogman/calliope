@@ -79,6 +79,10 @@ pub enum EventKind {
     /// M90 — the margin fails: upland fields go back to the wild under
     /// a cold sky. Appended last; wire discriminants hold.
     Abandon,
+    /// M93 — lakes that breathe: a terminal lake crosses a recorded
+    /// extreme and leaves a dated strandline. Appended last; wire
+    /// discriminants hold.
+    Strandline,
 }
 
 impl EventKind {
@@ -144,6 +148,8 @@ event_table! {
     Clearing  => family nature,  weight 2, fortune 1;
     // …and fails under a cold one. Appended last: wire codes are stable.
     Abandon   => family nature,  weight 2, fortune -1;
+    // M93 — a shore that rose or fell past every mark. Appended last.
+    Strandline => family nature, weight 2, fortune 0;
 }
 
 /// E5.5 — inline storage for the common 0–2 entity ids per event.
@@ -199,6 +205,7 @@ pub fn headline_worthy(k: EventKind) -> bool {
             | EventKind::Drought
             | EventKind::Age
             | EventKind::Optimum
+            | EventKind::Strandline
     )
 }
 

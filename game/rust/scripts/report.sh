@@ -101,6 +101,7 @@ if [ "$MODE" = "quick" ]; then
   SEEDS=(12345)
   CIV_YEARS=60
   ECO_YEARS=40
+  HYDRO_YEARS=120
   TELL_YEARS=80
   SWEEP="512 60 12345 777 31337"
   DET_MONTHS=60
@@ -114,6 +115,7 @@ else
   SEEDS=(12345 777 90210)
   CIV_YEARS=150
   ECO_YEARS=100
+  HYDRO_YEARS=240
   TELL_YEARS=150
   SWEEP="512 100 12345 777 31337 90210 555"
   DET_MONTHS=120
@@ -171,7 +173,7 @@ for s in "${SEEDS[@]}"; do
   # --explain: the M61 provenance-chain gate rides every terrain run.
   run "terrain-$s.txt"   terrain   "$s" "$SIZE" --explain
   run "climate-$s.txt"   climate   "$s" "$SIZE"
-  run "hydro-$s.txt"     hydro     "$s" "$SIZE"
+  run "hydro-$s.txt"     hydro     "$s" "$SIZE" "$HYDRO_YEARS"
   run "resources-$s.txt" resources "$s" "$SIZE"
 done
 # M55 — the composed civ ensemble carries the first two seeds. The ensemble
