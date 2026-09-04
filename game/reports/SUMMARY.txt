@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-09-04 17:29 UTC
+mode: full · size: 512 · generated: 2026-09-04 18:19 UTC
 
-totals: 1520 pass · 37 warn · 4 fail
+totals: 1523 pass · 38 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -10,17 +10,16 @@ totals: 1520 pass · 37 warn · 4 fail
    all checks pass
 
 -- bench.txt
-[WARN] tick rate                                   80 mo/s   (sweet ≥100 mo/s · hard ≥25)
 [WARN] median tick payload                          6900 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
 
 -- browser.txt
-[WARN] boot to engine ready                               20.3 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
+[WARN] boot to engine ready                               20.2 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
 
 -- build.txt
    all checks pass
 
 -- civ-12345.txt
-[WARN] events per year                                68.1   (sweet 2–48 · hard 0.5–100)
+[WARN] events per year                                68.2   (sweet 2–48 · hard 0.5–100)
 [WARN] famine events per century                     134.7   (M2.6: the rains must fail sometimes (rain-fed verdict only — the paddies' cadence is its own band; hard ceiling carries the M92 migration coupling, measured 166 coupled · 114 uncoupled on the worst sweep seed))
 [WARN] named droughts per century                     82.7   (M80: a drought is a generational event the chronicle can carry, not annual weather)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
@@ -73,8 +72,6 @@ totals: 1520 pass · 37 warn · 4 fail
 
 -- gate.txt
 [WARN] the veto bites somewhere in the ensemble 0 refused town(s) over 2 civ lane(s) [12345:0 · 777:0]   (M55, held as a want since M81: the veto-lifted run standing ≥1 town beyond its founder's well reach is a contingency of composed history — M81's population toll lawfully moved every canonical desert win past deep-well craft, so nothing is left to refuse; the law itself stays proven by the property lanes and the no-town-drinks-where-it-cannot musts)
-[FAIL] the suite composes clean             2 fail · 36 warn · 1513 pass   (M65: every composed lane 0 FAIL — held rows hold the era, by design)
-[FAIL] era I seals                               HELD OPEN   (M65 gate: the deep earth closes only over a clean composed suite)
 
 -- hydro-12345.txt
 [WARN] oasis share of arid land %                    25.7%   (M55: arid cells standing over a table within root reach (8 m) · sweet 0.2–25% · hard 0–60%)
@@ -101,11 +98,12 @@ totals: 1520 pass · 37 warn · 4 fail
 [WARN] ruins per century (after y100)                20.33   (M9.1 restated at M81: mature worlds carry ruins; the M77-M81 disaster stack may fell up to a quarter of the standing census per century before ruin outpaces renewal)
 
 -- perf.txt
-[WARN] stage fertility ms                   161 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[WARN] stage settlements ms                 298 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2956 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[FAIL] tick rate year 0                     94 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[FAIL] tick rate year 100                   49 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage fertility ms                   169 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage naming ms                      130 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
+[WARN] stage settlements ms                 255 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         2635 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     511 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   100 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
@@ -132,7 +130,7 @@ totals: 1520 pass · 37 warn · 4 fail
 [WARN] mean events/year                               51.7   (sweet 2–48 · hard 0.5–100)
 
 -- systems.txt
-[WARN] ECS parallel ceiling stays low               2.691×   (ADR-0022: re-open the bevy_ecs question if this rises)
+   all checks pass
 
 -- teleconnection.txt
    all checks pass

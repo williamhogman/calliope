@@ -36,26 +36,26 @@ LAKES THAT BREATHE (M93) · 14 basins · 240 years
   Lake Belath                  @(439,324) ·  179 cells   2864 km² · catchment    8176 km² · fill  76.9 m · T 10.4 °C · E₀ 0.92 m/y · τ 2.08 y · h₀ 2.88 m
   The Karays Mere              @(482,327) ·    4 cells     64 km² · catchment     272 km² · fill  27.0 m · T 12.8 °C · E₀ 1.05 m/y · τ 1.25 y · h₀ 1.97 m
   basin                          std m    lag   r@lag    hi m    lo m  lines
-  The Calrin Mere                0.197      0    0.91   +0.62   -0.56      0
+  The Calrin Mere                0.179      0    0.91   +0.56   -0.52      0
   The Talath Mere                0.237      0    0.91   +0.52   -0.67      0
   The Eleth Mere                 0.278      0    0.87   +0.68   -0.84      1
-  The Farion Mere                0.314      0    0.78   +0.79   -0.87      1
+  The Farion Mere                0.355      0    0.78   +0.96   -0.84      1
   The Aurrin Mere                0.241      0    0.90   +0.69   -0.87      0
   Lake Farath                    0.341      0    0.88   +0.73   -1.05      0
-  Lake Dordor                    0.294      0    0.90   +0.64   -0.84      0
-  The Aureys Mere                0.408      0    0.92   +0.81   -1.31      1
-  Lake Halowyn                   0.366      0    0.92   +0.82   -1.15      2
-  Lake Belrin                    0.390      0    0.89   +0.82   -1.22      0
-  The Quelaath Mere              0.349      0    0.91   +0.72   -1.02      1
-  Lake Zarmar                    0.164      0    0.83   +0.50   -0.40      0
-  Lake Belath                    0.339      0    0.80   +0.82   -1.10      1
+  Lake Dordor                    0.294      0    0.90   +0.58   -0.85      1
+  The Aureys Mere                0.394      0    0.92   +0.86   -1.32      2
+  Lake Halowyn                   0.360      0    0.92   +0.81   -1.15      1
+  Lake Belrin                    0.394      0    0.89   +0.83   -1.23      0
+  The Quelaath Mere              0.348      0    0.91   +0.71   -1.01      1
+  Lake Zarmar                    0.194      0    0.82   +0.55   -0.44      0
+  Lake Belath                    0.336      0    0.80   +0.84   -1.06      1
   The Karays Mere                0.285      0    0.91   +0.65   -1.10      1
-  strandlines: 8 dated (2 rising · 6 falling) · ledger 8 · dup 0 · in burn-in 0 · 0.27 per basin-century
+  strandlines: 9 dated (1 rising · 8 falling) · ledger 9 · dup 0 · in burn-in 0 · 0.31 per basin-century
     y32   The Karays Mere — The Karays Mere shrinks below its lowest remembered shore — the water stands 1.0 m under its founding mark, the lowest in 32 years, and a white strandline of salt shows where the old beach lay.
     y49   The Quelaath Mere — The Quelaath Mere shrinks below its lowest remembered shore — the water stands 0.9 m under its founding mark, the lowest in 49 years, and a white strandline of salt shows where the old beach lay.
     y50   The Eleth Mere — The Eleth Mere rises past every shore the living remember — the water stands 0.7 m above its founding mark, the highest in 50 years, and a new strandline is cut along the hills.
-    y65   The Farion Mere — The Farion Mere shrinks below its lowest remembered shore — the water stands 0.9 m under its founding mark, the lowest in 65 years, and a white strandline of salt shows where the old beach lay.
-  lake ledger hash 313ba970d06ecad4
+    y69   The Aureys Mere — The Aureys Mere shrinks below its lowest remembered shore — the water stands 1.0 m under its founding mark, the lowest in 69 years, and a white strandline of salt shows where the old beach lay.
+  lake ledger hash dc0b80bbf3045ec1
 
 
 ---- checks ----------------------------------------------------------
@@ -89,9 +89,9 @@ LAKES THAT BREATHE (M93) · 14 basins · 240 years
 [PASS] lake levels finite                            0 bad   (M93: the balance never blows up — floored at the playa residual, substepped)
 [PASS] lake level lag years                 0 y (worst basin)   (M93 gate: worst-basin lag of level behind the catchment's wet/dry year, argmax cross-correlation — under two years)
 [PASS] lake level tracking r                0.78 (worst basin)   (M93: worst-basin peak correlation of level with the catchment rain anomaly — the shore answers the sky)
-[PASS] lake level swing m                   0.31 m median std   (M93: median basin's level std over the run — playa lakes breathe decimetres to metres (Eyre 0–6 m, Great Salt Lake ±2 m/century))
-[PASS] strandlines per basin-century                  0.27   (M93: dated terraces per basin per 100 y after burn-in — a handful a century, never one a year)
-[PASS] strandlines dated and anchored       0 of 8 undated   (M93 gate: every strandline event carries its month, its basin and a map anchor)
-[PASS] strandlines never duplicated         0 dup · ledger 8 vs chronicle 8   (M93 gate: one line per (basin, sign, year), and the ledger and the chronicle agree to the count)
+[PASS] lake level swing m                   0.34 m median std   (M93: median basin's level std over the run — playa lakes breathe decimetres to metres (Eyre 0–6 m, Great Salt Lake ±2 m/century))
+[PASS] strandlines per basin-century                  0.31   (M93: dated terraces per basin per 100 y after burn-in — a handful a century, never one a year)
+[PASS] strandlines dated and anchored       0 of 9 undated   (M93 gate: every strandline event carries its month, its basin and a map anchor)
+[PASS] strandlines never duplicated         0 dup · ledger 9 vs chronicle 9   (M93 gate: one line per (basin, sign, year), and the ledger and the chronicle agree to the count)
 [PASS] strandlines are records, stepped apart monotone true · spaced true · burn-in 0   (M93: each terrace stands ≥STRANDLINE_STEP_M beyond the last of its sign, in date order, none before the watched generation)
 CHECKS: 34 pass · 1 warn · 0 fail
