@@ -14,7 +14,7 @@ world "Talomar" · 4 peoples · 4 realms · 16 settlements at dawn
   48    32274     26      42      16596       871     35    152    22
   54    52823     33      55      26591       732     39    154    45
   60    79551     41      71      41965      1147     42    155    50
-  66   104969     58     100      61286      1497     47    155    61
+  66   104969     58     100      61286      1497     47    155    63
   72   160365     81     143      95096      2138     51    157    83
   78   216141     97     174     142182      3811     67    158    72
   84   278614     98     175     192195      5741     69    162   114
@@ -30,7 +30,7 @@ world "Talomar" · 4 peoples · 4 realms · 16 settlements at dawn
  144   932252    104     181    1885155    222286    139    170    88
  150   986972    104     178    2084011    247300    171    170   109
 
-event census: abandon:204 · age:1 · clearing:197 · depletion:127 · disaster:1857 · discovery:86 · drought:124 · economy:50 · era:13 · famine:343 · festival:149 · flood:898 · found:89 · growth:1323 · kindred:13 · myth:41 · omen:12 · quake:1 · realm:392 · ruler:82 · society:403 · tech:64 · trade:2853 · war:500 · wonder:393
+event census: abandon:204 · age:1 · clearing:197 · depletion:127 · disaster:1857 · discovery:86 · drought:124 · economy:50 · era:13 · famine:343 · festival:149 · flood:898 · found:89 · growth:1323 · kindred:13 · myth:41 · omen:12 · quake:1 · realm:392 · ruler:82 · society:403 · strandline:6 · tech:64 · trade:2853 · war:500 · wonder:393
 strikes 86 · depletions 127 · mining camps 2 · wars 500
 statecraft: 500 war events · 266 towns changed hands · 28 secessions · polities 4–14 · coalitions yes · vassals ≤2
 longest silence between events: 8 months

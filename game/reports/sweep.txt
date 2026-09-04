@@ -2,15 +2,15 @@
  CALLIOPE DIAGNOSTIC · SWEEP                        size 512 · 100y · 5 seeds
 ========================================================================
    seed  land%   des%   for%  mtn%   isl  dep towns       pop   grw×   era arts strk camp  war   rt  ev/y  genms  flags
-  12345   35.3   19.8   23.4   8.7    28  173 16→103    532480 396.49     3   76   49    1  332  180  50.6   3004  ·
-    777   36.1   20.1   22.3   7.6    25  167 16→98    894255 694.30     3  102   37    6  378  157  51.5   2436  ·
-  31337   33.0   18.2   18.7   3.6    30  158 16→96    435026 310.73     3   70   41    0  305  168  43.8   2018  ·
-  90210   35.9   17.5   20.3   2.6    23  154 16→100    486786 326.05     3   76   51    3  362  174  58.4   2189  ·
-    555   34.9   20.2   22.1   3.5    26  140 16→99    652993 394.80     3   82   36    2  468  166  55.2   2283  ·
----mean   35.0   19.2   21.4   5.2                                     424.47                        51.9
+  12345   35.3   19.8   23.4   8.7    28  173 16→103    532480 396.49     3   76   49    1  332  180  50.6   3021  ·
+    777   36.1   20.1   22.3   7.6    25  167 16→102    746161 579.32     3  103   39    5  445  161  50.2   3517  ·
+  31337   33.0   18.2   18.7   3.6    30  158 16→96    435026 310.73     3   70   41    0  305  168  43.9   2752  ·
+  90210   35.9   17.5   20.3   2.6    23  154 16→100    486786 326.05     3   76   51    3  362  174  58.5   2962  ·
+    555   34.9   20.2   22.1   3.5    26  140 16→99    652993 394.80     3   82   36    2  468  166  55.2   2671  ·
+---mean   35.0   19.2   21.4   5.2                                     401.48                        51.7
 
 flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected · I malformed-ice · M malformed-monsoon
-sea ice (M37): icebound lanes per seed: 12345:11 · 777:12 · 31337:16 · 90210:24 · 555:16
+sea ice (M37): icebound lanes per seed: 12345:11 · 777:15 · 31337:16 · 90210:24 · 555:16
 monsoon (M48): calendar lanes per seed: 12345:37 · 777:28 · 31337:40 · 90210:19 · 555:32
 
 ---- checks ----------------------------------------------------------
@@ -18,8 +18,8 @@ monsoon (M48): calendar lanes per seed: 12345:37 · 777:28 · 31337:40 · 90210:
 [PASS] mean desert share                             19.2%   (sweet 12–28% · hard 6–38%)
 [WARN] mean forest share                             21.4%   (sweet 25–60% · hard 15–75%)
 [PASS] mean mountain share                            5.2%   (sweet 2–14% · hard 0.5–22%)
-[PASS] mean growth                                 424.47×   (M2 crop-package K: sweet 2–1200×)
-[WARN] mean events/year                               51.9   (sweet 2–48 · hard 0.5–100)
+[PASS] mean growth                                 401.48×   (M2 crop-package K: sweet 2–1200×)
+[WARN] mean events/year                               51.7   (sweet 2–48 · hard 0.5–100)
 [PASS] all seeds clean of hard flags             all clean   (no B/P/R/G/S/U/I/M flags on any seed)
 [PASS] strikes on every seed                           5/5   (prospecting fires everywhere)
 [PASS] icebound closures well-formed on every seed    0 malformed   (M37 gate: winter arcs only, hemisphere-true, across the sweep)
@@ -33,5 +33,5 @@ monsoon (M48): calendar lanes per seed: 12345:37 · 777:28 · 31337:40 · 90210:
 [PASS] famine strikes somewhere (≥60% of seeds)            5/5   (M2.6: failed rains have a price)
 [PASS] famine bounded (<190/century worst seed)    166/century   (M2.6: hunger is a visitation, not the weather — ceiling carries the M92 migration coupling (measured 166 coupled · 114 uncoupled on the worst seed))
 [PASS] monsoon famine bounded (<220/century worst seed)    130/century   (M92: the paddies' verdict is a visitation too, never the weather)
-[PASS] mean rank-size slope                 -1.25 over 5 seeds   (M2.3 gate: Zipf holds across the sweep)
+[PASS] mean rank-size slope                 -1.24 over 5 seeds   (M2.3 gate: Zipf holds across the sweep)
 CHECKS: 18 pass · 2 warn · 0 fail

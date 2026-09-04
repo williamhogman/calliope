@@ -327,6 +327,9 @@ fn hash_state(w: &World) -> u64 {
     // M81 — the flood ledger is state: who drowned, and the silt standing
     // on the ground for the season after.
     s.push_str(&format!("D{:016x}\n", w.floods.hash()));
+    // M93 — the lake ledger is state: every terminal basin's level, its
+    // records and the strandlines it dated.
+    s.push_str(&format!("L{:016x}\n", w.lakes.hash()));
     // M16/ADR-0024 — the plate sketch is state: polygons, kinds, ages.
     s.push_str(&format!("P{:016x}\n", w.plates.hash()));
     // M22 — the seismic ledger is state: seams, clocks, the quake log.
@@ -4838,9 +4841,9 @@ fn cmd_climate(seed: i64, size: usize) {
 
 // ================================================================ hydro
 
-fn cmd_hydro(seed: i64, size: usize) {
-    let w = World::generate(seed, size);
-    header("HYDROLOGY", &format!("seed {} · {}x{}", seed, w.width, size));
+fn cmd_hydro(seed: i64, size: usize, years: usize) {
+    let mut w = World::generate(seed, size);
+    header("HYDROLOGY", &format!("seed {} · {}x{} · lakes {}y", seed, w.width, size, years));
 
     let land = land_mask(&w);
     let land_n = land.iter().filter(|&&b| b).count() as f64;
@@ -5271,6 +5274,215 @@ fn cmd_hydro(seed: i64, size: usize) {
         hashed,
         if hashed { "yes".into() } else { "NO".into() },
         "M54 gate: the field is CRC-stable and part of hash_state",
+    );
+
+    // --- M93: lakes that breathe. Run the world for `years` and watch
+    // every terminal basin's level against the catchment's own wet/dry
+    // year: the balance is a first-order integrator, so the level must
+    // answer the sky at lag 0–1 with a strong positive correlation, swing
+    // decimetres to metres, and date its terraces without repeating one.
+    println!();
+    println!("LAKES THAT BREATHE (M93) · {} basins · {} years", w.lakes.basins.len(), years);
+    let nb = w.lakes.basins.len();
+    for b in w.lakes.basins.iter().take(16) {
+        println!(
+            "  {:<28} @({},{}) · {:>4} cells {:>6.0} km² · catchment {:>7.0} km² · fill {:>5.1} m · T {:>4.1} °C · E₀ {:.2} m/y · τ {:.2} y · h₀ {:.2} m",
+            b.name, b.x, b.y, b.cells.len(), b.area_km2(), b.catchment_km2(), b.fill_m, b.tmean_c, b.evap_m, b.tau_y, b.full_m
+        );
+    }
+    let basin_names: Vec<String> = w.lakes.basins.iter().map(|b| b.name.clone()).collect();
+    let unnamed = basin_names.iter().filter(|n| n.is_empty()).count();
+    let mut uniq: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let dup_names = basin_names.iter().filter(|n| !uniq.insert(n.as_str())).count();
+    // catchments are dry ground (or fresh water on its way down), disjoint
+    // from each other and from every terminal lake
+    let mut catch_seen: std::collections::HashSet<(u16, u16)> = std::collections::HashSet::new();
+    let mut catch_overlap = 0usize;
+    let mut catch_wet = 0usize;
+    let mut catch_empty = 0usize;
+    for b in &w.lakes.basins {
+        if b.catchment.is_empty() {
+            catch_empty += 1;
+        }
+        for &(cx, cy) in &b.catchment {
+            if !catch_seen.insert((cx, cy)) {
+                catch_overlap += 1;
+            }
+            let f = w.fields.flags[[cy as usize, cx as usize]];
+            // fresh lakes upstream drain on to the terminal and belong to
+            // its catchment; the sea and any salt water do not
+            if w.fields.height[[cy as usize, cx as usize]] < 0.0 || f & CellFlags::SALT.bits() != 0 {
+                catch_wet += 1;
+            }
+        }
+    }
+    for b in &w.lakes.basins {
+        for &(cx, cy) in &b.cells {
+            if catch_seen.contains(&(cx, cy)) {
+                catch_overlap += 1;
+            }
+        }
+    }
+    let catch_ok = catch_overlap == 0 && catch_wet == 0;
+    let mut level: Vec<Vec<f64>> = vec![Vec::with_capacity(years); nb];
+    let mut rain: Vec<Vec<f64>> = vec![Vec::with_capacity(years); nb];
+    let mut strand_evs: Vec<(String, i64, bool, String)> = Vec::new();
+    let mut nonfinite_levels = 0usize;
+    let mut misdated = 0usize;
+    for _ in 0..years {
+        let (evs, _, _) = w.tick(12);
+        for e in &evs {
+            if e.k == calliope::event::EventKind::Strandline {
+                let rising = e.text.contains("rises past");
+                if e.m < 0 || e.x < 0 || e.y < 0 || e.s.is_empty() {
+                    misdated += 1;
+                }
+                strand_evs.push((e.s.clone(), e.m / 12, rising, e.text.clone()));
+            }
+        }
+        for (i, b) in w.lakes.basins.iter().enumerate() {
+            if !b.level_m.is_finite() {
+                nonfinite_levels += 1;
+            }
+            level[i].push(b.level_m);
+            rain[i].push(b.last_dp);
+        }
+    }
+    // cross-correlation of level(t+lag) with rain(t), lags 0..6
+    let corr = |a: &[f64], b: &[f64]| -> f64 {
+        let n = a.len().min(b.len());
+        if n < 8 {
+            return f64::NAN;
+        }
+        let ma = a[..n].iter().sum::<f64>() / n as f64;
+        let mb = b[..n].iter().sum::<f64>() / n as f64;
+        let (mut sab, mut saa, mut sbb) = (0.0, 0.0, 0.0);
+        for i in 0..n {
+            let (da, db) = (a[i] - ma, b[i] - mb);
+            sab += da * db;
+            saa += da * da;
+            sbb += db * db;
+        }
+        if saa <= 0.0 || sbb <= 0.0 { 0.0 } else { sab / (saa * sbb).sqrt() }
+    };
+    let mut worst_lag = 0usize;
+    let mut worst_r = 1.0f64;
+    let mut swings: Vec<f64> = Vec::new();
+    println!("  {:<28} {:>7} {:>6} {:>7} {:>7} {:>7} {:>6}", "basin", "std m", "lag", "r@lag", "hi m", "lo m", "lines");
+    for i in 0..nb {
+        let lv = &level[i];
+        if lv.len() < 16 {
+            continue;
+        }
+        let mean = lv.iter().sum::<f64>() / lv.len() as f64;
+        let std = (lv.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / lv.len() as f64).sqrt();
+        swings.push(std);
+        let mut best = (0usize, f64::NEG_INFINITY);
+        for lag in 0..=6usize {
+            let r = corr(&lv[lag..], &rain[i][..lv.len() - lag]);
+            if r > best.1 {
+                best = (lag, r);
+            }
+        }
+        // a lake that never moved cannot be said to lag anything
+        if std > 1e-6 {
+            worst_lag = worst_lag.max(best.0);
+            worst_r = worst_r.min(best.1);
+        }
+        let b = &w.lakes.basins[i];
+        if i < 16 {
+            println!(
+                "  {:<28} {:>7.3} {:>6} {:>7.2} {:>+7.2} {:>+7.2} {:>6}",
+                b.name, std, best.0, best.1, b.hi_m - b.full_m, b.lo_m - b.full_m, b.strandlines.len()
+            );
+        }
+    }
+    swings.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let swing_med = if swings.is_empty() { 0.0 } else { swings[swings.len() / 2] };
+    // strandlines: dated, unique per (basin, sign, year), monotone per sign,
+    // none inside the burn-in, and the ledger agrees with the chronicle
+    let mut seen_lines: std::collections::HashSet<(String, i64, bool)> = std::collections::HashSet::new();
+    let dup_lines = strand_evs.iter().filter(|(s, y, r, _)| !seen_lines.insert((s.clone(), *y, *r))).count();
+    let early = strand_evs.iter().filter(|(_, y, _, _)| *y < calliope::hydrology::STRANDLINE_BURN_IN_YEARS).count();
+    let mut monotone = true;
+    let mut spaced = true;
+    for b in &w.lakes.basins {
+        let mut last_hi = f64::NEG_INFINITY;
+        let mut last_lo = f64::INFINITY;
+        let mut last_year: Option<i64> = None;
+        for t in &b.strandlines {
+            if t.rising {
+                if t.rel_m <= last_hi + calliope::hydrology::STRANDLINE_STEP_M - 1e-9 {
+                    if last_hi.is_finite() { spaced = false; }
+                }
+                if t.rel_m <= last_hi { monotone = false; }
+                last_hi = t.rel_m;
+            } else {
+                if t.rel_m >= last_lo - calliope::hydrology::STRANDLINE_STEP_M + 1e-9 {
+                    if last_lo.is_finite() { spaced = false; }
+                }
+                if t.rel_m >= last_lo { monotone = false; }
+                last_lo = t.rel_m;
+            }
+            if let Some(ly) = last_year { if t.year < ly { monotone = false; } }
+            last_year = Some(t.year);
+        }
+    }
+    let ledger_n = w.lakes.strandline_count();
+    let after = (years as f64 - calliope::hydrology::STRANDLINE_BURN_IN_YEARS as f64).max(1.0);
+    let per_bc = if nb == 0 { 0.0 } else { strand_evs.len() as f64 / nb as f64 / after * 100.0 };
+    println!(
+        "  strandlines: {} dated ({} rising · {} falling) · ledger {} · dup {} · in burn-in {} · {:.2} per basin-century",
+        strand_evs.len(), strand_evs.iter().filter(|e| e.2).count(), strand_evs.iter().filter(|e| !e.2).count(),
+        ledger_n, dup_lines, early, per_bc
+    );
+    for (s, y, _, text) in strand_evs.iter().take(4) {
+        println!("    y{:<4} {} — {}", y, s, text);
+    }
+    let h1 = w.lakes.hash();
+    println!("  lake ledger hash {:016x}", h1);
+    println!();
+    c.must(
+        "every terminal basin is named",
+        unnamed == 0 && dup_names == 0,
+        format!("{} basins · {} unnamed · {} duplicate", nb, unnamed, dup_names),
+        "M93: a shore the chronicle dates must answer to a name — a named lake's, or one coined in the nearest tongue",
+    );
+    c.must(
+        "basin catchments are land, disjoint",
+        catch_ok,
+        format!("{} basins · {} overlapping cells · {} wet cells · {} with no land at all", nb, catch_overlap, catch_wet, catch_empty),
+        "M93: every land cell's water ends in at most one terminal basin, and no basin counts its own water as catchment",
+    );
+    c.must(
+        "lake levels finite",
+        nonfinite_levels == 0,
+        format!("{} bad", nonfinite_levels),
+        "M93: the balance never blows up — floored at the playa residual, substepped",
+    );
+    if nb > 0 && years >= 40 {
+        c.band("lake level lag years", worst_lag as f64, format!("{} y (worst basin)", worst_lag));
+        c.band("lake level tracking r", worst_r, format!("{:.2} (worst basin)", worst_r));
+        c.band("lake level swing m", swing_med, format!("{:.2} m median std", swing_med));
+        c.band("strandlines per basin-century", per_bc, format!("{:.2}", per_bc));
+    }
+    c.must(
+        "strandlines dated and anchored",
+        misdated == 0,
+        format!("{} of {} undated", misdated, strand_evs.len()),
+        "M93 gate: every strandline event carries its month, its basin and a map anchor",
+    );
+    c.must(
+        "strandlines never duplicated",
+        dup_lines == 0 && ledger_n == strand_evs.len(),
+        format!("{} dup · ledger {} vs chronicle {}", dup_lines, ledger_n, strand_evs.len()),
+        "M93 gate: one line per (basin, sign, year), and the ledger and the chronicle agree to the count",
+    );
+    c.must(
+        "strandlines are records, stepped apart",
+        monotone && spaced && early == 0,
+        format!("monotone {} · spaced {} · burn-in {}", monotone, spaced, early),
+        "M93: each terrace stands ≥STRANDLINE_STEP_M beyond the last of its sign, in date order, none before the watched generation",
     );
     c.print();
 }
@@ -12352,7 +12564,7 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
     // Walls each system writes, by inspection of systems.rs bodies.
     // P=peoples · E=economy · C=chronicle · G=grids · D=deposits ·
     // N=names/features · R=draws the one rng stream · Q=seismic ledger
-    // · U=drought ledger · F=flood ledger + silt sheet
+    // · U=drought ledger · F=flood ledger + silt sheet · K=lake ledger
     // (own stream, order-free — M22) · –=scratch only.
     // A system is SERIAL if it writes Peoples or draws the RNG: the single
     // PCG stream is a total order — determinism law makes it unsplittable.
@@ -12371,6 +12583,10 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
         // no die is rolled — but it takes souls off the town and writes the
         // chronicle, so it stands on the serial side with the rest.
         ("flood", "F·P·C", true),
+        // M93 — the year's balance on the terminal lakes: reads the
+        // composed sky, writes the lake ledger (K) and dates strandlines
+        // into the chronicle. No die, no Peoples — parallel-safe.
+        ("lakes", "K·C", false),
         // M86 — pure chronicle: reads the derived schedule, writes events
         // only, draws no die. Parallel-safe by construction.
         ("ages", "C", false),
@@ -15620,7 +15836,7 @@ fn main() {
     match cmd {
         "terrain" => cmd_terrain(num(2, 12345), sized(3, 512), explain),
         "climate" => cmd_climate(num(2, 12345), sized(3, 512)),
-        "hydro" => cmd_hydro(num(2, 12345), sized(3, 512)),
+        "hydro" => cmd_hydro(num(2, 12345), sized(3, 512), num(4, 240) as usize),
         "resources" => cmd_resources(num(2, 12345), sized(3, 512)),
         "civ" => cmd_civ(num(2, 12345), sized(3, 512), num(4, 120) as usize),
         "economy" => cmd_economy(num(2, 12345), sized(3, 512), num(4, 80) as usize),

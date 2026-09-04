@@ -1,5 +1,5 @@
 ========================================================================
- CALLIOPE DIAGNOSTIC · HYDROLOGY                    seed 90210 · 640x512
+ CALLIOPE DIAGNOSTIC · HYDROLOGY                    seed 90210 · 640x512 · lakes 240y
 ========================================================================
 river cells: 5155 (4.4% of land) · lake cells: 1503 (1.3% of land)
 river systems (≥12 cells): 110 · longest network 325 cells ≈ 1300 km
@@ -19,6 +19,32 @@ aquifer (M54): median depth 14.1 m · p10 0.0 · p90 107.3 · within 10 m of sur
   spearman: vs HAND (height above nearest drainage) 0.63 · vs raw elevation 0.28 · vs elevation at 400-900mm 0.26 (25493 cells)
 
 springs & oases (M55): 1039 springs (0.88% of land) · 14481 oases (26.3% of arid land) · arid land with any water 29.2%
+
+LAKES THAT BREATHE (M93) · 8 basins · 240 years
+  Lake Calia                   @(220,170) ·   31 cells    496 km² · catchment   16048 km² · fill  61.0 m · T  8.7 °C · E₀ 0.83 m/y · τ 1.82 y · h₀ 2.26 m
+  Lake Doraion                 @(452,177) ·   22 cells    352 km² · catchment    1232 km² · fill  58.1 m · T 12.2 °C · E₀ 1.02 m/y · τ 1.77 y · h₀ 2.71 m
+  The Halaos Mere              @(460,192) ·   56 cells    896 km² · catchment    2064 km² · fill  47.4 m · T 14.8 °C · E₀ 1.17 m/y · τ 1.59 y · h₀ 2.78 m
+  Lake Lorrin                  @(198,209) ·    3 cells     48 km² · catchment     272 km² · fill  30.7 m · T 13.4 °C · E₀ 1.09 m/y · τ 1.31 y · h₀ 2.13 m
+  The Noraeth Mere             @(459,315) ·   16 cells    256 km² · catchment     848 km² · fill  40.6 m · T 14.3 °C · E₀ 1.13 m/y · τ 1.48 y · h₀ 2.51 m
+  Lake Beldor                  @(444,331) ·   46 cells    736 km² · catchment    2368 km² · fill  49.9 m · T 10.9 °C · E₀ 0.95 m/y · τ 1.63 y · h₀ 2.33 m
+  Lake Nordor                  @(263,374) ·   26 cells    416 km² · catchment    3968 km² · fill  34.7 m · T 12.5 °C · E₀ 1.04 m/y · τ 1.38 y · h₀ 2.15 m
+  Lake Aurelrin                @(232,380) ·   16 cells    256 km² · catchment    5376 km² · fill  31.9 m · T  8.6 °C · E₀ 0.82 m/y · τ 1.33 y · h₀ 1.64 m
+  basin                          std m    lag   r@lag    hi m    lo m  lines
+  Lake Calia                     0.181      0    0.86   +0.41   -0.70      1
+  Lake Doraion                   0.340      0    0.84   +0.93   -1.36      2
+  The Halaos Mere                0.463      0    0.87   +1.19   -1.15      0
+  Lake Lorrin                    0.416      0    0.89   +1.10   -1.18      1
+  The Noraeth Mere               0.483      0    0.87   +1.12   -1.39      1
+  Lake Beldor                    0.326      0    0.87   +0.86   -0.88      2
+  Lake Nordor                    0.245      0    0.89   +0.46   -0.86      0
+  Lake Aurelrin                  0.153      0    0.89   +0.42   -0.42      0
+  strandlines: 7 dated (3 rising · 4 falling) · ledger 7 · dup 0 · in burn-in 0 · 0.42 per basin-century
+    y49   The Noraeth Mere — The Noraeth Mere rises past every shore the living remember — the water stands 1.1 m above its founding mark, the highest in 49 years, and a new strandline is cut along the hills.
+    y84   Lake Doraion — Lake Doraion rises past every shore the living remember — the water stands 0.9 m above its founding mark, the highest in 84 years, and a new strandline is cut along the hills.
+    y127  Lake Lorrin — Lake Lorrin shrinks below its lowest remembered shore — the water stands 1.2 m under its founding mark, the lowest in 127 years, and a white strandline of salt shows where the old beach lay.
+    y129  Lake Calia — Lake Calia shrinks below its lowest remembered shore — the water stands 0.7 m under its founding mark, the lowest in 129 years, and a white strandline of salt shows where the old beach lay.
+  lake ledger hash 07e483c882001daf
+
 
 ---- checks ----------------------------------------------------------
 [PASS] river share of land                            4.4%   (sweet 0.8–5% · hard 0.3–10%)
@@ -46,4 +72,14 @@ springs & oases (M55): 1039 springs (0.88% of land) · 14481 oases (26.3% of ari
 [PASS] every spring stands on a shallow table      1039/1039   (M55 gate: a spring is the table daylighting — depth to water ≤2 m at every marked cell, by construction and by audit)
 [PASS] no oasis outside the dry country        14481 oases   (M55 gate: oases exist only where the year is arid (desert biome or <300 mm))
 [PASS] aquifer joins the state hash                    yes   (M54 gate: the field is CRC-stable and part of hash_state)
-CHECKS: 24 pass · 1 warn · 0 fail
+[PASS] every terminal basin is named        8 basins · 0 unnamed · 0 duplicate   (M93: a shore the chronicle dates must answer to a name — a named lake's, or one coined in the nearest tongue)
+[PASS] basin catchments are land, disjoint  8 basins · 0 overlapping cells · 0 wet cells · 0 with no land at all   (M93: every land cell's water ends in at most one terminal basin, and no basin counts its own water as catchment)
+[PASS] lake levels finite                            0 bad   (M93: the balance never blows up — floored at the playa residual, substepped)
+[PASS] lake level lag years                 0 y (worst basin)   (M93 gate: worst-basin lag of level behind the catchment's wet/dry year, argmax cross-correlation — under two years)
+[PASS] lake level tracking r                0.84 (worst basin)   (M93: worst-basin peak correlation of level with the catchment rain anomaly — the shore answers the sky)
+[PASS] lake level swing m                   0.34 m median std   (M93: median basin's level std over the run — playa lakes breathe decimetres to metres (Eyre 0–6 m, Great Salt Lake ±2 m/century))
+[PASS] strandlines per basin-century                  0.42   (M93: dated terraces per basin per 100 y after burn-in — a handful a century, never one a year)
+[PASS] strandlines dated and anchored       0 of 7 undated   (M93 gate: every strandline event carries its month, its basin and a map anchor)
+[PASS] strandlines never duplicated         0 dup · ledger 7 vs chronicle 7   (M93 gate: one line per (basin, sign, year), and the ledger and the chronicle agree to the count)
+[PASS] strandlines are records, stepped apart monotone true · spaced true · burn-in 0   (M93: each terrace stands ≥STRANDLINE_STEP_M beyond the last of its sign, in date order, none before the watched generation)
+CHECKS: 34 pass · 1 warn · 0 fail

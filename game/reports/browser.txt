@@ -1,17 +1,17 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · BROWSER               headless chromium · :8080
 ========================================================================
- boot: ready 17.3s · first frame 17.8s · backend webgl2
+ boot: ready 20.3s · first frame 21.7s · backend webgl2
  compute lane: cpu-twin (no compute: webgl2 downlevel)
- playback: 3×102 months at speed 3, quietest-ratio leg scores · leg1 40 tasks, med 204 ms, worst 341 ms (×1.7) · leg2 34 tasks, med 223 ms, worst 380 ms (×1.7) · leg3 34 tasks, med 205 ms, worst 383 ms (×1.9)
- GL drill: pre webgl2 · detected=True · post backend webgl2 · draws 108→109
+ playback: 3×102 months at speed 3, quietest-ratio leg scores · leg1 36 tasks, med 701 ms, worst 945 ms (×1.3) · leg2 35 tasks, med 604 ms, worst 906 ms (×1.5) · leg3 33 tasks, med 625 ms, worst 930 ms (×1.5)
+ GL drill: pre webgl2 · detected=True · post backend webgl2 · draws 106→107
 
 ---- checks ----------------------------------------------------------
-[WARN] boot to engine ready                               17.3 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
-[PASS] ready to first frame                               0.51 s   (E10.5: engine ready → first annotated draw (s); baseline 0.4)
+[WARN] boot to engine ready                               20.3 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
+[PASS] ready to first frame                               1.43 s   (E10.5: engine ready → first annotated draw (s); baseline 0.4)
 [PASS] compute lane verdict                         cpu-twin (no compute: webgl2 downlevel)
-[PASS] long tasks in playback                                 40   (E10.7: tasks >50 ms across 100 months at speed 3, quietest of 3 legs; headless baseline 53)
-[PASS] stall spike over steady work                 ×1.7 (worst 341 ms / median 204 ms)   (E10.7: worst / median long task, quietest of 3 legs — host-invariant stall shape; healthy calibration ×1.3-1.7 (M81 banked bytes, same-host A/B))
+[PASS] long tasks in playback                                 36   (E10.7: tasks >50 ms across 100 months at speed 3, quietest of 3 legs; headless baseline 53)
+[PASS] stall spike over steady work                 ×1.3 (worst 945 ms / median 701 ms)   (E10.7: worst / median long task, quietest of 3 legs — host-invariant stall shape; healthy calibration ×1.3-1.7 (M81 banked bytes, same-host A/B))
 [PASS] context-loss drill: loss detected                  webgl2
 [PASS] context-loss drill: map still draws               1 draws
 CHECKS: 6 pass · 1 warn · 0 fail
