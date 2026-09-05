@@ -119,6 +119,7 @@
  * Term ledger behind a derived quantity, or null when the engine has nothing to say.
  * @typedef {Object} ExplainLedger
  * @property {number} dp
+ * @property {{capacity_cell: number, cells: number, contested: number, farmed: number, frontier: number, full: number, herds: number, line: number, pressed: boolean, pressure: number, push_mm: number, range: number, sky: number, spoken: null, text: string, unrest: number, want_p: number, want_t: number}} [herds]
  * @property {{armed: boolean, failed: boolean, fails: number, filled: number, hold: null, last_pulse: null, line: string, lost: number, mean: number, reading: number, refuge: null, refuge_id: null, share: number, threshold: number, walkers: number, worst: number, yield: number}} [roads]
  * @property {{coastal: boolean, river: boolean, shelter: number, upwelling: number}} [site]
  * @property {{catchment: boolean, covered: number, crop: string, dearth: boolean, dry_behind: number, dry_run: number, fails: boolean, floor: number, granary: number, held: boolean, hit: number, index: number, kind: string, lean_run: number, line: string, monsoon: number, rain_pct: number, shortfall: number, spi: number, spoken: boolean, want: number, year: number}} [sky]

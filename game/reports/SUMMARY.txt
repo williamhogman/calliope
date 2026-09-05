@@ -1,7 +1,7 @@
 CALLIOPE DIAGNOSTIC SUMMARY
-mode: full · size: 512 · generated: 2026-09-05 05:20 UTC
+mode: full · size: 512 · generated: 2026-09-05 15:05 UTC
 
-totals: 1611 pass · 38 warn · 0 fail
+totals: 1624 pass · 37 warn · 0 fail
 
 -- assay.txt
    all checks pass
@@ -11,9 +11,6 @@ totals: 1611 pass · 38 warn · 0 fail
 
 -- bench.txt
 [WARN] median tick payload                          5342 B   (sweet ≤4 KB · hard ≤16 KB (E4: ship what changed))
-
--- browser.txt
-[WARN] boot to engine ready                               22.6 s   (E10.5: cold load → world unpacked, loader faded (s); baseline 2.6)
 
 -- build.txt
    all checks pass
@@ -27,7 +24,7 @@ totals: 1611 pass · 38 warn · 0 fail
 
 -- civ-777.txt
 [WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[WARN] events per year                                66.0   (sweet 2–48 · hard 0.5–100)
+[WARN] events per year                                65.9   (sweet 2–48 · hard 0.5–100)
 [WARN] named droughts per century                     67.3   (M80: a drought is a generational event the chronicle can carry, not annual weather)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
 [WARN] the dry-frontier veto is load-bearing no auction held — 0 cf dry founding(s), earliest month 0, deepest table 0 m, all inside the founder's reach (0 dry without · 0 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
@@ -52,7 +49,7 @@ totals: 1611 pass · 38 warn · 0 fail
    all checks pass
 
 -- compute.txt
-[WARN] coast law cpu ms                             142 ms   (sweet ≤120 · hard ≤400 (M67: CPU-twin JFA at 512², once per world upload — not per frame; measured 53–55))
+   all checks pass
 
 -- determinism.txt
    all checks pass
@@ -94,15 +91,15 @@ totals: 1611 pass · 38 warn · 0 fail
    all checks pass
 
 -- patina.txt
-[WARN] ruins per century (after y100)                23.83   (M9.1 restated at M81: mature worlds carry ruins; the M77-M81 disaster stack may fell up to a quarter of the standing census per century before ruin outpaces renewal)
+[WARN] ruins per century (after y100)                22.50   (M9.1 restated at M81: mature worlds carry ruins; the M77-M81 disaster stack may fell up to a quarter of the standing census per century before ruin outpaces renewal)
 
 -- perf.txt
-[WARN] stage fertility ms                   157 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[WARN] stage fertility ms                   191 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
 [WARN] stage naming ms                      129 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
-[WARN] stage settlements ms                 258 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2775 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 0                     667 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[WARN] tick rate year 100                   157 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[WARN] stage settlements ms                 262 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         2965 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     522 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   140 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
 
 -- properties.txt
 [WARN] hack density ratio (12345)                     0.37   (M64: Dd·√A₅₀/1.4 ≈ 1 over humid land — density obeys Hack pruning at the map's channel threshold)
@@ -120,6 +117,9 @@ totals: 1611 pass · 38 warn · 0 fail
 
 -- resources-90210.txt
    all checks pass
+
+-- steppe.txt
+[WARN] herds follow the range                          3/5   (M99: over every decade the century range stepped ≥ 2 % the realized herds moved the same way, 3 in 4 — the decade's own weather takes the rest)
 
 -- storms.txt
    all checks pass

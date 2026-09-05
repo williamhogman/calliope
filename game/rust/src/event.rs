@@ -99,6 +99,12 @@ pub enum EventKind {
     /// sky, leaving and arriving in one month. Appended last; wire
     /// discriminants hold.
     Exodus,
+    /// M99 — steppe pressure: the sky moved the grass onto a realm's
+    /// ploughed ground and the herds and the farmers stand in it
+    /// together; the crown feels it as unrest. Serialized with the
+    /// roadmap's own name. Appended last; wire discriminants hold.
+    #[strum(serialize = "frontier-pressure")]
+    FrontierPressure,
 }
 
 impl EventKind {
@@ -175,6 +181,9 @@ event_table! {
     // M98 — a generation failed and a wave walked: the sky's doing, the
     // town's loss, the kin-town's gain. Appended last.
     Exodus    => family nature,  weight 3, fortune -1;
+    // M99 — the herds on the sown ground: the sky's doing, the crown's
+    // trouble, so it files with the nature register. Appended last.
+    FrontierPressure => family nature,  weight 2, fortune -1;
 }
 
 /// E5.5 — inline storage for the common 0–2 entity ids per event.

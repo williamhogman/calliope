@@ -340,6 +340,9 @@ fn hash_state(w: &World) -> u64 {
     // M94 — the dry-edge ledger is state: what the steppe holds, when it
     // took it, which wells sank, and what the chronicle was told.
     s.push_str(&format!("Y{:016x}\n", w.dry_edge.hash()));
+    // M99 — the steppe is state: the field, its standings, and every
+    // realm's frontier mark and pressure.
+    s.push_str(&format!("H{:016x}\n", w.steppe.hash()));
     // M16/ADR-0024 — the plate sketch is state: polygons, kinds, ages.
     s.push_str(&format!("P{:016x}\n", w.plates.hash()));
     // M22 — the seismic ledger is state: seams, clocks, the quake log.
@@ -1521,6 +1524,8 @@ struct RunLog {
     road_cursor: usize,
     /// M98 — the Exodus tellings, (month, x, y, text), one per pulse.
     exodus_texts: Vec<(i64, i64, i64, String)>,
+    /// M99 — the frontier-pressure tellings, one per ledger row.
+    frontier_told: usize,
     placeholders: usize,
     empties: usize,
     /// events that speak a god's name — festivals, omens, war-oaths (M3.5)
@@ -1755,6 +1760,7 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
                 "war" => log.wars += 1,
                 "granary" => log.held_texts.push((e.m, e.x, e.y, e.text.clone())),
                 "exodus" => log.exodus_texts.push((e.m, e.x, e.y, e.text.clone())),
+                "frontier-pressure" => log.frontier_told += 1,
                 "famine" => {
                     log.famines += 1;
                     // the toll, read off the telling: the first number in
@@ -13064,6 +13070,15 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         rd_clean: bool,
         rd_share: f64,
         rd_km: f64,
+        /// M99 — the herds: max |herds/range − 1| over the logged years,
+        /// range↔drift agreement, tellings, audit cleanliness, the flat
+        /// twin's faults (moved + frontier + contested), dawn range share.
+        sp_within: f64,
+        sp_dir: (usize, usize),
+        sp_events: usize,
+        sp_clean: bool,
+        sp_flat: usize,
+        sp_range: f64,
     }
     let mut rows: Vec<Row> = Vec::new();
 
@@ -13184,6 +13199,17 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
             match fc.top_tier() { Some(t) => format!("{} {:.1}/c (bare {:.1}/c, {:.1} sett-cent)", calliope::society::StoreTier::from_code(t as u8).name(), fc.tier_per_century(t), fc.tier_bare_per_century(t), fc.exp_tier[t] as f64 / 100.0), None => "no tier with exposure".to_string() },
             if fc.in_envelope() { "in the envelope" } else { "OUT of the envelope" }
         );
+        // M99 — the herds on every seed: the decade lane held to the
+        // century's range every logged year, the field re-derived from
+        // the law at the close, every telling answering a ledger row, and
+        // the flat twin of the grown world with nothing to contest.
+        let spa = steppe_audit(&w, log.frontier_told, &[]);
+        println!(
+            "  M99 herds seed {}: range {} of land · herds/range max {:.2}% @y{} · range↔drift {}/{} · {} tellings · flat twin moved {} frontier {} contested {} · {}",
+            seed, pct(spa.dawn_range as f64 / spa.land.max(1) as f64), 100.0 * spa.within_max, spa.within_year, spa.dir_agree, spa.dir_decisive, spa.events,
+            spa.flat_moved, spa.flat_frontier, spa.flat_contested,
+            if spa.sky_bad == 0 && spa.field_bad == 0 && spa.events == spa.ledger && spa.under_line == 0 { "audit clean".to_string() } else { format!("AUDIT FAULT: sky {} field {} events {} ledger {} under {}", spa.sky_bad, spa.field_bad, spa.events, spa.ledger, spa.under_line) }
+        );
         // M98 — the roads on every seed: every pulse re-derived against
         // the harness's own decade memory, every decision owed answered.
         let ra = roads_audit(&w, &log);
@@ -13232,6 +13258,12 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
             rd_clean: ra.clean(),
             rd_share: ra.share,
             rd_km: ra.km,
+            sp_within: spa.within_max,
+            sp_dir: (spa.dir_agree, spa.dir_decisive),
+            sp_events: spa.events,
+            sp_clean: spa.sky_bad == 0 && spa.field_bad == 0 && spa.events == spa.ledger && spa.under_line == 0,
+            sp_flat: spa.flat_moved + spa.flat_frontier + spa.flat_contested,
+            sp_range: spa.dawn_range as f64 / spa.land.max(1) as f64,
         });
     }
 
@@ -13433,6 +13465,53 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
             c.band("exodus share of the town", share, format!("{:.1}% pooled over {} waves", 100.0 * share, pulses));
             c.band("exodus road km", km, format!("{:.0} km pooled over {} waves", km, pulses));
         }
+    }
+    // M99 — the herds on every seed: the decade lane inside ±10 % of the
+    // century range every logged year, the century range moving with the
+    // drift's sign, the field re-derived and every telling answered, and
+    // the grown world's flat twin with nothing to contest.
+    {
+        let within = rows.iter().map(|r| r.sp_within).fold(0.0f64, f64::max);
+        let (agree, dec) = rows.iter().fold((0usize, 0usize), |(a, d), r| (a + r.sp_dir.0, d + r.sp_dir.1));
+        let events: usize = rows.iter().map(|r| r.sp_events).sum();
+        let clean = rows.iter().filter(|r| r.sp_clean).count();
+        let flat: usize = rows.iter().map(|r| r.sp_flat).sum();
+        let range = rows.iter().map(|r| r.sp_range).sum::<f64>() / rows.len().max(1) as f64;
+        println!();
+        println!(
+            "steppe pressure (M99): herds/range max {:.2}% · range↔drift {}/{} · {} tellings · flat-twin faults {} · per seed: {}",
+            100.0 * within, agree, dec, events, flat,
+            rows.iter().map(|r| format!("{}:{:.1}%·{}t·{}", r.seed, 100.0 * r.sp_within, r.sp_events, if r.sp_clean { "clean" } else { "FAULT" })).collect::<Vec<_>>().join(" · ")
+        );
+        c.must(
+            "herds inside ±10 % of the range on every seed",
+            within <= 0.10,
+            format!("max {:.2}%", 100.0 * within),
+            "M99 gate: pastoral range area tracks the century's drift within ±10 % every logged year on every sweep seed",
+        );
+        if dec >= 3 {
+            c.must(
+                "range tracks the drift's sign on every seed",
+                agree * 10 >= dec * 9,
+                format!("{}/{} decisive decades", agree, dec),
+                "M99 gate: over every decade the forcing moved ≥ 0.2 °C the century range moved with its sign, 9 in 10, pooled over the sweep",
+            );
+        } else {
+            c.want("range tracks the drift's sign on every seed", agree == dec, format!("{}/{} decisive decades", agree, dec), "M99: too few decisive decades in this span to gate on; what there were agreed");
+        }
+        c.must(
+            "herds re-derive and every telling answers on every seed",
+            clean == rows.len(),
+            format!("{}/{} seeds", clean, rows.len()),
+            "M99 gate: the field recomputed from the public law bit-equal at the close, one frontier-pressure event per ledger row at or over the line, on every sweep seed",
+        );
+        c.must(
+            "flat sky: nothing to contest on every seed",
+            flat == 0,
+            format!("{} faults", flat),
+            "M99 metamorphic gate: the grown world's field under a zero decade sky holds the dawn range, no frontier ground, no contested field — no telling could fire",
+        );
+        c.band("herding range share of land", range, pct(range));
     }
     // M95 — hunger has a cause on every seed: each famine row's sky
     // re-derives from the law bit-equal and its telling ends with the
@@ -14768,6 +14847,443 @@ fn cmd_era(size: usize, years: usize, nseeds: usize, base: i64) {
     c.print();
 }
 
+// ================================================================ steppe (M99)
+
+/// M99 — one seed's steppe audit, read off the world after a run: the
+/// field re-derived from the law and the sky at the last year written,
+/// the decade lane held inside ±10 % of the century lane on every year,
+/// the realized footprint moving with the drift over every decisive
+/// decade, and every telling answering a realm over the line.
+struct SteppeAudit {
+    /// Range cells at the dawn, land cells, the lattice size.
+    dawn_range: usize,
+    land: usize,
+    cells: usize,
+    blocks: usize,
+    /// Max |herds/range − 1| over the logged years; the year it fell on.
+    within_max: f64,
+    within_year: i64,
+    /// Decisive decade pairs (|ΔF| ≥ DIR_DF): how many the century range
+    /// moved with the drift's sign on — the contract's tracking law.
+    dir_decisive: usize,
+    dir_agree: usize,
+    /// Decade pairs the century range moved ≥ 2 % over, and how many the
+    /// realized herds moved the same way on.
+    follow_decisive: usize,
+    follow_agree: usize,
+    /// The forcing's span over the run.
+    f_min: f64,
+    f_max: f64,
+    /// Re-derivation: blocks whose decade sky differs from the ring's, and
+    /// cells whose code differs from the law's.
+    sky_bad: usize,
+    field_bad: usize,
+    /// Tellings: events seen, ledger rows, rows under the line, realm-years
+    /// pressed, realm-years counted.
+    events: usize,
+    ledger: usize,
+    under_line: usize,
+    pressed_years: usize,
+    realm_years: usize,
+    /// Mean unrest over pressed realm-years and over the rest (sampled at
+    /// the year's close), when both exist.
+    unrest_pressed: Option<f64>,
+    unrest_calm: Option<f64>,
+    /// Herd capacity vs. settled souls at the close.
+    capacity: f64,
+    souls: i64,
+    /// Overreach share of herds at the close.
+    over_share: f64,
+    /// The outward push, read across the lattice at the close: the share
+    /// of range-candidate cells the herds hold beyond the century's range
+    /// over the hardest quarter of blocks (by want) and over the kindest.
+    push_hard: f64,
+    push_kind: f64,
+    /// The flat twin at the close: the same field under a decade sky of
+    /// zero — years the range left the dawn range (must be 0), frontier
+    /// cells (must be 0), fields the twin would contest over every town's
+    /// hinterland (must be 0).
+    flat_moved: usize,
+    flat_frontier: usize,
+    flat_contested: usize,
+}
+
+/// Range move over a decade, as a share of the range, that makes a pair
+/// decisive for the herds-follow gate: under that the decade lane's own
+/// weather (±3 % of the range, block by block) drowns the century's step.
+const STEPPE_FOLLOW_DR: f64 = 0.02;
+
+/// M99 — the flat twin of a world's steppe, read at its own close: every
+/// block's decade sky set to zero, the field advanced at forcing 0, then
+/// every town's hinterland scanned for contested fields. Under a sky
+/// that never drifts the range is the dawn range, no cell is frontier
+/// ground, and no field is contested — so no telling could fire.
+fn steppe_flat_twin(w: &World) -> (usize, usize, usize) {
+    use calliope::steppe::SkyYear;
+    let rows = w.fields.tmean.dim().0;
+    let mut st = w.steppe.clone();
+    for b in st.blocks.iter_mut() {
+        b.sky = SkyYear::ZERO;
+    }
+    let year = if st.primed() { st.year } else { 0 };
+    st.advance(year, 0.0, rows);
+    let moved = (st.range != st.dawn_range) as usize;
+    let mut contested = 0usize;
+    for s in &w.peoples.settlements {
+        if s.pop <= 0 {
+            continue;
+        }
+        contested += st.hinterland(s.y as usize, s.x as usize, &w.fields.crops).contested;
+    }
+    (moved, st.frontier, contested)
+}
+
+/// Forcing change over a decade that makes a pair decisive for the
+/// direction gate, °C: the composed sky moves this far over ten years
+/// only through an age's ramp or a steep drift, and then the century
+/// range must have moved with it.
+const STEPPE_DIR_DF: f64 = 0.20;
+
+fn steppe_audit(w: &World, events: usize, unrest_samples: &[(bool, f64)]) -> SteppeAudit {
+    use calliope::steppe::{self, herds_at, range_at, verdict, lat_signed};
+    let st = &w.steppe;
+    let rows = w.fields.tmean.dim().0;
+    let land = w.fields.height.iter().filter(|&&h| h >= 0.0).count();
+    let mut a = SteppeAudit {
+        dawn_range: st.dawn_range,
+        land,
+        cells: st.cells.len(),
+        blocks: st.blocks.len(),
+        within_max: 0.0,
+        within_year: 0,
+        dir_decisive: 0,
+        dir_agree: 0,
+        follow_decisive: 0,
+        follow_agree: 0,
+        f_min: f64::INFINITY,
+        f_max: f64::NEG_INFINITY,
+        sky_bad: 0,
+        field_bad: 0,
+        events,
+        ledger: st.ledger.len(),
+        under_line: st.ledger.iter().filter(|r| r.share < steppe::PRESSURE_LINE).count(),
+        pressed_years: st.log.iter().map(|r| r.pressed).sum(),
+        realm_years: 0,
+        unrest_pressed: None,
+        unrest_calm: None,
+        capacity: st.capacity,
+        souls: w.peoples.settlements.iter().map(|s| s.pop).sum(),
+        over_share: if st.herds > 0 { st.over as f64 / st.herds as f64 } else { 0.0 },
+        push_hard: 0.0,
+        push_kind: 0.0,
+        flat_moved: 0,
+        flat_frontier: 0,
+        flat_contested: 0,
+    };
+    // the push, across the lattice at the close: every block ranked by
+    // the hardness of its decade want (the line the law raises), the
+    // share of its cells the herds hold beyond the century's range on
+    // the hardest quarter against the kindest
+    if st.primed() && !st.blocks.is_empty() {
+        let nb = st.blocks.len();
+        let (mut cells, mut over) = (vec![0usize; nb], vec![0usize; nb]);
+        for c in &st.cells {
+            let b = c.block as usize;
+            cells[b] += 1;
+            if steppe::is_over(st.field[[c.y as usize, c.x as usize]]) {
+                over[b] += 1;
+            }
+        }
+        let mut ranked: Vec<(f64, usize, usize)> = st
+            .blocks
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| cells[*i] > 0)
+            .map(|(i, b)| (steppe::herds_line_mm(b.sky.dt0, b.sky.dp0), over[i], cells[i]))
+            .collect();
+        ranked.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        let q = (ranked.len() / 4).max(1);
+        if ranked.len() >= 8 {
+            let share = |v: &[(f64, usize, usize)]| v.iter().map(|r| r.1).sum::<usize>() as f64 / v.iter().map(|r| r.2).sum::<usize>().max(1) as f64;
+            a.push_kind = share(&ranked[..q]);
+            a.push_hard = share(&ranked[ranked.len() - q..]);
+        }
+    }
+    let (fm, ff, fc) = steppe_flat_twin(w);
+    a.flat_moved = fm;
+    a.flat_frontier = ff;
+    a.flat_contested = fc;
+    for r in &st.log {
+        a.f_min = a.f_min.min(r.f);
+        a.f_max = a.f_max.max(r.f);
+        if r.range > 0 {
+            let dev = (r.herds as f64 / r.range as f64 - 1.0).abs();
+            if dev > a.within_max {
+                a.within_max = dev;
+                a.within_year = r.year;
+            }
+        }
+    }
+    // direction: every pair of logged years a decade apart
+    let n = st.log.len();
+    for i in 0..n {
+        let j = i + steppe::DECADE as usize;
+        if j >= n {
+            break;
+        }
+        let (r0, r1) = (&st.log[i], &st.log[j]);
+        if r0.range == 0 {
+            continue;
+        }
+        let df = r1.f - r0.f;
+        let predicted = r1.range as i64 - r0.range as i64;
+        // the century range tracks the drift's sign: a warmer decade lifts
+        // the cold edge and the range grows, a colder one shrinks it
+        if df.abs() >= STEPPE_DIR_DF {
+            a.dir_decisive += 1;
+            if predicted.signum() == (df.signum() as i64) {
+                a.dir_agree += 1;
+            }
+        }
+        // the herds follow the range wherever it stepped far enough to
+        // stand clear of the decade's own weather
+        if (predicted.abs() as f64) >= STEPPE_FOLLOW_DR * r0.range as f64 {
+            a.follow_decisive += 1;
+            let realized = r1.herds as i64 - r0.herds as i64;
+            if realized.signum() == predicted.signum() {
+                a.follow_agree += 1;
+            }
+        }
+    }
+    // re-derivation at the last year written: the decade sky without the
+    // ring, the field from the law
+    if st.primed() {
+        let year = st.year;
+        let twin = w.steppe_decade_sky(year);
+        for (b, t) in st.blocks.iter().zip(twin.iter()) {
+            let same = b.sky.dt.to_bits() == t.dt.to_bits()
+                && b.sky.dp.to_bits() == t.dp.to_bits()
+                && b.sky.dt0.to_bits() == t.dt0.to_bits()
+                && b.sky.dp0.to_bits() == t.dp0.to_bits();
+            if !same {
+                a.sky_bad += 1;
+            }
+        }
+        let f = w.year_forcing(year);
+        for c in &st.cells {
+            let sky = twin[c.block as usize];
+            let lat = lat_signed(rows, c.y as usize);
+            let line = steppe::herds_line_mm(sky.dt0, sky.dp0);
+            let code = verdict(
+                range_at(c.t, c.p, lat, f),
+                herds_at(c.t, c.p, sky.dt, sky.dp, line),
+                herds_at(c.t, c.p, sky.dt0, sky.dp0, line),
+            );
+            if code != st.field[[c.y as usize, c.x as usize]] {
+                a.field_bad += 1;
+            }
+        }
+    }
+    // unrest over pressed vs. unpressed realm-years
+    let (mut sp, mut np, mut sc, mut nc) = (0.0, 0usize, 0.0, 0usize);
+    for &(pressed, u) in unrest_samples {
+        if pressed {
+            sp += u;
+            np += 1;
+        } else {
+            sc += u;
+            nc += 1;
+        }
+    }
+    a.realm_years = np + nc;
+    if np > 0 {
+        a.unrest_pressed = Some(sp / np as f64);
+    }
+    if nc > 0 {
+        a.unrest_calm = Some(sc / nc as f64);
+    }
+    a
+}
+
+/// M99 — run a world `years` years in whole-year ticks, collecting the
+/// frontier tellings and a yearly (pressed?, unrest) sample per living
+/// realm. The same loop under `flat_sky` is the counterfactual twin.
+fn steppe_run(w: &mut World, years: usize) -> (Vec<calliope::event::Event>, Vec<(bool, f64)>) {
+    use calliope::steppe::PRESSURE_LINE;
+    let mut tellings = Vec::new();
+    let mut samples = Vec::new();
+    for _ in 0..years {
+        let (evs, _, _) = w.tick(12);
+        for e in evs {
+            if e.k == calliope::event::EventKind::FrontierPressure {
+                tellings.push(e);
+            }
+        }
+        for (c, r) in w.peoples.realms.iter().enumerate() {
+            if !r.alive {
+                continue;
+            }
+            let p = w.steppe.pressure.get(c).copied().unwrap_or(0.0);
+            let u = w.politics.unrest.get(c).copied().unwrap_or(0.0);
+            samples.push((p >= PRESSURE_LINE, u));
+        }
+    }
+    (tellings, samples)
+}
+
+fn cmd_steppe(size: usize, years: usize, seeds: Vec<i64>) {
+    use calliope::steppe;
+    header("STEPPE", &format!("{}x{} · {} seeds · {} y", size, size, seeds.len(), years));
+    println!("steppe pressure · the herding range under the century, the herds under the decade, the plough between  (M99)");
+    println!(
+        "law: window T ≥ {} °C · {} ≤ P < {} mm · decade {} y on a {}-cell lattice · line {} · full {} · rest {} y · unrest {:.3}/mo at full",
+        steppe::RANGE_T_MIN, steppe::RANGE_P_MIN, steppe::RANGE_P_MAX, steppe::DECADE, steppe::BLOCK,
+        steppe::PRESSURE_LINE, steppe::PRESSURE_FULL, steppe::PRESSURE_REST, steppe::PRESSURE_UNREST
+    );
+    let mut c = Checks::default();
+    let mut pooled_within: f64 = 0.0;
+    let (mut pooled_dec, mut pooled_agree) = (0usize, 0usize);
+    let (mut pooled_fol, mut pooled_fol_agree) = (0usize, 0usize);
+    let (mut pooled_push_over, mut pooled_push_kind) = (Vec::new(), Vec::new());
+    let (mut twin_moved, mut twin_frontier, mut twin_contested) = (0usize, 0usize, 0usize);
+    let mut pooled_events = 0usize;
+    let mut pooled_flat = 0usize;
+    let mut flat_moved = 0usize;
+    let mut rederive_bad = 0usize;
+    let mut identity_bad = 0usize;
+    let mut range_shares: Vec<f64> = Vec::new();
+    let mut cap_shares: Vec<f64> = Vec::new();
+    let (mut push_seeds, mut push_agree) = (0usize, 0usize);
+    let (mut up, mut uc) = (Vec::new(), Vec::new());
+    let mean = |v: &[f64]| if v.is_empty() { 0.0 } else { v.iter().sum::<f64>() / v.len() as f64 };
+    println!();
+    println!(" seed     land    cells  blocks   range@dawn  share   F span            herds/range max   range↔drift  herds↔range   tellings   pressed-yr   flat tellings   flat range moved   gen+run");
+    for &seed in &seeds {
+        let t0 = Instant::now();
+        let mut w = World::generate(seed, size);
+        let (tell, samples) = steppe_run(&mut w, years);
+        let a = steppe_audit(&w, tell.len(), &samples);
+        if std::env::var("STEPPE_PROBE").is_ok() {
+            let mut hist = std::collections::BTreeMap::new();
+            for &c in w.fields.crops.iter() {
+                *hist.entry(c).or_insert(0usize) += 1;
+            }
+            println!("   probe crops {:?}", hist);
+            let (mut n, mut cells, mut farmed, mut range, mut herds, mut cont) = (0, 0, 0, 0, 0, 0);
+            let mut hh = std::collections::BTreeMap::new();
+            for s in &w.peoples.settlements {
+                if s.pop <= 0 { continue; }
+                n += 1;
+                let h = w.steppe.hinterland(s.y as usize, s.x as usize, &w.fields.crops);
+                cells += h.cells; farmed += h.farmed; range += h.range; herds += h.herds; cont += h.contested;
+                for dy in -3i64..=3 { for dx in -3i64..=3 { if dy*dy+dx*dx>9 {continue;}
+                    let yy = s.y as i64 + dy; let xx = s.x as i64 + dx;
+                    if yy<0||xx<0||yy>=w.fields.crops.dim().0 as i64||xx>=w.fields.crops.dim().1 as i64 {continue;}
+                    *hh.entry(w.fields.crops[[yy as usize, xx as usize]]).or_insert(0usize) += 1; }}
+            }
+            println!("   probe towns {} cells {} farmed {} range {} herds {} contested {} · hinterland crops {:?}", n, cells, farmed, range, herds, cont, hh);
+        }
+        // the flat twin: the same seed under a sky that never drifts
+        let mut wf = World::generate(seed, size);
+        wf.flat_sky = true;
+        let (tell_f, _) = steppe_run(&mut wf, years);
+        let moved = wf.steppe.log.iter().filter(|r| r.range != wf.steppe.dawn_range).count();
+        let ms = t0.elapsed().as_millis();
+        println!(
+            " {:<8} {:>6} {:>7} {:>7}   {:>9}  {:>5}   {:>+5.2}..{:<+5.2}   {:>6.2}% @y{:<5} {:>5}/{:<5}  {:>5}/{:<5}   {:>8}   {:>10}   {:>13}   {:>16}   {:>5} ms",
+            seed, a.land, a.cells, a.blocks, a.dawn_range, pct(a.dawn_range as f64 / a.land.max(1) as f64),
+            a.f_min, a.f_max, a.within_max * 100.0, a.within_year, a.dir_agree, a.dir_decisive, a.follow_agree, a.follow_decisive,
+            a.events, a.pressed_years, tell_f.len(), moved, ms
+        );
+        // the field's decades, every tenth year and the last
+        for (i, r) in w.steppe.log.iter().enumerate() {
+            if i % 10 == 0 || i + 1 == w.steppe.log.len() {
+                println!(
+                    "   y{:<4} F {:+.2}  decade {:+.2}°C {:+.1}%  want {:+.2}°C {:+.1}%  range {:>6}  herds {:>6}  over {:>5}  frontier {:>5}  cap {:>8.0}  farmed {:>6}  contested {:>4}  pressed {:>2}  max {:.3}  spoke {}",
+                    r.year, r.f, r.sky.dt, r.sky.dp * 100.0, r.sky.dt0, r.sky.dp0 * 100.0, r.range, r.herds, r.over, r.frontier, r.capacity, r.farmed, r.overlap, r.pressed, r.max_share, r.spoken
+                );
+            }
+        }
+        if a.sky_bad > 0 || a.field_bad > 0 {
+            println!("   ! re-derivation: {} blocks' decade sky differ · {} cells' code differ from the law", a.sky_bad, a.field_bad);
+        }
+        if a.events != a.ledger || a.under_line > 0 {
+            println!("   ! identity: {} events vs {} ledger rows · {} rows under the line", a.events, a.ledger, a.under_line);
+        }
+        for e in tell.iter().take(3) {
+            println!("   · y{} {}", e.m.div_euclid(12), e.text);
+        }
+        if let (Some(p), Some(q)) = (a.unrest_pressed, a.unrest_calm) {
+            println!("   · unrest: pressed realm-years {:.3} · the rest {:.3} · capacity {:.0} souls vs {} settled · overreach {} of herds", p, q, a.capacity, a.souls, pct(a.over_share));
+            up.push(p);
+            uc.push(q);
+        } else {
+            println!("   · capacity {:.0} souls vs {} settled · overreach {} of herds", a.capacity, a.souls, pct(a.over_share));
+        }
+        println!(
+            "   · the push: herds beyond the range on {} of the cells over the hardest quarter of blocks · {} over the kindest · twin at the close: range moved {} · frontier {} · contested {}",
+            pct(a.push_hard), pct(a.push_kind), a.flat_moved, a.flat_frontier, a.flat_contested
+        );
+        if a.push_hard > 0.0 || a.push_kind > 0.0 {
+            push_seeds += 1;
+            push_agree += (a.push_hard > a.push_kind) as usize;
+        }
+        pooled_push_over.push(a.push_hard);
+        pooled_push_kind.push(a.push_kind);
+        twin_moved += a.flat_moved;
+        twin_frontier += a.flat_frontier;
+        twin_contested += a.flat_contested;
+        pooled_within = pooled_within.max(a.within_max);
+        pooled_dec += a.dir_decisive;
+        pooled_agree += a.dir_agree;
+        pooled_fol += a.follow_decisive;
+        pooled_fol_agree += a.follow_agree;
+        pooled_events += a.events;
+        pooled_flat += tell_f.len();
+        flat_moved += moved;
+        rederive_bad += a.sky_bad + a.field_bad;
+        identity_bad += (a.events != a.ledger) as usize + a.under_line;
+        range_shares.push(a.dawn_range as f64 / a.land.max(1) as f64);
+        cap_shares.push(a.capacity / (a.souls.max(1) as f64));
+    }
+    let per_century = pooled_events as f64 / (seeds.len().max(1) as f64 * years as f64 / 100.0);
+    c.band("herding range share of land", mean(&range_shares), pct(mean(&range_shares)));
+    c.band("herds within the century range", 1.0 + pooled_within, format!("max {:+.1}%", pooled_within * 100.0));
+    c.must("herds inside ±10 % every seed-year", pooled_within <= 0.10, format!("max {:.2}%", pooled_within * 100.0), "M99: the decade lane never strays a tenth from what the century's drift dictates");
+    if pooled_dec >= 3 {
+        c.must("range tracks the drift's sign", pooled_agree * 10 >= pooled_dec * 9, format!("{}/{}", pooled_agree, pooled_dec), "M99: over every decisive decade (|ΔF| ≥ 0.2 °C) the century range moved with the drift's sign — warmer, wider; colder, narrower — 9 in 10");
+    } else {
+        c.want("range tracks the drift's sign", pooled_agree == pooled_dec, format!("{}/{}", pooled_agree, pooled_dec), "M99: too few decisive decades in this span to gate on; what there were agreed");
+    }
+    if pooled_fol >= 3 {
+        c.want("herds follow the range", pooled_fol_agree * 4 >= pooled_fol * 3, format!("{}/{}", pooled_fol_agree, pooled_fol), "M99: over every decade the century range stepped ≥ 2 % the realized herds moved the same way, 3 in 4 — the decade's own weather takes the rest");
+    } else {
+        c.want("herds follow the range", pooled_fol_agree == pooled_fol, format!("{}/{}", pooled_fol_agree, pooled_fol), "M99: too few decisive steps in this span to gate on; what there were agreed");
+    }
+    c.must(
+        "hard decades push the herds outward",
+        push_agree == push_seeds && mean(&pooled_push_over) > mean(&pooled_push_kind),
+        format!("{} vs {} · {}/{} seeds", pct(mean(&pooled_push_over)), pct(mean(&pooled_push_kind)), push_agree, push_seeds),
+        "M99: across the lattice at the close, the herds stand beyond the century's range on more of the cells over the hardest quarter of blocks (by decade want) than over the kindest — the pressure score's outward push, every seed",
+    );
+    c.must("flat sky: no frontier pressure", pooled_flat == 0, format!("{} tellings", pooled_flat), "M99: under a sky that never drifts the range is the dawn range and no field is newly contested");
+    c.must("flat sky: the range holds", flat_moved == 0, format!("{} years moved", flat_moved), "M99: the century lane is a function of the forcing alone");
+    c.must(
+        "flat twin at the close: nothing to contest",
+        twin_moved + twin_frontier + twin_contested == 0,
+        format!("moved {} · frontier {} · contested {}", twin_moved, twin_frontier, twin_contested),
+        "M99 metamorphic: the grown world's own field under a zero decade sky — the dawn range, no frontier ground, no contested field over any town's hinterland",
+    );
+    c.must("field re-derives from the law", rederive_bad == 0, format!("{} bad", rederive_bad), "M99: blocks' decade sky and every cell's code recomputed from the public primitives at the last year, bit-equal");
+    c.must("tellings answer the ledger", identity_bad == 0, format!("{} bad", identity_bad), "M99: one frontier-pressure event per ledger row, every row at or over the line");
+    c.band("frontier pressure events per century", per_century, format!("{:.2}", per_century));
+    c.band("steppe capacity share of souls", mean(&cap_shares), format!("{:.3}", mean(&cap_shares)));
+    if !up.is_empty() {
+        c.want("pressure shows in the unrest gauge", mean(&up) >= mean(&uc), format!("{:.3} vs {:.3}", mean(&up), mean(&uc)), "M99: realms over the line carry at least the unrest of the rest, sampled yearly");
+    }
+    c.print();
+}
+
 // ================================================================ systems
 
 /// E11.7 — profile the system lattice on a real grown world: where the
@@ -14790,6 +15306,11 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
         // M91 — ice: walks the GLACIER bit from the composed forcing.
         // Grids only — no RNG, no Peoples, no chronicle.
         ("ice", "G", false),
+        // M99 — steppe: reads the composed sky at its lattice and the
+        // crops grid, writes its own field and the realms' pressure
+        // (S), dates the frontier into the chronicle. No die, no Peoples
+        // — parallel-safe.
+        ("steppe", "S·C", false),
         ("towns", "P·R", true),
         // M80: pure seed×cell×year mapping writes only the drought ledger
         // and emits its onset event; it neither touches Peoples nor draws RNG.
@@ -18132,6 +18653,15 @@ fn main() {
                 seeds = vec![12345, 777, 90210];
             }
             cmd_perf(size, seeds);
+        }
+        "steppe" => {
+            let size = sized(2, 512);
+            let years = num(3, 100) as usize;
+            let mut seeds: Vec<i64> = a.get(4..).unwrap_or(&[]).iter().filter_map(|s| s.parse().ok()).collect();
+            if seeds.is_empty() {
+                seeds = vec![12345, 777, 31337];
+            }
+            cmd_steppe(size, years, seeds);
         }
         "sweep" => {
             let size = sized(2, 512);

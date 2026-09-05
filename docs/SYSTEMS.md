@@ -70,6 +70,27 @@ gap analysis (`GAP-ANALYSIS.md`) measures against. Module paths refer to
   own remembered mean is under `REFUGE_MEAN` (0.15), leaving and arriving
   in the same month; one dated `Exodus` event per pulse, cadence banded
   per settlement-century (`migration::BANDS`).
+- Steppe pressure (`steppe.rs`, M99): a herding-range field on the dry
+  side of the plough. The *century range* is every land cell whose dawn
+  climate, moved by the composed forcing `F` (M83–M88) and the belt walk
+  (M84), stands in the pastoral window (`T ≥ −1 °C`, `110 ≤ P < 300 mm`);
+  the *herds* are the cells the running decade's sky (the M71–M92
+  anomaly, drawn once per 4-cell block and averaged over ten years)
+  actually carries. A hard decade — colder, drier than the century — is
+  read against its *want*, the same decade under zero drift: the herds
+  are pushed outward onto wetter ground (`herds_line_mm`, `PUSH`), and
+  every herds cell the unforced twin would not hold is *frontier*
+  ground. Grass quality (`grass`, `cell_capacity`) turns the footprint
+  into a pastoral carrying capacity in souls. Where frontier ground lies
+  under a grain field inside a town's hinterland the field is contested;
+  a realm's share of contested fields is its *pressure*, which raises the
+  unrest ladder (`politics.rs`, `unrest_term`) and, on crossing
+  `PRESSURE_LINE` (2 %) or growing after a `PRESSURE_REST` of 20 years,
+  speaks one dated `frontier-pressure` event anchored at the most
+  contested town. The field hashes into the replay identity; the
+  `diagnose steppe` lane holds the herds inside ±10 % of the century
+  range every year, the range to the drift's sign, and runs the flat-sky
+  twin of every seed (no frontier, no telling).
 - **Not present:** wild flora/fauna, vegetation succession, pests/blights
   (Later/research).
 

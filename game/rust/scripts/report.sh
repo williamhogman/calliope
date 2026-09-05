@@ -111,6 +111,7 @@ if [ "$MODE" = "quick" ]; then
   PERF="512 12345 777"
   OCEAN="12345 777 31337"
   COMPUTE="512 12345"
+  STEPPE="300 12345"
 else
   SEEDS=(12345 777 90210)
   CIV_YEARS=150
@@ -125,6 +126,7 @@ else
   PERF="512 12345 777 90210"
   OCEAN="12345 777 31337 90210 555"
   COMPUTE="512 12345 777 90210"
+  STEPPE="300 12345 777"
 fi
 
 run() { # run <outfile> <diagnose args...>
@@ -199,6 +201,11 @@ run "teleconnection.txt" teleconnection "$SIZE" 120 $OCEAN
 run "storms.txt" storms "$SIZE" 60 $OCEAN
 # M78 — warm-sea fury: tropical cyclone heat/spin genesis and recurvature.
 run "tropics.txt" tropics "$SIZE" 60 $OCEAN
+# M99 — steppe pressure: the herding range under the century, the herds
+# under the decade, the plough between — with the flat-sky twin of every
+# seed (the contract's 300-year span; the sweep carries the per-seed gates
+# at its own span).
+run "steppe.txt" steppe "$SIZE" $STEPPE
 run "determinism.txt" determinism "${SEEDS[0]}" "$SIZE" "$DET_MONTHS"
 run "bench.txt" bench
 run "perf.txt" perf $PERF

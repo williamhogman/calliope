@@ -57,6 +57,7 @@ pub mod snapshot;
 pub mod society;
 pub mod storms;
 pub mod state;
+pub mod steppe;
 pub mod systems;
 pub mod telling;
 pub mod tides;

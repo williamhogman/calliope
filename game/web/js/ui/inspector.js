@@ -264,6 +264,25 @@ function SettlementView(a) {
           <div class="insp-note">${roads.line}${roads.refuge_id != null ? html` <button class="link-btn" onClick=${() => a.select({ kind: "settlement", id: roads.refuge_id, fly: true })}>\u2192 fly there</button>` : ""}</div>
         </div>`;
       }}
+      ${() => {
+        // M99 — the herds: the steppe field over the town's hinterland and
+        // the pressure the crown feels for it. Shown only where grass a
+        // herd could winter on lies within a day; red once the crown's
+        // fields are pressed past the line, amber when the drift has made
+        // grass hereabouts that no furrow yet lies under.
+        const herds = explain()?.herds;
+        if (!herds || (herds.range === 0 && herds.herds === 0 && herds.frontier === 0)) return "";
+        const tone = herds.pressed ? " pressed" : herds.contested > 0 ? " contested" : herds.frontier > 0 ? " frontier" : "";
+        const tag = herds.pressed
+          ? `${Math.max(1, Math.round(herds.pressure * 100))} in 100 pressed`
+          : herds.contested > 0 ? `${herds.contested} contested` : herds.frontier > 0 ? "the drift's grass" : "";
+        const gauge = Math.min(1, herds.pressure / herds.full);
+        return html`<div class=${"insp-herds" + tone}>
+          <span class="insp-kicker">Herds · ${herds.herds} of ${herds.cells} cells this decade${tag ? html`<em class="insp-tag">${tag}</em>` : ""}</span>
+          ${herds.pressure > 0 ? html`<div class="insp-gauge" title=${`${(herds.pressure * 100).toFixed(1)}% of the crown's fields contested · unrest full at ${(herds.full * 100).toFixed(0)}%`}><i style=${`width:${(gauge * 100).toFixed(1)}%`}></i></div>` : ""}
+          <div class="insp-note">${herds.text}</div>
+        </div>`;
+      }}
       ${() => (explain() ? Ledger({ data: explain }) : "")}
       <div class="insp-actions">
         <button class="ghost-btn" onClick=${() => a.flyTo(st.x + 0.5, st.y + 0.5, 8)}>${I.fly()} Fly to</button>

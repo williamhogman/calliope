@@ -95,6 +95,7 @@ pub fn all_bands() -> impl Iterator<Item = &'static Band> {
         .chain(crate::hydrology::BANDS)
         .chain(crate::hydrology::LAKE_BANDS)
         .chain(crate::dryedge::BANDS)
+        .chain(crate::steppe::BANDS)
         .chain(crate::resources::BANDS)
         .chain(crate::seismic::BANDS)
         .chain(crate::seismic::VOLCANO_BANDS)

@@ -1,56 +1,56 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · WASM AUDIT                   twiggy top (E6.4)
 ========================================================================
- subject: calliope_bg.wasm 2924220 B · sha256 e0a9b22e43390bb18ed17308d110ba607395c7d5b92fc6d752bb2ea34854aa1d
- profiling twin (symbolized): 3505265 B — sizes below are from the
+ subject: calliope_bg.wasm 2938382 B · sha256 6b3792e6e95017d5464ce7d7f22f9c54c63638ba724738252cc1f0211fc137a6
+ profiling twin (symbolized): 3520339 B — sizes below are from the
  twin; the release binary is the same code without names.
 
  Shallow Bytes │ Shallow % │ Item
 ───────────────┼───────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-        529007 ┊    15.09% ┊ "function names" subsection
-         81417 ┊     2.32% ┊ calliope::world::GenBuilder::stage_dawn::haf8428401ddb6cb5
-         49969 ┊     1.43% ┊ orbital_render
-         44854 ┊     1.28% ┊ <wgpu::backend::wgpu_core::CoreDevice as wgpu::dispatch::DeviceInterface>::create_shader_module::haad146540d3c18a2
-         35358 ┊     1.01% ┊ data segment ".rodata.361"
-         34986 ┊     1.00% ┊ <calliope::systems::Statecraft as calliope::systems::System>::run::hadf3ad4647c30314
-         34917 ┊     1.00% ┊ wgpu_hal::gles::device::<impl wgpu_hal::gles::Device>::create_pipeline::hb9a1960047bef7f3
-         31491 ┊     0.90% ┊ naga::valid::function::<impl naga::valid::Validator>::validate_function::ha80c1353d65787c6
-         30750 ┊     0.88% ┊ naga::back::glsl::Writer<W>::write_expr::h4557143f775fa00b
+        529835 ┊    15.05% ┊ "function names" subsection
+         84205 ┊     2.39% ┊ calliope::world::GenBuilder::stage_dawn::haf8428401ddb6cb5
+         49969 ┊     1.42% ┊ orbital_render
+         44854 ┊     1.27% ┊ <wgpu::backend::wgpu_core::CoreDevice as wgpu::dispatch::DeviceInterface>::create_shader_module::haad146540d3c18a2
+         35358 ┊     1.00% ┊ data segment ".rodata.362"
+         35078 ┊     1.00% ┊ <calliope::systems::Statecraft as calliope::systems::System>::run::hd1a7ec934bc6eb5b
+         34917 ┊     0.99% ┊ wgpu_hal::gles::device::<impl wgpu_hal::gles::Device>::create_pipeline::hb9a1960047bef7f3
+         31491 ┊     0.89% ┊ naga::valid::function::<impl naga::valid::Validator>::validate_function::ha80c1353d65787c6
+         30750 ┊     0.87% ┊ naga::back::glsl::Writer<W>::write_expr::h4557143f775fa00b
          28473 ┊     0.81% ┊ naga::valid::Validator::validate_impl::h58f31d166c958e04
-         25639 ┊     0.73% ┊ data segment ".rodata.285"
-         25168 ┊     0.72% ┊ wasmworld_explain multivalue shim
+         28154 ┊     0.80% ┊ wasmworld_explain multivalue shim
+         25639 ┊     0.73% ┊ data segment ".rodata.286"
+         24823 ┊     0.71% ┊ data segment ".rodata.37"
          24287 ┊     0.69% ┊ naga::front::wgsl::lower::Lowerer::call::h18caa70c150afb16
-         23211 ┊     0.66% ┊ data segment ".rodata.37"
          21847 ┊     0.62% ┊ calliope::world::GenBuilder::stage_naming::h84c37105259951d0
          21445 ┊     0.61% ┊ naga::front::wgsl::error::Error::as_parse_error::h0e1b95770ba406b8
          21090 ┊     0.60% ┊ calliope::world::GenBuilder::stage_glacial::hf1b720a6d2d9844d
-         20909 ┊     0.60% ┊ <Q as wgpu_hal::dynamic::queue::DynQueue>::submit::h65287ac3a4547bcb
-         20555 ┊     0.59% ┊ <wgpu::backend::wgpu_core::CoreQueue as wgpu::dispatch::QueueInterface>::submit::heb917410f64a336b
+         20909 ┊     0.59% ┊ <Q as wgpu_hal::dynamic::queue::DynQueue>::submit::h65287ac3a4547bcb
+         20555 ┊     0.58% ┊ <wgpu::backend::wgpu_core::CoreQueue as wgpu::dispatch::QueueInterface>::submit::heb917410f64a336b
          19711 ┊     0.56% ┊ wasmworld_tick multivalue shim
-         19459 ┊     0.56% ┊ data segment ".rodata.92"
+         19451 ┊     0.55% ┊ data segment ".rodata.93"
          19229 ┊     0.55% ┊ <wgpu::backend::wgpu_core::CoreDevice as wgpu::dispatch::DeviceInterface>::create_render_pipeline::h4b324cf3ec67d460
-         19213 ┊     0.55% ┊ data segment ".rodata.1"
-         18948 ┊     0.54% ┊ <calliope::systems::CivPulse as calliope::systems::System>::run::h4512e456f3ca053a
+         19229 ┊     0.55% ┊ data segment ".rodata.1"
+         18948 ┊     0.54% ┊ <calliope::systems::CivPulse as calliope::systems::System>::run::hcd02a6f3c6872487
          18547 ┊     0.53% ┊ wasmworld_bootstrap multivalue shim
          18340 ┊     0.52% ┊ calliope::world::GenBuilder::stage_fertility::h072b93314bd61ab2
-         18107 ┊     0.52% ┊ data segment ".rodata.273"
-         18087 ┊     0.52% ┊ naga::valid::function::<impl naga::valid::Validator>::validate_block_impl::h356788578f00813e
+         18107 ┊     0.51% ┊ data segment ".rodata.274"
+         18087 ┊     0.51% ┊ naga::valid::function::<impl naga::valid::Validator>::validate_block_impl::h356788578f00813e
          17278 ┊     0.49% ┊ naga::back::glsl::Writer<W>::write_stmt::hc05d0615484afeb1
          16901 ┊     0.48% ┊ wasmworld_stories multivalue shim
-         16563 ┊     0.47% ┊ data segment ".rodata.255"
-         16357 ┊     0.47% ┊ calliope::world::GenBuilder::stage_resources::hb045413be3b73b6a
-         15916 ┊     0.45% ┊ data segment ".rodata.226"
-         15656 ┊     0.45% ┊ data segment ".rodata.35"
-         15652 ┊     0.45% ┊ <calliope::systems::Colonize as calliope::systems::System>::run::h3562eb8d7d4a73aa
+         16563 ┊     0.47% ┊ data segment ".rodata.256"
+         16357 ┊     0.46% ┊ calliope::world::GenBuilder::stage_resources::hb045413be3b73b6a
+         15916 ┊     0.45% ┊ data segment ".rodata.227"
+         15652 ┊     0.44% ┊ <calliope::systems::Colonize as calliope::systems::System>::run::h65e21535010525f1
+         15648 ┊     0.44% ┊ data segment ".rodata.35"
          14800 ┊     0.42% ┊ naga::proc::constant_evaluator::component_wise_scalar::h4393c4f75f2ae89a
-         14120 ┊     0.40% ┊ data segment ".rodata.284"
+         14120 ┊     0.40% ┊ data segment ".rodata.285"
          13568 ┊     0.39% ┊ naga::proc::constant_evaluator::component_wise_scalar::h46a11d42631da0be
-         13183 ┊     0.38% ┊ <I as wgpu_hal::dynamic::instance::DynInstance>::enumerate_adapters::h0af7e94171992da9
-         13106 ┊     0.37% ┊ data segment ".rodata.239"
-       2047151 ┊    58.40% ┊ ... and 6708 more.
-       3505265 ┊   100.00% ┊ Σ [6748 Total Rows]
+         13183 ┊     0.37% ┊ <I as wgpu_hal::dynamic::instance::DynInstance>::enumerate_adapters::h0af7e94171992da9
+         13106 ┊     0.37% ┊ data segment ".rodata.240"
+       2053919 ┊    58.34% ┊ ... and 6723 more.
+       3520339 ┊   100.00% ┊ Σ [6763 Total Rows]
 
 ---- checks ----------------------------------------------------------
 [PASS] twin speaks for the shipped binary          Δ 1.8%   (E6.6: |twin − names − release| ≤3% sweet · ≤6% hard of release — beyond that the audit reads a different build)
-[PASS] no single item dominates the twin              2.3%   (E6.6: heaviest item ≤8% sweet · ≤12% hard — today's worst is the ~3.4% dawn stage; a jump names a new monster: calliope::world::GenBuilder::stage_dawn::haf84)
+[PASS] no single item dominates the twin              2.4%   (E6.6: heaviest item ≤8% sweet · ≤12% hard — today's worst is the ~3.4% dawn stage; a jump names a new monster: calliope::world::GenBuilder::stage_dawn::haf84)
 CHECKS: 2 pass · 0 warn · 0 fail

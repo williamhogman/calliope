@@ -1,7 +1,7 @@
 ========================================================================
  CALLIOPE DIAGNOSTIC · TELLING                      seed 12345 · size 512 · 150y
 ========================================================================
-chronicle: 11112 entries over 150y (74.1/y)
+chronicle: 11114 entries over 150y (74.1/y)
   ids on 100.0% · coords on 95.6% · legend layer on 4571/4571 loud entries
 cast: artifact 11+0† · civilization 1+1† · culture 14+0† · feature 113+0† · good 36+0† · person 16+216† · realm 13+21† · ruin 1+0† · settlement 106+1† · war 1+47† · world 1+0†
 epithets earned: 186  (Tamimbar "the Young", Thalshade "the Young", Arikos "the Unlucky", Dzunachi "the Wise")
@@ -29,5 +29,5 @@ stories sifted: 48 (bloody-circlet ×10 · empire-arc ×1 · high-noon ×1 · mi
 [PASS] a reversal story found                          yes   (M6.7: fortunes turn on the record)
 [PASS] relics wrought                                   11   (M6.3: artifacts enter the world)
 [PASS] epithets earned                                 186   (M6.8: names are coined in the field)
-[PASS] chronicle unbounded                           11112   (no truncation: the full log persists)
+[PASS] chronicle unbounded                           11114   (no truncation: the full log persists)
 CHECKS: 12 pass · 0 warn · 0 fail
