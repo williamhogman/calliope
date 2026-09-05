@@ -304,7 +304,14 @@ fn hash_state(w: &World) -> u64 {
         // both axes ride the hash (ADR-0018): tongue and banner
         // M79 — the harbour's wound rides the identity line: a coast that
         // remembers is state, and a replay must remember the same coast.
-        s.push_str(&format!("s{}|{}|{}|{}|{}|{:.2}|{:?}|{:.3}\n", t.id, t.name, t.pop, t.people.0, t.realm.0, t.wealth, t.goods.iter().map(|g| g.name()).collect::<Vec<_>>(), t.harbor_dmg));
+        // M96 — the granary rides it too: grain laid by is state, and a
+        // replay must lay by the same grain (kept to a thousandth, which
+        // is the law's own resolution — `store_turn` rounds there).
+        s.push_str(&format!("s{}|{}|{}|{}|{}|{:.2}|{:?}|{:.3}|{:.3}\n", t.id, t.name, t.pop, t.people.0, t.realm.0, t.wealth, t.goods.iter().map(|g| g.name()).collect::<Vec<_>>(), t.harbor_dmg, t.store));
+        // M98 — the roads' memory rides it too: the ten readings, the
+        // ring's position and the year the last wave left are state, and
+        // a replay must remember the same failed decade.
+        t.roads.hash_into(&mut s);
     }
     // M79 — the coast's memory: every harbour a storm broke, in order.
     for (m, sid, dmg) in &w.storm_marks {
@@ -330,6 +337,9 @@ fn hash_state(w: &World) -> u64 {
     // M93 — the lake ledger is state: every terminal basin's level, its
     // records and the strandlines it dated.
     s.push_str(&format!("L{:016x}\n", w.lakes.hash()));
+    // M94 — the dry-edge ledger is state: what the steppe holds, when it
+    // took it, which wells sank, and what the chronicle was told.
+    s.push_str(&format!("Y{:016x}\n", w.dry_edge.hash()));
     // M16/ADR-0024 — the plate sketch is state: polygons, kinds, ages.
     s.push_str(&format!("P{:016x}\n", w.plates.hash()));
     // M22 — the seismic ledger is state: seams, clocks, the quake log.
@@ -1485,6 +1495,32 @@ struct RunLog {
     /// hungry were dry; with it we can measure whether dryness governs
     /// hunger — the dose-response the causal claim actually rests on.
     famine_pool: Vec<(i64, i64, i64)>,
+    /// M95 — the famine tellings themselves, (month, x, y, text), so the
+    /// sky audit can hold each line to the cause its numbers make.
+    famine_texts: Vec<(i64, i64, i64, String)>,
+    /// M96 — the held years the chronicle spoke (the sky failed, the
+    /// store did not): (month, x, y, text), one per Granary event.
+    held_texts: Vec<(i64, i64, i64, String)>,
+    /// M97 — the exposure census: every eligible settlement-year the
+    /// harvest verdict could have weighed (rain-fed grain off the river
+    /// *or* monsoon-leaning paddies, more than 90 souls), as (year, x, y,
+    /// storage-tier code, kind: 0 rain-fed · 1 paddies). Read at the
+    /// year's close; the cadence audit unions it with the lean ledger so
+    /// a town the toll itself pushed under the floor still counts.
+    fam_census: Vec<(i64, i64, i64, u8, u8)>,
+    /// M98 — the roads' audit. The harness keeps its own decade memory
+    /// per town — `(id, x, y) → (year, reading)`, the reading re-derived
+    /// at the year's close from the public primitives (`year_yield_bare`,
+    /// `abandoned_share`, `migration::reading`) — so every pulse's mean
+    /// can be re-derived from numbers the pass never wrote. The pass's
+    /// own reading rows are held to the same numbers as they are read.
+    road_mem: BTreeMap<(i64, i64, i64), Vec<(i64, f64, usize)>>,
+    road_checked: usize,
+    road_exact: usize,
+    road_first_bad: Option<String>,
+    road_cursor: usize,
+    /// M98 — the Exodus tellings, (month, x, y, text), one per pulse.
+    exodus_texts: Vec<(i64, i64, i64, String)>,
     placeholders: usize,
     empties: usize,
     /// events that speak a god's name — festivals, omens, war-oaths (M3.5)
@@ -1509,6 +1545,9 @@ struct RunLog {
     peoples_rose: bool,
     /// M80 — every drought the chronicle announced, by the name it spoke.
     drought_named: Vec<String>,
+    /// M94 — every turn of the dry edge the chronicle spoke:
+    /// (month, kind name, subject, x, y, has-subject-id, text).
+    edge_spoken: Vec<(i64, &'static str, String, i64, i64, bool, String)>,
     /// M86 — every age turn the chronicle spoke: (month, world-subject?,
     /// subject line — the christened name since M88).
     age_spoken: Vec<(i64, bool, String)>,
@@ -1519,6 +1558,61 @@ struct RunLog {
     dz_hold: Vec<u64>,
     /// Hold onsets — a node crossing from free into held ground — per zone.
     dz_onsets: Vec<u64>,
+}
+
+/// M98 — the roads' reading, re-derived at month eight of the year from
+/// the public primitives for every town standing, into the harness's own
+/// memory; and the pass's reading rows for the year held to the same
+/// numbers. The reading is pure in the year and the fields as they stand
+/// between the year-turn passes, so a row written in the harvest month
+/// must equal a read taken a month later — any drift is a law that leaked.
+fn road_read(w: &World, log: &mut RunLog) {
+    debug_assert_eq!(w.month.rem_euclid(12), 8);
+    let fyear = w.month.div_euclid(12);
+    let mut rows_by_sid: BTreeMap<i64, calliope::migration::ReadingRow> = BTreeMap::new();
+    while log.road_cursor < w.reading_ledger.len() {
+        let r = w.reading_ledger[log.road_cursor];
+        if r.year > fyear {
+            break;
+        }
+        if r.year == fyear {
+            rows_by_sid.insert(r.sid, r);
+        }
+        log.road_cursor += 1;
+    }
+    for s in w.peoples.settlements.iter() {
+        // a town founded in the harvest month itself was founded after
+        // the pass ran (every founding system follows Migration in the
+        // system order), so its first reading is next year's
+        if s.born >= 12 * fyear + 7 {
+            continue;
+        }
+        let key = (s.id.0, s.x, s.y);
+        let (y, x) = (s.y as usize, s.x as usize);
+        let yf = w.year_yield_bare(fyear, y, x);
+        let lost = w.abandoned_share(y, x);
+        let r = calliope::migration::reading(yf, lost);
+        log.road_mem.entry(key).or_default().push((fyear, r, s.people.0));
+        if let Some(row) = rows_by_sid.get(&s.id.0) {
+            if row.x == s.x && row.y == s.y {
+                log.road_checked += 1;
+                let exact = row.yield_factor == yf && row.lost == lost && row.reading == r;
+                if exact {
+                    log.road_exact += 1;
+                } else if log.road_first_bad.is_none() {
+                    log.road_first_bad = Some(format!(
+                        "year {} {} ({},{}): pass read yield {:.6} lost {:.6} reading {:.6}; harness reads {:.6} {:.6} {:.6}",
+                        fyear, s.name, s.x, s.y, row.yield_factor, row.lost, row.reading, yf, lost, r
+                    ));
+                }
+            }
+        }
+    }
+    // memories outlive their towns: the audit runs after the run, and a
+    // town that pulsed and later fell must still answer for its waves.
+    // A re-founded id at another site is another key; at the same site
+    // it would show as a gap in the years, and the audit's windows are
+    // contiguous by construction.
 }
 
 /// Advance `years` in 12-month ticks, logging everything worth judging.
@@ -1553,7 +1647,16 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
     let mut node_held: Vec<bool> = Vec::new();
     for yr in 1..=years {
         let m0 = w.month;
-        let (evs, _founded, _dep) = w.tick(12);
+        // The year is ticked in two chunks — eight months, then four — so
+        // the M98 roads' reading can be re-derived between them, at month
+        // eight: after the harvest-month passes (famine, migration) and
+        // before the year-turn passes that rewrite the crops grid (M90 at
+        // month 0). Chunking is a law (ADR-0003; the M65 gate replays 300
+        // years under two chunkings to one hash), so nothing else moves.
+        let (mut evs, _founded, _dep) = w.tick(8);
+        road_read(w, &mut log);
+        let (evs_tail, _founded_tail, _dep_tail) = w.tick(4);
+        evs.extend(evs_tail);
         // M72 — the eligible pool for this year's harvest verdict: the
         // famine pass's own predicate (rain-fed wheat or maize, off the
         // river, more than 90 souls), read once per year. Sampled at the
@@ -1561,13 +1664,24 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
         // pushed under the floor still counts as having been at risk.
         if let Some(fm) = (m0..w.month).find(|m| m.rem_euclid(12) == 7) {
             let fyear = fm / 12;
-            for s in &w.peoples.settlements {
-                let pack = w.fields.crops[[s.y as usize, s.x as usize]];
-                let rainfed = (pack == calliope::agriculture::CropPackage::Wheat.code()
-                    || pack == calliope::agriculture::CropPackage::Maize.code())
-                    && !s.river;
-                if rainfed && s.pop > 90 {
-                    log.famine_pool.push((fyear, s.x, s.y));
+            for (i, s) in w.peoples.settlements.iter().enumerate() {
+                if s.pop <= 90 {
+                    continue;
+                }
+                // M97 — one predicate, the pass's own (`harvest_kind`):
+                // the rain-fed pool M72 reads, and the wider exposure
+                // census (paddies too, with the storage tier) the cadence
+                // table normalizes by.
+                let kind = w.harvest_kind(i);
+                match kind {
+                    calliope::famine::HarvestKind::RainFed => {
+                        log.famine_pool.push((fyear, s.x, s.y));
+                        log.fam_census.push((fyear, s.x, s.y, w.store_tier_of(i).code(), 0));
+                    }
+                    calliope::famine::HarvestKind::Paddies => {
+                        log.fam_census.push((fyear, s.x, s.y, w.store_tier_of(i).code(), 1));
+                    }
+                    _ => {}
                 }
             }
         }
@@ -1625,6 +1739,12 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
             }
             if matches!(
                 e.k,
+                calliope::event::EventKind::Encroach | calliope::event::EventKind::Regreen
+            ) {
+                log.edge_spoken.push((e.m, e.k.name(), e.s.clone(), e.x, e.y, !e.ids.is_empty(), e.text.clone()));
+            }
+            if matches!(
+                e.k,
                 calliope::event::EventKind::Age | calliope::event::EventKind::Optimum
             ) {
                 log.age_spoken.push((e.m, !e.ids.is_empty(), e.s.clone()));
@@ -1633,6 +1753,8 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
                 "discovery" => log.strikes += 1,
                 "depletion" => log.depletions += 1,
                 "war" => log.wars += 1,
+                "granary" => log.held_texts.push((e.m, e.x, e.y, e.text.clone())),
+                "exodus" => log.exodus_texts.push((e.m, e.x, e.y, e.text.clone())),
                 "famine" => {
                     log.famines += 1;
                     // the toll, read off the telling: the first number in
@@ -1645,6 +1767,7 @@ fn run_years(w: &mut World, years: usize) -> RunLog {
                         .and_then(|t| t.parse().ok())
                         .unwrap_or(0);
                     log.famine_sites.push((e.m, e.x, e.y, dead));
+                    log.famine_texts.push((e.m, e.x, e.y, e.text.clone()));
                 }
                 "tech" | "society" => log.arc.push((e.m, e.text.clone())),
                 _ => {}
@@ -6026,7 +6149,913 @@ fn cmd_resources(seed: i64, size: usize) {
     c.print();
 }
 
+// ================================================================ M95 sky audit
+
+/// M95 — *Hunger With a Cause*: the audit of every famine row against
+/// the law alone. Each row's `HarvestSky` is re-derived from
+/// `climate::year_anomaly_at` with the harness's own latitude and run
+/// arithmetic (never through `World::harvest_sky`), held bit-equal; the
+/// telling matched to the row must end with the sentence the *re-derived*
+/// sky makes; and, when `full_grid` is on, the row's `dp` must be the
+/// very number `diagnose climate`'s full-grid `year_anomaly` reports at
+/// that cell-year — one sky for the map, the ledger and the chronicle.
+struct SkyAudit {
+    n: usize,
+    /// rows whose sky re-derives bit-equal (and whose verdict z is its index)
+    traced: usize,
+    /// rows whose telling carries the re-derived cause sentence verbatim
+    spoken: usize,
+    /// rows with no telling found at (month, x, y)
+    untold: usize,
+    /// full-grid identity: rows checked, rows equal
+    grid_n: usize,
+    grid_ok: usize,
+    /// shape of the causes, rain-fed rows only
+    year_failed: usize,
+    carried: usize,
+    lean: usize,
+    monsoon: usize,
+    /// first few tellings, for the report
+    samples: Vec<String>,
+    /// first mismatch, for the report
+    first_bad: Option<String>,
+    /// first full-grid disagreement, for the report
+    first_grid_bad: Option<String>,
+}
+
+fn famine_sky_audit(w: &World, texts: &[(i64, i64, i64, String)], full_grid: bool) -> SkyAudit {
+    use calliope::famine::{self, HarvestSky, DROUGHT_Z};
+    let (nrows, ncols) = w.fields.tmean.dim();
+    let rows_f = nrows as f64;
+    let raw_dp = |year: i64, x: i64, y: i64| -> f64 {
+        calliope::climate::year_anomaly_at(
+            w.variability(),
+            nrows,
+            x as usize,
+            y as usize,
+            year,
+            w.year_osc(year),
+            w.year_forcing(year),
+        )
+        .1
+    };
+    let sigma_of = |y: i64| -> f64 {
+        let lat = (-90.0 + (y as f64) * 180.0 / (rows_f - 1.0)).abs();
+        calliope::climate::anomaly_amp_p(lat).max(1e-6)
+    };
+    // the harness's own reading of the sky at one cell-year
+    let sky_of = |year: i64, x: i64, y: i64| -> HarvestSky {
+        let sigma = sigma_of(y);
+        let mut zs = Vec::with_capacity(calliope::drought::MEMO_YEARS);
+        let mut acc = 0.0;
+        let mut wt = 1.0;
+        for k in 0..calliope::drought::MEMO_YEARS as i64 {
+            let dp = raw_dp(year - k, x, y);
+            zs.push(dp / sigma);
+            acc += wt * dp / sigma;
+            wt *= calliope::drought::MEM;
+        }
+        let dry_run = zs.iter().take_while(|&&z| z <= DROUGHT_Z).count() as u8;
+        let lean_run = zs.iter().take_while(|&&z| z < 0.0).count() as u8;
+        let dry_behind = zs.iter().skip(1).filter(|&&z| z <= DROUGHT_Z).count() as u8;
+        HarvestSky { year, z1: zs[0], index: acc * w.drought_norm(), dp: raw_dp(year, x, y), dry_run, lean_run, dry_behind }
+    };
+    let mut told: BTreeMap<(i64, i64, i64), std::collections::VecDeque<&str>> = BTreeMap::new();
+    for (m, x, y, t) in texts {
+        told.entry((*m, *x, *y)).or_default().push_back(t.as_str());
+    }
+    let mut a = SkyAudit { n: w.famine_ledger.len(), traced: 0, spoken: 0, untold: 0, grid_n: 0, grid_ok: 0, year_failed: 0, carried: 0, lean: 0, monsoon: 0, samples: Vec::new(), first_bad: None, first_grid_bad: None };
+    // full-grid sky per famine year, solved once per year on demand
+    let mut grids: BTreeMap<i64, ndarray::Array2<f64>> = BTreeMap::new();
+    let mut sampled = [false; 4];
+    for r in &w.famine_ledger {
+        let year = r.m / 12;
+        let mine = sky_of(year, r.x, r.y);
+        // the recorded shortfall must be the one the re-derived sky makes:
+        // the memory index through the rain-fed law, or the town's own
+        // monsoon index through the paddy law — no third number in between
+        let (cause, shortfall_mine, msi_ok) = if r.monsoon {
+            let riv = w.peoples.settlements.iter().find(|s| s.x == r.x && s.y == r.y).map(|s| s.river);
+            match riv {
+                Some(riv) => {
+                    let msi = w.monsoon_index(year, r.y as usize, r.x as usize, riv);
+                    (famine::monsoon_sentence(msi, riv), famine::monsoon_shortfall(msi), msi.to_bits() == r.msi.to_bits())
+                }
+                None => (String::from("\u{0}no such town\u{0}"), None, false),
+            }
+        } else {
+            (famine::cause_sentence(&mine), famine::rainfed_shortfall(mine.index), true)
+        };
+        let same = mine == r.sky
+            && (r.monsoon || r.z == r.sky.index)
+            && msi_ok
+            && shortfall_mine.is_some_and(|sf| sf.to_bits() == r.shortfall.to_bits())
+            && famine::toll(r.pop, r.shortfall, r.granary) == r.hit;
+        if same {
+            a.traced += 1;
+        }
+        // the shape of the cause: 0 monsoon · 1 the year failed · 2 carried
+        // by failed years behind · 3 summed from lean years
+        let class = if r.monsoon {
+            a.monsoon += 1;
+            0
+        } else if r.sky.z1 <= DROUGHT_Z {
+            a.year_failed += 1;
+            1
+        } else if r.sky.dry_behind >= 1 {
+            a.carried += 1;
+            2
+        } else {
+            a.lean += 1;
+            3
+        };
+        let text = told.get_mut(&(r.m, r.x, r.y)).and_then(|q| q.pop_front());
+        // `contains`, not `ends_with`: the M77 patina may hang a doubt
+        // ("Some deny it happened at all.") after the line. The cause
+        // sentence must still be there verbatim, whole.
+        let said = match text {
+            Some(t) => {
+                // one telling per class of cause, so the report shows the
+                // registers side by side rather than three monsoons
+                if !sampled[class] {
+                    sampled[class] = true;
+                    a.samples.push(format!("y{} · {}", year, t));
+                }
+                t.contains(&cause)
+            }
+            None => {
+                a.untold += 1;
+                false
+            }
+        };
+        if said {
+            a.spoken += 1;
+        }
+        if !(same && said) && a.first_bad.is_none() {
+            a.first_bad = Some(format!(
+                "y{} ({},{}) ledger {:?} · mine {:?} · cause «{}» · told «{}»",
+                year,
+                r.x,
+                r.y,
+                r.sky,
+                mine,
+                cause,
+                text.unwrap_or("—")
+            ));
+        }
+        if full_grid {
+            let g = grids.entry(year).or_insert_with(|| {
+                calliope::climate::year_anomaly(w.variability(), nrows, ncols, year, w.year_osc(year), w.year_forcing(year)).1
+            });
+            a.grid_n += 1;
+            let gv = g[[r.y as usize, r.x as usize]];
+            if gv.to_bits() == r.sky.dp.to_bits() {
+                a.grid_ok += 1;
+            } else if a.first_grid_bad.is_none() {
+                a.first_grid_bad = Some(format!(
+                    "y{} ({},{}) grid {:e} · ledger {:e} · {} ulp",
+                    year,
+                    r.x,
+                    r.y,
+                    gv,
+                    r.sky.dp,
+                    (gv.to_bits() as i64 - r.sky.dp.to_bits() as i64).abs()
+                ));
+            }
+        }
+    }
+    a
+}
+
+// ---------------------------------------------------------- M96 audit
+
+/// M96 — *Granaries Against Lean Years*, measured at the mechanism. The
+/// lean years' ledger holds one row per verdict that found a shortfall at
+/// an eligible town, spoken or held, with the store's draw beside the bare
+/// toll (the same town, the same year, no store) — an exact matched
+/// control, no regression needed. The audit re-derives every row from the
+/// pure laws (`store_draw`, `toll`), holds the roof, holds the untiered
+/// towns at zero, ties every spoken row to its famine row and every held
+/// row to its Granary telling, and sums the tiered towns' loss against
+/// their bare counterfactual per tier.
+#[derive(Default)]
+struct StoreAudit {
+    /// rows in the lean years' ledger
+    n: usize,
+    /// rows whose (covered, granary, hit, bare, spoken) re-derive exactly
+    exact: usize,
+    /// rows under the roof: store ≤ cap_years(tier) × pop
+    roofed: usize,
+    /// untiered rows, and those of them with an empty store and a bare toll
+    untiered: usize,
+    untiered_bare: usize,
+    /// tiered rows (tier > 0), and those where the store gave something
+    tiered: usize,
+    gave: usize,
+    /// spoken rows, and those matched to a famine row with the same store
+    spoken: usize,
+    spoken_tied: usize,
+    /// held rows (bare ≥ 4, covered > 0, not spoken), and those told
+    held: usize,
+    held_told: usize,
+    /// held tellings found with no held row behind them
+    held_orphans: usize,
+    /// per tier 0..4: rows, Σhit, Σbare, Σpop, Σcovered
+    by_tier: [(usize, i64, i64, i64, f64); 4],
+    /// per shortfall quartile (bounds from all rows): the tiered rows'
+    /// mean per-capita toll as paid, the same rows' mean per-capita toll
+    /// under the bare law, the untiered rows' mean per-capita toll (NaN
+    /// when none), tiered count, untiered count
+    matched: Vec<(f64, f64, f64, usize, usize)>,
+    /// per tier 0..4: months of grain at the verdict over that tier's
+    /// rows — median, 90th percentile, rows at the roof (≥ 99 % of cap)
+    months: [(f64, f64, usize); 4],
+    /// per tier 0..4, the same months split by run position: first
+    /// verdicts of a lean run (count, median, p90) and deep-in-the-run
+    /// verdicts (count, median)
+    run_months: [(usize, f64, f64, usize, f64); 4],
+    /// first few tellings for the report
+    samples: Vec<String>,
+    first_bad: Option<String>,
+}
+
+fn store_audit(w: &World, famine_texts: &[(i64, i64, i64, String)], held_texts: &[(i64, i64, i64, String)]) -> StoreAudit {
+    use calliope::famine;
+    use calliope::society::StoreTier;
+    let mut a = StoreAudit::default();
+    a.n = w.store_ledger.len();
+    let famine_rows: BTreeMap<(i64, i64, i64), &calliope::world::FamineRow> =
+        w.famine_ledger.iter().map(|r| ((r.m, r.x, r.y), r)).collect();
+    let held_by_site: BTreeMap<(i64, i64, i64), &str> =
+        held_texts.iter().map(|(m, x, y, t)| ((*m, *x, *y), t.as_str())).collect();
+    let famine_by_site: BTreeMap<(i64, i64, i64), &str> =
+        famine_texts.iter().map(|(m, x, y, t)| ((*m, *x, *y), t.as_str())).collect();
+    let mut held_sites: std::collections::BTreeSet<(i64, i64, i64)> = std::collections::BTreeSet::new();
+    let mut sampled = [false; 3];
+    for r in &w.store_ledger {
+        let tier = StoreTier::from_code(r.tier);
+        let (cov, g) = famine::store_draw(r.store, r.pop, r.shortfall);
+        let hit = famine::toll(r.pop, r.shortfall, g);
+        let bare = famine::toll(r.pop, r.shortfall, 1.0);
+        let exact = cov.to_bits() == r.covered.to_bits()
+            && g.to_bits() == r.granary.to_bits()
+            && hit == r.hit
+            && bare == r.bare
+            && r.spoken == (r.hit >= 4)
+            && r.hit <= r.bare
+            && r.covered <= r.store + 1e-9
+            && r.store >= 0.0;
+        if exact {
+            a.exact += 1;
+        }
+        let roofed = r.store <= tier.cap_years() * (r.pop as f64) + 1e-6;
+        if roofed {
+            a.roofed += 1;
+        }
+        let t = (r.tier as usize).min(3);
+        let e = &mut a.by_tier[t];
+        e.0 += 1;
+        e.1 += r.hit;
+        e.2 += r.bare;
+        e.3 += r.pop;
+        e.4 += r.covered;
+        let mut bad: Option<String> = None;
+        if tier == StoreTier::None {
+            a.untiered += 1;
+            if r.store == 0.0 && r.covered == 0.0 && r.granary == 1.0 && r.hit == r.bare {
+                a.untiered_bare += 1;
+            } else {
+                bad = Some(format!("untiered town holds grain: store {} covered {} granary {}", r.store, r.covered, r.granary));
+            }
+        } else {
+            a.tiered += 1;
+            if r.covered > 0.0 {
+                a.gave += 1;
+            }
+        }
+        if r.spoken {
+            a.spoken += 1;
+            match famine_rows.get(&(r.m, r.x, r.y)) {
+                Some(f) if f.tier == r.tier && f.store.to_bits() == r.store.to_bits() && f.covered.to_bits() == r.covered.to_bits() && f.granary.to_bits() == r.granary.to_bits() && f.hit == r.hit => {
+                    a.spoken_tied += 1;
+                    // the famine line carries the gave-clause iff the store gave
+                    let text = famine_by_site.get(&(r.m, r.x, r.y)).copied().unwrap_or("");
+                    let clause = famine::gave_sentence(tier, r.covered, r.pop);
+                    let carries = if r.covered > 0.0 { text.contains(&clause) } else { !text.contains(" gave ") };
+                    if !carries {
+                        bad = Some(format!("spoken row's telling misses its gave-clause «{}» · told «{}»", clause, text));
+                    } else if r.covered > 0.0 && !sampled[1] {
+                        sampled[1] = true;
+                        a.samples.push(format!("y{} · {}", r.m / 12, text));
+                    }
+                }
+                _ => bad = Some(String::from("spoken row has no famine row with the same store/covered/granary/hit")),
+            }
+        } else if r.bare >= 4 && r.covered > 0.0 {
+            a.held += 1;
+            held_sites.insert((r.m, r.x, r.y));
+            match held_by_site.get(&(r.m, r.x, r.y)) {
+                Some(t) if t.contains(&famine::held_sentence(tier, r.covered, r.pop)) => {
+                    a.held_told += 1;
+                    if !sampled[2] {
+                        sampled[2] = true;
+                        a.samples.push(format!("y{} · {}", r.m / 12, t));
+                    }
+                }
+                Some(t) => bad = Some(format!("held row's telling misses its clause «{}» · told «{}»", famine::held_sentence(tier, r.covered, r.pop), t)),
+                None => bad = Some(String::from("held row (bare ≥ 4, store gave) has no Granary telling")),
+            }
+        }
+        if !exact && bad.is_none() {
+            bad = Some(format!(
+                "row re-derives differently: ledger cov {} g {} hit {} bare {} · law cov {} g {} hit {} bare {}",
+                r.covered, r.granary, r.hit, r.bare, cov, g, hit, bare
+            ));
+        }
+        if !roofed && bad.is_none() {
+            bad = Some(format!("store {} over the roof {} × {} ({:?})", r.store, tier.cap_years(), r.pop, tier));
+        }
+        if let Some(b) = bad {
+            if a.first_bad.is_none() {
+                a.first_bad = Some(format!("y{} ({},{}) {:?} · {}", r.m / 12, r.x, r.y, tier, b));
+            }
+        }
+        if !sampled[0] && tier != StoreTier::None && r.covered == 0.0 && r.spoken {
+            sampled[0] = true;
+            a.samples.push(format!("y{} · {:?} empty at the verdict: bare toll {} on pop {} (shortfall {:.2})", r.m / 12, tier, r.hit, r.pop, r.shortfall));
+        }
+    }
+    a.held_orphans = held_texts.iter().filter(|(m, x, y, _)| !held_sites.contains(&(*m, *x, *y))).count();
+    // matched by shortfall quartile: the tiered towns' toll as paid against
+    // the bare law's on the very same town-years (the counterfactual the
+    // ledger carries), and the untiered towns' where any stand. M97 — the
+    // control is drawn where the bare law would strike at all (bare ≥ 4):
+    // under the floored toll a shallow shortfall asks nothing of anyone,
+    // stored or not, and a quartile of zeros against zeros is no match.
+    let asked: Vec<&calliope::world::StoreRow> = w.store_ledger.iter().filter(|r| r.bare >= 4).collect();
+    if asked.len() >= 8 {
+        let mut sfs: Vec<f64> = asked.iter().map(|r| r.shortfall).collect();
+        sfs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let q = |k: usize| sfs[(k * sfs.len() / 4).min(sfs.len() - 1)];
+        let bounds = [q(0), q(1), q(2), q(3), f64::INFINITY];
+        for k in 0..4 {
+            let (lo, hi) = (bounds[k], bounds[k + 1]);
+            let (mut ts, mut tb, mut tn, mut us, mut un) = (0.0, 0.0, 0usize, 0.0, 0usize);
+            for r in &asked {
+                let inside = if k == 3 { r.shortfall >= lo } else { r.shortfall >= lo && r.shortfall < hi };
+                if !inside {
+                    continue;
+                }
+                let pc = (r.hit as f64) / (r.pop as f64);
+                if r.tier > 0 {
+                    ts += pc;
+                    tb += (r.bare as f64) / (r.pop as f64);
+                    tn += 1;
+                } else {
+                    us += pc;
+                    un += 1;
+                }
+            }
+            a.matched.push((
+                if tn > 0 { ts / tn as f64 } else { f64::NAN },
+                if tn > 0 { tb / tn as f64 } else { f64::NAN },
+                if un > 0 { us / un as f64 } else { f64::NAN },
+                tn,
+                un,
+            ));
+        }
+    }
+    // months of grain at the verdict, per tier — split by where in the
+    // lean run the verdict falls. A verdict is the run's FIRST when the
+    // same town had no verdict the year before; every later one is DEEP
+    // in the run, and there the store is meant to be spent (that is what
+    // it was for). The size of the store is read at the first verdict;
+    // the deep median is reported because the drought's own run length
+    // (M80: median 3 y) is what it measures.
+    let sites: std::collections::BTreeSet<(i64, i64, i64)> = w.store_ledger.iter().map(|r| (r.m, r.x, r.y)).collect();
+    let is_first = |r: &calliope::world::StoreRow| !sites.contains(&(r.m - 12, r.x, r.y));
+    let stats = |ms: &mut Vec<f64>| -> (f64, f64) {
+        if ms.is_empty() {
+            return (f64::NAN, f64::NAN);
+        }
+        ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        (ms[ms.len() / 2], ms[(ms.len() * 9 / 10).min(ms.len() - 1)])
+    };
+    for t in 0..4 {
+        let tier = StoreTier::from_code(t as u8);
+        let rows = || w.store_ledger.iter().filter(move |r| r.tier as usize == t && r.pop > 0);
+        let mut all: Vec<f64> = rows().map(|r| 12.0 * r.store / (r.pop as f64)).collect();
+        let mut first: Vec<f64> = rows().filter(|r| is_first(r)).map(|r| 12.0 * r.store / (r.pop as f64)).collect();
+        let mut deep: Vec<f64> = rows().filter(|r| !is_first(r)).map(|r| 12.0 * r.store / (r.pop as f64)).collect();
+        let roof = rows()
+            .filter(|r| tier.cap_years() > 0.0 && r.store >= 0.99 * tier.cap_years() * (r.pop as f64))
+            .count();
+        let (n_first, n_deep) = (first.len(), deep.len());
+        let (med, p90) = stats(&mut all);
+        let (fmed, fp90) = stats(&mut first);
+        let (dmed, _) = stats(&mut deep);
+        a.months[t] = (med, p90, roof);
+        a.run_months[t] = (n_first, fmed, fp90, n_deep, dmed);
+    }
+    a
+}
+
+// -------------------------------------------------------- M97 cadence
+
+/// M97 — *Famine, Recalibrated*: the cadence and severity table, in the
+/// units the historical record reports. Exposure is the census of
+/// eligible settlement-years (the pass's own predicate, sampled at each
+/// year's close) unioned with the lean ledger (a verdict is proof of
+/// eligibility, whatever the toll did to the head-count afterwards);
+/// spoken famines are the famine ledger's rows; the bare law's famines
+/// are the lean rows whose bare toll would have reached the chronicle.
+/// Rates are per settlement-century: `events × 100 / exposure`.
+// ----------------------------------------------------------- M98 roads
+
+/// M98 — *Off the Failing Margin*: the roads' audit. Every pulse in the
+/// exodus ledger is held to the harness's own decade memory (built from
+/// readings the harness re-derived at each year's close, never from the
+/// pass's rows): the ring was full, its mean re-derives to the pulse's
+/// mean and stands at or above the failed-decade threshold, the gap
+/// since the town's last wave is a generation, the walkers are the
+/// law's count of the head-count the pulse read, the source lost and
+/// the destination gained exactly that many in the pulse's own month,
+/// the refuge's own memory was not failing, the kin were kin, and one
+/// dated Exodus telling names the road. Then the converse: every
+/// town-year the law owed a decision (mean at threshold, armed, large
+/// enough, not failing, a spoken wave's worth) has a ledger row — a
+/// pulse, or the written fact that no refuge stood.
+#[derive(Default)]
+struct RoadsAudit {
+    /// Pulses that walked · pulses that found no refuge.
+    pulses: usize,
+    held: usize,
+    /// Pulses whose every clause re-derived.
+    exact: usize,
+    /// Town-years with a full memory · of them, at or over the threshold.
+    judged: usize,
+    failed: usize,
+    /// Town-years the law owed a decision · that have a ledger row.
+    due: usize,
+    answered: usize,
+    /// Reading rows the harness held to its own read · of them exact.
+    rows_checked: usize,
+    rows_exact: usize,
+    /// Settlement-years with a reading (the cadence denominator).
+    town_years: usize,
+    /// Exodus tellings · tied to a pulse row · pulse rows with a telling.
+    told: usize,
+    told_tied: usize,
+    pulses_told: usize,
+    /// Pulses that reversed an earlier pulse the other way inside two
+    /// generations — people traded back and forth within one valley.
+    bounces: usize,
+    /// Mean walked share, mean road km, over the pulses that walked.
+    share: f64,
+    km: f64,
+    /// Decade-mean quantiles over the judged town-years: p50 p90 p99 max.
+    q: [f64; 4],
+    first_bad: Option<String>,
+    /// The first few faults in full, for the report.
+    faults: Vec<String>,
+}
+
+impl RoadsAudit {
+    fn per_century(&self) -> f64 {
+        if self.town_years == 0 { 0.0 } else { self.pulses as f64 / (self.town_years as f64 / 100.0) }
+    }
+    fn clean(&self) -> bool {
+        self.first_bad.is_none()
+            && self.exact == self.pulses + self.held
+            && self.due == self.answered
+            && self.rows_exact == self.rows_checked
+            && self.told == self.told_tied
+            && self.pulses_told == self.pulses
+    }
+}
+
+fn roads_audit(w: &World, log: &RunLog) -> RoadsAudit {
+    use calliope::migration as mg;
+    let mut a = RoadsAudit::default();
+    a.rows_checked = log.road_checked;
+    a.rows_exact = log.road_exact;
+    a.first_bad = log.road_first_bad.clone();
+    a.town_years = w.reading_ledger.len();
+    let bad = |a: &mut RoadsAudit, m: String| {
+        if a.first_bad.is_none() {
+            a.first_bad = Some(m.clone());
+        }
+        if a.faults.len() < 8 {
+            a.faults.push(m);
+        }
+    };
+    // the harness's trailing-ten mean for a town at a year, if ten
+    // consecutive readings end there
+    let mean_at = |key: (i64, i64, i64), year: i64| -> Option<f64> {
+        let v = log.road_mem.get(&key)?;
+        let end = v.iter().position(|&(y, _, _)| y == year)?;
+        if end + 1 < mg::DECADE {
+            return None;
+        }
+        let win = &v[end + 1 - mg::DECADE..=end];
+        if win.first().map(|&(y, _, _)| y) != Some(year - (mg::DECADE as i64 - 1)) {
+            return None;
+        }
+        Some(win.iter().map(|&(_, r, _)| r).sum::<f64>() / mg::DECADE as f64)
+    };
+    // the law's remembered mean from the harness's own readings: the
+    // trailing decade once the town has one, what it remembers once it
+    // has `REFUGE_MIN_YEARS`, nothing before that
+    let remembered_at = |key: (i64, i64, i64), year: i64| -> Option<f64> {
+        let v = log.road_mem.get(&key)?;
+        let end = v.iter().position(|&(y, _, _)| y == year)?;
+        let n = end + 1;
+        if n < mg::REFUGE_MIN_YEARS {
+            return None;
+        }
+        let take = n.min(mg::DECADE);
+        let win = &v[n - take..n];
+        if win.first().map(|&(y, _, _)| y) != Some(year - (take as i64 - 1)) {
+            return None;
+        }
+        Some(win.iter().map(|&(_, r, _)| r).sum::<f64>() / take as f64)
+    };
+    // the harness's snapshot of a town's people at a year's month eight.
+    // The pulse fires in month seven, before that year's kindred pass and
+    // after the previous year's union pass, so pulse-time kinship is read
+    // from whichever adjacent snapshot brackets it: kin in either the
+    // year's or the year before's snapshot stands; kin in neither is a
+    // refuge the law did not allow.
+    let people_at = |key: (i64, i64, i64), year: i64| -> Option<usize> {
+        log.road_mem.get(&key)?.iter().find(|&&(y, _, _)| y == year).map(|&(_, _, p)| p)
+    };
+    let kin_at = |a: (i64, i64, i64), b: (i64, i64, i64), year: i64| -> bool {
+        [year, year - 1].iter().any(|&y| match (people_at(a, y), people_at(b, y)) {
+            (Some(p), Some(q)) => p == q,
+            _ => false,
+        })
+    };
+    // decade-mean quantiles and the failed share, over the pass's rows
+    let mut means: Vec<f64> = w.reading_ledger.iter().filter_map(|r| r.mean).collect();
+    a.judged = means.len();
+    a.failed = means.iter().filter(|&&m| m >= mg::FAILED_DECADE).count();
+    if !means.is_empty() {
+        means.sort_by(|p, q| p.partial_cmp(q).unwrap());
+        let at = |f: f64| means[((means.len() - 1) as f64 * f).round() as usize];
+        a.q = [at(0.5), at(0.9), at(0.99), *means.last().unwrap()];
+    }
+    // the pulses, one by one
+    let mut last_pulse: BTreeMap<i64, i64> = BTreeMap::new();
+    let (mut share_sum, mut km_sum) = (0.0f64, 0.0f64);
+    for row in &w.exodus_ledger {
+        let key = (row.src_sid, row.src.0, row.src.1);
+        let mut ok = true;
+        let mut why = String::new();
+        match mean_at(key, row.year) {
+            None => {
+                ok = false;
+                let held: Vec<String> = log.road_mem.get(&key).map(|v| v.iter().rev().take(12).map(|&(y, _, _)| y.to_string()).collect()).unwrap_or_default();
+                why = format!("the harness holds no full decade for the town at that year (harness years, newest first: {}; ledger rows for the id: {})", held.join(" "), w.reading_ledger.iter().filter(|r| r.sid == row.src_sid && r.year <= row.year).count());
+            }
+            Some(m) => {
+                if (m - row.mean).abs() > 1e-9 {
+                    ok = false; why = format!("mean {:.6} against the harness's {:.6}", row.mean, m);
+                } else if m < mg::FAILED_DECADE {
+                    ok = false; why = format!("mean {:.3} under the threshold {:.2}", m, mg::FAILED_DECADE);
+                }
+            }
+        }
+        if ok && row.m.rem_euclid(12) != 7 {
+            ok = false; why = format!("pulse in month {} of the year, not the harvest month", row.m.rem_euclid(12));
+        }
+        if ok && row.src_pop_before <= mg::POP_FLOOR {
+            ok = false; why = format!("source held {} souls, at or under the floor", row.src_pop_before);
+        }
+        if ok {
+            if let Some(&lp) = last_pulse.get(&row.src_sid) {
+                if row.dst.is_some() && row.year - lp < mg::PULSE_GAP_YEARS {
+                    ok = false; why = format!("a wave left in year {} and another in {}", lp, row.year);
+                }
+            }
+        }
+        if ok && row.dst.is_some() {
+            let want = mg::walkers(row.src_pop_before, row.mean);
+            if row.walked != want {
+                ok = false; why = format!("{} walked, the law counts {} of {}", row.walked, want, row.src_pop_before);
+            } else if row.walked < mg::SPOKEN_MIN {
+                ok = false; why = format!("{} walked, under the spoken floor", row.walked);
+            } else if row.src_pop_before - row.src_pop_after != row.walked {
+                ok = false; why = format!("source {} → {} but {} walked", row.src_pop_before, row.src_pop_after, row.walked);
+            } else if row.dst_pop_after - row.dst_pop_before != row.walked {
+                ok = false; why = format!("destination {} → {} but {} walked", row.dst_pop_before, row.dst_pop_after, row.walked);
+            } else {
+                let dsid = row.dst_sid.unwrap();
+                let dkey = (dsid, row.dst.unwrap().0, row.dst.unwrap().1);
+                match remembered_at(dkey, row.year) {
+                    Some(dm) if dm >= mg::REFUGE_MEAN => {
+                        ok = false; why = format!("the refuge {} carried a failing sky of its own ({:.3})", row.dst_name, dm);
+                    }
+                    Some(dm) if (dm - row.dst_mean).abs() > 1e-9 => {
+                        ok = false; why = format!("the refuge's mean {:.6} against the harness's {:.6}", row.dst_mean, dm);
+                    }
+                    None if row.dst_mean >= 0.0 => {
+                        ok = false; why = format!("the refuge {} is too young to carry the mean {:.3} the row gives it", row.dst_name, row.dst_mean);
+                    }
+                    _ => {}
+                }
+                if ok {
+                    // a wave that reverses one the other way inside two
+                    // generations: two towns of one failing valley
+                    // trading their people back and forth
+                    if w.exodus_ledger.iter().any(|e| e.dst_sid == Some(row.src_sid) && e.src_sid == dsid && e.year < row.year && row.year - e.year <= 2 * mg::PULSE_GAP_YEARS) {
+                        a.bounces += 1;
+                    }
+                }
+                if ok && !kin_at(key, dkey, row.year) {
+                    ok = false; why = format!("{} and {} are not kin", row.src_name, row.dst_name);
+                }
+                if ok {
+                    let told = log.exodus_texts.iter().any(|(m, x, y, t)| {
+                        *m == row.m && *x == row.src.0 && *y == row.src.1 && t.contains(&row.dst_name) && t.contains(&format!("{} of its people", row.walked))
+                    });
+                    if told {
+                        a.pulses_told += 1;
+                    } else {
+                        ok = false; why = "no Exodus telling names the road".into();
+                    }
+                }
+            }
+        }
+        if row.dst.is_some() {
+            last_pulse.insert(row.src_sid, row.year);
+            a.pulses += 1;
+            share_sum += row.walked as f64 / row.src_pop_before as f64;
+            km_sum += row.km;
+        } else {
+            a.held += 1;
+        }
+        if ok {
+            a.exact += 1;
+        } else {
+            bad(&mut a, format!("year {} {} → {}: {}", row.year, row.src_name, if row.dst.is_some() { row.dst_name.as_str() } else { "(no refuge)" }, why));
+        }
+    }
+    if a.pulses > 0 {
+        a.share = share_sum / a.pulses as f64;
+        a.km = km_sum / a.pulses as f64;
+    }
+    // every telling ties to a pulse row
+    a.told = log.exodus_texts.len();
+    a.told_tied = log
+        .exodus_texts
+        .iter()
+        .filter(|(m, x, y, _)| w.exodus_ledger.iter().any(|r| r.dst.is_some() && r.m == *m && r.src.0 == *x && r.src.1 == *y))
+        .count();
+    if a.told != a.told_tied {
+        let msg = format!("{} Exodus tellings, {} tied to a pulse row", a.told, a.told_tied);
+        bad(&mut a, msg);
+    }
+    // the converse: every decision owed has a row
+    let mut pulse_years: BTreeMap<i64, Vec<i64>> = BTreeMap::new();
+    for r in w.exodus_ledger.iter().filter(|r| r.dst.is_some()) {
+        pulse_years.entry(r.src_sid).or_default().push(r.year);
+    }
+    for r in &w.reading_ledger {
+        let Some(m) = r.mean else { continue };
+        if m < mg::FAILED_DECADE || r.pop <= mg::POP_FLOOR || r.failing {
+            continue;
+        }
+        let armed = pulse_years.get(&r.sid).map_or(true, |ys| ys.iter().all(|&y| y >= r.year || r.year - y >= mg::PULSE_GAP_YEARS));
+        if !armed || mg::walkers(r.pop, m) < mg::SPOKEN_MIN {
+            continue;
+        }
+        a.due += 1;
+        if w.exodus_ledger.iter().any(|e| e.src_sid == r.sid && e.year == r.year) {
+            a.answered += 1;
+        } else {
+            bad(&mut a, format!("year {} town {} ({},{}): mean {:.3}, {} souls, armed — no decision in the ledger", r.year, r.sid, r.x, r.y, m, r.pop));
+        }
+    }
+    a
+}
+
+#[derive(Default)]
+struct FamineCadence {
+    /// eligible settlement-years, all · per storage tier 0..4 · per
+    /// climate zone (`famine::ZONES`) · per kind (rain-fed, paddies)
+    exposure: usize,
+    exp_tier: [usize; 4],
+    exp_zone: Vec<usize>,
+    exp_kind: [usize; 2],
+    /// spoken famines, by the same cuts
+    spoken: usize,
+    sp_tier: [usize; 4],
+    sp_zone: Vec<usize>,
+    sp_kind: [usize; 2],
+    /// lean verdicts the bare law would have spoken (bare toll ≥ 4),
+    /// all · per tier — the counterfactual cadence with no store at all
+    bare: usize,
+    bare_tier: [usize; 4],
+    /// lean verdicts of any depth (every row of the lean ledger), all ·
+    /// per tier — the harvest-failure cadence famine must sit under
+    lean: usize,
+    lean_tier: [usize; 4],
+    /// spoken famines whose sky carried a dry year behind (back-to-back)
+    back_to_back: usize,
+    /// famine *episodes*: consecutive spoken years at one town merged
+    /// into one (the unit Campbell & Ó Gráda and Ó Gráda count — 1315–17
+    /// is one famine), their longest run, and the mean dead share of the
+    /// town summed over an episode's years
+    episodes: usize,
+    longest_episode: usize,
+    episode_dead_share: f64,
+    /// severity over the spoken famines: mean dead share of the town,
+    /// mean struck share (dead + walked), the worst dead share, the 90th
+    /// percentile dead share, Σdead
+    dead_share: f64,
+    hit_share: f64,
+    worst_dead_share: f64,
+    dead_p90: f64,
+    dead: i64,
+    /// per tier 0..4: mean dead share over that tier's spoken famines
+    ds_tier: [f64; 4],
+    /// famine rows the exposure census never saw (must be 0)
+    orphans: usize,
+}
+
+impl FamineCadence {
+    fn rate(events: usize, exposure: usize) -> f64 {
+        if exposure == 0 { f64::NAN } else { events as f64 * 100.0 / exposure as f64 }
+    }
+    /// spoken famines per eligible settlement-century, all tiers
+    fn per_century(&self) -> f64 {
+        Self::rate(self.spoken, self.exposure)
+    }
+    /// famine episodes per eligible settlement-century
+    fn episodes_per_century(&self) -> f64 {
+        Self::rate(self.episodes, self.exposure)
+    }
+    /// the bare law's famines per settlement-century, all tiers
+    fn bare_per_century(&self) -> f64 {
+        Self::rate(self.bare, self.exposure)
+    }
+    /// harvest failures (any lean verdict) per settlement-century
+    fn lean_per_century(&self) -> f64 {
+        Self::rate(self.lean, self.exposure)
+    }
+    fn tier_per_century(&self, t: usize) -> f64 {
+        Self::rate(self.sp_tier[t], self.exp_tier[t])
+    }
+    fn tier_bare_per_century(&self, t: usize) -> f64 {
+        Self::rate(self.bare_tier[t], self.exp_tier[t])
+    }
+    /// the highest storage tier with enough exposure to speak for itself
+    /// (≥ 5 settlement-centuries), if any
+    fn top_tier(&self) -> Option<usize> {
+        (1..4).rev().find(|&t| self.exp_tier[t] >= 500)
+    }
+    /// the seed's own verdict against the historical envelope: the world
+    /// rate inside its sweet band, the dead share inside its sweet band,
+    /// and — where a storage tier has the exposure to speak — that tier's
+    /// rate inside the smaller band and under the bare law's rate on the
+    /// same town-years
+    fn in_envelope(&self) -> bool {
+        use calliope::famine as f;
+        let r = self.per_century();
+        let ds = self.dead_share;
+        let es = self.episode_dead_share;
+        let world_ok = r.is_finite() && r >= f::FAMINE_PER_CENTURY.0 && r <= f::FAMINE_PER_CENTURY.1;
+        let dead_ok = self.spoken == 0 || (ds >= f::FAMINE_DEAD_SHARE.0 && ds <= f::FAMINE_DEAD_SHARE.1);
+        // the record's own unit: the episode's dead share inside Ó Gráda's ledger
+        let episode_ok = self.episodes == 0 || (es >= f::FAMINE_EPISODE_DEAD_SHARE.0 && es <= f::FAMINE_EPISODE_DEAD_SHARE.1);
+        let store_ok = match self.top_tier() {
+            Some(t) => {
+                let tr = self.tier_per_century(t);
+                tr >= f::STORED_FAMINE_PER_CENTURY.0 && tr <= f::STORED_FAMINE_PER_CENTURY.1 && tr < self.tier_bare_per_century(t)
+            }
+            None => true,
+        };
+        world_ok && dead_ok && episode_ok && store_ok
+    }
+}
+
+fn famine_cadence(w: &World, log: &RunLog) -> FamineCadence {
+    use calliope::famine;
+    let nz = famine::ZONES.len();
+    let mut c = FamineCadence { exp_zone: vec![0; nz], sp_zone: vec![0; nz], ..Default::default() };
+    let zone_at = |x: i64, y: i64| -> usize {
+        famine::zone_of(w.fields.tmean[[y as usize, x as usize]] as f64, w.fields.precip[[y as usize, x as usize]] as f64)
+    };
+    // exposure: the lean ledger first (its tier is the verdict's own),
+    // then the census for every eligible year the sky held. A lean row's
+    // kind is the census's for that town-year, else the town's present
+    // reading (positions never move; a crop flip between is the rare case).
+    let census: BTreeMap<(i64, i64, i64), (u8, u8)> =
+        log.fam_census.iter().map(|&(yr, x, y, t, k)| ((yr, x, y), (t, k))).collect();
+    let kind_now: BTreeMap<(i64, i64), u8> = w
+        .peoples
+        .settlements
+        .iter()
+        .enumerate()
+        .map(|(i, s)| ((s.x, s.y), if w.harvest_kind(i) == famine::HarvestKind::Paddies { 1 } else { 0 }))
+        .collect();
+    let mut seen: BTreeSet<(i64, i64, i64)> = BTreeSet::new();
+    let count = |c: &mut FamineCadence, x: i64, y: i64, tier: u8, kind: u8| {
+        c.exposure += 1;
+        c.exp_tier[(tier as usize).min(3)] += 1;
+        c.exp_zone[zone_at(x, y)] += 1;
+        c.exp_kind[(kind as usize).min(1)] += 1;
+    };
+    for r in &w.store_ledger {
+        let key = (r.m.div_euclid(12), r.x, r.y);
+        if seen.insert(key) {
+            let kind = census.get(&key).map(|e| e.1).or_else(|| kind_now.get(&(r.x, r.y)).copied()).unwrap_or(0);
+            count(&mut c, r.x, r.y, r.tier, kind);
+        }
+        c.lean += 1;
+        c.lean_tier[(r.tier as usize).min(3)] += 1;
+        if r.bare >= 4 {
+            c.bare += 1;
+            c.bare_tier[(r.tier as usize).min(3)] += 1;
+        }
+    }
+    for (&(yr, x, y), &(tier, kind)) in &census {
+        if seen.insert((yr, x, y)) {
+            count(&mut c, x, y, tier, kind);
+        }
+    }
+    // the spoken famines, with their severity
+    let mut shares: Vec<f64> = Vec::with_capacity(w.famine_ledger.len());
+    let mut ds_sum = [0.0f64; 4];
+    let mut hit_sum = 0.0f64;
+    for r in &w.famine_ledger {
+        if !seen.contains(&(r.m.div_euclid(12), r.x, r.y)) {
+            c.orphans += 1;
+        }
+        let t = (r.tier as usize).min(3);
+        c.spoken += 1;
+        c.sp_tier[t] += 1;
+        c.sp_zone[zone_at(r.x, r.y)] += 1;
+        c.sp_kind[if r.monsoon { 1 } else { 0 }] += 1;
+        if !r.monsoon && (r.sky.dry_behind > 0 || r.sky.dry_run > 1) {
+            c.back_to_back += 1;
+        }
+        let ds = r.dead as f64 / (r.pop.max(1) as f64);
+        shares.push(ds);
+        ds_sum[t] += ds;
+        hit_sum += r.hit as f64 / (r.pop.max(1) as f64);
+        c.dead += r.dead;
+        c.worst_dead_share = c.worst_dead_share.max(ds);
+    }
+    if !shares.is_empty() {
+        let n = shares.len() as f64;
+        c.dead_share = shares.iter().sum::<f64>() / n;
+        c.hit_share = hit_sum / n;
+        shares.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        c.dead_p90 = shares[((shares.len() as f64 * 0.9) as usize).min(shares.len() - 1)];
+    }
+    for t in 0..4 {
+        c.ds_tier[t] = if c.sp_tier[t] > 0 { ds_sum[t] / c.sp_tier[t] as f64 } else { f64::NAN };
+    }
+    // episodes: the famine ledger is in pass order (year-major), so the
+    // rows of one town sort into runs of consecutive years; each run is
+    // one episode, its dead share the years' shares summed.
+    let mut by_town: BTreeMap<(i64, i64), Vec<(i64, f64)>> = BTreeMap::new();
+    for r in &w.famine_ledger {
+        by_town.entry((r.x, r.y)).or_default().push((r.m.div_euclid(12), r.dead as f64 / (r.pop.max(1) as f64)));
+    }
+    let mut ep_sum = 0.0f64;
+    for rows in by_town.values_mut() {
+        rows.sort_by_key(|e| e.0);
+        let (mut run, mut acc, mut last) = (0usize, 0.0f64, i64::MIN);
+        for &(yr, ds) in rows.iter() {
+            if yr == last + 1 {
+                run += 1;
+                acc += ds;
+            } else {
+                if run > 0 {
+                    c.episodes += 1;
+                    c.longest_episode = c.longest_episode.max(run);
+                    ep_sum += acc;
+                }
+                run = 1;
+                acc = ds;
+            }
+            last = yr;
+        }
+        if run > 0 {
+            c.episodes += 1;
+            c.longest_episode = c.longest_episode.max(run);
+            ep_sum += acc;
+        }
+    }
+    c.episode_dead_share = if c.episodes > 0 { ep_sum / c.episodes as f64 } else { 0.0 };
+    c
+}
+
 // ================================================================ civ
+
+
 
 fn cmd_civ(seed: i64, size: usize, years: usize) {
     let mut w = World::generate(seed, size);
@@ -6717,14 +7746,15 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
     }
 
     // ---- M2.6 famine: dry years starve somewhere, but not everywhere ----
-    // M92 — two famine classes share the event kind now: the rain-fed
-    // verdict keeps its original band, the paddies' cadence gets its own —
-    // distinct mechanisms stay measured as distinct.
+    // M92 — two famine classes share the event kind: the paddies' world-
+    // scale cadence keeps its own band here. M97 retired the rain-fed
+    // world-total row ("famine events per century") for the per-settlement
+    // cadence table below, which is what the historical record reports.
     if years >= 100 {
         let mons_n = w.famine_ledger.iter().filter(|r| r.monsoon).count();
         let per_c =
             log.famines.saturating_sub(mons_n) as f64 * 100.0 / years.max(1) as f64;
-        c.band("famine events per century", per_c, format!("{:.1}", per_c));
+        println!("famine: {} rain-fed ({:.1}/century world-total, unbanded since M97) · {} monsoon", log.famines.saturating_sub(mons_n), per_c, mons_n);
         let mons_c = mons_n as f64 * 100.0 / years.max(1) as f64;
         c.band("monsoon famines per century", mons_c, format!("{:.1}", mons_c));
     }
@@ -6897,8 +7927,9 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
                 let z_here = spi_of(r.m / 12, r.x, r.y);
                 (((-z_here) - (-calliope::famine::DROUGHT_Z)) / (-calliope::famine::DROUGHT_Z)).min(1.0)
             };
-            let hit = ((r.pop as f64) * (0.05 + 0.16 * sf) * r.granary) as i64;
-            let dead = (hit as f64 * 0.55) as i64;
+            // M97 — the law itself (floor of want, then linear), not a replica
+            let hit = calliope::famine::toll(r.pop, sf, r.granary);
+            let dead = calliope::famine::dead_of(hit);
             if (sf - r.shortfall).abs() < 1e-9 && hit == r.hit && dead == r.dead {
                 exact += 1;
             }
@@ -6910,12 +7941,24 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             "M72: every toll re-derives from the realized sky at that cell — SPI for the rain-fed, the monsoon index for the paddies — no residual, no die",
         );
         // (b) the dose, read continuously: per-capita toll against depth.
-        // Normalizing by the granary factor removes the craft's blunting,
-        // which is a property of the people, not of the sky.
+        // M97 — the depth the law reads is the *want the store left*,
+        // `shortfall × granary` (famine::want_of): above the floor the toll
+        // is linear in it on every row, stored or bare, so the dose reads
+        // the whole ledger with no normalization (the M96 fallback that
+        // divided a truncated toll by the granary factor is gone with the
+        // multiplicative law). The bare-law rows are counted for the record.
+        let bare_rows = led.iter().filter(|r| r.granary == 1.0).count();
         let dose: Vec<(f64, f64)> = led
             .iter()
-            .map(|r| (r.shortfall, (r.hit as f64) / (r.pop as f64) / r.granary))
+            .map(|r| (calliope::famine::want_of(r.shortfall, r.granary), (r.hit as f64) / (r.pop as f64)))
             .collect();
+        let law_slope = calliope::famine::TOLL_RATE / (1.0 - calliope::famine::TOLL_FLOOR);
+        let law_icpt = -calliope::famine::TOLL_RATE * calliope::famine::TOLL_FLOOR / (1.0 - calliope::famine::TOLL_FLOOR);
+        println!(
+            "  dose sample — {} famines read against the want the store left ({} bare-law rows, store gave nothing)",
+            led.len(),
+            bare_rows
+        );
         let nd = dose.len() as f64;
         let (mdx, mdy) = (
             dose.iter().map(|p| p.0).sum::<f64>() / nd,
@@ -6930,7 +7973,7 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
         let slope = cov / vx.max(1e-12);
         let intercept = mdy - slope * mdx;
         let rho_sev = cov / (vx.sqrt() * vy.sqrt()).max(1e-12);
-        // (c) monotone in depth across quartiles of the shortfall the world
+        // (c) monotone in depth across quartiles of the want the world
         // actually produced — a continuous dose, not two sparse SPI bins.
         let mut byd = dose.clone();
         byd.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
@@ -6943,32 +7986,538 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             .collect();
         let monotone = q.windows(2).all(|p| p[1] > p[0]);
         println!(
-            "  severity dose over {} famines — per-capita toll {:.4} + {:.4}·shortfall (law: 0.0500 + 0.1600) · ρ {:.4}",
+            "  severity dose over {} famines — per-capita toll {:.4} + {:.4}·want (law: {:.4} + {:.4}·want above the floor {:.2}) · ρ {:.4}",
             led.len(),
             intercept,
             slope,
+            law_icpt,
+            law_slope,
+            calliope::famine::TOLL_FLOOR,
             rho_sev
         );
         println!(
-            "  by shortfall quartile — {}",
+            "  by want quartile — {}",
             q.iter().map(|v| format!("{:.3}", v)).collect::<Vec<_>>().join(" → ")
         );
+        // Tolerances scale with the law's own slope (M97: 0.42 against the
+        // old 0.16): the integer toll truncates by up to 1/pop per row, and
+        // the fitted intercept carries that bias downward by a few thousandths.
         c.must(
             "hunger climbs with the drought",
             monotone
                 && rho_sev >= 0.99
-                && (slope - 0.16).abs() <= 0.02
-                && (intercept - 0.05).abs() <= 0.01,
+                && (slope - law_slope).abs() <= 0.05
+                && (intercept - law_icpt).abs() <= 0.025,
             format!(
-                "toll {:.4}+{:.4}·s · ρ {:.4} · quartiles {}",
+                "toll {:.4}+{:.4}·want · ρ {:.4} · quartiles {}",
                 intercept,
                 slope,
                 rho_sev,
                 q.iter().map(|v| format!("{:.3}", v)).collect::<Vec<_>>().join("<")
             ),
-            "M72: the per-capita toll rises linearly with the depth of the drought and monotonically across its quartiles — the threshold decides whether, the shortfall decides how hard",
+            "M72 (law M97): the per-capita toll rises linearly with the want the store left and monotonically across its quartiles — the floor decides whether, the want decides how hard",
         );
 
+        // ---- M95 · hunger with a cause: every famine carries the sky it
+        // read, tells the sentence that sky makes, and that sky is the one
+        // number the climate lane's full-grid anomaly reports at the cell.
+        let sa = famine_sky_audit(&w, &log.famine_texts, true);
+        println!();
+        println!(
+            "M95 · hunger with a cause — {} famines: {} where the year itself failed · {} carried by the ground's memory · {} summed from lean years · {} monsoon",
+            sa.n, sa.year_failed, sa.carried, sa.lean, sa.monsoon
+        );
+        for s in &sa.samples {
+            println!("  {}", s);
+        }
+        if let Some(b) = &sa.first_bad {
+            println!("  first mismatch: {}", b);
+        }
+        if let Some(b) = &sa.first_grid_bad {
+            println!("  first grid disagreement: {}", b);
+        }
+        c.must(
+            "every famine carries the sky it read",
+            sa.n > 0 && sa.traced == sa.n,
+            format!("{}/{} rows re-derived bit-equal (this year's SPI, rain anomaly, memory index, dry/lean runs → shortfall → toll)", sa.traced, sa.n),
+            "M95: the ledger's HarvestSky is the composite law (base sky + oscillation + drift + belts) read at that cell-year, the verdict's z is its index, the shortfall is that index through the rain-fed (or the monsoon index through the paddy) law and the toll is that shortfall's — no residual, no rounding, no dice",
+        );
+        c.must(
+            "every famine tells its cause",
+            sa.n > 0 && sa.spoken == sa.n && sa.untold == 0,
+            format!("{}/{} tellings carry the sentence their re-derived sky makes, verbatim · {} untold", sa.spoken, sa.n, sa.untold),
+            "M95: the chronicle line carries the reading verbatim — dry years running and the year's shortfall, the failed years behind a carried famine, or the monsoon's share",
+        );
+        c.must(
+            "the famine's sky is the climate lane's sky",
+            sa.grid_n == sa.n && sa.grid_ok == sa.grid_n,
+            format!("{}/{} rows equal the full-grid year_anomaly at their cell-year, bit for bit", sa.grid_ok, sa.grid_n),
+            "M95: one sky — the pointwise law the harvest reads and the full-grid law diagnose climate reports agree to the bit",
+        );
+        // ---- the inspector reads the same sky: the explain layer's "Sky
+        // this year" block, for every town standing, against the harness's
+        // own reading of the current year at that cell.
+        {
+            let year_now = w.month.div_euclid(12);
+            let (nrows, _) = w.fields.tmean.dim();
+            let rows_f = nrows as f64;
+            let mut n_ok = 0usize;
+            let mut n_all = 0usize;
+            let mut first_bad: Option<String> = None;
+            for s in &w.peoples.settlements {
+                n_all += 1;
+                let raw = calliope::explain::explain(&w, "settlement", &s.id.0.to_string());
+                let v: serde_json::Value = serde_json::from_str(&raw).unwrap_or_default();
+                let sky = &v["sky"];
+                let lat = (-90.0 + (s.y as f64) * 180.0 / (rows_f - 1.0)).abs();
+                let sigma = calliope::climate::anomaly_amp_p(lat).max(1e-6);
+                let dp = calliope::climate::year_anomaly_at(
+                    w.variability(), nrows, s.x as usize, s.y as usize, year_now, w.year_osc(year_now), w.year_forcing(year_now),
+                ).1;
+                let z1 = calliope::util::round2(dp / sigma);
+                let pct = (dp.abs() * 100.0).round() as i64 * if dp < 0.0 { -1 } else { 1 };
+                let pack = w.fields.crops[[s.y as usize, s.x as usize]];
+                let grain = pack == calliope::agriculture::CropPackage::Wheat.code() || pack == calliope::agriculture::CropPackage::Maize.code();
+                let paddies = pack == calliope::agriculture::CropPackage::Rice.code()
+                    && (w.fields.pamp[[s.y as usize, s.x as usize]] as f64).abs() >= calliope::climate::MONSOON_LEAN_MIN;
+                let kind = if grain && !s.river { "rain-fed" } else if paddies { "paddies" } else if grain { "irrigated" } else { "not-farming" };
+                let line = sky["line"].as_str().unwrap_or("");
+                let ok = sky["year"].as_i64() == Some(year_now)
+                    && sky["spi"].as_f64() == Some(z1)
+                    && sky["rain_pct"].as_i64() == Some(pct)
+                    && sky["kind"].as_str() == Some(kind)
+                    && !line.is_empty()
+                    && (sky["fails"].as_bool() != Some(true) || sky["shortfall"].as_f64().unwrap_or(0.0) > 0.0)
+                    && (kind != "paddies" || sky["monsoon"].is_number())
+                    && (kind == "paddies" || sky["monsoon"].is_null());
+                if ok {
+                    n_ok += 1;
+                } else if first_bad.is_none() {
+                    first_bad = Some(format!("{} · want year {} spi {} pct {} kind {} · got {}", s.name, year_now, z1, pct, kind, sky));
+                }
+            }
+            if let Some(b) = &first_bad {
+                println!("  explain sky mismatch: {}", b);
+            }
+            c.must(
+                "the inspector reads the same sky",
+                n_all > 0 && n_ok == n_all,
+                format!("{}/{} towns' explain sky blocks agree with the law at the current year", n_ok, n_all),
+                "M95: the settlement card's Sky-this-year block (year, SPI, rain share, verdict kind, monsoon presence) is the harvest law read at the cell — not a second estimate",
+            );
+        }
+
+        // ---- M96 · granaries against lean years: the town's own store,
+        // filled from its fat years and roofed by its people's craft, is
+        // drawn against the shortfall; the toll is multiplied by what it
+        // could not cover. Measured at the mechanism, with the bare toll
+        // of the same town-year as the exact matched control.
+        {
+            let st = store_audit(&w, &log.famine_texts, &log.held_texts);
+            println!();
+            println!(
+                "M96 · granaries against lean years — {} lean verdicts: {} spoken · {} held by the store · {} untiered · {} tiered ({} where the store gave)",
+                st.n, st.spoken, st.held, st.untiered, st.tiered, st.gave
+            );
+            for (t, e) in st.by_tier.iter().enumerate() {
+                if e.0 == 0 {
+                    continue;
+                }
+                let tier = calliope::society::StoreTier::from_code(t as u8);
+                let m = st.months[t];
+                let rm = st.run_months[t];
+                println!(
+                    "  {:<12} {:>4} verdicts · toll {:>6} of bare {:>6} ({:>5.1}% kept) · {:.1} person-years given · at the verdict median {:.1} mo, p90 {:.1} mo, {} at the roof · entering the run {:.1} mo (p90 {:.1}, n={}) · deep in it {:.1} mo (n={}) · share {:.2} spoil {:.2} roof {:.1}y",
+                    tier.name(), e.0, e.1, e.2, if e.2 > 0 { 100.0 * (1.0 - e.1 as f64 / e.2 as f64) } else { 0.0 }, e.4, m.0, m.1, m.2, rm.1, rm.2, rm.0, rm.4, rm.3, tier.share(), tier.spoil(), tier.cap_years()
+                );
+            }
+            if !st.matched.is_empty() {
+                println!(
+                    "  matched by shortfall quartile (per-capita toll: tiered as paid / same rows bare / untiered): {}",
+                    st.matched
+                        .iter()
+                        .map(|(t, b, u, tn, un)| format!("{:.3}/{:.3}/{} ({}/{})", t, b, if u.is_nan() { "—".to_string() } else { format!("{:.3}", u) }, tn, un))
+                        .collect::<Vec<_>>()
+                        .join(" · ")
+                );
+            }
+            for s in &st.samples {
+                println!("  {}", s);
+            }
+            if let Some(b) = &st.first_bad {
+                println!("  first mismatch: {}", b);
+            }
+            // the fat years the store is fed from: the bare harvest law
+            // (pure in seed × cell × year) over every storing town's
+            // town-years of the run — how often the year gives more than
+            // the town eats, and how much.
+            {
+                let year_now = w.month.div_euclid(12);
+                let (mut n, mut fat, mut sum_sur, mut sum_y, mut lean) = (0usize, 0usize, 0.0f64, 0.0f64, 0usize);
+                let mut best = 0.0f64;
+                for s in &w.peoples.settlements {
+                    let (y, x) = (s.y as usize, s.x as usize);
+                    if !w.store_fills(y, x) {
+                        continue;
+                    }
+                    for year in 0..=year_now {
+                        let yb = w.year_yield_bare(year, y, x);
+                        n += 1;
+                        sum_y += yb;
+                        if yb > 1.0 {
+                            fat += 1;
+                            sum_sur += yb - 1.0;
+                            best = best.max(yb);
+                        } else if yb < 1.0 {
+                            lean += 1;
+                        }
+                    }
+                }
+                if n > 0 {
+                    println!(
+                        "  fat years — {} storing town-years: {:.0}% give more than the town eats, {:.0}% less · mean yield {:.3} · mean surplus over all years {:.3} pop-years (over fat years {:.3}) · best {:.2}",
+                        n,
+                        100.0 * fat as f64 / n as f64,
+                        100.0 * lean as f64 / n as f64,
+                        sum_y / n as f64,
+                        sum_sur / n as f64,
+                        if fat > 0 { sum_sur / fat as f64 } else { 0.0 },
+                        best
+                    );
+                    let tier = calliope::society::StoreTier::Storehouses;
+                    println!(
+                        "  steady state — storehouses at share {:.2} / spoil {:.2} on that surplus: {:.2} pop-years ≈ {:.1} months (roof {:.1}y)",
+                        tier.share(),
+                        tier.spoil(),
+                        tier.share() * (sum_sur / n as f64) / tier.spoil(),
+                        12.0 * tier.share() * (sum_sur / n as f64) / tier.spoil(),
+                        tier.cap_years()
+                    );
+                }
+            }
+            c.must(
+                "the store is the law's own arithmetic",
+                st.n > 0 && st.exact == st.n && st.roofed == st.n,
+                format!("{}/{} rows re-derive exactly (draw, granary share, toll, bare toll, spoken) · {}/{} under the roof", st.exact, st.n, st.roofed, st.n),
+                "M96: every lean verdict's draw is min(store, shortfall×pop), its granary factor the uncovered share, its toll that factor through M2.6's law; no store above cap_years×pop",
+            );
+            c.must(
+                "untiered towns lay nothing by",
+                st.untiered == st.untiered_bare,
+                format!("{}/{} untiered verdicts held an empty store and paid the bare toll", st.untiered_bare, st.untiered),
+                "M96: a people with none of the keeping crafts has no store — the bare law, exactly",
+            );
+            c.must(
+                "spoken famines carry their store",
+                st.spoken == st.spoken_tied && st.first_bad.as_deref().map_or(true, |b| !b.contains("gave-clause")),
+                format!("{}/{} spoken rows tied to a famine row with the same store, and told with the gave-clause where the store gave", st.spoken_tied, st.spoken),
+                "M96: the famine ledger and the lean ledger agree row for row; a famine line says what the jars gave, verbatim",
+            );
+            c.must(
+                "held years are told once",
+                st.held == st.held_told && st.held_orphans == 0,
+                format!("{}/{} held rows told as Granary events · {} orphan tellings", st.held_told, st.held, st.held_orphans),
+                "M96: every year the store took without a death (bare toll ≥ 4, store gave) is one Granary event with its months of grain; no Granary event without such a year",
+            );
+            // the headline: tiered towns lose fewer at the same shortfall.
+            // Exact counterfactual — Σhit against Σbare over the tiered
+            // rows, the very same town-years — and the cross-town match
+            // by shortfall quartile.
+            let tiered_hit: i64 = st.by_tier[1..].iter().map(|e| e.1).sum();
+            let tiered_bare: i64 = st.by_tier[1..].iter().map(|e| e.2).sum();
+            let kept = if tiered_bare > 0 { 1.0 - tiered_hit as f64 / tiered_bare as f64 } else { 0.0 };
+            if st.tiered >= 10 {
+                c.range(
+                    "storage tiers reduce the toll",
+                    kept,
+                    format!("{:.1}% of the bare toll kept alive over {} tiered verdicts", 100.0 * kept, st.tiered),
+                    (0.10, 0.90),
+                    (0.03, 0.97),
+                    "M96: over the same town-years, the tiered towns' summed toll falls measurably short of the bare law's — and the store does not make hunger impossible",
+                );
+                let mono = {
+                    let mut last = 1.0f64;
+                    let mut ok = true;
+                    for e in st.by_tier[1..].iter() {
+                        if e.0 < 10 {
+                            continue;
+                        }
+                        let r = e.1 as f64 / e.2.max(1) as f64;
+                        if r > last + 0.02 {
+                            ok = false;
+                        }
+                        last = r;
+                    }
+                    ok
+                };
+                c.want(
+                    "the higher craft keeps more",
+                    mono,
+                    st.by_tier[1..]
+                        .iter()
+                        .filter(|e| e.0 >= 10)
+                        .map(|e| format!("{:.2}", e.1 as f64 / e.2.max(1) as f64))
+                        .collect::<Vec<_>>()
+                        .join(" ≥ "),
+                    "M96: the surviving share of the bare toll does not rise from jars to granaries to storehouses (tiers with ≥ 10 verdicts)",
+                );
+                // matched shortfalls: within each quartile of shortfall the
+                // storing towns pay strictly less per head than the bare
+                // law asks of those very rows (≥ 10 rows), and no more per
+                // head than the untiered towns in the same quartile where
+                // any stand (≥ 5 rows).
+                let quart: Vec<&(f64, f64, f64, usize, usize)> = st.matched.iter().filter(|(_, _, _, tn, _)| *tn >= 10).collect();
+                let matched_ok = !quart.is_empty()
+                    && quart.iter().all(|(t, b, u, _, un)| t < b && (*un < 5 || u.is_nan() || t <= u));
+                c.must(
+                    "matched shortfalls favour the storing town",
+                    matched_ok,
+                    format!(
+                        "{} quartiles with ≥ 10 storing verdicts: per head as paid < bare in each ({})",
+                        quart.len(),
+                        quart.iter().map(|(t, b, _, _, _)| format!("{:.3}<{:.3}", t, b)).collect::<Vec<_>>().join(", ")
+                    ),
+                    "M96 gate: at the same depth of shortfall, the town with a store loses fewer per head than the bare law — the same town-years, the same shortfall, only the granary differs",
+                );
+                // the store's size: storehouses hold seasons, not days and
+                // not decades — a design band on the median grain the town
+                // brings to the FIRST verdict of a lean run, for the highest
+                // tier with the sample. Deep in a run the store is spent by
+                // design (M80's droughts run a median 3 y; the granary holds
+                // the first of them), so the deep median is reported beside
+                // it, not banded.
+                if let Some((t, rm)) = st.run_months.iter().enumerate().rev().find(|(t, rm)| *t > 0 && rm.0 >= 10 && !rm.1.is_nan()) {
+                    let tier = calliope::society::StoreTier::from_code(t as u8);
+                    c.range(
+                        "the store holds seasons",
+                        rm.1,
+                        format!(
+                            "{}: median {:.1} months of grain entering a lean run (p90 {:.1}, {} first verdicts) · deep in the run median {:.1} ({} verdicts) · {} of {} at the roof",
+                            tier.name(), rm.1, rm.2, rm.0, rm.4, rm.3, st.months[t].2, st.by_tier[t].0
+                        ),
+                        (1.0, 12.0),
+                        (0.3, 24.0),
+                        "M96: a craft of keeping worth the name brings a season or more to the first lean year, and no town sits on decades of grain — the run then spends it",
+                    );
+                }
+            } else {
+                c.want(
+                    "storage tiers reduce the toll",
+                    st.tiered == 0 || kept > 0.0,
+                    format!("{} tiered verdicts only — {:.1}% kept", st.tiered, 100.0 * kept),
+                    "M96: too few tiered verdicts on this seed to band; the sweep carries the gate",
+                );
+            }
+            // the explain layer: every town's card carries its store as
+            // the law reads it this year.
+            let year_now = w.month.div_euclid(12);
+            let mut n_ok = 0usize;
+            let mut first_bad: Option<String> = None;
+            for (i, s) in w.peoples.settlements.iter().enumerate() {
+                let raw = calliope::explain::explain(&w, "settlement", &s.id.0.to_string());
+                let v: serde_json::Value = serde_json::from_str(&raw).unwrap_or_default();
+                let b = &v["store"];
+                let tier = w.store_tier_of(i);
+                let store = w.store_at_verdict(i, year_now);
+                let months = calliope::famine::store_months(store, s.pop);
+                let ok = b["tier"].as_str() == Some(tier.name())
+                    && b["code"].as_u64() == Some(tier.code() as u64)
+                    && b["months"].as_i64() == Some(months)
+                    && (b["grain"].as_f64().unwrap_or(-1.0) - store).abs() < 5e-4
+                    && b["cap_years"].as_f64() == Some(tier.cap_years())
+                    && !b["line"].as_str().unwrap_or("").is_empty();
+                if ok {
+                    n_ok += 1;
+                } else if first_bad.is_none() {
+                    first_bad = Some(format!("{} · want {:?} {} months {:.3} py · got {}", s.name, tier, months, store, b));
+                }
+            }
+            if let Some(b) = &first_bad {
+                println!("  explain store mismatch: {}", b);
+            }
+            c.must(
+                "the inspector reads the same store",
+                n_ok == w.peoples.settlements.len(),
+                format!("{}/{} towns' explain store blocks agree with the law at the current year", n_ok, w.peoples.settlements.len()),
+                "M96: the settlement card's store block (tier, months of grain, person-years, roof) is the granary law read at the town — not a second estimate",
+            );
+        }
+
+        // ---- M97 · famine, recalibrated: the cadence and severity table
+        // in the units the record reports — spoken famines per eligible
+        // settlement-century, the bare law's cadence beside it, the
+        // harvest-failure cadence above it, the granary tier's own band,
+        // and the dead share per famine — against the historical envelope
+        // documented in `famine.rs`.
+        if years >= 50 {
+            use calliope::famine as fm;
+            let fc = famine_cadence(&w, &log);
+            println!();
+            println!(
+                "M97 · famine, recalibrated — {} eligible settlement-years ({:.1} settlement-centuries: {} rain-fed · {} paddy) · {} lean verdicts · {} the bare law would speak · {} spoken ({} back-to-back)",
+                fc.exposure, fc.exposure as f64 / 100.0, fc.exp_kind[0], fc.exp_kind[1], fc.lean, fc.bare, fc.spoken, fc.back_to_back
+            );
+            println!(
+                "  per settlement-century: harvest failed {:.1} · bare law {:.1} · spoken {:.1} (rain-fed {:.1} · paddies {:.1}) · envelope sweet {:.0}–{:.0} hard {:.1}–{:.0}",
+                fc.lean_per_century(), fc.bare_per_century(), fc.per_century(),
+                FamineCadence::rate(fc.sp_kind[0], fc.exp_kind[0]), FamineCadence::rate(fc.sp_kind[1], fc.exp_kind[1]),
+                fm::FAMINE_PER_CENTURY.0, fm::FAMINE_PER_CENTURY.1, fm::FAMINE_PER_CENTURY_HARD.0, fm::FAMINE_PER_CENTURY_HARD.1
+            );
+            println!(
+                "  severity per spoken famine: dead {:.1}% of the town (p90 {:.1}%, worst {:.1}%) · struck {:.1}% · {} dead in all · envelope {:.0}–{:.0}%",
+                100.0 * fc.dead_share, 100.0 * fc.dead_p90, 100.0 * fc.worst_dead_share, 100.0 * fc.hit_share, fc.dead,
+                100.0 * fm::FAMINE_DEAD_SHARE.0, 100.0 * fm::FAMINE_DEAD_SHARE.1
+            );
+            println!(
+                "  episodes (consecutive famine years at one town merged): {} · {:.1} per settlement-century · longest {} y · dead {:.1}% of the town per episode",
+                fc.episodes, fc.episodes_per_century(), fc.longest_episode, 100.0 * fc.episode_dead_share
+            );
+            println!("  {:<12} {:>9} {:>9} {:>9} {:>9} {:>9} {:>8}", "tier", "sett-cent", "failed/c", "bare/c", "spoken/c", "dead%", "band");
+            for t in 0..4 {
+                if fc.exp_tier[t] == 0 {
+                    continue;
+                }
+                let tier = calliope::society::StoreTier::from_code(t as u8);
+                let r = fc.tier_per_century(t);
+                let (lo, hi) = if t == 0 { fm::FAMINE_PER_CENTURY } else { fm::STORED_FAMINE_PER_CENTURY };
+                let verdict = if fc.exp_tier[t] < 500 { "thin" } else if r >= lo && r <= hi { "in" } else { "OUT" };
+                println!(
+                    "  {:<12} {:>9.1} {:>9.1} {:>9.1} {:>9.1} {:>8.1}% {:>8}",
+                    tier.name(), fc.exp_tier[t] as f64 / 100.0, FamineCadence::rate(fc.lean_tier[t], fc.exp_tier[t]), fc.tier_bare_per_century(t), r,
+                    100.0 * fc.ds_tier[t], verdict
+                );
+            }
+            println!("  {:<12} {:>9} {:>9} {:>8}", "zone", "sett-cent", "spoken/c", "band");
+            for (z, name) in fm::ZONES.iter().enumerate() {
+                if fc.exp_zone[z] == 0 {
+                    continue;
+                }
+                let r = FamineCadence::rate(fc.sp_zone[z], fc.exp_zone[z]);
+                let verdict = if fc.exp_zone[z] < 300 { "thin" } else if r >= fm::FAMINE_PER_CENTURY.0 && r <= fm::FAMINE_PER_CENTURY.1 { "in" } else { "OUT" };
+                println!("  {:<12} {:>9.1} {:>9.1} {:>8}", name, fc.exp_zone[z] as f64 / 100.0, r, verdict);
+            }
+            c.must(
+                "the exposure census covers every famine",
+                fc.orphans == 0 && fc.exposure > 0,
+                format!("{} famine rows outside the {} eligible settlement-years", fc.orphans, fc.exposure),
+                "M97: every spoken famine fell on a settlement-year the census counts as exposed — the rate's denominator is the pass's own predicate",
+            );
+            c.band("famines per settlement-century", fc.per_century(), format!("{:.1} over {:.1} settlement-centuries", fc.per_century(), fc.exposure as f64 / 100.0));
+            if fc.spoken > 0 {
+                c.band("famine dead share", fc.dead_share, format!("{:.1}% of the town per famine year, {} famine years", 100.0 * fc.dead_share, fc.spoken));
+            }
+            if fc.episodes > 0 {
+                c.band("famine episode dead share", fc.episode_dead_share, format!("{:.1}% of the town per episode, {} episodes (longest {} y)", 100.0 * fc.episode_dead_share, fc.episodes, fc.longest_episode));
+            }
+            c.want(
+                "famine sits under the failed harvest",
+                fc.lean == 0 || fc.spoken < fc.lean,
+                format!("{:.1} spoken against {:.1} failed harvests per settlement-century", fc.per_century(), fc.lean_per_century()),
+                "M97: Hoskins' one harvest in six fails; famine is the rarer thing the record counts separately — a shortfall must not always be a death",
+            );
+            match fc.top_tier() {
+                Some(t) => {
+                    let tier = calliope::society::StoreTier::from_code(t as u8);
+                    let tr = fc.tier_per_century(t);
+                    c.band("storehouse famines per settlement-century", tr, format!("{:.1} at the {} tier over {:.1} settlement-centuries", tr, tier.name(), fc.exp_tier[t] as f64 / 100.0));
+                    c.must(
+                        "the granary tier's band is the smaller one",
+                        tr < fc.tier_bare_per_century(t) && (fc.exp_tier[0] < 500 || tr < fc.tier_per_century(0)),
+                        format!("{} {:.1}/c against the bare law's {:.1}/c on the same town-years{}", tier.name(), tr, fc.tier_bare_per_century(t), if fc.exp_tier[0] >= 500 { format!(" · unstored towns {:.1}/c", fc.tier_per_century(0)) } else { String::new() }),
+                        "M97: settlements with granary-tier storage show a distinct, smaller famine band — under the bare law on their own town-years, and under the towns with no store",
+                    );
+                }
+                None => c.want(
+                    "the granary tier's band is the smaller one",
+                    true,
+                    "no storage tier with 5 settlement-centuries of exposure on this seed".to_string(),
+                    "M97: the sweep carries the tiered band where a seed's exposure is thin",
+                ),
+            }
+            c.must(
+                "famine lands in the historical envelope",
+                fc.in_envelope(),
+                format!(
+                    "{:.1}/c spoken · {:.1}% dead per famine year · {:.1}% per episode · {}",
+                    fc.per_century(), 100.0 * fc.dead_share, 100.0 * fc.episode_dead_share,
+                    match fc.top_tier() { Some(t) => format!("{} {:.1}/c (bare {:.1}/c)", calliope::society::StoreTier::from_code(t as u8).name(), fc.tier_per_century(t), fc.tier_bare_per_century(t)), None => "no tier with the exposure to band".to_string() }
+                ),
+                "M97 gate: cadence, severity (per year and per episode) and the granary tier's band all inside the pre-industrial envelope (Campbell & Ó Gráda, Ó Gráda, Appleby, Hoskins — famine.rs)",
+            );
+        }
+
+
+
+
+
+
+
+        // ---- M98 · off the failing margin: the roads' audit — every
+        // pulse re-derived from the harness's own decade memory, every
+        // decision owed found in the ledger, every reading row equal to
+        // a read taken at the year's close, and the cadence and shape of
+        // the waves against the historical anchors in `migration.rs`.
+        if years >= 50 {
+            use calliope::migration as mg;
+            let ra = roads_audit(&w, &log);
+            println!();
+            println!(
+                "M98 · off the failing margin — {} town-years read · {} judged on a full decade · {} at or over the threshold ({:.1}%) · decade mean p50 {:.3} p90 {:.3} p99 {:.3} max {:.3}",
+                ra.town_years, ra.judged, ra.failed, if ra.judged > 0 { 100.0 * ra.failed as f64 / ra.judged as f64 } else { 0.0 }, ra.q[0], ra.q[1], ra.q[2], ra.q[3]
+            );
+            println!(
+                "  pulses: {} walked · {} found no refuge · {} bounced back within two generations · {:.2} per settlement-century · mean share {:.1}% · mean road {:.0} km · {} decisions owed, {} in the ledger · {}/{} reading rows exact · {} tellings ({} tied)",
+                ra.pulses, ra.held, ra.bounces, ra.per_century(), 100.0 * ra.share, ra.km, ra.due, ra.answered, ra.rows_exact, ra.rows_checked, ra.told, ra.told_tied
+            );
+            for r in w.exodus_ledger.iter().filter(|r| r.dst.is_some()).take(10) {
+                println!(
+                    "    Y{} {} → {} · {} of {} walked ({:.0}%) · decade mean {:.3} ({} failed outright, {:.0}% of the fields wild) · refuge's sky {} · {:.0} km",
+                    r.year + 1, r.src_name, r.dst_name, r.walked, r.src_pop_before, 100.0 * r.walked as f64 / r.src_pop_before as f64, r.mean, r.fails, 100.0 * r.lost,
+                    if r.dst_mean >= 0.0 { format!("{:.3}", r.dst_mean) } else { "unrecorded".to_string() }, r.km
+                );
+            }
+            if let Some(b) = &ra.first_bad {
+                println!("  first fault: {}", b);
+            }
+            for f in &ra.faults {
+                println!("    fault: {}", f);
+            }
+            c.must(
+                "the decade reading is the law",
+                ra.rows_checked > 0 && ra.rows_exact == ra.rows_checked,
+                format!("{}/{} reading rows equal to the harness's read at the year's close", ra.rows_exact, ra.rows_checked),
+                "M98: the reading is pure in the year and the fields (year_yield_bare × the M90 abandonment share) — a row written in the harvest month equals a read taken at the year's close, bit for bit",
+            );
+            c.must(
+                "exodus pulses fire only after a failed decade",
+                ra.exact == ra.pulses + ra.held,
+                format!("{}/{} pulses re-derive: full memory, mean ≥ {:.2} from the harness's own readings, a generation since the last wave, the law's count of walkers, the refuge under a kinder sky, kin to kin", ra.exact, ra.pulses + ra.held, mg::FAILED_DECADE),
+                "M98 gate: migration pulses fire only after a sustained failed-decade climate average crosses threshold — every pulse's mean re-derived from readings the pass never wrote",
+            );
+            c.must(
+                "the walkers arrive in the month they leave",
+                ra.exact == ra.pulses + ra.held && ra.pulses_told == ra.pulses,
+                format!("{} pulses: source down by the walkers and destination up by the walkers in the pulse's own month, one dated Exodus telling each", ra.pulses),
+                "M98 gate: arriving at destination settlements within the same recorded month — observed at the mechanism, and nothing in transit across a tick boundary (the chunking replay would otherwise diverge)",
+            );
+            c.must(
+                "every failed decade is answered",
+                ra.due == ra.answered,
+                format!("{} town-years owed a decision (mean ≥ {:.2}, armed, > {} souls, not failing), {} in the ledger", ra.due, mg::FAILED_DECADE, mg::POP_FLOOR, ra.answered),
+                "M98: the law fires exactly when it should — a pulse, or the written fact that no kin-town under a kinder sky stood",
+            );
+            c.must(
+                "every exodus telling is a pulse",
+                ra.told == ra.told_tied,
+                format!("{} tellings, {} tied to a pulse row", ra.told, ra.told_tied),
+                "M98: no Exodus event without the wave it tells",
+            );
+            c.band("exodus pulses / settlement-century", ra.per_century(), format!("{:.2} over {:.1} settlement-centuries ({} pulses)", ra.per_century(), ra.town_years as f64 / 100.0, ra.pulses));
+            if ra.pulses > 0 {
+                c.band("exodus share of the town", ra.share, format!("{:.1}% of the town per wave, {} waves", 100.0 * ra.share, ra.pulses));
+                c.band("exodus road km", ra.km, format!("{:.0} km mean, {} roads", ra.km, ra.pulses));
+            }
+        }
 
         // ---- the placebo: the same towns, the same years' worth of sky,
         // but the wrong year. If hunger were a property of *place* (bad
@@ -9216,6 +10765,247 @@ fn cmd_civ(seed: i64, size: usize, years: usize) {
             }
         }
     }
+
+    // ---- M94 the dry edge: steppe takes ground only after a sustained run ----
+    // of failed rains; every taking re-derived from the pure sky law, every
+    // spoken turn dated and anchored, the ledger hash-stable under an
+    // independently driven twin.
+    {
+        use calliope::dryedge::{self as de, Spoke};
+        println!();
+        let d = &w.dry_edge;
+        let land = w.fields.height.iter().filter(|&&h| h >= 0.0).count().max(1);
+        let edge_n = d.cells.len();
+        let edge_share = edge_n as f64 / land as f64;
+        let reaches_n = d.reaches.len();
+        let big_reaches = d.reaches.iter().filter(|r| r.cells >= de::EVENT_MIN_CELLS).count();
+        let (onsets, widens, returns) = d.spoken();
+        let reach_turns = onsets + widens + returns;
+        let taken_now = d.taken_count();
+        let ever = d.ever_taken();
+        // takings: every (cell, year) the steppe took, from the rows
+        let mut takings = 0usize;
+        let mut hold_years: Vec<f64> = Vec::new();
+        let mut spoken_rows = 0usize;
+        let mut spoken_unanchored = 0usize;
+        for r in &d.reaches {
+            for row in &r.rows {
+                takings += row.taken as usize;
+                if row.spoke != Spoke::None {
+                    spoken_rows += 1;
+                    if row.x < 0 || row.y < 0 || row.taken_now == 0 && row.spoke != Spoke::Return {
+                        spoken_unanchored += 1;
+                    }
+                }
+            }
+        }
+        // hold years: for cells that flipped back at least once, the
+        // ledger rows give takings by year; approximate the hold as the
+        // span between a cell's taking rows and the next release. The
+        // cells carry only their current taking, so measure the hold on
+        // the reach level: a cell taken in row A and released before row
+        // B contributes B.year - A.year. Re-walk per reach.
+        for r in &d.reaches {
+            // per-cell taking year within this reach, as rows are replayed
+            let mut open: std::collections::HashMap<u32, i64> = std::collections::HashMap::new();
+            for row in &r.rows {
+                for &ci in &row.cells {
+                    open.insert(ci, row.year);
+                }
+                let pending_release = row.released;
+                if pending_release > 0 && !open.is_empty() {
+                    // the released cells are those no longer taken; the
+                    // ledger does not list them per row, so attribute the
+                    // release to the oldest open takings (FIFO — the
+                    // longest-held ground is also the driest, on average).
+                    let mut oldest: Vec<(i64, u32)> = open.iter().map(|(&c, &y)| (y, c)).collect();
+                    oldest.sort_unstable();
+                    for (y0, c) in oldest.into_iter().take(pending_release as usize) {
+                        hold_years.push((row.year - y0) as f64);
+                        open.remove(&c);
+                    }
+                }
+            }
+        }
+        let hold_mean = if hold_years.is_empty() { f64::NAN } else { hold_years.iter().sum::<f64>() / hold_years.len() as f64 };
+        let cent = years as f64 / 100.0;
+        let takings_per = if edge_n == 0 { 0.0 } else { takings as f64 / edge_n as f64 * 100.0 / cent };
+        let oases_n = d.oases.len();
+        let failures: usize = d.oases.iter().map(|o| o.episodes.len()).sum();
+        let returned: usize = d.oases.iter().flat_map(|o| o.episodes.iter()).filter(|e| e.return_year >= 0).count();
+        // a grove already dead on the eve of the dawn is dead at it, unspoken
+        // (its episode is dated to the year before): the chronicle's volume
+        // and the turn rate count only what the run itself dated.
+        let predawn: usize = d.oases.iter().flat_map(|o| o.episodes.iter()).filter(|e| e.fail_year < 0).count();
+        let turns = reach_turns + (failures - predawn) + returned;
+        let turns_per = turns as f64 / cent;
+        println!(
+            "THE DRY EDGE (M94) · {} edge cells ({:.1}% of land, 300–{:.0} mm rain-fed) in {} reaches ({} ≥{} cells) · {} groves",
+            edge_n, 100.0 * edge_share, de::EDGE_CEIL_MM, reaches_n, big_reaches, de::EVENT_MIN_CELLS, oases_n
+        );
+        println!(
+            "  takings {} cell-years ({:.2} per 100 edge cells per century) · held now {} · ever {} ({:.1}% of the edge) · mean hold {:.1} y over {} releases",
+            takings, takings_per, taken_now, ever, 100.0 * ever as f64 / edge_n.max(1) as f64, hold_mean, hold_years.len()
+        );
+        println!(
+            "  spoken: {} onsets · {} widenings · {} returns + groves failed {} ({} before the dawn, unspoken · {} watered again · {} dry now) = {} turns ({:.1} per century) · chronicle heard {}",
+            onsets, widens, returns, failures, predawn, returned, d.failed_count(), turns, turns_per, log.edge_spoken.len()
+        );
+        for (m, k, subj, _, _, _, text) in log.edge_spoken.iter().take(5) {
+            println!("    y{:<4} {:<8} {} — {}", m / 12, k, subj, text);
+        }
+        // (1) the law, re-derived: every taken cell-year has its last
+        // ENCROACH_YEARS realized rains under the line, and its dawn rain
+        // at or over it — the edge fires only where the sky actually
+        // failed for the sustained span, and only on ground that had grass.
+        let rows_n = w.fields.tmean.dim().0;
+        let mut checked = 0usize;
+        let mut bad_run = 0usize;
+        let mut bad_dawn = 0usize;
+        let mut worst_over = f64::NEG_INFINITY;
+        for r in &d.reaches {
+            for row in &r.rows {
+                for &ci in &row.cells {
+                    let c = &d.cells[ci as usize];
+                    checked += 1;
+                    if (c.p0 as f64) < de::PASTORAL_MM {
+                        bad_dawn += 1;
+                    }
+                    let mut all_dry = true;
+                    for k in 0..de::ENCROACH_YEARS as i64 {
+                        let yr = row.year - k;
+                        let (_, dp) = clim::year_anomaly_at(
+                            w.variability(), rows_n, c.x as usize, c.y as usize, yr, w.year_osc(yr), w.year_forcing(yr),
+                        );
+                        let p = de::DryEdge::realized_mm(c.p0 as f64, dp);
+                        worst_over = worst_over.max(p - de::PASTORAL_MM);
+                        if !(p < de::PASTORAL_MM) {
+                            all_dry = false;
+                        }
+                    }
+                    if !all_dry {
+                        bad_run += 1;
+                    }
+                }
+            }
+        }
+        // (2) the groves, re-derived: every failure's remembered deficit
+        // is the mean of the last OASIS_MEMORY_YEARS anomalies at that cell
+        // by the same law, and puts the table past the root reach plus
+        // the margin; every return puts it back within reach minus it.
+        let mut grove_checked = 0usize;
+        let mut grove_bad = 0usize;
+        let mut grove_single_year = 0usize;
+        for o in &d.oases {
+            for ep in &o.episodes {
+                grove_checked += 1;
+                let mean_at = |yr: i64| -> f64 {
+                    let mut sum = 0.0;
+                    for k in 0..de::OASIS_MEMORY_YEARS as i64 {
+                        let y2 = yr - k;
+                        sum += clim::year_anomaly_at(w.variability(), rows_n, o.x as usize, o.y as usize, y2, w.year_osc(y2), w.year_forcing(y2)).1;
+                    }
+                    sum / de::OASIS_MEMORY_YEARS as f64
+                };
+                let def = mean_at(ep.fail_year);
+                let depth = de::DryEdge::oasis_depth(o.d0, def);
+                if (def - ep.deficit_at_fail).abs() > 1e-9 || (depth - ep.depth_at_fail).abs() > 1e-9 || !(depth > calliope::hydrology::OASIS_DEPTH_M + de::OASIS_HYSTERESIS_M) {
+                    grove_bad += 1;
+                }
+                // a single failed year cannot be the cause: the run law
+                // re-derived — a majority of the remembered years were
+                // themselves under normal rain.
+                {
+                    let dry = (0..de::OASIS_MEMORY_YEARS as i64)
+                        .filter(|&k| { let y2 = ep.fail_year - k; clim::year_anomaly_at(w.variability(), rows_n, o.x as usize, o.y as usize, y2, w.year_osc(y2), w.year_forcing(y2)).1 < 0.0 })
+                        .count();
+                    if dry < de::OASIS_DRY_MAJORITY {
+                        grove_single_year += 1;
+                    }
+                }
+                if ep.return_year >= 0 {
+                    let def_r = mean_at(ep.return_year);
+                    let depth_r = de::DryEdge::oasis_depth(o.d0, def_r);
+                    if !(depth_r < calliope::hydrology::OASIS_DEPTH_M - de::OASIS_HYSTERESIS_M) {
+                        grove_bad += 1;
+                    }
+                }
+            }
+        }
+        // (3) the twin: the dawn geometry rewound and driven year by year
+        // off the same sky, with nothing else of the world ticking. Its
+        // law hash must equal the live ledger's — the edge is closed over
+        // the seed and its own state, and stable at fixed seed.
+        let twin_ok = {
+            let mut twin = d.rewound();
+            for yr in 0..years as i64 {
+                // the forcing reads the live ledger's geometry, which the
+                // twin shares cell for cell
+                let (edp, odp) = w.dry_edge_forcing(yr);
+                let pre = if twin.primed() { None } else { Some(w.dry_edge_prehistory(yr)) };
+                let _ = twin.advance(yr, &edp, &odp, pre.as_ref());
+            }
+            twin.law_hash() == d.law_hash()
+        };
+        let mut edge_undated = 0usize;
+        let mut edge_unsubj = 0usize;
+        let mut seen_turn: std::collections::HashSet<(String, i64, &str)> = std::collections::HashSet::new();
+        let mut dup_turn = 0usize;
+        for (m, k, subj, x, y, has_id, _) in &log.edge_spoken {
+            if *m < 0 || *x < 0 || *y < 0 || subj.is_empty() {
+                edge_undated += 1;
+            }
+            if !*has_id {
+                edge_unsubj += 1;
+            }
+            if !seen_turn.insert((subj.clone(), *m / 12, *k)) {
+                dup_turn += 1;
+            }
+        }
+        // a grove already dead on the eve of the dawn is dead at it,
+        // unspoken (its episode is dated to the year before): the
+        // chronicle owes a line for every failure dated within the run.
+        let ledger_turns = spoken_rows + (failures - predawn) + returned;
+        println!(
+            "  re-derived: {} takings checked ({} broke the run, {} had no grass at dawn; driest-year margin {:+.1} mm) · {} grove turns ({} off the law, {} one-year) · twin law hash {} · ledger hash {:016x}",
+            checked, bad_run, bad_dawn, worst_over, grove_checked, grove_bad, grove_single_year, if twin_ok { "equal" } else { "DIFFERS" }, d.hash()
+        );
+        println!();
+        c.must(
+            "steppe takes only sustained-dry ground",
+            bad_run == 0 && bad_dawn == 0,
+            format!("{} takings · {} broke the run · {} arid at dawn", checked, bad_run, bad_dawn),
+            "M94 gate: every cell the steppe took had rain-fed grass at the dawn (≥300 mm) and its realized rain under 300 mm in each of the last 5 years, re-derived from the pure sky law",
+        );
+        c.must(
+            "oasis fails only on remembered deficit",
+            grove_bad == 0 && grove_single_year == 0,
+            format!("{} turns · {} off the law · {} single-year", grove_checked, grove_bad, grove_single_year),
+            "M94: a grove's failure re-derives bit-for-bit from the 8-year mean anomaly at its cell, sinks the table past 8.5 m, and a majority of the remembered years were themselves dry — a run, never one bad year",
+        );
+        c.must(
+            "dry edge hash-stable at fixed seed",
+            twin_ok,
+            if twin_ok { "twin ledger equal".into() } else { "twin ledger DIFFERS".into() },
+            "M94 gate: a rewound twin driven off the same seed's sky alone reaches the live ledger's law hash — closed over the seed, independent of the rest of the tick",
+        );
+        c.must(
+            "dry edge turns dated, anchored, unique",
+            edge_undated == 0 && edge_unsubj == 0 && dup_turn == 0 && spoken_unanchored == 0 && log.edge_spoken.len() == ledger_turns,
+            format!("{} spoken · {} ledger · {} undated · {} unsubjected · {} duplicate", log.edge_spoken.len(), ledger_turns, edge_undated, edge_unsubj, dup_turn),
+            "M94 gate: every turn carries its month, a map anchor and a cast subject; one line per (ground, year, kind); the ledger and the chronicle agree to the count",
+        );
+        c.band("dry edge share of land", edge_share, format!("{:.1}% · {} cells", 100.0 * edge_share, edge_n));
+        if years >= 40 && edge_n > 0 {
+            c.band("steppe takings per edge-century", takings_per, format!("{:.2} · {} takings", takings_per, takings));
+            c.band("dry edge turns per century", turns_per, format!("{:.1} · {} turns", turns_per, turns));
+            if hold_years.len() >= 8 {
+                c.band("steppe hold years", hold_mean, format!("{:.1} y · {} releases", hold_mean, hold_years.len()));
+            } else {
+                println!("  (steppe hold years: {} releases — too few to band)", hold_years.len());
+            }
+        }
+    }
     c.print();
 }
 
@@ -11069,12 +12859,111 @@ fn cmd_perf(size: usize, seeds: Vec<i64>) {
         rate_y100 = rate_y100.min(r100);
     }
 
+    // ---- M95 perf pass: the anatomy of a grown month's sky reads ----
+    // The year-100 tick is dominated by weather read at inhabited cells:
+    // the per-site catchment kernel (~2,400 taps of the rain draw, once a
+    // year per watered town, and once more per river paddy in the harvest
+    // verdict) and the pointwise draws behind the drought memory. These
+    // rows put a price on each so a regression in the kernel is seen as a
+    // kernel regression, not as an unexplained tick-rate dip. The kernel
+    // is also held to the full-grid filter to the bit here: whatever the
+    // tick pays, it must read the same basin the map shows.
+    println!("sky-read anatomy (grown worlds, min of 3 passes):");
+    let mut worst_catch_us = 0.0f64;
+    let mut worst_point_ns = 0.0f64;
+    let mut worst_yield_ms = 0.0f64;
+    let mut worst_verdict_ms = 0.0f64;
+    let mut kernel_mismatch = 0usize;
+    let mut kernel_n = 0usize;
+    for (i, w) in worlds.iter().enumerate() {
+        let (rows, cols) = w.fields.tmean.dim();
+        let year = w.month.div_euclid(12);
+        let sites: Vec<(usize, usize)> =
+            w.peoples.settlements.iter().map(|s| (s.y as usize, s.x as usize)).collect();
+        let n = sites.len().max(1) as f64;
+        let osc = w.year_osc(year);
+        let forcing = w.year_forcing(year);
+        // the catchment kernel, raw, at every town
+        let mut best = f64::INFINITY;
+        let mut sink = 0.0f64;
+        for _ in 0..3 {
+            let t = Instant::now();
+            for &(y, x) in &sites {
+                sink += calliope::climate::catchment_anomaly_at(w.variability(), rows, cols, x, y, year, osc, forcing);
+            }
+            best = best.min(t.elapsed().as_secs_f64());
+        }
+        let catch_us = best * 1e6 / n;
+        // the pointwise rain lane — the drought memory's walk, twelve years deep
+        let mut best = f64::INFINITY;
+        for _ in 0..3 {
+            let t = Instant::now();
+            for &(y, x) in &sites {
+                for k in 0..calliope::drought::MEMO_YEARS as i64 {
+                    let yr = year - k;
+                    sink += calliope::climate::rain_anomaly_at(w.variability(), rows, x, y, yr, w.year_osc(yr), w.year_forcing(yr));
+                }
+            }
+            best = best.min(t.elapsed().as_secs_f64());
+        }
+        let point_ns = best * 1e9 / (n * calliope::drought::MEMO_YEARS as f64);
+        // one year of the harvest read for every town, memo cold — what the
+        // first month of a year pays in `tick_month`
+        let mut best = f64::INFINITY;
+        for pass in 0..3 {
+            let yr = year + 1 + pass; // a year the memo does not hold
+            let t = Instant::now();
+            for &(y, x) in &sites {
+                sink += w.year_yield(yr, y, x);
+            }
+            best = best.min(t.elapsed().as_secs_f64());
+        }
+        let yield_ms = best * 1e3;
+        // the harvest verdict for every town — the famine pass's twin,
+        // memo warm for `year` (the pass runs after the month's yields)
+        let mut best = f64::INFINITY;
+        for _ in 0..3 {
+            for &(y, x) in &sites {
+                sink += w.year_yield(year, y, x);
+            }
+            let t = Instant::now();
+            for si in 0..sites.len() {
+                sink += w.harvest_verdict(si, year).shortfall;
+            }
+            best = best.min(t.elapsed().as_secs_f64());
+        }
+        let verdict_ms = best * 1e3;
+        // the kernel against the full filter, every town, this year
+        let (mm, kn) = w.with_year_sky(year, |_, _, dq| {
+            let mut mm = 0usize;
+            for &(y, x) in &sites {
+                let k = calliope::climate::catchment_anomaly_at(w.variability(), rows, cols, x, y, year, osc, forcing);
+                if k.to_bits() != dq[[y, x]].to_bits() {
+                    mm += 1;
+                }
+            }
+            (mm, sites.len())
+        });
+        kernel_mismatch += mm;
+        kernel_n += kn;
+        println!(
+            "  seed {:<6} catchment read {:.0} µs · point rain read {:.0} ns · yields/yr cold {:.1} ms · verdicts/yr warm {:.1} ms · kernel = filter at {}/{} towns{}",
+            seeds[i], catch_us, point_ns, yield_ms, verdict_ms, kn - mm, kn,
+            if sink.is_nan() { " (nan)" } else { "" }
+        );
+        worst_catch_us = worst_catch_us.max(catch_us);
+        worst_point_ns = worst_point_ns.max(point_ns);
+        worst_yield_ms = worst_yield_ms.max(yield_ms);
+        worst_verdict_ms = worst_verdict_ms.max(verdict_ms);
+    }
+
     // ---- E10.6: memory ceiling after the heavy run ----
     let rss = peak_rss_mib();
     match rss {
         Some((m, src)) => println!("native peak RSS after run: {:.0} MiB via {} ({} worlds resident)", m, src, worlds.len()),
         None => println!("native peak RSS: /proc/self/status unavailable on this platform"),
     }
+
 
     let mut c = Checks::default();
     for s in STAGES {
@@ -11087,6 +12976,16 @@ fn cmd_perf(size: usize, seeds: Vec<i64>) {
     c.band("gen total ms", worst_total, format!("{:.0} ms (worst)", worst_total));
     c.band("tick rate year 0", rate_y0, format!("{:.0} mo/s (worst)", rate_y0));
     c.band("tick rate year 100", rate_y100, format!("{:.0} mo/s (worst)", rate_y100));
+    c.must(
+        "catchment kernel bit-equal to the full filter",
+        kernel_mismatch == 0,
+        format!("{}/{} town reads equal", kernel_n - kernel_mismatch, kernel_n),
+        "M95 perf pass: the per-site kernel (row terms hoisted, rain lane only) must read the exact `gaussian_filter` value the map shows — same taps, same weights, same order",
+    );
+    c.band("catchment read us", worst_catch_us, format!("{:.0} µs per town (worst seed)", worst_catch_us));
+    c.band("point rain read ns", worst_point_ns, format!("{:.0} ns per cell-year (worst seed)", worst_point_ns));
+    c.band("harvest yields per year ms", worst_yield_ms, format!("{:.1} ms for every town, memo cold (worst seed)", worst_yield_ms));
+    c.band("harvest verdicts per year ms", worst_verdict_ms, format!("{:.1} ms for every town, memo warm (worst seed)", worst_verdict_ms));
     if let Some((m, src)) = rss {
         c.band("native peak RSS", m, format!("{:.0} MiB ({})", m, src));
     }
@@ -11124,6 +13023,47 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         mons_bad: usize,
         /// M92 — monsoon famines (paddy verdicts) among `famines`
         mons_fam: usize,
+        /// M95 — the sky audit: famine rows, rows traced bit-equal to the
+        /// law, rows whose telling carries their cause
+        sky_n: usize,
+        sky_traced: usize,
+        sky_spoken: usize,
+        /// M96 — the store audit: lean rows, rows exact and roofed, held
+        /// rows told, tiered rows, Σhit and Σbare over the tiered rows,
+        /// per-tier (rows, Σhit, Σbare)
+        st_n: usize,
+        st_exact: usize,
+        st_held: usize,
+        st_held_told: usize,
+        st_orphans: usize,
+        st_tiered: usize,
+        st_hit: i64,
+        st_bare: i64,
+        st_by_tier: [(usize, i64, i64); 4],
+        st_bad: Option<String>,
+        /// M97 — the cadence table: eligible settlement-years, spoken
+        /// famines, the bare law's, lean verdicts, mean dead share, the
+        /// top storage tier with exposure (tier, exposure, spoken, bare),
+        /// exposure orphans, and the seed's own envelope verdict
+        fc_exposure: usize,
+        fc_spoken: usize,
+        fc_bare: usize,
+        fc_lean: usize,
+        fc_dead_share: f64,
+        fc_episodes: usize,
+        fc_episode_dead_share: f64,
+        fc_top: Option<(usize, usize, usize, usize)>,
+        fc_tier0: (usize, usize),
+        fc_orphans: usize,
+        fc_in: bool,
+        /// M98 — the roads: pulses, no-refuge rows, town-years, the
+        /// audit's verdict, the pulses' mean share and road.
+        rd_pulses: usize,
+        rd_held: usize,
+        rd_town_years: usize,
+        rd_clean: bool,
+        rd_share: f64,
+        rd_km: f64,
     }
     let mut rows: Vec<Row> = Vec::new();
 
@@ -11222,7 +13162,77 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
 
         println!("{:>7} {:>6.1} {:>6.1} {:>6.1} {:>5.1} {:>5} {:>4} {:>2}→{:<2} {:>9} {:>6.2} {:>5} {:>4} {:>4} {:>4} {:>4} {:>4} {:>5.1} {:>6}  {}", seed, 100.0 * land_frac, 100.0 * desert, 100.0 * forest, 100.0 * mtn, li.n, w.deposits.len(), setts0, w.peoples.settlements.len(), pop1, growth, era, arts, log.strikes, log.camps, log.wars, w.routes.len(), evyr, gen_ms, flags);
 
-        rows.push(Row { seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags, sundered: log.peoples_rose, iced, ice_bad, mons: mons_lanes, mons_bad, mons_fam: w.famine_ledger.iter().filter(|r| r.monsoon).count() });
+        // M95 — every famine on every seed, audited against the law alone
+        // (no full-grid leg here; the civ lane carries that one).
+        let sa = famine_sky_audit(&w, &log.famine_texts, false);
+        if let Some(b) = &sa.first_bad {
+            println!("  M95 sky mismatch on seed {}: {}", seed, b);
+        }
+        // M96 — every lean verdict on every seed, re-derived from the
+        // store law, with the tiered towns' toll against their bare
+        // counterfactual.
+        let st = store_audit(&w, &log.famine_texts, &log.held_texts);
+        if let Some(b) = &st.first_bad {
+            println!("  M96 store mismatch on seed {}: {}", seed, b);
+        }
+        // M97 — the cadence table on every seed: spoken famines per
+        // eligible settlement-century, severity, the granary tier's band.
+        let fc = famine_cadence(&w, &log);
+        println!(
+            "  M97 cadence seed {}: {:.1} spoken/c · bare {:.1}/c · failed {:.1}/c · dead {:.1}%/famine year · {} episodes at {:.1}% dead · {} · {}",
+            seed, fc.per_century(), fc.bare_per_century(), fc.lean_per_century(), 100.0 * fc.dead_share, fc.episodes, 100.0 * fc.episode_dead_share,
+            match fc.top_tier() { Some(t) => format!("{} {:.1}/c (bare {:.1}/c, {:.1} sett-cent)", calliope::society::StoreTier::from_code(t as u8).name(), fc.tier_per_century(t), fc.tier_bare_per_century(t), fc.exp_tier[t] as f64 / 100.0), None => "no tier with exposure".to_string() },
+            if fc.in_envelope() { "in the envelope" } else { "OUT of the envelope" }
+        );
+        // M98 — the roads on every seed: every pulse re-derived against
+        // the harness's own decade memory, every decision owed answered.
+        let ra = roads_audit(&w, &log);
+        println!(
+            "  M98 roads seed {}: {} pulses · {} no refuge · {:.2}/settlement-century · share {:.1}% · road {:.0} km · {}/{} judged town-years failed · {}",
+            seed, ra.pulses, ra.held, ra.per_century(), 100.0 * ra.share, ra.km, ra.failed, ra.judged,
+            if ra.clean() { "audit clean".to_string() } else { format!("AUDIT FAULT: {}", ra.first_bad.clone().unwrap_or_default()) }
+        );
+        // full credit only when every row re-derives, sits under its roof,
+        // ties to its famine row and carries its clause — any mismatch
+        // (first_bad) costs the seed at least one row, so the sweep gate
+        // cannot pass on a seed the audit faulted.
+        let st_clean = st.exact == st.n && st.roofed == st.n && st.untiered == st.untiered_bare && st.spoken == st.spoken_tied && st.first_bad.is_none();
+        let st_exact = if st_clean { st.n } else { st.exact.min(st.roofed).min(st.n.saturating_sub(1)) };
+        rows.push(Row {
+            seed, land: land_frac, desert, forest, mtn, camps: log.camps, strikes: log.strikes, famines: log.famines, zipf, growth, pace, era, evyr, flags, sundered: log.peoples_rose, iced, ice_bad, mons: mons_lanes, mons_bad, mons_fam: w.famine_ledger.iter().filter(|r| r.monsoon).count(), sky_n: sa.n, sky_traced: sa.traced, sky_spoken: sa.spoken,
+            st_n: st.n,
+            st_exact,
+            st_held: st.held,
+            st_held_told: st.held_told,
+            st_orphans: st.held_orphans,
+            st_tiered: st.tiered,
+            st_hit: st.by_tier[1..].iter().map(|e| e.1).sum(),
+            st_bare: st.by_tier[1..].iter().map(|e| e.2).sum(),
+            st_by_tier: [
+                (st.by_tier[0].0, st.by_tier[0].1, st.by_tier[0].2),
+                (st.by_tier[1].0, st.by_tier[1].1, st.by_tier[1].2),
+                (st.by_tier[2].0, st.by_tier[2].1, st.by_tier[2].2),
+                (st.by_tier[3].0, st.by_tier[3].1, st.by_tier[3].2),
+            ],
+            st_bad: st.first_bad.clone(),
+            fc_exposure: fc.exposure,
+            fc_spoken: fc.spoken,
+            fc_bare: fc.bare,
+            fc_lean: fc.lean,
+            fc_dead_share: fc.dead_share,
+            fc_episodes: fc.episodes,
+            fc_episode_dead_share: fc.episode_dead_share,
+            fc_top: fc.top_tier().map(|t| (t, fc.exp_tier[t], fc.sp_tier[t], fc.bare_tier[t])),
+            fc_tier0: (fc.exp_tier[0], fc.sp_tier[0]),
+            fc_orphans: fc.orphans,
+            fc_in: fc.in_envelope(),
+            rd_pulses: ra.pulses,
+            rd_held: ra.held,
+            rd_town_years: ra.town_years,
+            rd_clean: ra.clean(),
+            rd_share: ra.share,
+            rd_km: ra.km,
+        });
     }
 
     let n = rows.len() as f64;
@@ -11303,19 +13313,224 @@ fn cmd_sweep(size: usize, years: usize, seeds: Vec<i64>) {
         // but famine must stay an event, not a climate.
         let famine_seeds = rows.iter().filter(|r| r.famines > 0).count();
         c.want("famine strikes somewhere (≥60% of seeds)", famine_seeds * 10 >= rows.len() * 6, format!("{}/{}", famine_seeds, rows.len()), "M2.6: failed rains have a price");
-        // M92 — the two famine classes bound separately: the paddies' own
-        // cadence gets the band's hard ceiling (per-place return is gated in
-        // civ). The rain-fed ceiling is recalibrated for the coupled world:
-        // monsoon famines walk migrants into kin-towns (the M2.6 law in
-        // famine.rs), pumping the rain-fed margins — counterfactually
-        // measured on seed 90210/100y: 114/c with the paddies inert, 166/c
-        // with them live (+52/c of coupling, all through migration). The
-        // per-place M82 return envelope stays the real teeth.
-        let worst_fam = rows.iter().map(|r| r.famines.saturating_sub(r.mons_fam) as f64 * 100.0 / years as f64).fold(0.0f64, f64::max);
-        c.want("famine bounded (<190/century worst seed)", worst_fam < 190.0, format!("{:.0}/century", worst_fam), "M2.6: hunger is a visitation, not the weather — ceiling carries the M92 migration coupling (measured 166 coupled · 114 uncoupled on the worst seed)");
+        // M92 — the paddies' world-scale cadence keeps its hard ceiling
+        // here (per-place return is gated in civ). The rain-fed world-total
+        // ceiling ("famine bounded <190/century", M2.6) is retired at M97:
+        // the per-settlement envelope below is the recalibrated teeth.
         let worst_mf = rows.iter().map(|r| r.mons_fam as f64 * 100.0 / years as f64).fold(0.0f64, f64::max);
         c.want("monsoon famine bounded (<220/century worst seed)", worst_mf < 220.0, format!("{:.0}/century", worst_mf), "M92: the paddies' verdict is a visitation too, never the weather");
     }
+    // M97 — famine, recalibrated, across the sweep: every seed's cadence
+    // table against the historical envelope (famine.rs), ≥ 90 % of seeds
+    // inside it; the granary tier's band smaller than the bare law's on
+    // every seed with the exposure to say so; and the pooled table, so a
+    // reader sees the world's cadence in the record's own units.
+    {
+        use calliope::famine as fm;
+        let exposure: usize = rows.iter().map(|r| r.fc_exposure).sum();
+        let spoken: usize = rows.iter().map(|r| r.fc_spoken).sum();
+        let bare: usize = rows.iter().map(|r| r.fc_bare).sum();
+        let lean: usize = rows.iter().map(|r| r.fc_lean).sum();
+        let orphans: usize = rows.iter().map(|r| r.fc_orphans).sum();
+        let pooled_dead = {
+            let (mut s, mut n) = (0.0f64, 0usize);
+            for r in rows.iter().filter(|r| r.fc_spoken > 0) {
+                s += r.fc_dead_share * r.fc_spoken as f64;
+                n += r.fc_spoken;
+            }
+            if n > 0 { s / n as f64 } else { 0.0 }
+        };
+        let (pooled_episodes, pooled_episode_dead) = {
+            let (mut s, mut n) = (0.0f64, 0usize);
+            for r in rows.iter().filter(|r| r.fc_episodes > 0) {
+                s += r.fc_episode_dead_share * r.fc_episodes as f64;
+                n += r.fc_episodes;
+            }
+            (n, if n > 0 { s / n as f64 } else { 0.0 })
+        };
+        let in_env = rows.iter().filter(|r| r.fc_in).count();
+        let voting: Vec<&Row> = rows.iter().filter(|r| r.fc_top.is_some()).collect();
+        let smaller = voting.iter().filter(|r| { let (_, e, s, b) = r.fc_top.unwrap(); (s as f64 / e as f64) < (b as f64 / e as f64) && (r.fc_tier0.0 < 500 || (s as f64 / e as f64) < (r.fc_tier0.1 as f64 / r.fc_tier0.0 as f64)) }).count();
+        let pooled_top = {
+            let (mut e, mut s, mut b) = (0usize, 0usize, 0usize);
+            for r in &voting {
+                let (_, te, ts, tb) = r.fc_top.unwrap();
+                e += te; s += ts; b += tb;
+            }
+            (e, s, b)
+        };
+        println!();
+        println!(
+            "famine, recalibrated (M97): pooled {:.1} spoken/c · bare law {:.1}/c · failed harvests {:.1}/c over {:.1} settlement-centuries · dead {:.1}%/famine year · {} episodes ({:.1}/c) at {:.1}% dead · granary tier {:.1}/c (bare {:.1}/c, {:.1} sett-cent) · per seed: {}",
+            FamineCadence::rate(spoken, exposure), FamineCadence::rate(bare, exposure), FamineCadence::rate(lean, exposure), exposure as f64 / 100.0, 100.0 * pooled_dead,
+            pooled_episodes, FamineCadence::rate(pooled_episodes, exposure), 100.0 * pooled_episode_dead,
+            FamineCadence::rate(pooled_top.1, pooled_top.0), FamineCadence::rate(pooled_top.2, pooled_top.0), pooled_top.0 as f64 / 100.0,
+            rows.iter().map(|r| format!("{}:{:.1}/c·{:.1}%·ep {:.1}%·{}", r.seed, FamineCadence::rate(r.fc_spoken, r.fc_exposure), 100.0 * r.fc_dead_share, 100.0 * r.fc_episode_dead_share, if r.fc_in { "in" } else { "OUT" })).collect::<Vec<_>>().join(" · ")
+        );
+        c.must(
+            "the exposure census covers every famine (sweep)",
+            orphans == 0 && exposure > 0,
+            format!("{} famine rows outside {} eligible settlement-years", orphans, exposure),
+            "M97: on every seed the rate's denominator is the pass's own predicate",
+        );
+        c.must(
+            "famine lands in the historical envelope (≥90% of seeds)",
+            in_env * 10 >= rows.len() * 9,
+            format!("{}/{} seeds inside · sweet {:.0}–{:.0}/c, dead {:.0}–{:.0}% per year, {:.0}–{:.0}% per episode", in_env, rows.len(), fm::FAMINE_PER_CENTURY.0, fm::FAMINE_PER_CENTURY.1, 100.0 * fm::FAMINE_DEAD_SHARE.0, 100.0 * fm::FAMINE_DEAD_SHARE.1, 100.0 * fm::FAMINE_EPISODE_DEAD_SHARE.0, 100.0 * fm::FAMINE_EPISODE_DEAD_SHARE.1),
+            "M97 gate: famine frequency and severity (per year and per episode) per settlement-century inside the pre-industrial envelope on at least 90 % of sweep seeds",
+        );
+        c.must(
+            "the granary tier's band is the smaller one (sweep)",
+            !voting.is_empty() && smaller == voting.len(),
+            format!("{}/{} seeds with a banded tier show it under the bare law and the unstored towns", smaller, voting.len()),
+            "M97 gate: settlements with granary-tier storage show a distinct, smaller famine band on every seed with the exposure to band",
+        );
+        c.want(
+            "famine sits under the failed harvest (sweep)",
+            lean == 0 || spoken < lean,
+            format!("{:.1} spoken against {:.1} failed harvests per settlement-century", FamineCadence::rate(spoken, exposure), FamineCadence::rate(lean, exposure)),
+            "M97: a shortfall is not always a death, on the pooled sweep",
+        );
+    }
+    // M98 — off the failing margin, across the sweep: the audit clean on
+    // every seed, the pooled cadence and shape of the waves banded, and
+    // at least one generation somewhere that took the road.
+    {
+        let pulses: usize = rows.iter().map(|r| r.rd_pulses).sum();
+        let held: usize = rows.iter().map(|r| r.rd_held).sum();
+        let ty: usize = rows.iter().map(|r| r.rd_town_years).sum();
+        let clean = rows.iter().filter(|r| r.rd_clean).count();
+        let per_c = if ty == 0 { 0.0 } else { pulses as f64 / (ty as f64 / 100.0) };
+        let (share, km) = {
+            let (mut ss, mut ks, mut n) = (0.0f64, 0.0f64, 0usize);
+            for r in rows.iter().filter(|r| r.rd_pulses > 0) {
+                ss += r.rd_share * r.rd_pulses as f64;
+                ks += r.rd_km * r.rd_pulses as f64;
+                n += r.rd_pulses;
+            }
+            if n > 0 { (ss / n as f64, ks / n as f64) } else { (0.0, 0.0) }
+        };
+        println!();
+        println!(
+            "off the failing margin (M98): pooled {} pulses · {} no refuge · {:.2} per settlement-century over {:.1} settlement-centuries · share {:.1}% · road {:.0} km · per seed: {}",
+            pulses, held, per_c, ty as f64 / 100.0, 100.0 * share, km,
+            rows.iter().map(|r| format!("{}:{}p·{}h·{}", r.seed, r.rd_pulses, r.rd_held, if r.rd_clean { "clean" } else { "FAULT" })).collect::<Vec<_>>().join(" · ")
+        );
+        c.must(
+            "exodus pulses re-derive on every seed",
+            clean == rows.len(),
+            format!("{}/{} seeds with every pulse re-derived from the harness's own decade memory and every failed decade answered", clean, rows.len()),
+            "M98 gate: migration pulses fire only after a sustained failed-decade average crosses threshold, arrive the same month, and replay at fixed seed — on every sweep seed",
+        );
+        c.want(
+            "some generation took the road",
+            pulses > 0,
+            format!("{} pulses across the sweep", pulses),
+            "M98: the law is live on the sweep — a world where no decade ever fails a town is a threshold set out of reach",
+        );
+        c.band("exodus pulses / settlement-century", per_c, format!("{:.2} pooled over {:.1} settlement-centuries", per_c, ty as f64 / 100.0));
+        if pulses > 0 {
+            c.band("exodus share of the town", share, format!("{:.1}% pooled over {} waves", 100.0 * share, pulses));
+            c.band("exodus road km", km, format!("{:.0} km pooled over {} waves", km, pulses));
+        }
+    }
+    // M95 — hunger has a cause on every seed: each famine row's sky
+    // re-derives from the law bit-equal and its telling ends with the
+    // sentence that sky makes. Exhaustive over every famine the sweep
+    // produced, not sampled.
+    let sky_n: usize = rows.iter().map(|r| r.sky_n).sum();
+    let sky_traced: usize = rows.iter().map(|r| r.sky_traced).sum();
+    let sky_spoken: usize = rows.iter().map(|r| r.sky_spoken).sum();
+    println!(
+        "hunger with a cause (M95): famines traced/spoken per seed: {}",
+        rows.iter().map(|r| format!("{}:{}/{}/{}", r.seed, r.sky_traced, r.sky_spoken, r.sky_n)).collect::<Vec<_>>().join(" · ")
+    );
+    c.must(
+        "hunger has a cause on every seed",
+        sky_n > 0 && sky_traced == sky_n && sky_spoken == sky_n,
+        format!("{} famines across {} seeds · {} traced bit-equal · {} tell their cause", sky_n, rows.len(), sky_traced, sky_spoken),
+        "M95: every famine in the sweep carries the composite sky it read and speaks the sentence those numbers make — no seed, no row excepted",
+    );
+    // M96 — granaries against lean years, across the sweep: every lean
+    // verdict re-derives from the store law on every seed; the tiered
+    // towns' summed toll falls measurably short of the bare law's over the
+    // same town-years; the held years are told. This is the gate the
+    // roadmap names — "measurably reduce population loss on matched
+    // shortfalls across sweep seeds" — read exhaustively, not sampled.
+    let st_n: usize = rows.iter().map(|r| r.st_n).sum();
+    let st_exact: usize = rows.iter().map(|r| r.st_exact).sum();
+    let st_held: usize = rows.iter().map(|r| r.st_held).sum();
+    let st_held_told: usize = rows.iter().map(|r| r.st_held_told).sum();
+    let st_orphans: usize = rows.iter().map(|r| r.st_orphans).sum();
+    let st_tiered: usize = rows.iter().map(|r| r.st_tiered).sum();
+    let st_hit: i64 = rows.iter().map(|r| r.st_hit).sum();
+    let st_bare: i64 = rows.iter().map(|r| r.st_bare).sum();
+    let st_kept = if st_bare > 0 { 1.0 - st_hit as f64 / st_bare as f64 } else { 0.0 };
+    let mut tier_tot = [(0usize, 0i64, 0i64); 4];
+    for r in &rows {
+        for t in 0..4 {
+            tier_tot[t].0 += r.st_by_tier[t].0;
+            tier_tot[t].1 += r.st_by_tier[t].1;
+            tier_tot[t].2 += r.st_by_tier[t].2;
+        }
+    }
+    println!(
+        "granaries against lean years (M96): lean verdicts exact/held-told/tiered per seed: {}",
+        rows.iter().map(|r| format!("{}:{}/{}·{}/{}·{}", r.seed, r.st_exact, r.st_n, r.st_held_told, r.st_held, r.st_tiered)).collect::<Vec<_>>().join(" · ")
+    );
+    println!(
+        "  by tier across the sweep — {}",
+        tier_tot
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.0 > 0)
+            .map(|(t, e)| format!("{} {} verdicts toll {} of bare {} ({:.1}% kept)", calliope::society::StoreTier::from_code(t as u8).name(), e.0, e.1, e.2, if e.2 > 0 { 100.0 * (1.0 - e.1 as f64 / e.2 as f64) } else { 0.0 }))
+            .collect::<Vec<_>>()
+            .join(" · ")
+    );
+    if let Some(b) = rows.iter().find_map(|r| r.st_bad.as_ref()) {
+        println!("  first store mismatch: {}", b);
+    }
+    c.must(
+        "the store is the law on every seed",
+        st_n > 0 && st_exact == st_n,
+        format!("{} lean verdicts across {} seeds · {} re-derive exactly, roofed, tied and clause-true", st_n, rows.len(), st_exact),
+        "M96: every lean verdict in the sweep is the store law's own arithmetic — draw, granary share, toll, bare toll, roof, ledger tie, telling clause — no seed, no row excepted",
+    );
+    c.must(
+        "held years are told on every seed",
+        st_held == st_held_told && st_orphans == 0,
+        format!("{}/{} held years told · {} orphan tellings", st_held_told, st_held, st_orphans),
+        "M96: each year a store took without a death is one Granary event, and there is no Granary event without such a year",
+    );
+    c.range(
+        "storage tiers reduce the toll across the sweep",
+        st_kept,
+        format!("{:.1}% of the bare toll kept alive over {} tiered verdicts", 100.0 * st_kept, st_tiered),
+        (0.10, 0.90),
+        (0.05, 0.97),
+        "M96 gate: over the same town-years, across every sweep seed, the tiered towns' summed toll falls measurably short of the bare law's — the craft of keeping is worth lives, and not all of them",
+    );
+    c.want(
+        "the higher craft keeps more across the sweep",
+        {
+            let mut last = 1.0f64;
+            let mut ok = true;
+            for e in tier_tot[1..].iter() {
+                if e.0 < 10 {
+                    continue;
+                }
+                let r = e.1 as f64 / e.2.max(1) as f64;
+                if r > last + 0.02 {
+                    ok = false;
+                }
+                last = r;
+            }
+            ok
+        },
+        tier_tot[1..].iter().filter(|e| e.0 >= 10).map(|e| format!("{:.2}", e.1 as f64 / e.2.max(1) as f64)).collect::<Vec<_>>().join(" ≥ "),
+        "M96: the surviving share of the bare toll does not rise from jars to granaries to storehouses (tiers with ≥ 10 verdicts, sweep-wide)",
+    );
     // M2.3 across seeds: mean rank-size slope where measurable
     let zipfs: Vec<f64> = rows.iter().map(|r| r.zipf).filter(|z| z.is_finite()).collect();
     if !zipfs.is_empty() {
@@ -12565,7 +14780,7 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
     // P=peoples · E=economy · C=chronicle · G=grids · D=deposits ·
     // N=names/features · R=draws the one rng stream · Q=seismic ledger
     // · U=drought ledger · F=flood ledger + silt sheet · K=lake ledger
-    // (own stream, order-free — M22) · –=scratch only.
+    // · Y=dry-edge ledger (own stream, order-free — M22) · –=scratch only.
     // A system is SERIAL if it writes Peoples or draws the RNG: the single
     // PCG stream is a total order — determinism law makes it unsplittable.
     const ACCESS: &[(&str, &str, bool)] = &[
@@ -12587,10 +14802,18 @@ fn cmd_systems(seed: i64, size: usize, years: usize) {
         // composed sky, writes the lake ledger (K) and dates strandlines
         // into the chronicle. No die, no Peoples — parallel-safe.
         ("lakes", "K·C", false),
+        // M94 — the dry edge: reads the composed sky at its own cells,
+        // writes the dry-edge ledger (Y) and dates the turns into the
+        // chronicle. No die, no Peoples — parallel-safe.
+        ("dry-edge", "Y·C", false),
         // M86 — pure chronicle: reads the derived schedule, writes events
         // only, draws no die. Parallel-safe by construction.
         ("ages", "C", false),
         ("famine", "P·R", true),
+        // M98: reads the composed sky and the field ledger, writes the
+        // towns' decade memories and moves Peoples down the road, dates
+        // the pulse into the chronicle. No die; Peoples keeps it serial.
+        ("migration", "P·C", true),
 
         // Q=seismic ledger (own stream). M24: the effects pass also
         // damages Peoples and fells towns into the chronicle: serial.

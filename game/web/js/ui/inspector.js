@@ -211,6 +211,59 @@ function SettlementView(a) {
               <button class="link-btn" onClick=${() => a.select({ kind: "settlement", id: ma.id, fly: true })}>${ma.name}</button>
               \u00b7 ${ma.n} towns</div>`;
       }}
+      ${() => {
+        // M95 — the sky this year's harvest reads, in the verdict's own
+        // numbers: the same law that writes "The rains fail over …".
+        // M97 — three states, the law's own: a famine (red), a dearth or a
+        // year the store held (amber — the harvest fell short, no one
+        // died), or the harvest held. The card never calls a shortfall a
+        // famine the chronicle would not.
+        const sky = explain()?.sky;
+        if (!sky) return "";
+        const tone = sky.fails ? " fail" : sky.dearth || sky.held ? " lean" : "";
+        const tag = sky.fails ? "famine" : sky.held ? "held" : sky.dearth ? "dearth" : "";
+        return html`<div class=${"insp-sky" + tone}>
+          <span class="insp-kicker">Sky \u00b7 Y${sky.year + 1}${tag ? html`<em class="insp-tag">${tag}</em>` : ""}</span>
+          <div class="insp-note">${sky.line}</div>
+        </div>`;
+      }}
+      ${() => {
+        // M96 — the store the verdict draws on: tier, months of grain
+        // under the roof, the terms of the craft — the granary law read
+        // at the town, the same law the famine pass applies.
+        const store = explain()?.store;
+        if (!store) return "";
+        const bare = store.code === 0;
+        const empty = !bare && store.grain <= 0;
+        const gauge = bare ? 0 : Math.max(0, Math.min(1, store.grain / Math.max(1e-9, store.cap_years * store.year_need)));
+        return html`<div class=${"insp-store" + (bare ? " bare" : empty ? " empty" : "")}>
+          <span class="insp-kicker">Store \u00b7 ${store.tier}${bare ? "" : ` \u00b7 ${store.months} mo`}</span>
+          ${bare ? "" : html`<div class="insp-gauge" title=${`${(gauge * 100).toFixed(0)}% of the roof`}><i style=${`width:${(gauge * 100).toFixed(1)}%`}></i></div>`}
+          <div class="insp-note">${store.line}</div>
+        </div>`;
+      }}
+      ${() => {
+        // M98 — the roads' memory: the last ten harvests as the migration
+        // law reads them, and the wave it would send. Red once the
+        // generation has failed; amber while the memory is still short of
+        // ten readings and the town cannot yet be judged. The tag is the
+        // pass's own verdict (`hold`): why no wave walks this year, or
+        // "exodus" when the road is open and a kin-town found.
+        const roads = explain()?.roads;
+        if (!roads) return "";
+        const young = roads.mean == null;
+        const tone = roads.failed ? " fail" : young ? " young" : "";
+        const HOLD = { walked: "walked", small: "too small", famine: "in famine", unspoken: "too few" };
+        const tag = roads.failed
+          ? (roads.hold ? HOLD[roads.hold] || roads.hold : roads.refuge ? "exodus" : "no refuge")
+          : young ? `${roads.filled}/10` : "";
+        const gave = young ? null : Math.round((1 - roads.mean) * 100);
+        return html`<div class=${"insp-roads" + tone}>
+          <span class="insp-kicker">Roads \u00b7 ${young ? "a short memory" : `${gave} in 100 over ten harvests`}${tag ? html`<em class="insp-tag">${tag}</em>` : ""}</span>
+          ${young ? "" : html`<div class="insp-gauge" title=${`${(roads.mean * 100).toFixed(0)}% short of a fair year \u00b7 a generation fails at ${(roads.threshold * 100).toFixed(0)}%`}><i style=${`width:${(Math.min(1, roads.mean / (2 * roads.threshold)) * 100).toFixed(1)}%`}></i></div>`}
+          <div class="insp-note">${roads.line}${roads.refuge_id != null ? html` <button class="link-btn" onClick=${() => a.select({ kind: "settlement", id: roads.refuge_id, fly: true })}>\u2192 fly there</button>` : ""}</div>
+        </div>`;
+      }}
       ${() => (explain() ? Ledger({ data: explain }) : "")}
       <div class="insp-actions">
         <button class="ghost-btn" onClick=${() => a.flyTo(st.x + 0.5, st.y + 0.5, 8)}>${I.fly()} Fly to</button>

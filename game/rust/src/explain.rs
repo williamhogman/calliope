@@ -12,7 +12,7 @@
 
 use serde_json::{json, Value};
 
-use crate::agriculture::SoilOrder;
+use crate::agriculture::{self, SoilOrder};
 use crate::climate;
 use crate::constants::METRES_PER_UNIT;
 use crate::economy::{base_value, demand_weight};
@@ -142,6 +142,17 @@ fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
         }
     }
 
+    // M95 — the sky this year's harvest reads, from the same law the
+    // famine pass applies (famine::harvest_verdict): the town can be asked
+    // *why* it starved, or why it did not, in the verdict's own numbers.
+    let idx = world.peoples.settlements.iter().position(|o| o.id == id)?;
+    let sky = harvest_sky_block(world, idx);
+    // M96 — the store the verdict draws on: the granary law at the town.
+    let store = store_block(world, idx);
+    // M98 — the roads' memory: the last ten harvests as the migration
+    // law reads them, and what it would do about them.
+    let roads = roads_block(world, idx);
+
     Some(json!({
         "title": "Growth this month",
         "dp": 1,
@@ -156,7 +167,257 @@ fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
             "coastal": s.coastal,
             "river": s.river,
         },
+        "sky": sky,
+        "store": store,
+        "roads": roads,
     }))
+}
+
+/// M98 — "The roads" for one settlement: the decade memory the
+/// migration law judges the town on — the ten readings' mean (the share
+/// of a fair year the land did not give, M90 abandonment compounded
+/// in), how many of them failed outright, whether the generation has
+/// failed, the wave it would send and where. Serialized with a prose
+/// line the inspector shows verbatim. `refuge` is the same search the
+/// pass runs, so the card names the town the road would lead to.
+pub fn roads_block(world: &World, idx: usize) -> Value {
+    use crate::migration::{self, Hold};
+    let s = &world.peoples.settlements[idx];
+    let year = world.month.div_euclid(12);
+    let mem = &s.roads;
+    let mean = mem.mean();
+    let failed = mem.failed();
+    // the pass's own eligibility (`migration::hold`), so the card names
+    // a road only when the law would open it — and says why it holds
+    // when it would not
+    let hold = mean
+        .filter(|_| failed)
+        .and_then(|m| migration::hold(mem, year, s.pop, s.failing, m));
+    let refuge = if failed && hold.is_none() {
+        let buckets = crate::util::Buckets::build(
+            world.peoples.settlements.iter().map(|o| (o.x as f64, o.y as f64)).collect(),
+            32.0,
+        );
+        world.refuge_for(idx, &buckets).map(|(j, _)| j)
+    } else {
+        None
+    };
+    let refuge_name = refuge.map(|j| world.peoples.settlements[j].name.clone());
+    let (yf, lost, now) = world.decade_reading(year, idx);
+    let line = migration::decade_line(mem, s.pop, hold, refuge_name.as_deref());
+    // null when nothing holds the road (the wave is eligible, or the decade
+    // has not failed); a name only when the pass itself would withhold
+    let hold_tag = match hold {
+        Some(Hold::Walked) => json!("walked"),
+        Some(Hold::Small) => json!("small"),
+        Some(Hold::Famine) => json!("famine"),
+        Some(Hold::Unspoken) => json!("unspoken"),
+        None => Value::Null,
+    };
+    json!({
+        "filled": mem.filled,
+        "mean": mean.map(crate::util::round3),
+        "failed": failed,
+        "fails": mem.failed_years(),
+        "worst": crate::util::round3(mem.worst()),
+        "threshold": migration::FAILED_DECADE,
+        "armed": mem.armed(year),
+        "hold": hold_tag,
+        "last_pulse": if mem.last_pulse == migration::NEVER { Value::Null } else { json!(mem.last_pulse) },
+        "share": mean.map(|m| crate::util::round3(migration::leave_share(m))),
+        "walkers": mean.map(|m| migration::walkers(s.pop, m)),
+        "refuge": refuge_name,
+        "refuge_id": refuge.map(|j| world.peoples.settlements[j].id.0),
+        "reading": crate::util::round3(now),
+        "yield": crate::util::round3(yf),
+        "lost": crate::util::round3(lost),
+        "line": line,
+    })
+}
+
+/// M95 — "Sky this year" for one settlement: the harvest verdict's own
+/// reading, serialized with a prose line the inspector shows verbatim.
+/// The year is the calendar year of the world's current month; the
+/// verdict falls in its eighth month (`famine_pass`), so before that the
+/// line speaks of the harvest ahead, after it of the harvest past — the
+/// sky itself is a pure function of seed × cell × year either way.
+pub fn harvest_sky_block(world: &World, idx: usize) -> Value {
+    use crate::famine::{self, HarvestKind};
+    let s = &world.peoples.settlements[idx];
+    let (y, x) = (s.y as usize, s.x as usize);
+    let year = world.month.div_euclid(12);
+    let spoken = world.month.rem_euclid(12) >= 7;
+    let v = world.harvest_verdict(idx, year);
+    let sky = v.sky;
+    let pack = agriculture::CropPackage::from_code(world.fields.crops[[y, x]]);
+    let pct = famine::rain_pct(sky.dp);
+    let rains = if pct == 0 {
+        "the rains at their norm".to_string()
+    } else if sky.dp < 0.0 {
+        format!("the rains {} in every hundred short of their norm", pct)
+    } else {
+        format!("the rains {} in every hundred above their norm", pct)
+    };
+    let tense = if spoken { "read" } else { "will read" };
+    // M96 — the store's part in the verdict: a bare toll the granary took
+    // (held), or a toll it only blunted (gave). M97 — a shortfall whose
+    // want (what the store left uncovered) stays under the law's floor is
+    // a *dearth*: a lean year the town eats through, spoken as such and
+    // never as a famine.
+    let bare = famine::toll(s.pop, v.shortfall, 1.0);
+    let held_by_store = !v.fails && v.shortfall > 0.0 && v.covered > 0.0 && bare >= 4 && s.pop > 90;
+    let want = famine::want_of(v.shortfall, v.granary);
+    let dearth = !v.fails && v.shortfall > 0.0 && !held_by_store;
+    let verdict_word = |fails: bool| -> String {
+        let mut w = match (fails, spoken) {
+            (true, true) => format!("The harvest failed — {} souls.", v.hit),
+            (true, false) => format!("The harvest ahead fails — {} souls at today's count.", v.hit),
+            (false, true) if held_by_store => format!(
+                "The harvest failed, {}",
+                famine::held_sentence(v.tier, v.covered, s.pop)
+            ),
+            (false, false) if held_by_store => format!(
+                "The harvest ahead fails, {}",
+                famine::held_sentence(v.tier, v.covered, s.pop).replace("sees the town through", "would see the town through").replace("see the town through", "would see the town through")
+            ),
+            (false, true) if dearth => famine::dearth_sentence(v.shortfall, want, true),
+            (false, false) if dearth => famine::dearth_sentence(v.shortfall, want, false),
+            (false, true) => "The harvest held.".to_string(),
+            (false, false) => "The harvest ahead holds.".to_string(),
+        };
+        if fails && v.covered > 0.0 {
+            w.push(' ');
+            w.push_str(&famine::gave_sentence(v.tier, v.covered, s.pop));
+        }
+        w
+    };
+    let small = s.pop <= 90;
+    let line = match v.kind {
+        HarvestKind::RainFed => {
+            let mut l = format!(
+                "Open-sky {} {} {} (SPI {:+.1}); the ground's memory stands at {:+.1}.",
+                pack.name(),
+                tense,
+                rains,
+                sky.z1,
+                sky.index
+            );
+            if v.shortfall > 0.0 {
+                l.push(' ');
+                l.push_str(&famine::cause_sentence(&sky));
+            }
+            l.push(' ');
+            if small && v.shortfall > 0.0 {
+                l.push_str("Too small a hearth for the verdict to be spoken.");
+            } else {
+                l.push_str(&verdict_word(v.fails));
+            }
+            l
+        }
+        HarvestKind::Paddies => {
+            let mut l = format!("Monsoon paddies. {}", famine::monsoon_sentence(v.msi, v.catchment));
+            l.push(' ');
+            if small && v.shortfall > 0.0 {
+                l.push_str("Too small a hearth for the verdict to be spoken.");
+            } else {
+                l.push_str(&verdict_word(v.fails));
+            }
+            l
+        }
+        HarvestKind::Irrigated => format!(
+            "River-fed {}: channel irrigation is base flow, not the sky, so the harvest does not fail on the rains. This year {} (SPI {:+.1}).",
+            pack.name(),
+            rains,
+            sky.z1
+        ),
+        HarvestKind::NotFarming => format!(
+            "No grain verdict here ({}): this hearth does not live by the harvest. This year {} (SPI {:+.1}).",
+            pack.name(),
+            rains,
+            sky.z1
+        ),
+    };
+    json!({
+        "year": year,
+        "spoken": spoken,
+        "kind": v.kind.name(),
+        "crop": pack.name(),
+        "spi": crate::util::round2(sky.z1),
+        "index": crate::util::round2(sky.index),
+        "rain_pct": if sky.dp < 0.0 { -pct } else { pct },
+        "dry_run": sky.dry_run,
+        "lean_run": sky.lean_run,
+        "dry_behind": sky.dry_behind,
+        "monsoon": if v.kind == HarvestKind::Paddies { json!(crate::util::round2(v.msi)) } else { Value::Null },
+        "catchment": v.catchment,
+        "shortfall": crate::util::round2(v.shortfall),
+        "granary": crate::util::round3(v.granary),
+        "covered": crate::util::round3(v.covered),
+        "want": crate::util::round3(want),
+        "floor": famine::TOLL_FLOOR,
+        "hit": v.hit,
+        "fails": v.fails,
+        "dearth": dearth && !small,
+        "held": held_by_store,
+        "line": line,
+    })
+}
+
+/// M96 — "The store" for one settlement: the granary law read at the
+/// town — its people's tier, the grain under the roof as this year's
+/// verdict reads it (`store_at_verdict`), in months of the town's own
+/// eating, and the terms of the craft (share kept of a fat year, the
+/// winter's spoilage, the roof). Serialized with a prose line the
+/// inspector shows verbatim.
+pub fn store_block(world: &World, idx: usize) -> Value {
+    use crate::famine;
+    use crate::society::StoreTier;
+    let s = &world.peoples.settlements[idx];
+    let (y, x) = (s.y as usize, s.x as usize);
+    let year = world.month.div_euclid(12);
+    let tier = world.store_tier_of(idx);
+    let grain = world.store_at_verdict(idx, year);
+    let months = famine::store_months(grain, s.pop);
+    let fills = world.store_fills(y, x);
+    let need_year = s.pop as f64;
+    let line = match tier {
+        StoreTier::None => "No craft of keeping: what a fat year gives is eaten or lost by the next. A failed harvest falls on the town at its full weight.".to_string(),
+        _ => {
+            let mut l = if grain <= 0.0 {
+                format!("The {} stand empty.", tier.name())
+            } else if months <= 0 {
+                format!("The {} hold a few days' grain — {:.0} person-years.", tier.name(), grain)
+            } else if months == 1 {
+                format!("The {} hold a month of grain ({:.0} person-years).", tier.name(), grain)
+            } else {
+                format!("The {} hold {} months of grain ({:.0} person-years).", tier.name(), months, grain)
+            };
+            l.push(' ');
+            if fills {
+                l.push_str(&format!(
+                    "Each fat year lays by {} in every hundred of the surplus, the winter takes {} in every hundred of the pile, and the roof holds {} at most.",
+                    (tier.share() * 100.0).round() as i64,
+                    (tier.spoil() * 100.0).round() as i64,
+                    if tier.cap_years() >= 1.0 { format!("{} years' eating", tier.cap_years()) } else { format!("{} months' eating", (tier.cap_years() * 12.0).round() as i64) }
+                ));
+            } else {
+                l.push_str("No grain is grown here to lay by; whatever the store holds came with the craft, and spoils.");
+            }
+            l
+        }
+    };
+    json!({
+        "tier": tier.name(),
+        "code": tier.code(),
+        "grain": crate::util::round3(grain),
+        "months": months,
+        "year_need": need_year,
+        "share": tier.share(),
+        "spoil": tier.spoil(),
+        "cap_years": tier.cap_years(),
+        "fills": fills,
+        "line": line,
+    })
 }
 
 // ------------------------------------------------------------------- good

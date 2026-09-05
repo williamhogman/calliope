@@ -1019,7 +1019,16 @@ pub fn monsoon_index(
     drift: f64,
     lean: f64,
 ) -> f64 {
-    let (_, dp) = year_anomaly_at(noise, rows, x, y, year, osc, drift);
+    let dp = rain_anomaly_at(noise, rows, x, y, year, osc, drift);
+    monsoon_of(dp, lean)
+}
+
+/// The monsoon index from a rain anomaly already in hand — the one
+/// expression both the point and the catchment readings end in, so the
+/// tick's memo-served basin read (`World::catchment_rain_anomaly`) and the
+/// raw law below cannot drift apart.
+#[inline]
+pub fn monsoon_of(dp: f64, lean: f64) -> f64 {
     1.0 + dp / lean.abs().max(MONSOON_REF)
 }
 
@@ -1040,7 +1049,7 @@ pub fn monsoon_index_catchment(
     lean: f64,
 ) -> f64 {
     let dp = catchment_anomaly_at(noise, rows, cols, x, y, year, osc, drift);
-    1.0 + dp / lean.abs().max(MONSOON_REF)
+    monsoon_of(dp, lean)
 }
 
 /// 1σ of the year-to-year temperature swing at this latitude, °C.
@@ -1089,16 +1098,23 @@ pub fn year_anomaly(
     for y in 0..rows {
         let lat_signed = -90.0 + (y as f64) * 180.0 / (n - 1.0);
         let lat = lat_signed.abs();
-        let at = anomaly_amp_t(lat) / ANOM_FBM_SIGMA;
-        let ap = anomaly_amp_p(lat) / ANOM_FBM_SIGMA;
+        // M95 — one sky, to the bit. The row's amplitudes are hoisted (a
+        // powf each), but the per-cell arithmetic must be *the same
+        // operations in the same order* as `year_anomaly_at`: the harvest
+        // reads `draw * amp / σ`, so the grid does too. The earlier form
+        // pre-divided the amplitude (`draw * (amp / σ)`) and landed one
+        // ulp off the pointwise law on ~15% of cells — two skies, which
+        // the M95 audit caught (291/343 famine rows equal on seed 12345).
+        // The extra division per cell is noise against the fbm draws.
+        let amp_t = anomaly_amp_t(lat);
         // M75: the tilt is a property of the row, drawn once per row.
-        let tilt = teleconnection_bias(osc, lat_signed);
         // M84: so is the belt — the camps move with the century, not the cell.
-        let belt = belt_anomaly(lat_signed, drift);
+        // Both live in `RowSky` now, with the amplitude; the per-cell rain
+        // expression is `rain_anomaly_row`, shared with every pointwise path.
+        let row = RowSky::at(rows, y, osc, drift);
         for x in 0..cols {
-            dt[[y, x]] = drift + anomaly_draw(noise, x, y, year, 0.0) * at;
-            dp[[y, x]] = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE) * ap + tilt + belt)
-                .max(ANOM_P_FLOOR);
+            dt[[y, x]] = drift + anomaly_draw(noise, x, y, year, 0.0) * amp_t / ANOM_FBM_SIGMA;
+            dp[[y, x]] = rain_anomaly_row(noise, x, y, year, &row);
         }
     }
     (dt, dp)
@@ -1125,12 +1141,70 @@ pub fn year_anomaly_at(
     let lat_signed = -90.0 + (y as f64) * 180.0 / (n - 1.0);
     let lat = lat_signed.abs();
     let dt = drift + anomaly_draw(noise, x, y, year, 0.0) * anomaly_amp_t(lat) / ANOM_FBM_SIGMA;
-    let dp = (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE) * anomaly_amp_p(lat)
-        / ANOM_FBM_SIGMA
-        + teleconnection_bias(osc, lat_signed)
-        + belt_anomaly(lat_signed, drift))
-    .max(ANOM_P_FLOOR);
+    let dp = rain_anomaly_row(noise, x, y, year, &RowSky::at(rows, y, osc, drift));
     (dt, dp)
+}
+
+/// The rain lane of `year_anomaly_at` alone — the same expression to the
+/// bit, without drawing the temperature lane nobody asked for. Every
+/// rain-only reader (the drought ledger's memory walk, the monsoon index,
+/// the catchment kernel) comes through here; the tick's own per-site
+/// weather memo still takes both lanes through `year_anomaly_at`.
+#[inline]
+pub fn rain_anomaly_at(
+    noise: &crate::noisegen::Perlin3,
+    rows: usize,
+    x: usize,
+    y: usize,
+    year: i64,
+    osc: f64,
+    drift: f64,
+) -> f64 {
+    rain_anomaly_row(noise, x, y, year, &RowSky::at(rows, y, osc, drift))
+}
+
+/// The three terms of the rain lane that belong to the *row*, not the
+/// cell: the latitude amplitude (a powf), the M75 tilt and the M84 belt
+/// walk (four exps). `year_anomaly` hoists them per row already; the
+/// catchment kernel below reads forty-nine rows and used to re-solve them
+/// at every one of its ~2,400 taps. Hoisting changes no value — each term
+/// is a pure function of the row and the year's forcing — and the per-cell
+/// arithmetic in `rain_anomaly_row` keeps the operation order the M95
+/// audit pinned (`draw * amp / σ + tilt + belt`).
+#[derive(Clone, Copy, Debug)]
+pub struct RowSky {
+    pub amp_p: f64,
+    pub tilt: f64,
+    pub belt: f64,
+}
+
+impl RowSky {
+    #[inline]
+    pub fn at(rows: usize, y: usize, osc: f64, drift: f64) -> RowSky {
+        let n = rows as f64;
+        let lat_signed = -90.0 + (y as f64) * 180.0 / (n - 1.0);
+        RowSky {
+            amp_p: anomaly_amp_p(lat_signed.abs()),
+            tilt: teleconnection_bias(osc, lat_signed),
+            belt: belt_anomaly(lat_signed, drift),
+        }
+    }
+}
+
+/// The rain lane at one cell given its row's hoisted terms. This is *the*
+/// per-cell rain expression: `year_anomaly` (full grid), `year_anomaly_at`
+/// (one cell), `rain_anomaly_at` and the catchment kernel all evaluate it,
+/// so there is one sky to the bit whichever path reads it.
+#[inline]
+pub fn rain_anomaly_row(
+    noise: &crate::noisegen::Perlin3,
+    x: usize,
+    y: usize,
+    year: i64,
+    row: &RowSky,
+) -> f64 {
+    (anomaly_draw(noise, x, y, year, ANOM_RAIN_LANE) * row.amp_p / ANOM_FBM_SIGMA + row.tilt + row.belt)
+        .max(ANOM_P_FLOOR)
 }
 
 /// The separable Gaussian catchment reading at one cell. The arithmetic and
@@ -1138,6 +1212,12 @@ pub fn year_anomaly_at(
 /// diagnostics may ask for the full field, while ticks pay only for inhabited
 /// cells and receive the same value bit-for-bit. `drift` as everywhere since
 /// M84: the catchment must read the same belt-carrying rain the sky rains.
+///
+/// Cost shape (M95 perf pass): the kernel is (8σ+1)² ≈ 2,400 taps of the
+/// rain draw. The row terms are hoisted once per kernel row and the
+/// temperature lane is never drawn — the tap is one 2-octave fbm plus the
+/// three-term sum, which is what the law actually costs. Values are
+/// unchanged: same taps, same weights, same summation order.
 pub fn catchment_anomaly_at(
     noise: &crate::noisegen::Perlin3,
     rows: usize,
@@ -1162,11 +1242,12 @@ pub fn catchment_anomaly_at(
     let mut out = 0.0;
     for (jy, ky) in kernel.iter().enumerate() {
         let yy = crate::ndimage::reflect(y as isize + jy as isize - radius, rows as isize);
+        let row = RowSky::at(rows, yy, osc, drift);
         let mut horizontal = 0.0;
         for (jx, kx) in kernel.iter().enumerate() {
             let xx = crate::ndimage::reflect(x as isize + jx as isize - radius, cols as isize);
             // Rain lane, belt included (M84) — bit-equal to the full filter.
-            horizontal += kx * year_anomaly_at(noise, rows, xx, yy, year, osc, drift).1;
+            horizontal += kx * rain_anomaly_row(noise, xx, yy, year, &row);
         }
         out += ky * horizontal;
     }

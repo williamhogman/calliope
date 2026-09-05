@@ -5,19 +5,19 @@ expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
 
       seed   land  river   mntn  entrp   coast  lmbig  towns  spacing
      12345  0.350  0.032  0.138  2.103    8.77  0.515     12   142.0km
-     20264  0.339  0.027  0.115  2.056    9.13  0.988      8   192.0km
-     28183  0.352  0.032  0.097  2.071    8.52  0.499     15   141.5km
-     36102  0.357  0.032  0.109  2.076    9.20  0.490     10   179.5km
-     44021  0.356  0.030  0.136  2.081    9.49  0.496     12   142.4km
+     20264  0.339  0.027  0.115  2.056    9.13  0.988     11   118.0km
+     28183  0.352  0.032  0.097  2.071    8.52  0.499     15   122.4km
+     36102  0.357  0.032  0.109  2.076    9.20  0.490     12   152.8km
+     44021  0.356  0.030  0.136  2.081    9.49  0.496     11   167.3km
      51940  0.364  0.035  0.097  2.081    8.79  0.493      9   175.5km
-     59859  0.365  0.031  0.176  2.122    9.27  0.504     10   131.4km
-     67778  0.358  0.029  0.194  2.120    8.43  0.519     11   156.7km
-     75697  0.327  0.030  0.098  2.017    9.18  0.514     13   133.7km
-     83616  0.336  0.031  0.063  2.066    9.68  0.499      9   147.7km
+     59859  0.365  0.031  0.176  2.122    9.27  0.504      9   172.0km
+     67778  0.358  0.029  0.194  2.120    8.43  0.519     10   179.5km
+     75697  0.327  0.030  0.098  2.017    9.18  0.514     12   117.5km
+     83616  0.336  0.031  0.063  2.066    9.68  0.499     10   154.9km
      91535  0.347  0.028  0.144  2.087    8.86  0.509     11   159.3km
-     99454  0.366  0.033  0.136  2.102    8.83  0.507     10   177.9km
-    107373  0.344  0.030  0.086  2.075    8.69  0.516      8   156.5km
-    115292  0.327  0.029  0.095  2.066    8.59  0.519     11   140.2km
+     99454  0.366  0.033  0.136  2.102    8.83  0.507     10   157.5km
+    107373  0.344  0.030  0.086  2.075    8.69  0.516      9   156.1km
+    115292  0.327  0.029  0.095  2.066    8.59  0.519     10   149.7km
     123211  0.365  0.031  0.154  2.089    9.28  0.500     12   140.7km
     131130  0.348  0.032  0.065  2.081    7.99  0.506      8   161.2km
 
@@ -43,16 +43,16 @@ expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
     |      ·                 |
     occupied cells: 14
 
-  ERA 3 · the human layer — x: settlements [8.000 … 15.000] · y: NN spacing km [131.416 … 192.019]
-    |·                       |
-    |       ·                |
+  ERA 3 · the human layer — x: settlements [8.000 … 15.000] · y: NN spacing km [117.454 … 179.488]
     |   ·   ·                |
+    |   ·      ·             |
+    |·      ·  ·             |
+    |   ·   :     ·          |
+    |             :          |
     |                        |
-    |:         :             |
-    |   ·                    |
-    |          ·  ▪         ·|
-    |       ·        ·       |
-    occupied cells: 12
+    |                       ·|
+    |          ·  ·          |
+    occupied cells: 14
 
   ERA 4 · the shape of coasts — x: coast complexity [7.993 … 9.684] · y: largest landmass [0.490 … 0.988]
     |                ·       |
@@ -65,7 +65,7 @@ expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
     |·     ···· ▪·   :·· ·  ·|
     occupied cells: 13
 
-  oatmeal: min 0.0069 (seeds 67778 vs 91535) · mean 0.0522 · max 0.1796 · min/mean 0.133
+  oatmeal: min 0.0074 (seeds 59859 vs 99454) · mean 0.0545 · max 0.1797 · min/mean 0.136
 
   landforms: min entropy 1.24 nat · worst dominance mountain 63.2% (seed 67778) · min pairwise JSD 0.0015
 
@@ -74,9 +74,9 @@ expressive-range analysis (M8.3) and the oatmeal detector (M8.4)
 [PASS] land share varies                            Δ0.039   (M8.3: the range is a range)
 [PASS] relief varies                                Δ0.132   (M8.3: not one mountain recipe)
 [PASS] towns vary                                       Δ7   (M8.3: history diverges)
-[PASS] ERA occupancy / seed                           0.84   (M8.3: seeds spread across the plates)
-[PASS] oatmeal min/mean ratio                        0.133   (M8.4: no two worlds are the same bowl)
-[PASS] oatmeal mean distance                        0.0522   (M8.4: the family resembles, never repeats)
+[PASS] ERA occupancy / seed                           0.88   (M8.3: seeds spread across the plates)
+[PASS] oatmeal min/mean ratio                        0.136   (M8.4: no two worlds are the same bowl)
+[PASS] oatmeal mean distance                        0.0545   (M8.4: the family resembles, never repeats)
 [PASS] landform entropy floor                     1.24 nat   (M64: worst seed keeps a mixed vocabulary (Shannon entropy over the 27 words; ln 27 ≈ 3.3))
 [PASS] dominant landform share              mountain 63.2%   (M64: no seed pinned to one word — the commonest landform stays under ~2/3 of land)
 [WARN] landform oatmeal floor                       0.0015   (M64: the landform mix differs between worlds — the closest pair stays distinct)

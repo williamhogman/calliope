@@ -83,6 +83,22 @@ pub enum EventKind {
     /// extreme and leaves a dated strandline. Appended last; wire
     /// discriminants hold.
     Strandline,
+    /// M94 — the dry edge: the steppe takes named ground after a
+    /// sustained run of failed rains, or a grove's water sinks past the
+    /// roots. Appended last; wire discriminants hold.
+    Encroach,
+    /// M94 — the dry edge gives back: the grass returns, or water stands
+    /// again at a failed oasis. Appended last; wire discriminants hold.
+    Regreen,
+    /// M96 — granaries against lean years: the sky failed and the town's
+    /// store held — a famine the bare law would have spoken, taken
+    /// without a death. Appended last; wire discriminants hold.
+    Granary,
+    /// M98 — off the failing margin: ten harvests failed a town and a
+    /// wave of its people took the road to a kin-town under a kinder
+    /// sky, leaving and arriving in one month. Appended last; wire
+    /// discriminants hold.
+    Exodus,
 }
 
 impl EventKind {
@@ -150,6 +166,15 @@ event_table! {
     Abandon   => family nature,  weight 2, fortune -1;
     // M93 — a shore that rose or fell past every mark. Appended last.
     Strandline => family nature, weight 2, fortune 0;
+    // M94 — the dry edge advances / gives back. Appended last.
+    Encroach  => family nature,  weight 2, fortune -1;
+    Regreen   => family nature,  weight 2, fortune 1;
+    // M96 — the store held where the sky failed: the same verdict as a
+    // famine, the other outcome, so it files with Famine. Appended last.
+    Granary   => family nature,  weight 2, fortune 1;
+    // M98 — a generation failed and a wave walked: the sky's doing, the
+    // town's loss, the kin-town's gain. Appended last.
+    Exodus    => family nature,  weight 3, fortune -1;
 }
 
 /// E5.5 — inline storage for the common 0–2 entity ids per event.
@@ -206,6 +231,8 @@ pub fn headline_worthy(k: EventKind) -> bool {
             | EventKind::Age
             | EventKind::Optimum
             | EventKind::Strandline
+            | EventKind::Encroach
+            | EventKind::Regreen
     )
 }
 

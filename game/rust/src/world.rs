@@ -90,7 +90,10 @@ pub struct FamineRow {
     pub z: f64,
     /// the shortfall it derived from that anomaly (0 at SPI −1, 1 at −2)
     pub shortfall: f64,
-    /// the granary factor its people's craft earned (1.0 or 0.75)
+    /// the granary factor the toll was multiplied by: through M95 the
+    /// flat craft discount (1.0 or 0.75); since M96 the share of the
+    /// shortfall the town's own store could *not* cover (1.0 with no
+    /// store, 0.0 when the store held — but then no famine is spoken)
     pub granary: f64,
     /// the toll: struck = dead + walked
     pub hit: i64,
@@ -100,6 +103,50 @@ pub struct FamineRow {
     /// M92 — the monsoon-strength index the pass read (1.0 = a normal
     /// year); 0.0 on SPI rows, which never consult it
     pub msi: f64,
+    /// M95 — the sky the verdict read, every number of it: this year's
+    /// own SPI and fractional rain anomaly, and the run structure behind
+    /// the memory index (`z` above is `sky.index`). On paddy rows the sky
+    /// is the cell's all the same, so the two classes stay comparable.
+    pub sky: crate::famine::HarvestSky,
+    /// M96 — the storage tier the town's people held at the verdict
+    pub tier: u8,
+    /// M96 — grain in the store when the verdict fell, person-years
+    pub store: f64,
+    /// M96 — grain the store gave against this shortfall, person-years
+    pub covered: f64,
+}
+
+/// M96 — the lean years' ledger: one row per harvest verdict that found
+/// a shortfall at an eligible town, whether or not the famine was then
+/// spoken — the store's turn and draw, measured at the mechanism, so a
+/// gate can match tiered against untiered towns at the same shortfall.
+/// Diagnostics-only observation; never hashed, never packed.
+#[derive(Clone, Copy, Debug)]
+pub struct StoreRow {
+    /// absolute month of the verdict
+    pub m: i64,
+    pub x: i64,
+    pub y: i64,
+    /// the town's storage tier at the verdict (`society::StoreTier` code)
+    pub tier: u8,
+    /// souls the verdict weighed
+    pub pop: i64,
+    /// the shortfall the sky (or the monsoon) made
+    pub shortfall: f64,
+    /// grain in the store when the verdict fell, person-years — after
+    /// the year's spoilage and accrual, under the roof
+    pub store: f64,
+    /// grain the store gave, person-years: `min(store, shortfall × pop)`
+    pub covered: f64,
+    /// the toll multiplier that followed: the uncovered share of the need
+    pub granary: f64,
+    /// the toll taken (0 where the store held it under the spoken line)
+    pub hit: i64,
+    /// the toll the bare law would have taken at this shortfall — the
+    /// untiered control at the same town-year
+    pub bare: i64,
+    /// whether a famine was spoken (hit ≥ 4)
+    pub spoken: bool,
 }
 
 /// M90 — one row per yearly fields pass whose forcing moved: what the
@@ -323,6 +370,13 @@ pub struct World {
     /// The geometry is the dawn's; the *level* remembers, so the ledger
     /// rides the replay identity line.
     pub lakes: hydrology::Lakes,
+    /// M94 — the dry edge: every rain-fed cell within reach of the
+    /// pastoral line, grouped into named reaches, and every grove the
+    /// landform vocabulary names — with what the steppe holds, when it
+    /// took it, and which wells have sunk past the roots. The forcing is
+    /// derived (a pure read of the sky); the *takings* — dated, mapped,
+    /// spoken — are state, and ride the replay identity line.
+    pub dry_edge: crate::dryedge::DryEdge,
     /// M90 — the margin ledger: every cell whose farmable verdict is a
     /// single solved threshold on the composed forcing. Derived state —
     /// a pure function of the dawn grids, regenerated bit-identically —
@@ -378,6 +432,22 @@ pub struct World {
     /// never packed. Without it a severity gate can only reconstruct the
     /// dose from prose; with it the dose is measured at the mechanism.
     pub famine_ledger: Vec<FamineRow>,
+    /// M96 — the lean years' ledger: every verdict that found a shortfall
+    /// at an eligible town, with the store's turn and draw. Diagnostics-
+    /// only observation; never hashed, never packed.
+    pub store_ledger: Vec<StoreRow>,
+    /// M96 — the last calendar year the granary turn ran (spoilage and
+    /// accrual), so the read-only twin (`harvest_verdict`) can tell a
+    /// store already turned for the year from one still to turn. Derived
+    /// from the month alone; not hashed.
+    pub store_year: i64,
+    /// M98 — the roads' ledgers: every year's decade reading at every
+    /// town (`reading_ledger`) and every pulse the failed decades sent
+    /// down the road, or could not (`exodus_ledger`), observed at the
+    /// mechanism. Diagnostics-only; never hashed, never packed. The
+    /// memory itself lives on each `Settlement` (`roads`) and is hashed.
+    pub reading_ledger: Vec<crate::migration::ReadingRow>,
+    pub exodus_ledger: Vec<crate::migration::ExodusRow>,
 
     /// pub since M55: diagnostics weigh dry ground against watered ground.
     pub site_score: Array2<f64>,
@@ -1331,6 +1401,8 @@ impl GenBuilder {
             droughts: crate::drought::Droughts::default(),
             floods: crate::flood::Floods::default(),
             lakes,
+            // M94 — founded post-widen, once the landform words stand.
+            dry_edge: crate::dryedge::DryEdge::default(),
             fields_ledger: self.margins.take().expect("fertility stage ran"),
             fields_sky: 0.0,
             fields_log: Vec::new(),
@@ -1344,6 +1416,10 @@ impl GenBuilder {
             year_site_weather: std::sync::Mutex::new(None),
             grain_shock_year: -1,
             famine_ledger: Vec::new(),
+            store_ledger: Vec::new(),
+            store_year: -1,
+            reading_ledger: Vec::new(),
+            exodus_ledger: Vec::new(),
             site_score: founded.site_score,
             food_grid: founded.food_grid,
             near_fresh: founded.near_fresh,
@@ -1554,6 +1630,17 @@ impl GenBuilder {
         // rate it meant before the memory existed. Once, at the dawn,
         // from a fixed window of prehistory: pure in seed × size.
         world.droughts.norm = world.calibrate_drought_norm();
+        // M94 — the dry edge is founded off the final grids: the rain
+        // each cell normally gets, the fresh water it can reach, and the
+        // groves the landform vocabulary just named. Pure in the dawn.
+        world.dry_edge = crate::dryedge::DryEdge::found(
+            &world.fields.height,
+            &world.fields.precip,
+            &world.fields.biomes,
+            &world.near_fresh,
+            &world.fields.landform,
+            &world.fields.aquifer,
+        );
         self.world = Some(world);
 
     }
@@ -2884,6 +2971,8 @@ pub const CARAVAN_MARKET_POP: i64 = 400;
             rebuild_peak: 0,
             harbor_dmg: 0.0,
             harbor_until: 0,
+            store: 0.0,
+            roads: Default::default(),
         };
         trade::goods_for(&mut s, &self.deposits, &self.fields.fertility, &self.fields.rock);
         let mdc = self
@@ -4191,12 +4280,12 @@ impl World {
         let mut w = 1.0;
         for k in 0..MEMO_YEARS as i64 {
             let yr = year - k;
-            let (_, dp) =
-                // M84 — the belt rides `dp`: an age that walks the rain
-                // belts off a flank *is* that flank's drought, and the
-                // ledger must read the same sky the harvests felt.
-                climate::year_anomaly_at(
-                    self.variability(), rows, x, y, yr, self.year_osc(yr), self.year_forcing(yr));
+            // M84 — the belt rides `dp`: an age that walks the rain
+            // belts off a flank *is* that flank's drought, and the
+            // ledger must read the same sky the harvests felt. Rain
+            // lane only — the memory walk never asked for temperature.
+            let dp = climate::rain_anomaly_at(
+                self.variability(), rows, x, y, yr, self.year_osc(yr), self.year_forcing(yr));
             acc += w * dp / sigma;
             w *= MEM;
         }
@@ -4208,10 +4297,68 @@ impl World {
     /// harness and the explain layer both want to show the year apart
     /// from the memory it lands on.
     pub fn year_spi(&self, year: i64, y: usize, x: usize) -> f64 {
-        let rows = self.fields.tmean.dim().0;
-        let sigma = climate::anomaly_amp_p(row_lat(rows, y)).max(1e-6);
-        self.year_rain_anomaly_site(year, y, x) / sigma
+        self.year_rain_anomaly_site(year, y, x) / self.spi_sigma(y)
     }
+
+    /// M95 — the interannual rain spread the SPI divides by at this row:
+    /// the latitude-shaped `anomaly_amp_p`, floored so the poles never
+    /// divide by zero. One place, so the harvest, its ledger row and the
+    /// explain layer all standardize with the same number.
+    pub fn spi_sigma(&self, y: usize) -> f64 {
+        let rows = self.fields.tmean.dim().0;
+        climate::anomaly_amp_p(row_lat(rows, y)).max(1e-6)
+    }
+
+    /// M95 — the fractional rain anomaly at one cell in one year, solved
+    /// straight from the law with no memo. The memoized `year_spi` is the
+    /// tick's path; this one is for reading the years *behind* a harvest
+    /// (the run structure of a drought) without evicting the year cache
+    /// the rest of the month is still using.
+    pub fn year_rain_anomaly_raw(&self, year: i64, y: usize, x: usize) -> f64 {
+        let rows = self.fields.tmean.dim().0;
+        climate::rain_anomaly_at(
+            self.variability(),
+            rows,
+            x,
+            y,
+            year,
+            self.year_osc(year),
+            self.year_forcing(year),
+        )
+    }
+
+    /// The catchment rain anomaly at one cell in one year — the exact
+    /// `climate::catchment_anomaly_at` reading, served from the tick's
+    /// per-site memo when the memo already holds `year` (the harvest
+    /// verdict runs in the eighth month, after every river town's yield
+    /// read has filled its entry), solved raw otherwise. A read of any
+    /// other year never evicts the memo: the M95 harness and the explain
+    /// layer walk history through here without touching what the month
+    /// still needs. Same law, same bits, whichever way it is served.
+    pub(crate) fn catchment_rain_anomaly(&self, year: i64, y: usize, x: usize) -> f64 {
+        let served = {
+            let slot = self.year_site_weather.lock().unwrap();
+            match slot.as_ref() {
+                None => true,
+                Some((cached_year, _)) => *cached_year == year,
+            }
+        };
+        if served {
+            return self.year_site_flow_anomaly(year, y, x);
+        }
+        let (rows, cols) = self.fields.tmean.dim();
+        climate::catchment_anomaly_at(
+            self.variability(),
+            rows,
+            cols,
+            x,
+            y,
+            year,
+            self.year_osc(year),
+            self.year_forcing(year),
+        )
+    }
+
 
     /// M92 — the monsoon-strength index at one cell in one year (1.0 =
     /// a normal year): the composed sky's rain anomaly read against the
@@ -4219,22 +4366,14 @@ impl World {
     /// as the lean. A riverine paddy (`catchment` = true) reads the
     /// basin's sky — the exact gaussian the M81 floods read — because
     /// the pulse that fills it is the monsoon over the whole catchment.
-    /// Pure in seed × cell × year either way.
+    /// Pure in seed × cell × year either way. The catchment read is
+    /// served through the tick's per-site memo (`catchment_rain_anomaly`)
+    /// — the river paddy's yield already paid for this year's basin.
     pub fn monsoon_index(&self, year: i64, y: usize, x: usize, catchment: bool) -> f64 {
-        let (rows, cols) = self.fields.tmean.dim();
+        let rows = self.fields.tmean.dim().0;
         let lean = self.fields.pamp[[y, x]] as f64;
         if catchment {
-            climate::monsoon_index_catchment(
-                self.variability(),
-                rows,
-                cols,
-                x,
-                y,
-                year,
-                self.year_osc(year),
-                self.year_forcing(year),
-                lean,
-            )
+            climate::monsoon_of(self.catchment_rain_anomaly(year, y, x), lean)
         } else {
             climate::monsoon_index(
                 self.variability(),
@@ -4793,6 +4932,282 @@ impl World {
         events
     }
 
+    /// M94 — the dry edge. In the year's last month every edge cell's
+    /// realized rain (`p0 · (1 + dp)`, the same pointwise sky the harvests
+    /// read) is struck against the pastoral line and the run counters
+    /// answer; every grove's remembered deficit moves its table. The
+    /// ledger decides what turned; this pass only gives the turns names
+    /// and words. No die is drawn: every taking is re-derivable from the
+    /// seed, and `diagnose civ` re-derives them.
+    pub(crate) fn dry_edge_pass(&mut self, month_abs: i64) -> Vec<Event> {
+        let mut events = Vec::new();
+        if month_abs.rem_euclid(12) != 11 {
+            return events;
+        }
+        if self.dry_edge.cells.is_empty() && self.dry_edge.oases.is_empty() {
+            return events;
+        }
+        let year = month_abs.div_euclid(12);
+        if self.dry_edge.last_year >= year {
+            return events;
+        }
+        let (edge_dp, oasis_dp) = self.dry_edge_forcing(year);
+        let pre = if self.dry_edge.primed() { None } else { Some(self.dry_edge_prehistory(year)) };
+        let speech = self.dry_edge.advance(year, &edge_dp, &oasis_dp, pre.as_ref());
+        if speech.is_empty() {
+            return events;
+        }
+        let dry_years = crate::dryedge::ENCROACH_YEARS;
+        for sp in speech {
+            match sp {
+                crate::dryedge::Speech::Edge { reach, row } => {
+                    let ri = reach as usize;
+                    if self.dry_edge.reaches[ri].name.is_empty() {
+                        let (cx, cy) = (self.dry_edge.reaches[ri].x as f64, self.dry_edge.reaches[ri].y as f64);
+                        let mut taken = std::mem::take(&mut self.dry_edge.taken_names);
+                        let (name, place) = self.name_reach(&mut taken, ri, cx, cy);
+                        self.dry_edge.taken_names = taken;
+                        let r = &mut self.dry_edge.reaches[ri];
+                        r.name = name;
+                        r.place = place;
+                    }
+                    let r = &self.dry_edge.reaches[ri];
+                    let w = &r.rows[row];
+                    let km2 = |cells: u32| (cells as f64 * crate::dryedge::CELL_KM2).round() as i64;
+                    let subject = self.dry_edge_subject(&r.place);
+                    let (k, text) = match w.spoke {
+                        crate::dryedge::Spoke::Onset => (
+                            EventKind::Encroach,
+                            format!(
+                                "The grass fails at {}: {} dry years running, and {} square leagues of pasture before {} go to steppe.",
+                                r.name, dry_years, km2(w.taken_now), r.place
+                            ),
+                        ),
+                        crate::dryedge::Spoke::Widen => (
+                            EventKind::Encroach,
+                            format!(
+                                "The dry edge widens at {}: {} square leagues now lie under steppe, {} years after the grass first failed.",
+                                r.name, km2(w.taken_now), year - r.episode_year
+                            ),
+                        ),
+                        crate::dryedge::Spoke::Return => (
+                            EventKind::Regreen,
+                            format!(
+                                "The rains come back to {}: the grass returns over {} square leagues, {} years after the steppe took them.",
+                                r.name, km2(r.peak.saturating_sub(w.taken_now)), year - r.episode_year
+                            ),
+                        ),
+                        crate::dryedge::Spoke::None => continue,
+                    };
+                    events.push(Event {
+                        m: month_abs,
+                        s: r.name.clone(),
+                        k,
+                        text,
+                        ids: subject.into_iter().collect(),
+                        x: w.x,
+                        y: w.y,
+                        ..Default::default()
+                    });
+                }
+                crate::dryedge::Speech::Oasis { oasis, episode, failed } => {
+                    let oi = oasis as usize;
+                    if self.dry_edge.oases[oi].name.is_empty() {
+                        let mut taken = std::mem::take(&mut self.dry_edge.taken_names);
+                        let name = self.name_oasis(&mut taken, oi);
+                        self.dry_edge.taken_names = taken;
+                        self.dry_edge.oases[oi].name = name;
+                    }
+                    let o = &self.dry_edge.oases[oi];
+                    let ep = &o.episodes[episode];
+                    let (_, place) = self.nearest_place(o.x as f64, o.y as f64);
+                    let subject = self.dry_edge_subject(&place);
+                    let (k, text) = if failed {
+                        (
+                            EventKind::Encroach,
+                            format!(
+                                "The wells sink at {}: {:.0} of every hundred drops of rain have failed these {} years, the water lies {:.1} fathoms past the reach of the palms, and the oasis dies.",
+                                o.name,
+                                (-ep.deficit_at_fail * 100.0).max(1.0),
+                                crate::dryedge::OASIS_MEMORY_YEARS,
+                                (ep.depth_at_fail - crate::hydrology::OASIS_DEPTH_M).max(0.05) / 1.8288
+                            ),
+                        )
+                    } else {
+                        (
+                            EventKind::Regreen,
+                            format!(
+                                "Water stands again at {}: the table has risen within reach of the roots, {} years after the palms died.",
+                                o.name,
+                                year - ep.fail_year
+                            ),
+                        )
+                    };
+                    events.push(Event {
+                        m: month_abs,
+                        s: o.name.clone(),
+                        k,
+                        text,
+                        ids: subject.into_iter().collect(),
+                        x: o.x,
+                        y: o.y,
+                        ..Default::default()
+                    });
+                }
+            }
+        }
+        events
+    }
+
+    /// M94 — the year's forcing for the dry-edge ledger: the fractional
+    /// rain anomaly at every edge cell and every grove. The pointwise
+    /// sky law, cell by cell: the edge is a threshold on each cell's own
+    /// rain, and the anomaly field is smooth enough that the cost is a
+    /// few thousand fbm reads a year.
+    pub fn dry_edge_forcing(&self, year: i64) -> (Vec<f64>, Vec<f64>) {
+        let rows = self.fields.tmean.dim().0;
+        let osc = self.year_osc(year);
+        let drift = self.year_forcing(year);
+        let dp_at = |x: usize, y: usize| -> f64 {
+            climate::year_anomaly_at(self.variability(), rows, x, y, year, osc, drift).1
+        };
+        let edge_dp: Vec<f64> =
+            self.dry_edge.cells.iter().map(|c| dp_at(c.x as usize, c.y as usize)).collect();
+        let oasis_dp: Vec<f64> =
+            self.dry_edge.oases.iter().map(|o| dp_at(o.x as usize, o.y as usize)).collect();
+        (edge_dp, oasis_dp)
+    }
+
+    /// M94 — the sky before `year` for the ledger's first pass: at each
+    /// edge cell the previous `ENCROACH_YEARS − 1` anomalies (oldest
+    /// first), at each grove the previous `OASIS_MEMORY_YEARS` (newest
+    /// first). The same pointwise law the yearly pass reads, so the dawn
+    /// is a date and not a discontinuity. Read once by the world, and by
+    /// the harness's twin on its own.
+    pub fn dry_edge_prehistory(&self, year: i64) -> crate::dryedge::Prehistory {
+        let rows = self.fields.tmean.dim().0;
+        let years_back = |n: i64| -> Vec<(i64, f64, f64)> {
+            (1..=n)
+                .map(|k| {
+                    let yr = year - k;
+                    (yr, self.year_osc(yr), self.year_forcing(yr))
+                })
+                .collect()
+        };
+        let dp_at = |x: i64, y: i64, past: &[(i64, f64, f64)]| -> Vec<f64> {
+            past.iter()
+                .map(|&(yr, o2, f2)| {
+                    climate::year_anomaly_at(self.variability(), rows, x as usize, y as usize, yr, o2, f2).1
+                })
+                .collect()
+        };
+        // newest first as built; the edge wants oldest first
+        let edge_past = years_back(crate::dryedge::ENCROACH_YEARS as i64 - 1);
+        let grove_past = years_back(crate::dryedge::OASIS_MEMORY_YEARS as i64);
+        crate::dryedge::Prehistory {
+            edge: self
+                .dry_edge
+                .cells
+                .iter()
+                .map(|c| {
+                    let mut v = dp_at(c.x as i64, c.y as i64, &edge_past);
+                    v.reverse();
+                    v
+                })
+                .collect(),
+            oases: self.dry_edge.oases.iter().map(|o| dp_at(o.x, o.y, &grove_past)).collect(),
+        }
+    }
+
+    /// M94 — the entity a dry-edge entry speaks of: the feature or town
+    /// the reach or grove was christened after, or the world itself.
+    fn dry_edge_subject(&self, place: &str) -> Option<crate::ids::EntityId> {
+        self.chronicle
+            .registry
+            .find_kind(EntityKind::Feature, place)
+            .or_else(|| self.chronicle.registry.find_kind(EntityKind::Settlement, place))
+            .or_else(|| self.chronicle.registry.find(place))
+            .or_else(|| self.chronicle.registry.find_kind(EntityKind::World, &self.world_name))
+    }
+
+    /// M94 — a reach is named for the nearest named ground, in one of a
+    /// few forms picked by its own ordinal: no die, no other stream moved.
+    fn name_reach(&self, taken: &mut HashSet<String>, id: usize, cx: f64, cy: f64) -> (String, String) {
+        const REACH_FORMS: &[&str] = &[
+            "the Steppe of {P}",
+            "the Dry Edge of {P}",
+            "the Wastes before {P}",
+            "the Grazing of {P}",
+            "the Dry Marches of {P}",
+        ];
+        let (_, place) = self.nearest_place(cx, cy);
+        for k in 0..REACH_FORMS.len() {
+            let cand = REACH_FORMS[(id + k) % REACH_FORMS.len()].replace("{P}", &place);
+            if taken.insert(cand.clone()) {
+                return (cand, place);
+            }
+        }
+        let cand = format!("{} ({})", REACH_FORMS[id % REACH_FORMS.len()].replace("{P}", &place), id);
+        taken.insert(cand.clone());
+        (cand, place)
+    }
+
+    /// M94 — a grove is named in the tongue of the nearest people within
+    /// reach (M3.1's rule), through the landform vocabulary (M62): the
+    /// word says oasis in that tongue. Its own stream per grove, derived
+    /// from the seed and the grove's ordinal, so nothing else moves.
+    fn name_oasis(&self, taken: &mut HashSet<String>, id: usize) -> String {
+        let o = &self.dry_edge.oases[id];
+        let mut style = "old".to_string();
+        let mut best = f64::INFINITY;
+        for s in &self.peoples.settlements {
+            let d2 = ((s.x - o.x) as f64).powi(2) + ((s.y - o.y) as f64).powi(2);
+            if d2 < best {
+                best = d2;
+                style = self.peoples.peoples[s.people.idx()].style.clone();
+            }
+        }
+        if best.sqrt() > naming::TONGUE_REACH {
+            style = "old".to_string();
+        }
+        let mut rng94 = crate::util::rng(self.seed.wrapping_mul(31).wrapping_add(9400 + id as i64));
+        let word = naming::coin_for_landform(&mut rng94, &style, crate::landform::OASIS, taken)
+            .map(|c| c.word)
+            .unwrap_or_else(|| naming::coin(&mut rng94, &style, taken).word);
+        let (_, place) = self.nearest_place(o.x as f64, o.y as f64);
+        let name = format!("{} below {}", word, place);
+        if taken.insert(name.clone()) {
+            name
+        } else {
+            let alt = format!("{} ({})", name, id);
+            taken.insert(alt.clone());
+            alt
+        }
+    }
+
+    /// The nearest named ground to a point: the nearest feature or town
+    /// (whichever is closer), or the world itself when nothing is named.
+    /// Returns the squared distance and the name.
+    fn nearest_place(&self, cx: f64, cy: f64) -> (f64, String) {
+        let mut best: Option<(f64, String)> = None;
+        let mut consider = |x: i64, y: i64, name: &str| {
+            if name.is_empty() {
+                return;
+            }
+            let dd = (x as f64 - cx).powi(2) + (y as f64 - cy).powi(2);
+            if best.as_ref().is_none_or(|(bd, _)| dd < *bd) {
+                best = Some((dd, name.to_string()));
+            }
+        };
+        for f in &self.features {
+            consider(f.x, f.y, &f.name);
+        }
+        for s in &self.peoples.settlements {
+            consider(s.x, s.y, &s.name);
+        }
+        best.unwrap_or_else(|| (f64::INFINITY, self.world_name.clone()))
+    }
+
     fn lattice_year(&self, d: &Droughts, year: i64) -> Vec<f32> {
         let rows = self.fields.tmean.dim().0;
         let osc = self.year_osc(year);
@@ -5099,23 +5514,7 @@ impl World {
         cx: f64,
         cy: f64,
     ) -> (String, String) {
-        let mut best: Option<(f64, String)> = None;
-        let mut consider = |x: i64, y: i64, name: &str| {
-            if name.is_empty() {
-                return;
-            }
-            let dd = (x as f64 - cx).powi(2) + (y as f64 - cy).powi(2);
-            if best.as_ref().is_none_or(|(bd, _)| dd < *bd) {
-                best = Some((dd, name.to_string()));
-            }
-        };
-        for f in &self.features {
-            consider(f.x, f.y, &f.name);
-        }
-        for s in &self.peoples.settlements {
-            consider(s.x, s.y, &s.name);
-        }
-        let place = best.map(|(_, n)| n).unwrap_or_else(|| self.world_name.clone());
+        let (_, place) = self.nearest_place(cx, cy);
         for k in 0..FORMS.len() {
             let cand = FORMS[(id + k) % FORMS.len()].replace("{P}", &place);
             if taken.insert(cand.clone()) {
@@ -5130,4 +5529,224 @@ impl World {
 
 fn row_lat(rows: usize, y: usize) -> f64 {
     (-90.0 + (y as f64) * 180.0 / (rows as f64 - 1.0)).abs()
+}
+
+// ------------------------------------------------------------ M98 roads
+//
+// Off the failing margin: the decade reading, the abandonment share and
+// the pulse. The laws live in `migration.rs` (a leaf); this is the pass
+// that reads the world and moves its people.
+impl World {
+    /// M98 — the share of the farmed density the town's hinterland held
+    /// at the dawn that has since gone back to the wild under M90's
+    /// margin law: `1 − Σ density now / Σ density at dawn` over the same
+    /// 12 km disc the field capacity is summed over, clamped at zero
+    /// (ground the warm side *opened* is a gain, not an abandonment). A
+    /// pure read of the crop grid against the ledger's dawn packages.
+    pub fn abandoned_share(&self, y: usize, x: usize) -> f64 {
+        use crate::migration::HINTERLAND_R as R;
+        let (rows, cols) = self.fields.crops.dim();
+        let mut dawn = 0.0f64;
+        let mut now = 0.0f64;
+        for dy in -R..=R {
+            for dx in -R..=R {
+                if dy * dy + dx * dx > R * R {
+                    continue;
+                }
+                let yy = y as i64 + dy;
+                let xx = x as i64 + dx;
+                if yy < 0 || xx < 0 || yy >= rows as i64 || xx >= cols as i64 {
+                    continue;
+                }
+                let (yy, xx) = (yy as usize, xx as usize);
+                let d_now = agriculture::CropPackage::from_code(self.fields.crops[[yy, xx]]).density();
+                let d_dawn = match self.fields_ledger.dawn_code_at(yy, xx) {
+                    Some(c) => agriculture::CropPackage::from_code(c).density(),
+                    None => d_now,
+                };
+                dawn += d_dawn;
+                now += d_now;
+            }
+        }
+        if dawn <= 0.0 {
+            0.0
+        } else {
+            ((dawn - now) / dawn).clamp(0.0, 1.0)
+        }
+    }
+
+    /// M98 — the decade reading of one town for one calendar year: the
+    /// bare harvest factor (`year_yield_bare`: the M95 composite sky
+    /// through the crop's own curve, no flood terms), the M90 abandonment
+    /// share around the town, and the reading the law makes of the two.
+    /// Pure in the year and the fields, so the harness re-derives it at
+    /// the year's close and finds the ledger's number.
+    pub fn decade_reading(&self, year: i64, idx: usize) -> (f64, f64, f64) {
+        let s = &self.peoples.settlements[idx];
+        let (y, x) = (s.y as usize, s.x as usize);
+        let yf = self.year_yield_bare(year, y, x);
+        let lost = self.abandoned_share(y, x);
+        (yf, lost, crate::migration::reading(yf, lost))
+    }
+
+    /// M98 — the refuge a pulse from `idx` would walk to: the nearest
+    /// settlement of the same people whose own decade memory is not
+    /// failing (`Memory::refuge`), alive and not already failing as a
+    /// town. `None` when no such town stands. Ties break on the bucket
+    /// search's own fixed order.
+    pub fn refuge_for(&self, idx: usize, buckets: &crate::util::Buckets) -> Option<(usize, f64)> {
+        let s = &self.peoples.settlements[idx];
+        let people = s.people;
+        buckets.nearest(s.x as f64, s.y as f64, |j| {
+            if j == idx {
+                return false;
+            }
+            let o = &self.peoples.settlements[j];
+            o.people == people && o.pop > 0 && !o.failing && o.roads.refuge()
+        })
+    }
+
+    /// M98 — the pass: in the harvest month, after the famine verdict,
+    /// every town takes the year's decade reading into its memory; then
+    /// every town whose full ten-year mean stands at or above the
+    /// failed-decade threshold, armed (no wave inside the gap), large
+    /// enough to send anyone, and with a kin-town under a kinder sky to
+    /// walk to, sends `migration::walkers` of its people down the road.
+    /// They leave and arrive in this same month — nothing is in transit
+    /// across a tick boundary. One dated `Exodus` event per pulse.
+    pub(crate) fn migration_pass(&mut self, month_abs: i64) -> Vec<Event> {
+        use crate::migration::{self, ExodusRow, ReadingRow};
+        let mut events = Vec::new();
+        if month_abs.rem_euclid(12) != 7 {
+            return events;
+        }
+        let year = month_abs.div_euclid(12);
+        let n = self.peoples.settlements.len();
+
+        // 1. Every town reads the year. Readings are pure in the fields,
+        //    so they are all taken before any memory or population moves.
+        let readings: Vec<(f64, f64, f64)> = (0..n).map(|i| self.decade_reading(year, i)).collect();
+        for i in 0..n {
+            let (yf, lost, r) = readings[i];
+            let s = &mut self.peoples.settlements[i];
+            s.roads.push(r);
+            let mean = s.roads.mean();
+            self.reading_ledger.push(ReadingRow {
+                m: month_abs,
+                year,
+                sid: s.id.0,
+                x: s.x,
+                y: s.y,
+                pop: s.pop,
+                failing: s.failing,
+                yield_factor: yf,
+                lost,
+                reading: r,
+                mean,
+            });
+        }
+
+        // 2. The failed decades, judged on the memories as they stand
+        //    after this year's reading — before any wave moves anyone, so
+        //    a refuge is judged on its own sky, not on arrivals.
+        let buckets = crate::util::Buckets::build(
+            self.peoples.settlements.iter().map(|s| (s.x as f64, s.y as f64)).collect(),
+            32.0,
+        );
+        let mut pulses: Vec<(usize, Option<usize>, i64, f64)> = Vec::new();
+        for i in 0..n {
+            let s = &self.peoples.settlements[i];
+            let mean = match s.roads.mean() {
+                Some(m) if m >= migration::FAILED_DECADE => m,
+                _ => continue,
+            };
+            // the one eligibility predicate the inspector also reads
+            // (`explain::roads_block`): armed · above the floor · not in
+            // famine this year · enough walkers to be spoken of
+            if migration::hold(&s.roads, year, s.pop, s.failing, mean).is_some() {
+                continue;
+            }
+            let walked = migration::walkers(s.pop, mean);
+            let refuge = self.refuge_for(i, &buckets).map(|(j, _)| j);
+            pulses.push((i, refuge, walked, mean));
+        }
+
+        // 3. The waves walk, in town order, each arriving the month it
+        //    leaves. A town that found no refuge is written down and
+        //    stays armed: it will try again next year, when a kin-town
+        //    may stand under a kinder sky.
+        for (i, refuge, walked, mean) in pulses {
+            let (src_sid, src_name, sx, sy, src_pop, fails, lost) = {
+                let s = &self.peoples.settlements[i];
+                (s.id.0, s.name.clone(), s.x, s.y, s.pop, s.roads.failed_years(), readings[i].1)
+            };
+            let Some(j) = refuge else {
+                self.exodus_ledger.push(ExodusRow {
+                    m: month_abs,
+                    year,
+                    src_sid,
+                    src: (sx, sy),
+                    src_name,
+                    dst_sid: None,
+                    dst: None,
+                    dst_name: String::new(),
+                    dst_mean: -1.0,
+                    mean,
+                    fails,
+                    lost,
+                    walked: 0,
+                    km: 0.0,
+                    src_pop_before: src_pop,
+                    src_pop_after: src_pop,
+                    dst_pop_before: 0,
+                    dst_pop_after: 0,
+                });
+                continue;
+            };
+            let (dst_sid, dst_name, dx, dy, dst_pop, dst_mean) = {
+                let d = &self.peoples.settlements[j];
+                (d.id.0, d.name.clone(), d.x, d.y, d.pop, d.roads.remembered_mean().unwrap_or(-1.0))
+            };
+            let km = migration::road_km(sx, sy, dx, dy);
+            let wind = migration::compass((dx - sx) as f64, (dy - sy) as f64);
+            {
+                let s = &mut self.peoples.settlements[i];
+                s.pop -= walked;
+                s.roads.last_pulse = year;
+            }
+            self.peoples.settlements[j].pop += walked;
+            let (src_after, dst_after) = (self.peoples.settlements[i].pop, self.peoples.settlements[j].pop);
+            let text = migration::exodus_text(&src_name, &dst_name, walked, mean, fails, lost, km, wind);
+            self.exodus_ledger.push(ExodusRow {
+                m: month_abs,
+                year,
+                src_sid,
+                src: (sx, sy),
+                src_name: src_name.clone(),
+                dst_sid: Some(dst_sid),
+                dst: Some((dx, dy)),
+                dst_name,
+                dst_mean,
+                mean,
+                fails,
+                lost,
+                walked,
+                km,
+                src_pop_before: src_pop,
+                src_pop_after: src_after,
+                dst_pop_before: dst_pop,
+                dst_pop_after: dst_after,
+            });
+            events.push(Event {
+                m: month_abs,
+                s: src_name,
+                k: EventKind::Exodus,
+                text,
+                x: sx,
+                y: sy,
+                ..Default::default()
+            });
+        }
+        events
+    }
 }

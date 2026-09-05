@@ -3,29 +3,38 @@
 ========================================================================
 per-stage generation (ms):
   seed        terrain    erosion    climate  icemargin  hydrology     biomes  fertility    margins     naming  resources settlements    total
-  12345           242        240        121         11        123          4        139         51         87        359        255     2635
-  777             227        230        112         15        175          5        148         58        130        342        255     2615
-  90210           281        224         97         11        150          6        169         52        103        382        220     2441
+  12345           272        264        142         16        151          6        197         66        159        431        296     3052
+  777             342        297        180         18        189          4        158         52        109        404        276     3414
+  90210           364        286        102         10        180          5        177         68        116        392        272     2996
 tick clock: process CPU via /proc/self/stat · min of 3 windows of 240 months
-tick rate seed 12345: year-0 649 mo/s · year-100 110 mo/s (104 towns)
-tick rate seed 777: year-0 522 mo/s · year-100 100 mo/s (103 towns)
-tick rate seed 90210: year-0 511 mo/s · year-100 119 mo/s (100 towns)
-native peak RSS after run: 252 MiB via VmRSS at peak load (3 worlds resident)
+tick rate seed 12345: year-0 706 mo/s · year-100 154 mo/s (105 towns)
+tick rate seed 777: year-0 686 mo/s · year-100 143 mo/s (110 towns)
+tick rate seed 90210: year-0 828 mo/s · year-100 189 mo/s (100 towns)
+sky-read anatomy (grown worlds, min of 3 passes):
+  seed 12345  catchment read 112 µs · point rain read 372 ns · yields/yr cold 13.4 ms · verdicts/yr warm 1.0 ms · kernel = filter at 105/105 towns
+  seed 777    catchment read 120 µs · point rain read 366 ns · yields/yr cold 14.0 ms · verdicts/yr warm 1.0 ms · kernel = filter at 110/110 towns
+  seed 90210  catchment read 117 µs · point rain read 447 ns · yields/yr cold 10.9 ms · verdicts/yr warm 1.0 ms · kernel = filter at 100/100 towns
+native peak RSS after run: 271 MiB via VmRSS at peak load (3 worlds resident)
 
 ---- checks ----------------------------------------------------------
-[PASS] stage terrain ms                     281 ms (worst of 3 seeds)   (E10.1: plate+plume noise, warp, falloff + plate-history sketch (M16/M17; measured ~280-455 ms))
-[PASS] stage erosion ms                     240 ms (worst of 3 seeds)   (E10.1: thermal+fluvial passes)
-[PASS] stage climate ms                     121 ms (worst of 3 seeds)   (E10.1: temperature, advection precip)
-[PASS] stage icemargin ms                   15 ms (worst of 3 seeds)   (M91: the ice-margin ledger's dawn solve — endpoint prefilter + bisection on the flip cells only)
-[PASS] stage hydrology ms                   175 ms (worst of 3 seeds)   (E10.1: D8 routing, accumulation, lakes)
+[PASS] stage terrain ms                     364 ms (worst of 3 seeds)   (E10.1: plate+plume noise, warp, falloff + plate-history sketch (M16/M17; measured ~280-455 ms))
+[PASS] stage erosion ms                     297 ms (worst of 3 seeds)   (E10.1: thermal+fluvial passes)
+[PASS] stage climate ms                     180 ms (worst of 3 seeds)   (E10.1: temperature, advection precip)
+[PASS] stage icemargin ms                   18 ms (worst of 3 seeds)   (M91: the ice-margin ledger's dawn solve — endpoint prefilter + bisection on the flip cells only)
+[PASS] stage hydrology ms                   189 ms (worst of 3 seeds)   (E10.1: D8 routing, accumulation, lakes)
 [PASS] stage biomes ms                      6 ms (worst of 3 seeds)   (E10.1: Whittaker classification)
-[WARN] stage fertility ms                   169 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
-[PASS] stage margins ms                     58 ms (worst of 3 seeds)   (M90: the margin ledger's dawn solve — prefilter + bisection on the flip cells only)
-[WARN] stage naming ms                      130 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
-[PASS] stage resources ms                   382 ms (worst of 3 seeds)   (E10.1: rock classify + geology-seated placement (M18/M19; measured ~450-500 ms, was ~300 pre-geology))
-[WARN] stage settlements ms                 255 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
-[WARN] gen total ms                         2635 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
-[WARN] tick rate year 0                     511 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
-[WARN] tick rate year 100                   100 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
-[PASS] native peak RSS                      252 MiB (VmRSS at peak load)   (E10.6: sweet ≤1.5 GiB · hard ≤2.5 GiB (3 × 512² worlds + histories))
-CHECKS: 9 pass · 6 warn · 0 fail
+[WARN] stage fertility ms                   197 ms (worst of 3 seeds)   (E10.1: soil + floodplain kernel)
+[PASS] stage margins ms                     68 ms (worst of 3 seeds)   (M90: the margin ledger's dawn solve — prefilter + bisection on the flip cells only)
+[WARN] stage naming ms                      159 ms (worst of 3 seeds)   (E10.1: feature detection + toponymy)
+[PASS] stage resources ms                   431 ms (worst of 3 seeds)   (E10.1: rock classify + geology-seated placement (M18/M19; measured ~450-500 ms, was ~300 pre-geology))
+[WARN] stage settlements ms                 296 ms (worst of 3 seeds)   (E10.1: founding, cultures, goods, routes)
+[WARN] gen total ms                         3414 ms (worst)   (E10.1: native total incl. plate sketch + rock provinces (M16-M19); wasm ≈ 2× rides the 512-generation band)
+[WARN] tick rate year 0                     686 mo/s (worst)   (E10.2: sweet ≥1000 mo/s · hard ≥200 (native))
+[WARN] tick rate year 100                   143 mo/s (worst)   (E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544))
+[PASS] catchment kernel bit-equal to the full filter 315/315 town reads equal   (M95 perf pass: the per-site kernel (row terms hoisted, rain lane only) must read the exact `gaussian_filter` value the map shows — same taps, same weights, same order)
+[PASS] catchment read us                    120 µs per town (worst seed)   (M95 perf: one per-site catchment kernel read at a town, µs (2,401 taps, row terms hoisted, rain lane only; measured 194 — the two-lane kernel it replaced would trip the hard line))
+[PASS] point rain read ns                   447 ns per cell-year (worst seed)   (M95 perf: one pointwise rain-lane read, ns (a 2-octave fbm + the row terms; measured 418))
+[PASS] harvest yields per year ms           14.0 ms for every town, memo cold (worst seed)   (M95 perf: `year_yield` for every town with the year memo cold — the first month of a year in `tick_month` (measured 13.6 at 103 towns))
+[PASS] harvest verdicts per year ms         1.0 ms for every town, memo warm (worst seed)   (M95 perf: `harvest_verdict` for every town with the memo warm — the famine pass's twin (measured 1.0 at 103 towns))
+[PASS] native peak RSS                      271 MiB (VmRSS at peak load)   (E10.6: sweet ≤1.5 GiB · hard ≤2.5 GiB (3 × 512² worlds + histories))
+CHECKS: 14 pass · 6 warn · 0 fail

@@ -579,6 +579,79 @@ input { font: inherit; color: inherit; }
 .insp-line { font-size: 11.5px; }
 .insp-line.wind { font-size: 10.5px; }
 
+/* M95 — Sky this year: the harvest verdict's own reading on the town card */
+.insp-sky {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-left: 2px solid rgba(207, 214, 201, 0.25);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 0 6px 6px 0;
+}
+/* M97 — the verdict's three tones: famine (the chronicle's red), the
+   lean year — a dearth, or a year the store held — in amber, and the
+   harvest that held in the card's own grey. */
+.insp-sky.fail { border-left-color: #d46a5a; }
+.insp-sky.fail .insp-note { color: #ecb9ad; }
+.insp-sky.lean { border-left-color: #d9a05a; }
+.insp-sky.lean .insp-note { color: #e8cfa3; }
+/* the kicker's verdict tag ("famine", "walked", …) — the separator lives
+   in CSS so the html tag cannot swallow it as leading template text; it is
+   drawn as content with margins, not spaces, so it survives a line wrap */
+.insp-kicker .insp-tag { display: inline-block; white-space: nowrap; margin-left: 0.5em; font-style: normal; opacity: 0.85; letter-spacing: 0.02em; }
+.insp-kicker .insp-tag::before { content: "\00b7"; margin-right: 0.5em; opacity: 0.6; }
+.insp-sky .insp-kicker em { font-style: normal; opacity: 0.85; letter-spacing: 0.02em; }
+.insp-sky.fail .insp-kicker em { color: #d46a5a; }
+.insp-sky.lean .insp-kicker em { color: #d9a05a; }
+
+/* M98 — the roads: the decade memory the migration law judges the town on */
+.insp-roads {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border-left: 2px solid #8fa3b8;
+  background: rgba(143, 163, 184, 0.05);
+  border-radius: 0 6px 6px 0;
+}
+.insp-roads .insp-gauge i { background: linear-gradient(90deg, #6f8399, #b9c7d6); }
+.insp-roads.fail { border-left-color: #d46a5a; background: rgba(212, 106, 90, 0.06); }
+.insp-roads.fail .insp-note { color: #ecb9ad; }
+.insp-roads.fail .insp-gauge i { background: linear-gradient(90deg, #a04a3c, #e28a7a); }
+.insp-roads.young { border-left-color: rgba(143, 163, 184, 0.4); background: rgba(255, 255, 255, 0.02); }
+.insp-roads.young .insp-note { opacity: 0.75; }
+.insp-roads .insp-kicker em { font-style: normal; opacity: 0.85; letter-spacing: 0.02em; }
+.insp-roads.fail .insp-kicker em { color: #d46a5a; }
+
+/* M96 — the store: the granary law read at the town, beneath the sky */
+.insp-store {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border-left: 2px solid #c9b46a;
+  background: rgba(201, 180, 106, 0.05);
+  border-radius: 0 6px 6px 0;
+}
+.insp-store.empty { border-left-color: rgba(201, 180, 106, 0.45); }
+.insp-store.bare { border-left-color: rgba(207, 214, 201, 0.18); background: rgba(255, 255, 255, 0.02); }
+.insp-store.bare .insp-note { opacity: 0.75; }
+.insp-gauge {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.insp-gauge i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #a08a3c, #e2cf7a);
+  border-radius: 2px;
+  transition: width 240ms ease;
+}
+
+
 /* M61 — the provenance chain: why is this here, deep time forward */
 .insp-chain {
   margin-top: 8px;
