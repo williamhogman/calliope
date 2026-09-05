@@ -2,19 +2,19 @@
  CALLIOPE DIAGNOSTIC · SWEEP                        size 512 · 100y · 5 seeds
 ========================================================================
    seed  land%   des%   for%  mtn%   isl  dep towns       pop   grw×   era arts strk camp  war   rt  ev/y  genms  flags
-  12345   35.3   19.8   23.4   8.7    28  173 16→100    508957 378.97     3   77   46    3  455  172  55.0   3234  ·
+  12345   35.3   19.8   23.4   8.7    28  173 16→100    508957 378.97     3   77   46    3  455  172  55.0   3068  ·
   M97 cadence seed 12345: 5.4 spoken/c · bare 6.7/c · failed 14.3/c · dead 5.3%/famine year · 53 episodes at 6.5% dead · storehouses 5.3/c (bare 6.9/c, 10.5 sett-cent) · in the envelope
   M98 roads seed 12345: 21 pulses · 0 no refuge · 0.41/settlement-century · share 19.3% · road 92 km · 105/4200 judged town-years failed · audit clean
-    777   36.1   20.1   22.3   7.6    25  167 16→105    723757 561.92     3  102   39    5  306  176  45.2   3000  ·
+    777   36.1   20.1   22.3   7.6    25  167 16→105    723757 561.92     3  102   39    5  306  176  45.2   2707  ·
   M97 cadence seed 777: 1.5 spoken/c · bare 2.1/c · failed 4.4/c · dead 5.5%/famine year · 15 episodes at 8.4% dead · storehouses 1.4/c (bare 2.0/c, 13.5 sett-cent) · in the envelope
   M98 roads seed 777: 17 pulses · 0 no refuge · 0.38/settlement-century · share 21.6% · road 119 km · 101/3515 judged town-years failed · audit clean
-  31337   33.0   18.2   18.7   3.6    30  158 16→98    428998 306.43     3   86   44    0  442  169  51.9   3001  ·
+  31337   33.0   18.2   18.7   3.6    30  158 16→98    428998 306.43     3   86   44    0  442  169  51.9   2757  ·
   M97 cadence seed 31337: 5.9 spoken/c · bare 6.4/c · failed 10.6/c · dead 5.5%/famine year · 51 episodes at 6.3% dead · storehouses 6.2/c (bare 6.7/c, 8.1 sett-cent) · in the envelope
   M98 roads seed 31337: 10 pulses · 0 no refuge · 0.24/settlement-century · share 27.0% · road 75 km · 69/3262 judged town-years failed · audit clean
-  90210   35.9   17.5   20.3   2.6    23  154 16→97    451915 302.69     3   74   50    1  326  169  49.9   2734  ·
+  90210   35.9   17.5   20.3   2.6    23  154 16→97    451915 302.69     3   74   50    1  326  169  49.9   2643  ·
   M97 cadence seed 90210: 7.6 spoken/c · bare 9.6/c · failed 15.8/c · dead 4.9%/famine year · 89 episodes at 6.1% dead · storehouses 6.5/c (bare 9.0/c, 11.5 sett-cent) · in the envelope
   M98 roads seed 90210: 31 pulses · 0 no refuge · 0.72/settlement-century · share 25.9% · road 194 km · 217/3442 judged town-years failed · audit clean
-    555   34.9   20.2   22.1   3.5    26  140 16→97    704232 425.78     3   77   44    5  341  165  49.4   2681  ·
+    555   34.9   20.2   22.1   3.5    26  140 16→97    704232 425.78     3   77   44    5  341  165  49.4   2692  ·
   M97 cadence seed 555: 3.3 spoken/c · bare 4.3/c · failed 8.6/c · dead 5.4%/famine year · 47 episodes at 7.4% dead · storehouses 3.2/c (bare 4.5/c, 16.6 sett-cent) · in the envelope
   M98 roads seed 555: 25 pulses · 0 no refuge · 0.53/settlement-century · share 28.4% · road 124 km · 191/3788 judged town-years failed · audit clean
 ---mean   35.0   19.2   21.4   5.2                                     395.16                        50.3
