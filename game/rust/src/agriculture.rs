@@ -740,11 +740,29 @@ pub struct MarginLedger {
     /// Candidates rejected because the solved sides disagreed with the
     /// dawn verdict at forcing 0 (should be zero; counted, not hidden).
     pub inconsistent: usize,
+    /// M98 — the dawn package of every ledger cell by position, so a
+    /// town's hinterland can be asked what it farmed at the dawn against
+    /// what it farms now (`World::abandoned_share`). Derived from
+    /// `cells`; a sorted map, so nothing about it depends on hashing.
+    pub dawn_by_cell: std::collections::BTreeMap<(u32, u32), u8>,
 }
 
 impl MarginLedger {
     pub fn empty() -> Self {
-        MarginLedger { cells: Vec::new(), multi: 0, inconsistent: 0 }
+        MarginLedger { cells: Vec::new(), multi: 0, inconsistent: 0, dawn_by_cell: Default::default() }
+    }
+
+    /// Build from the solved cells, indexing the dawn packages.
+    pub fn from_cells(cells: Vec<MarginCell>, multi: usize, inconsistent: usize) -> Self {
+        let dawn_by_cell = cells.iter().map(|c| ((c.y, c.x), c.dawn)).collect();
+        MarginLedger { cells, multi, inconsistent, dawn_by_cell }
+    }
+
+    /// M98 — the package a cell carried at the dawn, if it is a margin
+    /// cell; `None` for ground whose package never moves.
+    #[inline]
+    pub fn dawn_code_at(&self, y: usize, x: usize) -> Option<u8> {
+        self.dawn_by_cell.get(&(y as u32, x as u32)).copied()
     }
 
     /// Cells the warm side opens (wildland at dawn, farmable above `dt`).
@@ -873,7 +891,7 @@ pub fn margin_ledger(
         }
     }
 
-    MarginLedger { cells, multi, inconsistent }
+    MarginLedger::from_cells(cells, multi, inconsistent)
 }
 
 
@@ -884,7 +902,9 @@ use crate::util::Band;
 /// Diagnostics bands (E2.7): where fields can feed a city.
 pub const BANDS: &[Band] = &[
     Band { name: "arable share of land", sweet: (0.15, 0.65), hard: (0.06, 0.85), target: "M2.1: wheat+rice+maize belts cover the good land" },
-    Band { name: "famine events per century", sweet: (1.0, 60.0), hard: (0.0, 190.0), target: "M2.6: the rains must fail sometimes (rain-fed verdict only — the paddies' cadence is its own band; hard ceiling carries the M92 migration coupling, measured 166 coupled · 114 uncoupled on the worst sweep seed)" },
+    // M2.6's "famine events per century" (a world-total count, sweet 1–60,
+    // hard 0–190) retired at M97: the cadence the record reports is per
+    // settlement, and lives in `famine::BANDS` with its historical envelope.
     Band { name: "monsoon famines per century", sweet: (0.0, 110.0), hard: (0.0, 220.0), target: "M92: world-scale cadence of the paddies' verdict — scales with the monsoon-fed town count; per-place return keeps the M82 envelope (measured 94.0 · 24.0 on the civ seeds)" },
     // M51 — the soil-order mix. Bands are shares of *land*, read against
     // the Whittaker distribution the same world already classifies: no

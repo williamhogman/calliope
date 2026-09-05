@@ -54,7 +54,22 @@ gap analysis (`GAP-ANALYSIS.md`) measures against. Module paths refer to
 - Soil fertility from climate optima, slope penalty, alluvial/silt bonus
   near rivers and deltas.
 - Famine coupling: local subsistence failure → demand spike, population
-  loss, migration, chronicle events (M2.6).
+  loss, migration, chronicle events (M2.6). Granaries hold grain against
+  the shortfall (M96); mortality opens only past a floor of uncovered
+  want (`famine::TOLL_FLOOR`, M97) — below it the year is a *dearth*
+  (prices spike, the store draws, nobody dies), above it a famine whose
+  cadence and dead share are calibrated per settlement-century against
+  the pre-industrial record (`famine::BANDS`).
+- Climate migration (`migration.rs`, M98): every town keeps a ten-year
+  ring of *readings* — the share of a fair year the land did not give,
+  `1 − yield × (1 − abandoned)`, the M71–M92 composite sky through the
+  bare yield law compounded with the M90 share of its fields gone wild.
+  When the full decade's mean stands at or above `FAILED_DECADE` (0.25)
+  and no wave has left inside a generation, a deterministic share
+  (15–40 %, rising with the excess) walks to the nearest kin-town whose
+  own remembered mean is under `REFUGE_MEAN` (0.15), leaving and arriving
+  in the same month; one dated `Exodus` event per pulse, cadence banded
+  per settlement-century (`migration::BANDS`).
 - **Not present:** wild flora/fauna, vegetation succession, pests/blights
   (Later/research).
 

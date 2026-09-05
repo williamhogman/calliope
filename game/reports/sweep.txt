@@ -2,24 +2,41 @@
  CALLIOPE DIAGNOSTIC · SWEEP                        size 512 · 100y · 5 seeds
 ========================================================================
    seed  land%   des%   for%  mtn%   isl  dep towns       pop   grw×   era arts strk camp  war   rt  ev/y  genms  flags
-  12345   35.3   19.8   23.4   8.7    28  173 16→103    532480 396.49     3   76   49    1  332  180  50.6   3078  ·
-    777   36.1   20.1   22.3   7.6    25  167 16→102    746161 579.32     3  103   39    5  445  161  50.3   2741  ·
-  31337   33.0   18.2   18.7   3.6    30  158 16→96    435026 310.73     3   70   41    0  305  168  43.9   2815  ·
-  90210   35.9   17.5   20.3   2.6    23  154 16→100    486786 326.05     3   76   51    3  362  174  58.5   2683  ·
-    555   34.9   20.2   22.1   3.5    26  140 16→99    652993 394.80     3   82   36    2  468  166  55.2   2653  ·
----mean   35.0   19.2   21.4   5.2                                     401.48                        51.7
+  12345   35.3   19.8   23.4   8.7    28  173 16→100    508957 378.97     3   77   46    3  455  172  55.0   3068  ·
+  M97 cadence seed 12345: 5.4 spoken/c · bare 6.7/c · failed 14.3/c · dead 5.3%/famine year · 53 episodes at 6.5% dead · storehouses 5.3/c (bare 6.9/c, 10.5 sett-cent) · in the envelope
+  M98 roads seed 12345: 21 pulses · 0 no refuge · 0.41/settlement-century · share 19.3% · road 92 km · 105/4200 judged town-years failed · audit clean
+    777   36.1   20.1   22.3   7.6    25  167 16→105    723757 561.92     3  102   39    5  306  176  45.2   2707  ·
+  M97 cadence seed 777: 1.5 spoken/c · bare 2.1/c · failed 4.4/c · dead 5.5%/famine year · 15 episodes at 8.4% dead · storehouses 1.4/c (bare 2.0/c, 13.5 sett-cent) · in the envelope
+  M98 roads seed 777: 17 pulses · 0 no refuge · 0.38/settlement-century · share 21.6% · road 119 km · 101/3515 judged town-years failed · audit clean
+  31337   33.0   18.2   18.7   3.6    30  158 16→98    428998 306.43     3   86   44    0  442  169  51.9   2757  ·
+  M97 cadence seed 31337: 5.9 spoken/c · bare 6.4/c · failed 10.6/c · dead 5.5%/famine year · 51 episodes at 6.3% dead · storehouses 6.2/c (bare 6.7/c, 8.1 sett-cent) · in the envelope
+  M98 roads seed 31337: 10 pulses · 0 no refuge · 0.24/settlement-century · share 27.0% · road 75 km · 69/3262 judged town-years failed · audit clean
+  90210   35.9   17.5   20.3   2.6    23  154 16→97    451915 302.69     3   74   50    1  326  169  49.9   2643  ·
+  M97 cadence seed 90210: 7.6 spoken/c · bare 9.6/c · failed 15.8/c · dead 4.9%/famine year · 89 episodes at 6.1% dead · storehouses 6.5/c (bare 9.0/c, 11.5 sett-cent) · in the envelope
+  M98 roads seed 90210: 31 pulses · 0 no refuge · 0.72/settlement-century · share 25.9% · road 194 km · 217/3442 judged town-years failed · audit clean
+    555   34.9   20.2   22.1   3.5    26  140 16→97    704232 425.78     3   77   44    5  341  165  49.4   2692  ·
+  M97 cadence seed 555: 3.3 spoken/c · bare 4.3/c · failed 8.6/c · dead 5.4%/famine year · 47 episodes at 7.4% dead · storehouses 3.2/c (bare 4.5/c, 16.6 sett-cent) · in the envelope
+  M98 roads seed 555: 25 pulses · 0 no refuge · 0.53/settlement-century · share 28.4% · road 124 km · 191/3788 judged town-years failed · audit clean
+---mean   35.0   19.2   21.4   5.2                                     395.16                        50.3
 
 flags: B border-land · P placeholder-leak · R no-routes · G stagnant · S no-strikes · U unconnected · I malformed-ice · M malformed-monsoon
-sea ice (M37): icebound lanes per seed: 12345:11 · 777:15 · 31337:16 · 90210:24 · 555:16
-monsoon (M48): calendar lanes per seed: 12345:37 · 777:28 · 31337:40 · 90210:19 · 555:32
+sea ice (M37): icebound lanes per seed: 12345:13 · 777:17 · 31337:11 · 90210:20 · 555:9
+monsoon (M48): calendar lanes per seed: 12345:27 · 777:26 · 31337:37 · 90210:21 · 555:42
+
+famine, recalibrated (M97): pooled 4.5 spoken/c · bare law 5.6/c · failed harvests 10.4/c over 72.3 settlement-centuries · dead 5.2%/famine year · 255 episodes (3.5/c) at 6.6% dead · granary tier 4.2/c (bare 5.5/c, 60.1 sett-cent) · per seed: 12345:5.4/c·5.3%·ep 6.5%·in · 777:1.5/c·5.5%·ep 8.4%·in · 31337:5.9/c·5.5%·ep 6.3%·in · 90210:7.6/c·4.9%·ep 6.1%·in · 555:3.3/c·5.4%·ep 7.4%·in
+
+off the failing margin (M98): pooled 104 pulses · 0 no refuge · 0.46 per settlement-century over 227.1 settlement-centuries · share 24.6% · road 133 km · per seed: 12345:21p·0h·clean · 777:17p·0h·clean · 31337:10p·0h·clean · 90210:31p·0h·clean · 555:25p·0h·clean
+hunger with a cause (M95): famines traced/spoken per seed: 12345:65/65/65 · 777:23/23/23 · 31337:59/59/59 · 90210:110/110/110 · 555:65/65/65
+granaries against lean years (M96): lean verdicts exact/held-told/tiered per seed: 12345:173/173·16/16·173 · 777:70/70·10/10·70 · 31337:107/107·5/5·105 · 90210:230/230·29/29·224 · 555:172/172·21/21·172
+  by tier across the sweep — no store 8 verdicts toll 120 of bare 120 (0.0% kept) · jars 108 verdicts toll 2610 of bare 3172 (17.7% kept) · granaries 6 verdicts toll 88 of bare 98 (10.2% kept) · storehouses 630 verdicts toll 52195 of bare 80278 (35.0% kept)
 
 ---- checks ----------------------------------------------------------
 [PASS] mean land fraction                            35.0%   (sweet 22–40% · hard 15–52%)
 [PASS] mean desert share                             19.2%   (sweet 12–28% · hard 6–38%)
 [WARN] mean forest share                             21.4%   (sweet 25–60% · hard 15–75%)
 [PASS] mean mountain share                            5.2%   (sweet 2–14% · hard 0.5–22%)
-[PASS] mean growth                                 401.48×   (M2 crop-package K: sweet 2–1200×)
-[WARN] mean events/year                               51.7   (sweet 2–48 · hard 0.5–100)
+[PASS] mean growth                                 395.16×   (M2 crop-package K: sweet 2–1200×)
+[WARN] mean events/year                               50.3   (sweet 2–48 · hard 0.5–100)
 [PASS] all seeds clean of hard flags             all clean   (no B/P/R/G/S/U/I/M flags on any seed)
 [PASS] strikes on every seed                           5/5   (prospecting fires everywhere)
 [PASS] icebound closures well-formed on every seed    0 malformed   (M37 gate: winter arcs only, hemisphere-true, across the sweep)
@@ -31,7 +48,20 @@ monsoon (M48): calendar lanes per seed: 12345:37 · 777:28 · 31337:40 · 90210:
 [PASS] worlds still growing at half-run (≥60%)            5/5   (no century-long plateaus)
 [PASS] daughter peoples sunder (≥60% of seeds)            5/5   (M12.1: far branches become peoples of their own)
 [PASS] famine strikes somewhere (≥60% of seeds)            5/5   (M2.6: failed rains have a price)
-[PASS] famine bounded (<190/century worst seed)    166/century   (M2.6: hunger is a visitation, not the weather — ceiling carries the M92 migration coupling (measured 166 coupled · 114 uncoupled on the worst seed))
-[PASS] monsoon famine bounded (<220/century worst seed)    130/century   (M92: the paddies' verdict is a visitation too, never the weather)
-[PASS] mean rank-size slope                 -1.24 over 5 seeds   (M2.3 gate: Zipf holds across the sweep)
-CHECKS: 18 pass · 2 warn · 0 fail
+[PASS] monsoon famine bounded (<220/century worst seed)     56/century   (M92: the paddies' verdict is a visitation too, never the weather)
+[PASS] the exposure census covers every famine (sweep) 0 famine rows outside 7235 eligible settlement-years   (M97: on every seed the rate's denominator is the pass's own predicate)
+[PASS] famine lands in the historical envelope (≥90% of seeds) 5/5 seeds inside · sweet 1–12/c, dead 2–8% per year, 3–10% per episode   (M97 gate: famine frequency and severity (per year and per episode) per settlement-century inside the pre-industrial envelope on at least 90 % of sweep seeds)
+[PASS] the granary tier's band is the smaller one (sweep) 5/5 seeds with a banded tier show it under the bare law and the unstored towns   (M97 gate: settlements with granary-tier storage show a distinct, smaller famine band on every seed with the exposure to band)
+[PASS] famine sits under the failed harvest (sweep) 4.5 spoken against 10.4 failed harvests per settlement-century   (M97: a shortfall is not always a death, on the pooled sweep)
+[PASS] exodus pulses re-derive on every seed 5/5 seeds with every pulse re-derived from the harness's own decade memory and every failed decade answered   (M98 gate: migration pulses fire only after a sustained failed-decade average crosses threshold, arrive the same month, and replay at fixed seed — on every sweep seed)
+[PASS] some generation took the road        104 pulses across the sweep   (M98: the law is live on the sweep — a world where no decade ever fails a town is a threshold set out of reach)
+[PASS] exodus pulses / settlement-century   0.46 pooled over 227.1 settlement-centuries   (M98: climate migration is rare and clustered — a few towns a century send a wave, in the failed ages; not none, not every year)
+[PASS] exodus share of the town             24.6% pooled over 104 waves   (M98: Dust Bowl Oklahoma lost ~19 %, its worst counties ~40 %; a wave is a fraction of the town, never the town)
+[PASS] exodus road km                       133 km pooled over 104 waves   (M98: the road leads to the nearest kin-town under a kinder sky — days to weeks on foot, not across the world)
+[PASS] hunger has a cause on every seed     322 famines across 5 seeds · 322 traced bit-equal · 322 tell their cause   (M95: every famine in the sweep carries the composite sky it read and speaks the sentence those numbers make — no seed, no row excepted)
+[PASS] the store is the law on every seed   752 lean verdicts across 5 seeds · 752 re-derive exactly, roofed, tied and clause-true   (M96: every lean verdict in the sweep is the store law's own arithmetic — draw, granary share, toll, bare toll, roof, ledger tie, telling clause — no seed, no row excepted)
+[PASS] held years are told on every seed    81/81 held years told · 0 orphan tellings   (M96: each year a store took without a death is one Granary event, and there is no Granary event without such a year)
+[PASS] storage tiers reduce the toll across the sweep 34.3% of the bare toll kept alive over 744 tiered verdicts   (M96 gate: over the same town-years, across every sweep seed, the tiered towns' summed toll falls measurably short of the bare law's — the craft of keeping is worth lives, and not all of them)
+[PASS] the higher craft keeps more across the sweep    0.82 ≥ 0.65   (M96: the surviving share of the bare toll does not rise from jars to granaries to storehouses (tiers with ≥ 10 verdicts, sweep-wide))
+[PASS] mean rank-size slope                 -1.26 over 5 seeds   (M2.3 gate: Zipf holds across the sweep)
+CHECKS: 31 pass · 2 warn · 0 fail

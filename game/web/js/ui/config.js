@@ -50,6 +50,7 @@ const KIND_COLOR = {
   depletion: "#b09a86",
   disaster:  "#e07a6a",
   famine:    "#d3885c",
+  granary:   "#c9b46a",
   economy:   "#a9c9a4",
   nature:    "#8fbf9f",
 };

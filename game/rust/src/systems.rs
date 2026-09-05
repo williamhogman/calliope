@@ -123,8 +123,10 @@ pub static SYSTEMS: &[&dyn System] = &[
     &Drought,
     &Flood,
     &Lakes,
+    &DryEdgeSystem,
     &Ages,
     &Famine,
+    &Migration,
     &Quakes,
     &Volcanoes,
     &Storms,
@@ -258,6 +260,25 @@ impl System for Lakes {
     }
 }
 
+/// M94 — the dry edge: in the year's last month, beside the lakes and
+/// off the same sky, every edge cell's realized rain is struck against
+/// the pastoral line and every grove's remembered deficit moves its
+/// table. Solved thresholds with hysteresis — no die, no Peoples: the
+/// dry-edge ledger and the chronicle are all it writes.
+struct DryEdgeSystem;
+impl System for DryEdgeSystem {
+    fn name(&self) -> &'static str {
+        "dry-edge"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        if w.month.rem_euclid(12) == 11 {
+            let evs = w.dry_edge_pass(w.month);
+            sink.emit(evs);
+        }
+    }
+}
+
 /// M86 — the cold ages: the schedule's dated onsets and releases are
 /// spoken in the year's first month. Pure chronicle — the offset itself
 /// is derived law read through `World::year_forcing`, so this system
@@ -285,6 +306,23 @@ impl System for Famine {
     fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
         let w = &mut *ctx.world;
         let evs = w.famine_pass(w.month);
+        sink.emit(evs);
+    }
+}
+
+/// M98 — off the failing margin: every town takes the year's decade
+/// reading in the harvest month, after the famine verdict, and a town
+/// whose ten-year mean has crossed the failed-decade threshold sends a
+/// wave down the road to the nearest kin-town under a kinder sky — the
+/// walkers leave and arrive in this same month. Writes Peoples: serial.
+struct Migration;
+impl System for Migration {
+    fn name(&self) -> &'static str {
+        "migration"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        let evs = w.migration_pass(w.month);
         sink.emit(evs);
     }
 }
@@ -850,6 +888,13 @@ pub const BANDS: &[Band] = &[
     // E10.2 — tick rate on a young world and the heavier year-100 world.
     Band { name: "tick rate year 0", sweet: (1000.0, f64::INFINITY), hard: (200.0, f64::INFINITY), target: "E10.2: sweet ≥1000 mo/s · hard ≥200 (native)" },
     Band { name: "tick rate year 100", sweet: (400.0, f64::INFINITY), hard: (100.0, f64::INFINITY), target: "E10.2: sweet ≥400 mo/s · hard ≥100 (grown-in world, ~103 towns; baseline 459–544)" },
+    // M95 perf pass — the anatomy of the grown month's sky reads, priced
+    // one by one so a kernel regression names itself. Bands set from the
+    // measured pass (catchment ≈ 2,400 taps at one fbm each).
+    Band { name: "catchment read us", sweet: (0.0, 400.0), hard: (0.0, 1000.0), target: "M95 perf: one per-site catchment kernel read at a town, µs (2,401 taps, row terms hoisted, rain lane only; measured 194 — the two-lane kernel it replaced would trip the hard line)" },
+    Band { name: "point rain read ns", sweet: (0.0, 600.0), hard: (0.0, 2000.0), target: "M95 perf: one pointwise rain-lane read, ns (a 2-octave fbm + the row terms; measured 418)" },
+    Band { name: "harvest yields per year ms", sweet: (0.0, 20.0), hard: (0.0, 60.0), target: "M95 perf: `year_yield` for every town with the year memo cold — the first month of a year in `tick_month` (measured 13.6 at 103 towns)" },
+    Band { name: "harvest verdicts per year ms", sweet: (0.0, 5.0), hard: (0.0, 30.0), target: "M95 perf: `harvest_verdict` for every town with the memo warm — the famine pass's twin (measured 1.0 at 103 towns)" },
     // E10.6 — memory ceiling with the whole seed sweep resident.
     Band { name: "native peak RSS", sweet: (0.0, 1500.0), hard: (0.0, 2500.0), target: "E10.6: sweet ≤1.5 GiB · hard ≤2.5 GiB (3 × 512² worlds + histories)" },
 ];

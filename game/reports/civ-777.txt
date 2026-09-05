@@ -6,33 +6,33 @@ world "Calomar" · 4 peoples · 4 realms · 16 settlements at dawn
   yr      pop  towns  routes     wealth  treasury   arts  seams  ev/y
    6     2231     16      19        428       106      6    127     8
   12     3379     17      20        575        96     13    127    19
-  18     5200     17      20        960       114     17    129    13
-  24     8339     19      23       1675       120     20    131    19
-  30    13436     21      26       3177       153     25    134    33
-  36    18107     24      29       5846       296     29    138    23
-  42    24789     26      32       7615       867     35    139    33
-  48    36342     28      37      12491       479     39    141    26
-  54    59868     30      40      21180       888     42    146    45
-  60    94094     41      60      35168      1552     47    148    39
-  66   144476     54      81      55337      2484     52    148    68
-  72   205118     65      99      93803      6879     73    153    58
-  78   294089     93     148     164631     11404     77    154    87
-  84   408968     97     155     263008     17609     98    156   127
-  90   509164     98     156     406353     31034     98    157   126
-  96   665990    100     158     605213     49094    102    158   103
- 102   795067    102     161     863034     69262    104    159   133
- 108   952544    100     159    1194033    102054    104    159    99
- 114  1060947    101     161    1591308    136084    104    160    93
- 120  1189454    101     161    1936060    173204    104    161    95
- 126  1270314    101     161    2405700    217945    104    162    65
- 132  1286595    101     161    2884111    275502    125    162    82
- 138  1261643    103     163    3247522    331129    146    163    96
- 144  1337146    104     164    3461954    421916    200    163    83
- 150  1414603    105     165    3738706    480548    238    164   102
+  18     5074     18      22        974       115     17    129    12
+  24     7661     20      24       1630       131     21    130    17
+  30    11481     21      25       2956       213     25    134    17
+  36    15577     23      28       5030       303     30    138    17
+  42    20826     23      28       6955       402     33    138    21
+  48    33219     24      31       9660       652     37    139    34
+  54    51650     30      41      14848      1510     44    142    39
+  60    84638     35      51      26474      1009     49    146    27
+  66   116083     43      64      45418      1581     56    148    35
+  72   165565     58      90      75554      4347     58    148    71
+  78   243328     84     141     125693      6397     58    148   112
+  84   350328    102     173     208852     12372     80    151   106
+  90   492851    104     175     347343     19455     81    155    93
+  96   613232    105     176     528056     35354    101    157   101
+ 102   763640    105     176     784907     63199    102    158    90
+ 108   941027    105     176    1080841     98353    102    158    81
+ 114  1029579    106     178    1449858    163632    118    159    97
+ 120  1109388    108     180    1869583    200797    118    159   129
+ 126  1214300    108     180    2240061    265915    118    160    99
+ 132  1306920    110     182    2663097    337762    118    161   125
+ 138  1418739    110     182    3062864    428287    118    163    90
+ 144  1357229    110     182    3245033    523958    118    163    97
+ 150  1444118    110     182    3494739    591743    130    163    96
 
-event census: abandon:193 · clearing:193 · depletion:75 · disaster:1375 · discovery:60 · drought:101 · economy:43 · era:12 · eruption:2 · famine:156 · festival:210 · flood:327 · found:93 · growth:1051 · kindred:12 · myth:32 · omen:9 · quake:1 · realm:370 · ruler:100 · society:395 · strandline:10 · tech:69 · trade:3783 · war:767 · wonder:346
-strikes 60 · depletions 75 · mining camps 6 · wars 767
-statecraft: 767 war events · 338 towns changed hands · 29 secessions · polities 4–14 · coalitions yes · vassals ≤6
+event census: abandon:211 · clearing:215 · depletion:72 · disaster:1410 · discovery:57 · drought:101 · economy:43 · encroach:16 · era:14 · eruption:1 · exodus:38 · famine:50 · festival:163 · flood:375 · found:97 · granary:24 · growth:1114 · kindred:8 · myth:45 · omen:12 · quake:1 · realm:357 · regreen:11 · ruler:108 · society:443 · strandline:10 · tech:66 · trade:3823 · war:671 · wonder:344
+strikes 57 · depletions 72 · mining camps 6 · wars 671
+statecraft: 671 war events · 283 towns changed hands · 27 secessions · polities 4–16 · coalitions yes · vassals ≤7
 longest silence between events: 7 months
 
 the arc of the ages (tech & society events):
@@ -54,257 +54,332 @@ the arc of the ages (tech & society events):
   y12   The scattered camps of the Delmoionians bind themselves under one chief.
   y12   The wise-women of the Delmoionians set down which roots cure and which kill.
   y14   The scattered camps of the Alkarim bind themselves under one chief.
-  … and 446 more
+  … and 491 more
 
 societies at year 150:
-  Aelmerekin             empire     the High Age   21 arts · lore 406884
-  Delmoionians           empire     the High Age   17 arts · lore 215122
-  Alkarim                empire     the High Age   16 arts · lore 226280
-  Skjalavikfolk          kingdom    the High Age   15 arts · lore 126644
-  Xandoosians            kingdom    the High Age   15 arts · lore  51578
-  Aelorbrookkin          empire     the High Age   20 arts · lore  89059
-  Ashwickkin             empire     the High Age   21 arts · lore 319735
-  Elorgladekin           empire     the High Age   21 arts · lore 320685
-  Thestheeneians         empire     the High Age   17 arts · lore 184493
-  Glenenwoodkin          empire     the High Age   21 arts · lore 371197
-  Ashabarim              empire     the High Age   16 arts · lore 220099
-  Glenorrunkin           empire     the High Age   21 arts · lore 393997
-  Kaltheeneians          empire     the High Age   17 arts · lore 211649
+  Aelmerekin             empire     the High Age   21 arts · lore 518671
+  Delmoionians           empire     the High Age   17 arts · lore 198212
+  Alkarim                kingdom    the High Age   12 arts · lore 138643
+  Skjalavikfolk          kingdom    the High Age   16 arts · lore 163950
+  Eryliossaians          kingdom    the High Age   16 arts · lore  48773
+  Briarorleafkin         empire     the High Age   20 arts · lore 149926
+  Frostheimfolk          kingdom    the High Age   16 arts · lore  71982
+  Ashiyyaim              kingdom    the High Age   12 arts · lore 131847
 crowns at year 150:
-  Aelrun                 treasury   216172
-  Albar                  treasury    90653
-  Idaliaia               treasury   138557
-  Khaarabar              treasury     2474
-  Eirmark                treasury     3223
-  Eiravik                treasury      766
-  Idakaene               treasury     2454
-  Naxrapolis             treasury    16081
+  Aelrun                 treasury   330771
+  Lindell                treasury     7777
+  Erypolis               treasury    93951
+  Thoravik               treasury      465
+  Jorberg                treasury     3732
+  Alamesh                treasury   100245
+  Eryanion               treasury    39094
 
 harbour shelter (M45): coastal band 5984 cells · mean 0.468 · q3 0.542 · p90 0.688
-  ports on top-quartile shelter: 43 of 64 (67%) · coastal towns 79 mean 0.656 (1.40× the band)
-    missed: Eryrastoma sh=0.38 takeable-best=0.65 (at founding m0 0.65) pop=21957 at (123,169)
-    missed: Brynstrand sh=0.54 takeable-best=0.62 (at founding m0 0.81) pop=8431 at (498,94)
-    missed: Nefmasab sh=0.39 takeable-best=0.65 (at founding m0 0.65) pop=20593 at (254,156)
-    missed: Aelhythe sh=0.47 takeable-best=0.67 (at founding m0 0.67) pop=10223 at (367,379)
-    missed: Alsif sh=0.47 takeable-best=0.50 (at founding m753 0.50) pop=24156 at (265,248)
-    missed: Yewenhythe sh=0.47 takeable-best=0.50 (at founding m910 0.62) pop=6312 at (377,353)
-    missed: Delyra sh=0.47 takeable-best=0.56 (at founding m933 0.56) pop=9229 at (277,343)
-  siting: 43 on top-quartile + 14 took the best their coast offers = 57 of 64 well-sited (89%) · 7 missed better water within 56 km
-  siting (founding-time occupancy): 43 + 10 = 53 of 64 (83%) · 11 missed — terminal-set reading 89%, gap -6 pp
+  ports on top-quartile shelter: 45 of 66 (68%) · coastal towns 83 mean 0.648 (1.38× the band)
+    missed: Erystoma sh=0.38 takeable-best=0.65 (at founding m0 0.65) pop=9390 at (123,169)
+    missed: Nefmasab sh=0.39 takeable-best=0.65 (at founding m0 0.65) pop=10448 at (254,156)
+    missed: Aelhythe sh=0.47 takeable-best=0.67 (at founding m0 0.67) pop=8322 at (367,379)
+    missed: Khasif sh=0.47 takeable-best=0.50 (at founding m846 0.50) pop=12278 at (265,248)
+    missed: Hawknoll sh=0.42 takeable-best=0.54 (at founding m933 0.54) pop=9199 at (503,265)
+    missed: Olynliyra sh=0.47 takeable-best=0.56 (at founding m934 0.56) pop=3633 at (148,375)
+    missed: Korrayra sh=0.47 takeable-best=0.56 (at founding m950 0.56) pop=6225 at (277,343)
+  siting: 45 on top-quartile + 14 took the best their coast offers = 59 of 66 well-sited (89%) · 7 missed better water within 56 km
+  siting (founding-time occupancy): 45 + 9 = 54 of 66 (82%) · 12 missed — terminal-set reading 89%, gap -8 pp
 
 ---- unrest ladder (M11) ----------------------------------------------
- riots 157 · charters  71 · coups  60 · crises   4 (resolved   4) · secessions  29
- unrest now: mean 0.39 · max 1.00 over 33 realms
+ riots 137 · charters  76 · coups  65 · crises   5 (resolved   5) · secessions  27
+ unrest now: mean 0.26 · max 1.00 over 31 realms
 
 ---- kindred and crown (M12) ------------------------------------------
- foreign-crowned towns  57 of 105 · drifting  38 · max drift 0.56
-   Aelmerekin       under Skjalavikfolk      1 towns · kinship 0.15
-   Delmoionians     under Aelmerekin         1 towns · kinship 0.02
-   Delmoionians     under Alkarim            2 towns · kinship 0.03
-   Skjalavikfolk    under Aelmerekin         9 towns · kinship 0.15
-   Skjalavikfolk    under Alkarim            2 towns · kinship 0.01
-   Xandoosians      under Delmoionians       5 towns · kinship 0.88
-   Aelorbrookkin    under Aelmerekin         4 towns · kinship 0.89
-   Ashwickkin       under Aelmerekin         3 towns · kinship 0.80
-   Elorgladekin     under Aelmerekin         5 towns · kinship 0.54
-   Thestheeneians   under Delmoionians       2 towns · kinship 0.76
-   Thestheeneians   under Alkarim            1 towns · kinship 0.01
-   Glenenwoodkin    under Aelmerekin         4 towns · kinship 0.77
-   Ashabarim        under Aelmerekin         1 towns · kinship 0.00
-   Ashabarim        under Alkarim            6 towns · kinship 0.76
-   Glenorrunkin     under Aelmerekin         7 towns · kinship 0.76
-   Kaltheeneians    under Aelmerekin         2 towns · kinship 0.00
-   Kaltheeneians    under Delmoionians       2 towns · kinship 0.75
- moves: 0 flips · 9 sunderings · 0 fusions · 9 unions · 27 crown exonyms
-   union gate: Albar              + Khaarabar          kin 1.00 · opinion   29/  28 · vassal false
-   union gate: Idaliaia           + Idakaene           kin 1.00 · opinion   30/  30 · vassal false
-   union gate: Idaliaia           + Naxrapolis         kin 1.00 · opinion   24/  -3 · vassal false
-   union gate: Eirmark            + Eiravik            kin 1.00 · opinion   30/  30 · vassal true
-   union gate: Idakaene           + Naxrapolis         kin 1.00 · opinion   30/  30 · vassal false
+ foreign-crowned towns  34 of 110 · drifting   9 · max drift 0.81
+   Delmoionians     under Aelmerekin         1 towns · kinship 0.00
+   Delmoionians     under Alkarim            4 towns · kinship 0.06
+   Alkarim          under Aelmerekin         2 towns · kinship 0.03
+   Alkarim          under Delmoionians       1 towns · kinship 0.06
+   Skjalavikfolk    under Aelmerekin        12 towns · kinship 0.14
+   Eryliossaians    under Delmoionians       3 towns · kinship 0.89
+   Eryliossaians    under Alkarim            1 towns · kinship 0.02
+   Briarorleafkin   under Aelmerekin         3 towns · kinship 0.87
+   Frostheimfolk    under Aelmerekin         3 towns · kinship 0.04
+   Ashiyyaim        under Aelmerekin         1 towns · kinship 0.00
+   Ashiyyaim        under Alkarim            3 towns · kinship 0.76
+ moves: 0 flips · 4 sunderings · 0 fusions · 16 unions · 34 crown exonyms
+   union gate: Aelrun             + Lindell            kin 1.00 · opinion  -33/ -68 · vassal true
+   union gate: Erypolis           + Eryanion           kin 1.00 · opinion  -68/ -87 · vassal false
+   union gate: Thoravik           + Jorberg            kin 1.00 · opinion   30/  30 · vassal true
 
 ---- the arc of empires (M13) -----------------------------------------
-   the Circle of Fenamere     interregnum  2 tongues [Aelmerekin, Aelorbrookkin] · golden ages 0 · monuments 0 · ENDED
-     drivers: legit 0.50 · asab 0.35 · wealth 16965 · stretch 1.02   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
-     span: 5 crowns · 46 towns · admin 89.5 vs capacity 87.6   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
-   the Circle of Thesossa     interregnum  2 tongues [Delmoionians, Xandoosians] · golden ages 1 · monuments 3 · ENDED
-     drivers: legit 0.45 · asab 0.49 · wealth 22984 · stretch 0.46   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
-     span: 5 crowns · 20 towns · admin 43.7 vs capacity 95.3   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
-   the Zarmesh Ecumene        golden       2 tongues [Alkarim, Ashabarim] · golden ages 1 · monuments 3
-     drivers: legit 0.94 · asab 1.00 · wealth 93022 · stretch 0.84   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
-     span: 2 crowns · 21 towns · admin 42.0 vs capacity 49.9   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
-   the Norheim Ecumene        golden       1 tongues [Skjalavikfolk] · golden ages 1 · monuments 3
-     drivers: legit 0.69 · asab 0.90 · wealth 3985 · stretch 0.16   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
-     span: 2 crowns · 5 towns · admin 7.5 vs capacity 47.6   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
+   the Circle of Aeladell     interregnum  2 tongues [Aelmerekin, Briarorleafkin] · golden ages 1 · monuments 3 · ENDED
+     drivers: legit 0.47 · asab 0.45 · wealth 54175 · stretch 1.07   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
+     span: 7 crowns · 61 towns · admin 139.8 vs capacity 130.8   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
+   the Weal of Arossa         interregnum  2 tongues [Delmoionians, Eryliossaians] · golden ages 0 · monuments 0 · ENDED
+     drivers: legit 0.45 · asab 0.38 · wealth 32896 · stretch 0.57   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
+     span: 3 crowns · 18 towns · admin 30.8 vs capacity 53.6   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
+   the Weal of Bakmesh        waning       2 tongues [Alkarim, Ashiyyaim] · golden ages 1 · monuments 3
+     drivers: legit 0.95 · asab 0.93 · wealth 100206 · stretch 1.30   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
+     span: 1 crowns · 15 towns · admin 31.4 vs capacity 24.1   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
+   the Jorurvik Concord       golden       2 tongues [Skjalavikfolk, Frostheimfolk] · golden ages 1 · monuments 3
+     drivers: legit 0.50 · asab 1.00 · wealth 4215 · stretch 0.20   (golden gate: ≥0.58 · ≥0.52 · ≥700 · <0.95)
+     span: 2 crowns · 5 towns · admin 9.9 vs capacity 49.9   (ADR-0020: Σ(1+d/96) vs 12·crowns·era·asab)
  arc events: 4 minted · 3 golden dawns · 2 falls · 2 interregna closed
+famine: 50 rain-fed (33.3/century world-total, unbanded since M97) · 0 monsoon
 
-M72 · famine causality — 118 rain-fed famines (38 monsoon-fed, judged by the M92 law) · mean SPI -1.78 · worst -3.72
-  dose-response over 463 eligible town-years — SPI ≤ −2 100% (36/36) · −2 < SPI ≤ −1 100% (81/81) · −1 < SPI ≤ 0 0% (0/141) · SPI > 0 0% (0/205)
-  severity dose over 156 famines — per-capita toll 0.0495 + 0.1584·shortfall (law: 0.0500 + 0.1600) · ρ 0.9993
-  by shortfall quartile — 0.065 → 0.095 → 0.154 → 0.208
-  counterfactual sky — the same 118 hungry cells under 470 wrong-year skies: 28% would have been dry (real 100%)
+M72 · famine causality — 50 rain-fed famines (0 monsoon-fed, judged by the M92 law) · mean SPI -2.23 · worst -3.72
+  dose-response over 713 eligible town-years — SPI ≤ −2 86% (31/36) · −2 < SPI ≤ −1 18% (19/104) · −1 < SPI ≤ 0 0% (0/226) · SPI > 0 0% (0/347)
+  dose sample — 50 famines read against the want the store left (28 bare-law rows, store gave nothing)
+  severity dose over 50 famines — per-capita toll -0.1522 + 0.3012·want (law: -0.1500 + 0.3000·want above the floor 0.50) · ρ 0.9994
+  by want quartile — 0.034 → 0.087 → 0.133 → 0.149
+
+M95 · hunger with a cause — 50 famines: 41 where the year itself failed · 9 carried by the ground's memory · 0 summed from lean years · 0 monsoon
+  y33 · The rains fail over Mellophos — 2 starve, and 3 take the road to Idastoma. It was the second dry year running, the rains 18 in every hundred short of their norm. The jars gave a month of grain against it.
+  y40 · The rains fail over Mellophos — 5 starve, and 5 take the road to Idastoma. The year itself came only 9 in every hundred short, but 3 failed years behind it had emptied the ground.
+
+M96 · granaries against lean years — 175 lean verdicts: 50 spoken · 24 held by the store · 0 untiered · 175 tiered (128 where the store gave)
+  jars            6 verdicts · toll     37 of bare     42 ( 11.9% kept) · 27.7 person-years given · at the verdict median 0.3 mo, p90 1.1 mo, 0 at the roof · entering the run 0.3 mo (p90 1.1, n=5) · deep in it 0.0 mo (n=1) · share 0.35 spoil 0.30 roof 0.2y
+  granaries       2 verdicts · toll     26 of bare     29 ( 10.3% kept) · 7.5 person-years given · at the verdict median 0.6 mo, p90 0.6 mo, 0 at the roof · entering the run 0.6 mo (p90 0.6, n=1) · deep in it 0.0 mo (n=1) · share 0.60 spoil 0.15 roof 0.8y
+  storehouses   167 verdicts · toll   5761 of bare  10030 ( 42.6% kept) · 99679.2 person-years given · at the verdict median 1.7 mo, p90 6.0 mo, 0 at the roof · entering the run 2.5 mo (p90 6.2, n=116) · deep in it 0.0 mo (n=51) · share 0.85 spoil 0.08 roof 1.5y
+  matched by shortfall quartile (per-capita toll: tiered as paid / same rows bare / untiered): 0.009/0.026/— (18/0) · 0.054/0.092/— (19/0) · 0.036/0.138/— (2/0) · 0.110/0.149/— (35/0)
+  y22 · The rains fail over Mellophos, but the jars hold — a month of grain sees the town through. It was a dry year, the rains 18 in every hundred short of their norm.
+  y33 · The rains fail over Mellophos — 2 starve, and 3 take the road to Idastoma. It was the second dry year running, the rains 18 in every hundred short of their norm. The jars gave a month of grain against it.
+  y40 · Jars empty at the verdict: bare toll 10 on pop 124 (shortfall 0.77)
+  fat years — 12231 storing town-years: 49% give more than the town eats, 51% less · mean yield 0.990 · mean surplus over all years 0.035 pop-years (over fat years 0.071) · best 1.75
+  steady state — storehouses at share 0.85 / spoil 0.08 on that surplus: 0.37 pop-years ≈ 4.4 months (roof 1.5y)
+
+M97 · famine, recalibrated — 3549 eligible settlement-years (35.5 settlement-centuries: 713 rain-fed · 2836 paddy) · 175 lean verdicts · 74 the bare law would speak · 50 spoken (49 back-to-back)
+  per settlement-century: harvest failed 4.9 · bare law 2.1 · spoken 1.4 (rain-fed 7.0 · paddies 0.0) · envelope sweet 1–12 hard 0.3–20
+  severity per spoken famine: dead 5.4% of the town (p90 8.2%, worst 8.2%) · struck 10.1% · 3173 dead in all · envelope 2–8%
+  episodes (consecutive famine years at one town merged): 34 · 1.0 per settlement-century · longest 4 y · dead 8.0% of the town per episode
+  tier         sett-cent  failed/c    bare/c  spoken/c     dead%     band
+  no store           0.2       0.0       0.0       0.0      NaN%     thin
+  jars               1.8       3.3       2.2       1.7      4.1%     thin
+  granaries          0.2      10.5      10.5       5.3      7.7%     thin
+  storehouses       33.2       5.0       2.0       1.4      5.5%       in
+  zone         sett-cent  spoken/c     band
+  semi-arid          2.7       6.6     thin
+  temperate          4.4       6.8       in
+  tropical          28.4       0.1      OUT
+
+M98 · off the failing margin — 9872 town-years read · 8855 judged on a full decade · 254 at or over the threshold (2.9%) · decade mean p50 0.019 p90 0.138 p99 0.356 max 0.525
+  pulses: 38 walked · 0 found no refuge · 0 bounced back within two generations · 0.38 per settlement-century · mean share 22.5% · mean road 121 km · 38 decisions owed, 38 in the ledger · 9872/9872 reading rows exact · 38 tellings (38 tied)
+    Y44 Oraulon → Melstoma · 25 of 98 walked (26%) · decade mean 0.356 (0 failed outright, 36% of the fields wild) · refuge's sky 0.055 · 173 km
+    Y45 Brynstrand → Skjalberg · 180 of 1167 walked (15%) · decade mean 0.254 (0 failed outright, 0% of the fields wild) · refuge's sky 0.144 · 215 km
+    Y59 Oraulon → Melstoma · 25 of 97 walked (26%) · decade mean 0.356 (0 failed outright, 36% of the fields wild) · refuge's sky 0.032 · 173 km
+    Y69 Glenknoll → Ashcarr · 113 of 744 walked (15%) · decade mean 0.252 (0 failed outright, 15% of the fields wild) · refuge's sky 0.001 · 120 km
+    Y76 Mellophos → Idastoma · 31 of 176 walked (18%) · decade mean 0.274 (2 failed outright, 0% of the fields wild) · refuge's sky 0.125 · 214 km
+    Y78 Brynstrand → Ulfevik · 751 of 4949 walked (15%) · decade mean 0.252 (0 failed outright, 0% of the fields wild) · refuge's sky unrecorded · 45 km
+    Y79 Glenknoll → Ashcarr · 162 of 1075 walked (15%) · decade mean 0.251 (0 failed outright, 15% of the fields wild) · refuge's sky 0.000 · 120 km
+    Y80 Vargeyr → Jorhaug · 166 of 633 walked (26%) · decade mean 0.362 (1 failed outright, 30% of the fields wild) · refuge's sky 0.070 · 44 km
+    Y87 Briarorhythe → Elhythe · 268 of 1768 walked (15%) · decade mean 0.251 (1 failed outright, 0% of the fields wild) · refuge's sky 0.039 · 36 km
+    Y88 Brynstrand → Ulfevik · 868 of 5545 walked (16%) · decade mean 0.257 (2 failed outright, 0% of the fields wild) · refuge's sky 0.076 · 45 km
+  counterfactual sky — the same 50 hungry cells under 199 wrong-year skies: 23% would have been dry (real 100%)
 
 M80 · droughts named — 101 took hold (101 closed) · median span 3y (mean 3.2, longest 11) · median extent 52224 km² · median year-on-year overlap 0.51
   persistence chain — index lag-1 spatial r 0.49 · whole hold-mask Jaccard 0.37 · matched-region Jaccard 0.51
   spans — 1y 11 · 2y 35 · 3y 28 · 4y 13 · 5y 3 · ≥6y 11
-  naming — 101 droughts · 101 distinct names · 101 chronicle announcements · e.g. the Withering of The Aureth Highlands (149–149) · the Failing of The Sands of Lorador (146–148) · the Great Drought of Dellophos (146–147)
-  carry-over — 29/118 rain-fed famines (25%) struck in a year whose own rain was above SPI −1: the ground, not the year, was empty
+  naming — 101 droughts · 101 distinct names · 101 chronicle announcements · e.g. the Dry Years of The Aureth Highlands (149–149) · the Failing of Field of Roeknoll (146–148) · the Failing of Field of Mellophos (146–147)
+  carry-over — 9/50 rain-fed famines (18%) struck in a year whose own rain was above SPI −1: the ground, not the year, was empty
   the ages spoken — 0 dated turns inside 150 y · 0 age/optimum entries · first onset y177
 
-M81 · the spates — 327 floods over 150 y across 78 river towns (2.8 per town-century) · worst toll 0.060 of a town · deepest stage +0.29 over the levees · 29556 souls to the water
-  the gift — 327/327 spates leave ground that harvests better the season after (0 at the yield ceiling, no lawful headroom), by 4.1% on average · 327/327 recorded sheets lift the live harvest read at their own following year
+M81 · the spates — 375 floods over 150 y across 77 river towns (3.2 per town-century) · worst toll 0.060 of a town · deepest stage +0.36 over the levees · 43007 souls to the water
+  the gift — 373/373 spates leave ground that harvests better the season after (2 at the yield ceiling, no lawful headroom), by 3.9% on average · 373/373 recorded sheets lift the live harvest read at their own following year
 
 M82 · return times against the paleoclimate envelope
   zone       measure   events     exposure     return  envelope    verdict
   polar      drought      410      68550 n·y      167 y  20–400 y    in
-  polar      flood         36        750 t·y       21 y  4–500 y     in
+  polar      flood         51        750 t·y       15 y  4–500 y     in
   boreal     drought      451      42900 n·y       95 y  15–250 y    in
-  boreal     flood         24       1050 t·y       44 y  4–300 y     in
+  boreal     flood         29        900 t·y       31 y  4–300 y     in
   arid       drought      546      14250 n·y       26 y  8–100 y     in
   arid       flood          0        150 t·y     >150 y  4–300 y     thin — no vote
   semi-arid  drought     2283      56100 n·y       25 y  8–100 y     in
-  semi-arid  flood          8       1050 t·y      131 y  4–250 y     in
+  semi-arid  flood          4       1050 t·y      262 y  4–250 y     OUT — too rare
   temperate  drought     2433      66900 n·y       27 y  12–200 y    in
-  temperate  flood        105       2850 t·y       27 y  3–200 y     in
+  temperate  flood        128       2700 t·y       21 y  3–200 y     in
   tropical   drought      960      30300 n·y       32 y  12–200 y    in
-  tropical   flood        154       5850 t·y       38 y  2–150 y     in
+  tropical   flood        163       6000 t·y       37 y  2–150 y     in
   land in held drought, average year: 4.8% of 1860 lattice nodes
 
 M72 · the year that was — 1549 farmed cells × 32 years
   rain anomaly σ 0.1306 · catchment σ 0.1031 · harvest σ 0.2274 (curves 0.2274 · tangent 0.2363) · flow σ 0.1547
   ρ against the curves 1.0000 · against the tangent 0.9526 · direction agrees 44215/45653 where the tangent calls a ≥1% move
 
-the dry frontier (M55): 1 towns on waterless arid ground · 1 of them within well reach
+the dry frontier (M55): 0 towns on waterless arid ground · 0 of them within well reach
 the well ladder (M55): 68 arid-dry cells score above the founding bar · opened no craft (0 m) 0 · hand-dug (12 m) 8 · masonry (30 m) 38 · aqueduct (60 m) 60 · engineering (90 m) 66
 
 outcrop visibility (M57): bare desert lithosol 2.89 · arid aridisol 2.25 · wooded cambisol 0.45 · rainforest loess 0.12
-seams found by ground (M57): 57 mineral seams, visibility 0.12..2.46 · median discovery month — buried tercile 1034 · middling 338 · bared 315 (horizon 1800) · desert 453 vs elsewhere 525
-claim pressure (M58): 17 standing claims over 5 crowns — 0:"copper" 3.00 · 0:"gems" 3.00 · 0:"gold" 3.00 · 0:"iron" 3.00 · 0:"silver" 3.00 · 2:"gems" 3.00
-the desert's best hour (M57): peak arid-dry offer 9.68 at (327,429) in month 960 (pull 7.00 · provision 0.52) against the best watered site ever seen, 30.31
-the auctions the desert lost (M56): 1017 parent rings held over the run · 679 held an eligible arid-dry cell · 0 chose one · closest call -3.02 at (327,429) in month 960 (dry 9.68 vs ring winner 12.69)
+seams found by ground (M57): 57 mineral seams, visibility 0.12..2.46 · median discovery month — buried tercile 985 · middling 338 · bared 328 (horizon 1800) · desert 291 vs elsewhere 631
+claim pressure (M58): 11 standing claims over 4 crowns — 0:"copper" 3.00 · 0:"gems" 3.00 · 0:"gold" 3.00 · 0:"iron" 3.00 · 0:"silver" 3.00 · 8:"copper" 3.00
+the desert's best hour (M57): peak arid-dry offer 7.95 at (63,424) in month 840 (pull 0.00 · provision 0.03) against the best watered site ever seen, 30.61
+the auctions the desert lost (M56): 1044 parent rings held over the run · 734 held an eligible arid-dry cell · 0 chose one · closest call -2.29 at (382,458) in month 1080 (dry 4.44 vs ring winner 6.73)
 the gates behind the auction (M55): of 0 desert-winning rings — parent ≥380 souls 0 · crowded past 0.72·kland 0 · both (a real drawer) 0 · winner ore-led 0 · census at soft cap 0 · nearest miss 0 souls short at (0,0) month 0 (pop 0 vs kland 0)
-counterfactual (M55): with wells of unlimited reach, 1 towns stand on waterless arid ground (real run: 1)
-  cf dry town at (114,503) founded by month 936: table 30 m · founder's well reach then 90 m (terminal 90 m) · within reach (the veto never barred it)
-the desert's offer (M56): best arid-dry site 7.95 vs best watered site 19.11 · best ore pull 7.00 · caravan-provisioned 23719/26290 arid-dry cells (best 1.00)
+counterfactual (M55): with wells of unlimited reach, 0 towns stand on waterless arid ground (real run: 0)
+the desert's offer (M56): best arid-dry site 7.95 vs best watered site 19.11 · best ore pull 7.00 · caravan-provisioned 22667/26290 arid-dry cells (best 1.00)
   best offer cell (63,424): held 9.02 · pull 0.00 · provision 0.96 · table 18 m · upkeep 1.07 · offer 7.95
-  best pull cell (74,245): held -3.33 · pull 7.00 · provision 0.16 · table 146 m · upkeep 8.73 · offer -5.37
+  best pull cell (74,245): held -3.33 · pull 7.00 · provision 0.00 · table 146 m · upkeep 8.73 · offer -1000000000.00
 
 fields at the edge (M90): sky +0.05 °C at year 150 · ledger 21699 cells (497 multi-crossing skipped · 0 inconsistent) · farming 11784 · opened beyond dawn 188
   schedule: 32 warm plateaus (28 expand · 0 wrong-signed) · 72 cold plateaus (0 opened cells remain) · 25 drift-masked skipped
   run: 149 passes moved ground (38282 flips) · 0 winter onsets due within a year · 0 late
 
-monsoon fortune (M92): 33 rice towns (31 riverine · strongest lean 0.43) · 28 monsoon-fed (0 open-sky · 28 catchment-read) · 38 monsoon verdicts in 150 y · fail below 0.45 of a normal year
+monsoon fortune (M92): 35 rice towns (33 riverine · strongest lean 0.43) · 30 monsoon-fed (0 open-sky · 30 catchment-read) · 0 monsoon verdicts in 150 y · fail below 0.45 of a normal year
+  (no monsoon verdicts this run — cause and leak legs idle)
+
+THE DRY EDGE (M94) · 4378 edge cells (3.7% of land, 300–460 mm rain-fed) in 508 reaches (62 ≥12 cells) · 243 groves
+  takings 364 cell-years (5.54 per 100 edge cells per century) · held now 122 · ever 281 (6.4% of the edge) · mean hold 28.7 y over 240 releases
+  spoken: 4 onsets · 1 widenings · 0 returns + groves failed 12 (1 before the dawn, unspoken · 11 watered again · 1 dry now) = 27 turns (18.0 per century) · chronicle heard 27
+    y32   encroach Eleithel below The Raised Shores of Galdor — The wells sink at Eleithel below The Raised Shores of Galdor: 16 of every hundred drops of rain have failed these 8 years, the water lies 0.7 fathoms past the reach of the palms, and the oasis dies.
+    y35   encroach Skjalakelda below Skjalberg — The wells sink at Skjalakelda below Skjalberg: 9 of every hundred drops of rain have failed these 8 years, the water lies 0.6 fathoms past the reach of the palms, and the oasis dies.
+    y37   regreen  Eleithel below The Raised Shores of Galdor — Water stands again at Eleithel below The Raised Shores of Galdor: the table has risen within reach of the roots, 5 years after the palms died.
+    y46   regreen  Frostkelda below The Raised Shores of Thorevik — Water stands again at Frostkelda below The Raised Shores of Thorevik: the table has risen within reach of the roots, 47 years after the palms died.
+    y71   regreen  Skjalakelda below Skjalberg — Water stands again at Skjalakelda below Skjalberg: the table has risen within reach of the roots, 36 years after the palms died.
+  re-derived: 364 takings checked (0 broke the run, 0 had no grass at dawn; driest-year margin -0.0 mm) · 12 grove turns (0 off the law, 0 one-year) · twin law hash equal · ledger hash 2395851ff60cce6a
+
 
 ---- checks ----------------------------------------------------------
-[PASS] population growth ×                        1098.29×   (M2 crop-package K: sweet 2–1200×)
-[PASS] still growing at half-run              17% of final   (pop at half-run ≤92% of final)
-[PASS] settlements grew                             16→105   (colonies should outnumber the dawn towns)
-[PASS] legacy towns eat off the deposit     +0.0411 uplift on 23 footprint towns   (M30 gate: zeroing till+loess must cost the towns on it ≥ +0.005)
-[PASS] dry-country towns exist                   27 of 105   (≥1 town beyond fresh water by the century mark)
-[PASS] routes exist                                    165   (a world without trade is broken)
+[PASS] population growth ×                        1121.21×   (M2 crop-package K: sweet 2–1200×)
+[PASS] still growing at half-run              14% of final   (pop at half-run ≤92% of final)
+[PASS] settlements grew                             16→110   (colonies should outnumber the dawn towns)
+[PASS] legacy towns eat off the deposit     +0.0443 uplift on 25 footprint towns   (M30 gate: zeroing till+loess must cost the towns on it ≥ +0.005)
+[PASS] dry-country towns exist                   33 of 110   (≥1 town beyond fresh water by the century mark)
+[PASS] routes exist                                    182   (a world without trade is broken)
 [PASS] no unconnected towns                              0   (every town should reach the web of trade)
-[PASS] port shelter concentration                    89.1%   (M45 gate: ≥70% of ports well-sited — top-quartile water, or the best their coast offers)
-[PASS] ports favor sheltered water          57 of 64 well-sited   (M45 gate: ≥70% of ports well-sited (top-quartile water, or the best their coast offers))
+[PASS] port shelter concentration                    89.4%   (M45 gate: ≥70% of ports well-sited — top-quartile water, or the best their coast offers)
+[PASS] ports favor sheltered water          59 of 66 well-sited   (M45 gate: ≥70% of ports well-sited (top-quartile water, or the best their coast offers))
 [PASS] coastal shelter p90                           0.688   (M45: the field discriminates — bays and lagoons stand above the open strand)
-[PASS] coastal town shelter lift                     1.40×   (M45: founded coastal towns sit on better-than-average anchorages)
+[PASS] coastal town shelter lift                     1.38×   (M45: founded coastal towns sit on better-than-average anchorages)
 [PASS] shelter silent inland                max off-coast 0.0000   (M45: exactly 0 off the coastal band — inland siting untouched)
 [PASS] no template placeholders                          0   (no {P}/{S} may leak into chronicle text)
 [PASS] no empty event texts                              0   (every event tells its story)
-[PASS] settlement names unique              105 names / 105 towns   (the taken-set must hold)
-[PASS] realm seats under their own banner   0 dangling · 36 seat moves   (M10.4: a lost seat re-homes the same month)
-[PASS] unrest stays a 0..1 gauge                 33 realms   (M11.1: finite, clamped)
-[PASS] the unrest ladder speaks             317 rungs fired   (M11: riots/charters/coups/secessions on the century scale)
+[PASS] settlement names unique              110 names / 110 towns   (the taken-set must hold)
+[PASS] realm seats under their own banner   0 dangling · 40 seat moves   (M10.4: a lost seat re-homes the same month)
+[PASS] unrest stays a 0..1 gauge                 31 realms   (M11.1: finite, clamped)
+[PASS] the unrest ladder speaks             305 rungs fired   (M11: riots/charters/coups/secessions on the century scale)
 [PASS] no realm convulses monthly            min gap 12 mo   (M11.6: cooldowns keep risings years apart)
 [PASS] no war of the circlet outlives its term        0 stuck   (M11.3: crises resolve the month they come due)
-[PASS] co-residence ledger squares with the roster 13×13 for 13 peoples   (M12.1: the ledger grows with divergence, stays finite)
+[PASS] co-residence ledger squares with the roster 8×8 for 8 peoples   (M12.1: the ledger grows with divergence, stays finite)
 [PASS] no drift across non-kindred pairs        0 breaches   (M12 gate: below kinship 0.20 the minority stands and remembers)
-[PASS] kindred moves per century                      12.0   (M12: the kindred clock ticks, but slowly)
+[PASS] kindred moves per century                      13.3   (M12: the kindred clock ticks, but slowly)
 [WARN] assimilation cadence                 0.0 flips/century   (M12.2: towns turn kindred a few times a century, not monthly)
-[PASS] assimilation drift is turning        38 of 38 kindred foreign-crowned towns drift   (M12.2: towns under kindred crowns lean, however slowly)
+[PASS] assimilation drift is turning        9 of 9 kindred foreign-crowned towns drift   (M12.2: towns under kindred crowns lean, however slowly)
 [PASS] living civilizations                    2 of 4 ever   (M13.1: the tier exists without swallowing the world)
 [PASS] civ membership is a partition        0 shared tongues   (M13.1: kinship-closure — one tongue, one civilization)
 [PASS] no crownless civilization stands           0 hollow   (M13.4: losing every crown opens the interregnum)
 [PASS] successor realms per collapse        2.0 over 2 falls   (M13.4: fragmentation through the M11 ladder, not deletion)
-[WARN] events per year                                65.2   (sweet 2–48 · hard 0.5–100)
+[WARN] events per year                                66.0   (sweet 2–48 · hard 0.5–100)
 [PASS] no long silences                               7 mo   (≤36 months between chronicle entries)
-[PASS] strikes happened                                 60   (the age of prospectors must actually happen)
+[PASS] strikes happened                                 57   (the age of prospectors must actually happen)
 [PASS] era advanced past Stone                the High Age   (≥ Age of Bronze by now)
-[PASS] arts accumulate                      238 arts / 13 peoples   (≥3 arts per people)
+[PASS] arts accumulate                      130 arts / 8 peoples   (≥3 arts per people)
 [PASS] era reached Iron                       the High Age   (≥ Age of Iron by now)
 [PASS] numbers stay finite                             yes   (no NaN pops, wealth or prices)
-[PASS] rank-size slope (Zipf)               -1.25 over 104 towns   (M2.3 gate: −1.3…−0.8)
-[PASS] median town spacing                           44 km   (M2.5: market-town band ~15–30 km in settled cores)
-[WARN] famine events per century                      78.7   (M2.6: the rains must fail sometimes (rain-fed verdict only — the paddies' cadence is its own band; hard ceiling carries the M92 migration coupling, measured 166 coupled · 114 uncoupled on the worst sweep seed))
-[PASS] monsoon famines per century                    25.3   (M92: world-scale cadence of the paddies' verdict — scales with the monsoon-fed town count; per-place return keeps the M82 envelope (measured 94.0 · 24.0 on the civ seeds))
-[PASS] every famine stands in a failed year 118/118 at SPI ≤ -1.0   (M72: hunger is the year's realized rain read as SPI, never a private die)
-[PASS] famine years are meaningfully dry    mean SPI -1.78   (M72: the mean famine year sits at or beyond moderate drought)
-[PASS] no town starves in a year that was not dry 0 famines above SPI −1 of 346 wet-side town-years   (M72: the drought threshold is a hard boundary on hunger — above SPI −1 the harvest verdict never starves anyone)
-[PASS] the toll is the shortfall's own arithmetic 156/156 famines reproduced exactly from the year's sky   (M72: every toll re-derives from the realized sky at that cell — SPI for the rain-fed, the monsoon index for the paddies — no residual, no die)
-[PASS] hunger climbs with the drought       toll 0.0495+0.1584·s · ρ 0.9993 · quartiles 0.065<0.095<0.154<0.208   (M72: the per-capita toll rises linearly with the depth of the drought and monotonically across its quartiles — the threshold decides whether, the shortfall decides how hard)
-[PASS] the year, not the place, makes the famine 28% of wrong-year skies dry vs 100% of the real ones   (M72: swap the year and the drought mostly vanishes — hunger is selected by the realized sky, not by the cell)
+[PASS] rank-size slope (Zipf)               -1.21 over 109 towns   (M2.3 gate: −1.3…−0.8)
+[PASS] median town spacing                           40 km   (M2.5: market-town band ~15–30 km in settled cores)
+[PASS] monsoon famines per century                     0.0   (M92: world-scale cadence of the paddies' verdict — scales with the monsoon-fed town count; per-place return keeps the M82 envelope (measured 94.0 · 24.0 on the civ seeds))
+[PASS] every famine stands in a failed year 50/50 at SPI ≤ -1.0   (M72: hunger is the year's realized rain read as SPI, never a private die)
+[PASS] famine years are meaningfully dry    mean SPI -2.23   (M72: the mean famine year sits at or beyond moderate drought)
+[PASS] no town starves in a year that was not dry 0 famines above SPI −1 of 573 wet-side town-years   (M72: the drought threshold is a hard boundary on hunger — above SPI −1 the harvest verdict never starves anyone)
+[PASS] the toll is the shortfall's own arithmetic 50/50 famines reproduced exactly from the year's sky   (M72: every toll re-derives from the realized sky at that cell — SPI for the rain-fed, the monsoon index for the paddies — no residual, no die)
+[PASS] hunger climbs with the drought       toll -0.1522+0.3012·want · ρ 0.9994 · quartiles 0.034<0.087<0.133<0.149   (M72 (law M97): the per-capita toll rises linearly with the want the store left and monotonically across its quartiles — the floor decides whether, the want decides how hard)
+[PASS] every famine carries the sky it read 50/50 rows re-derived bit-equal (this year's SPI, rain anomaly, memory index, dry/lean runs → shortfall → toll)   (M95: the ledger's HarvestSky is the composite law (base sky + oscillation + drift + belts) read at that cell-year, the verdict's z is its index, the shortfall is that index through the rain-fed (or the monsoon index through the paddy) law and the toll is that shortfall's — no residual, no rounding, no dice)
+[PASS] every famine tells its cause         50/50 tellings carry the sentence their re-derived sky makes, verbatim · 0 untold   (M95: the chronicle line carries the reading verbatim — dry years running and the year's shortfall, the failed years behind a carried famine, or the monsoon's share)
+[PASS] the famine's sky is the climate lane's sky 50/50 rows equal the full-grid year_anomaly at their cell-year, bit for bit   (M95: one sky — the pointwise law the harvest reads and the full-grid law diagnose climate reports agree to the bit)
+[PASS] the inspector reads the same sky     110/110 towns' explain sky blocks agree with the law at the current year   (M95: the settlement card's Sky-this-year block (year, SPI, rain share, verdict kind, monsoon presence) is the harvest law read at the cell — not a second estimate)
+[PASS] the store is the law's own arithmetic 175/175 rows re-derive exactly (draw, granary share, toll, bare toll, spoken) · 175/175 under the roof   (M96: every lean verdict's draw is min(store, shortfall×pop), its granary factor the uncovered share, its toll that factor through M2.6's law; no store above cap_years×pop)
+[PASS] untiered towns lay nothing by        0/0 untiered verdicts held an empty store and paid the bare toll   (M96: a people with none of the keeping crafts has no store — the bare law, exactly)
+[PASS] spoken famines carry their store     50/50 spoken rows tied to a famine row with the same store, and told with the gave-clause where the store gave   (M96: the famine ledger and the lean ledger agree row for row; a famine line says what the jars gave, verbatim)
+[PASS] held years are told once             24/24 held rows told as Granary events · 0 orphan tellings   (M96: every year the store took without a death (bare toll ≥ 4, store gave) is one Granary event with its months of grain; no Granary event without such a year)
+[PASS] storage tiers reduce the toll        42.3% of the bare toll kept alive over 175 tiered verdicts   (M96: over the same town-years, the tiered towns' summed toll falls measurably short of the bare law's — and the store does not make hunger impossible)
+[PASS] the higher craft keeps more                    0.57   (M96: the surviving share of the bare toll does not rise from jars to granaries to storehouses (tiers with ≥ 10 verdicts))
+[PASS] matched shortfalls favour the storing town 3 quartiles with ≥ 10 storing verdicts: per head as paid < bare in each (0.009<0.026, 0.054<0.092, 0.110<0.149)   (M96 gate: at the same depth of shortfall, the town with a store loses fewer per head than the bare law — the same town-years, the same shortfall, only the granary differs)
+[PASS] the store holds seasons              storehouses: median 2.5 months of grain entering a lean run (p90 6.2, 116 first verdicts) · deep in the run median 0.0 (51 verdicts) · 0 of 167 at the roof   (M96: a craft of keeping worth the name brings a season or more to the first lean year, and no town sits on decades of grain — the run then spends it)
+[PASS] the inspector reads the same store   110/110 towns' explain store blocks agree with the law at the current year   (M96: the settlement card's store block (tier, months of grain, person-years, roof) is the granary law read at the town — not a second estimate)
+[PASS] the exposure census covers every famine 0 famine rows outside the 3549 eligible settlement-years   (M97: every spoken famine fell on a settlement-year the census counts as exposed — the rate's denominator is the pass's own predicate)
+[PASS] famines per settlement-century       1.4 over 35.5 settlement-centuries   (M97: spoken famines per eligible settlement-century — Campbell & Ó Gráda's England (~1) to Farr's ten-a-century and Mallory's China (~5 per province); Hoskins' one-bad-harvest-in-six (≈17) is the hard ceiling famine must sit under)
+[PASS] famine dead share                    5.4% of the town per famine year, 50 famine years   (M97: mean share of the town dead per spoken famine year — a single harvest's toll; the record's per-famine figures are the episode band below)
+[PASS] famine episode dead share            8.0% of the town per episode, 34 episodes (longest 4 y)   (M97: mean share of the town dead per famine episode (consecutive famine years at a town merged) — Ó Gráda's ledger runs 3 % (France 1709) to 10 % (England 1315–17); Ireland 1740–1 (13 %) is the outlier)
+[PASS] famine sits under the failed harvest 1.4 spoken against 4.9 failed harvests per settlement-century   (M97: Hoskins' one harvest in six fails; famine is the rarer thing the record counts separately — a shortfall must not always be a death)
+[PASS] storehouse famines per settlement-century 1.4 at the storehouses tier over 33.2 settlement-centuries   (M97: the granary tier's own, smaller band — Appleby's England left famine behind on storage and markets; the storehouse must show it)
+[PASS] the granary tier's band is the smaller one storehouses 1.4/c against the bare law's 2.0/c on the same town-years   (M97: settlements with granary-tier storage show a distinct, smaller famine band — under the bare law on their own town-years, and under the towns with no store)
+[PASS] famine lands in the historical envelope 1.4/c spoken · 5.4% dead per famine year · 8.0% per episode · storehouses 1.4/c (bare 2.0/c)   (M97 gate: cadence, severity (per year and per episode) and the granary tier's band all inside the pre-industrial envelope (Campbell & Ó Gráda, Ó Gráda, Appleby, Hoskins — famine.rs))
+[PASS] the decade reading is the law        9872/9872 reading rows equal to the harness's read at the year's close   (M98: the reading is pure in the year and the fields (year_yield_bare × the M90 abandonment share) — a row written in the harvest month equals a read taken at the year's close, bit for bit)
+[PASS] exodus pulses fire only after a failed decade 38/38 pulses re-derive: full memory, mean ≥ 0.25 from the harness's own readings, a generation since the last wave, the law's count of walkers, the refuge under a kinder sky, kin to kin   (M98 gate: migration pulses fire only after a sustained failed-decade climate average crosses threshold — every pulse's mean re-derived from readings the pass never wrote)
+[PASS] the walkers arrive in the month they leave 38 pulses: source down by the walkers and destination up by the walkers in the pulse's own month, one dated Exodus telling each   (M98 gate: arriving at destination settlements within the same recorded month — observed at the mechanism, and nothing in transit across a tick boundary (the chunking replay would otherwise diverge))
+[PASS] every failed decade is answered      38 town-years owed a decision (mean ≥ 0.25, armed, > 90 souls, not failing), 38 in the ledger   (M98: the law fires exactly when it should — a pulse, or the written fact that no kin-town under a kinder sky stood)
+[PASS] every exodus telling is a pulse      38 tellings, 38 tied to a pulse row   (M98: no Exodus event without the wave it tells)
+[PASS] exodus pulses / settlement-century   0.38 over 98.7 settlement-centuries (38 pulses)   (M98: climate migration is rare and clustered — a few towns a century send a wave, in the failed ages; not none, not every year)
+[PASS] exodus share of the town             22.5% of the town per wave, 38 waves   (M98: Dust Bowl Oklahoma lost ~19 %, its worst counties ~40 %; a wave is a fraction of the town, never the town)
+[PASS] exodus road km                       121 km mean, 38 roads   (M98: the road leads to the nearest kin-town under a kinder sky — days to weeks on foot, not across the world)
+[PASS] the year, not the place, makes the famine 23% of wrong-year skies dry vs 100% of the real ones   (M72: swap the year and the drought mostly vanishes — hunger is selected by the realized sky, not by the cell)
 [PASS] droughts last years, not a season    median span 3y over 101 closed droughts   (M80 gate: a failed year persists — the drought field carries its shortfall forward, so the median event spans 2–5 consecutive years)
 [PASS] a drought holds the same ground      median year-on-year footprint overlap 0.51 (Jaccard)   (M80 gate: the mapped extent is stable — a drought is one region moving slowly, not a new blotch each year)
 [PASS] every drought is named once and named alone 101/101 droughts surfaced exactly once · 101 distinct names   (M80 gate: the chronicle speaks each drought's name exactly once, in the year it takes hold — no duplicates, no silent droughts)
 [PASS] the ledger answers to the sky        322/322 drought-years re-derived dry from the seed alone   (M80: the named event is a reading of the accumulated rain, re-computable from seed × cell × year with no stored per-cell state)
-[PASS] the ground remembers the year before 29 famines carried by memory alone (25%)   (M80: persistence is load-bearing — remove the memory and these harvests would not have failed)
-[PASS] drought carry-over share of famines            0.25   (M80: memory is load-bearing but not sovereign — some harvests fail on the years behind them, most still on the year itself)
+[PASS] the ground remembers the year before 9 famines carried by memory alone (18%)   (M80: persistence is load-bearing — remove the memory and these harvests would not have failed)
+[PASS] drought carry-over share of famines            0.18   (M80: memory is load-bearing but not sovereign — some harvests fail on the years behind them, most still on the year itself)
 [WARN] named droughts per century                     67.3   (M80: a drought is a generational event the chronicle can carry, not annual weather)
 [PASS] every dated turn of the age is spoken once 0/0 dated turns spoken · 0 age/optimum entries · world-subject on all   (M86 gate (extended at M87): each onset and release the schedule dates inside the run — winter or optimum — surfaces as exactly one chronicle entry, in that year's first month, owned by the world — none invented, none missed, none outside the dates)
 [PASS] the chronicle calls the age by its name 0/0 entries subject-lined with the christening · first: —   (M88 gate: every spoken turn carries the schedule's own christening as its subject — the name the world remembers the age by, stable at fixed seed)
-[PASS] floods per river town per century               2.8   (M81: a river town drowns now and then — a spate every few decades of its life, often enough to be a fact of life on the water, rare enough to be news)
+[PASS] floods per river town per century               3.2   (M81: a river town drowns now and then — a spate every few decades of its life, often enough to be a fact of life on the water, rare enough to be news)
 [PASS] worst flood toll (share of town)              0.060   (M81: the toll is capped by law — no spate may take more than DMG_CAP of a town)
-[PASS] every flood re-derives from the year's own water        327/327   (M81 gate: a flood is a threshold crossing on the realized flow, not a die — every ledger row recomputes from seed × cell × year)
+[PASS] every flood re-derives from the year's own water        375/375   (M81 gate: a flood is a threshold crossing on the realized flow, not a die — every ledger row recomputes from seed × cell × year)
 [PASS] the toll is capped by law            worst 0.060 ≤ cap 0.060   (M81 gate: a levee breach is a disaster, never an extinction — no spate takes more than DMG_CAP of a town)
 [PASS] levees raise the stage the banks hold    1.15 → 1.45   (M81 gate: masonry, aqueducts and engineering buy real freeboard — an engineered town floods in strictly fewer years)
-[PASS] the silt is load-bearing on the next harvest 327/327 grounds with headroom lifted (0 ceiling-bound), mean +4.1%   (M81 gate: counterfactual — the same cell, the same following year, read with and without the sheet: every silted ground below the yield ceiling must harvest measurably better, or the gift is decoration; ceiling-bound grounds are counted, not asked to break the cap)
-[PASS] the standing sheet reaches the harvest 327/327 recorded sheets lift the live read   (M81 gate: the silt the ledger records must be the silt year_yield consumes — every row with lawful headroom re-stood and read through the live path at the year it feeds, the wiring not the intent)
-[PASS] the flood gives the season after     327 silted spates   (M81 gate: the water that drowns the levees lays the silt — the harvest after a flood stands on richer ground)
-[PASS] no silt flatters the year it drowned       327 rows   (M81 gate: the silt sheet is dated to the following season — a spate never improves the harvest it ruined)
-[PASS] the flood ledger rides the identity line d7c4393b2ead8e33   (ADR-0003: floods are state — a replay that lost a spate would farm a different next year)
-[PASS] return times land in the Earth envelope 11/11 zone-rows in envelope   (M82 gate: drought and flood recurrence per climate zone sits inside the configured Earth-analog envelope for ≥90% of voting zones — paleoclimate rates, not fantasy frequencies)
+[PASS] the silt is load-bearing on the next harvest 373/373 grounds with headroom lifted (2 ceiling-bound), mean +3.9%   (M81 gate: counterfactual — the same cell, the same following year, read with and without the sheet: every silted ground below the yield ceiling must harvest measurably better, or the gift is decoration; ceiling-bound grounds are counted, not asked to break the cap)
+[PASS] the standing sheet reaches the harvest 373/373 recorded sheets lift the live read   (M81 gate: the silt the ledger records must be the silt year_yield consumes — every row with lawful headroom re-stood and read through the live path at the year it feeds, the wiring not the intent)
+[PASS] the flood gives the season after     375 silted spates   (M81 gate: the water that drowns the levees lays the silt — the harvest after a flood stands on richer ground)
+[PASS] no silt flatters the year it drowned       375 rows   (M81 gate: the silt sheet is dated to the following season — a spate never improves the harvest it ruined)
+[PASS] the flood ledger rides the identity line 90aeea7a0e9c1b73   (ADR-0003: floods are state — a replay that lost a spate would farm a different next year)
+[PASS] return times land in the Earth envelope 10/11 zone-rows in envelope   (M82 gate: drought and flood recurrence per climate zone sits inside the configured Earth-analog envelope for ≥90% of voting zones — paleoclimate rates, not fantasy frequencies)
 [PASS] harvest variance tracks the sky      σ 0.2274 vs curves 0.2274 (+0.00%)   (M72: the year's harvest spread equals the crop curves re-scored at the year's own sky, within 1%)
 [PASS] flow variance tracks the catchment   σ 0.1547 vs 1.50× catchment σ 0.1547 (+0.0%)   (M72: the year's flow spread is the catchment anomaly times the declared gain, within 15%)
 [PASS] the harvest follows the curves       ρ 1.0000 (tangent model 0.953)   (M72: the realized harvest factor is the crop curves' own response to the year's sky (Pearson ρ ≥ 0.999 against an independent re-scoring))
 [PASS] wet years feed, dry years starve     96.9% of 45653 called moves go the derivative's way   (M72: the sign of the harvest response matches the crop curves' own derivatives on the year's anomalies)
 [PASS] the year is bounded, not deleted     720 clamped harvests · 0 flows out of band   (M72: flow stays inside [0.35, 2.20]; a year moves a town, it does not erase one)
 [PASS] the river map does not move          dawn 2ab17c42e6b251f0 · year 150 2ab17c42e6b251f0   (M72: order, discharge and the endorheic calls are the dawn's — the year is a read, never a write)
-[PASS] disaster falls have their telling    1 falls · 1 ruins   (M24 gate: every destroying-magnitude event → one chronicle entry + one ruin)
-[PASS] toponyms classify to culture                  99.0%   (M3 gate: sampled toponyms ≥ 90%)
+[PASS] disaster falls have their telling    0 falls · 0 ruins   (M24 gate: every destroying-magnitude event → one chronicle entry + one ruin)
+[PASS] toponyms classify to culture                  98.2%   (M3 gate: sampled toponyms ≥ 90%)
 [PASS] gloss coverage of name banks                204/204   (M3.3 gate: 100% of fragments glossed)
-[PASS] settlement etymologies                      105/105   (M3.3: every town name reads back)
-[PASS] feature etymologies                           98/98   (M3.3: every feature name reads back)
+[PASS] settlement etymologies                      110/110   (M3.3: every town name reads back)
+[PASS] feature etymologies                         100/100   (M3.3: every feature name reads back)
 [PASS] name collisions                                   0   (M3 gate: 0 duplicates)
-[PASS] border exonyms present               71 of 71 shared   (M3.4: doubled names on shared features)
-[PASS] pantheons complete                            13/13   (M3.5: ≥ 3 named gods per people)
-[PASS] gods cited in the chronicle                     230   (M3.5: omens/festivals/wars name the gods)
+[PASS] border exonyms present               69 of 57 shared   (M3.4: doubled names on shared features)
+[PASS] pantheons complete                              8/8   (M3.5: ≥ 3 named gods per people)
+[PASS] gods cited in the chronicle                     194   (M3.5: omens/festivals/wars name the gods)
 [PASS] territory owners valid                  0 bad cells   (M4.1: every owned cell names a live realm)
-[PASS] land under banners                            76.3%   (M4.1: realms claim some — never all — of the wild)
-[PASS] wars kindle                                     767   (M4: a century without war is a broken game)
-[PASS] land changes hands                   338 transfers / 767 war events   (M4.2 gate: border change per major war)
-[PASS] polity count moves                             4–14   (M4.5 gate: realms must rise and fall)
-[PASS] largest realm pop share                       58.0%   (M4 gate: no runaway single empire)
+[PASS] land under banners                            75.5%   (M4.1: realms claim some — never all — of the wild)
+[PASS] wars kindle                                     671   (M4: a century without war is a broken game)
+[PASS] land changes hands                   283 transfers / 671 war events   (M4.2 gate: border change per major war)
+[PASS] polity count moves                             4–16   (M4.5 gate: realms must rise and fall)
+[PASS] largest realm pop share                       65.1%   (M4 gate: no runaway single empire)
 [PASS] coalitions form                                 yes   (M4.3 gate: dread should unite the wary)
-[PASS] market areas carved                  7 areas / 105 towns   (M5.2: the route web splits into local markets)
-[PASS] inter-area price divergence          ×3.26 mean spread   (M5.2 gate: local markets disagree, but not madly)
-[PASS] von Thünen ordering                  bulk ×4.76 · ordinary ×3.37 · precious ×1.49   (M14.7: bulk stays local and dispersed, precious arbitrages flat — rings emerge, not painted)
-[PASS] recipe towns emerge                  11 towns craft   (M5.1 gate: ore, fuel and art make finished goods)
-[PASS] merchants take the roads                    25 ever   (M5.5: coin-wise realms send out traders)
-[PASS] gravity-model correlation            r=0.51 over 143 routes   (M5.4 gate: big close pairs carry the trade)
-[PASS] no town drinks where it cannot          1/1 watered   (M55 gate: every settlement on arid ground with no river, lake, spring or oasis is held by a people whose well craft reaches its water table)
+[PASS] market areas carved                  7 areas / 110 towns   (M5.2: the route web splits into local markets)
+[PASS] inter-area price divergence          ×3.71 mean spread   (M5.2 gate: local markets disagree, but not madly)
+[PASS] von Thünen ordering                  bulk ×4.50 · ordinary ×4.11 · precious ×1.56   (M14.7: bulk stays local and dispersed, precious arbitrages flat — rings emerge, not painted)
+[PASS] recipe towns emerge                   9 towns craft   (M5.1 gate: ore, fuel and art make finished goods)
+[PASS] merchants take the roads                    17 ever   (M5.5: coin-wise realms send out traders)
+[PASS] gravity-model correlation            r=0.62 over 158 routes   (M5.4 gate: big close pairs carry the trade)
+[PASS] no town drinks where it cannot          0/0 watered   (M55 gate: every settlement on arid ground with no river, lake, spring or oasis is held by a people whose well craft reaches its water table)
 [PASS] the dry frontier is real ground      68 foundable arid-dry cells   (M55: the veto must hold back ground a people would otherwise want — otherwise the gate proves nothing)
 [PASS] well craft opens the dry frontier    0 → 66 cells across the ladder   (M55 gate: craftless peoples open no dry ground, and every deeper shaft opens at least as much as the shallower one, ending above zero)
 [PASS] the outcrop orders the ground        2.89 > 2.25 > 0.45 > 0.12   (M57: bared rock must be more visible than thin arid soil, which must beat farmland, which must beat a loess mantle under closed canopy)
 [PASS] every visibility band carries seams  19 · 19 · 19 seams over visibility 0.12..2.46   (M57: the claim is only measurable if buried, middling and bared ground all hold seams and the visibility field actually varies)
-[PASS] the bared ground is found first      median month 315 bared vs 338 middling vs 1034 buried   (M57 gate: prospecting yield rises with how much basement the ground shows, so bared country must give up its seams earlier than buried country)
-[PASS] every claim stands on a dark forge   0 of 17 claims unbacked   (M58 gate: claim pressure is unmet demand — each claim must be backed by a town of that realm whose market area holds no seam of the ore)
+[PASS] the bared ground is found first      median month 328 bared vs 338 middling vs 985 buried   (M57 gate: prospecting yield rises with how much basement the ground shows, so bared country must give up its seams earlier than buried country)
+[PASS] every claim stands on a dark forge   0 of 11 claims unbacked   (M58 gate: claim pressure is unmet demand — each claim must be backed by a town of that realm whose market area holds no seam of the ore)
 [WARN] a claim makes its seam call louder   no standing claims   (M58: no crown presses a claim for an ore with an unworked seam left — the lever has nothing to act on in this world)
-[WARN] the dry-frontier veto is load-bearing no auction held — 1 cf dry founding(s), earliest month 936, deepest table 30 m, all inside the founder's reach (1 dry without · 1 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
-[PASS] names tell the truth about the ground 100% (103 of 103 eligible towns)   (M62 gate: ≥90% of towns whose tongue has a generic for their landform carry it as the name's tail (worn names count through their recorded source))
+[WARN] the dry-frontier veto is load-bearing no auction held — 0 cf dry founding(s), earliest month 0, deepest table 0 m, all inside the founder's reach (0 dry without · 0 with)   (M55: this world's dry foundings all fall after its peoples hold deep-well craft, so the veto had nothing to refuse here — the law is carried by the gate's ensemble row across seeds)
+[PASS] names tell the truth about the ground 100% (108 of 108 eligible towns)   (M62 gate: ≥90% of towns whose tongue has a generic for their landform carry it as the name's tail (worn names count through their recorded source))
 [PASS] the crops grid is the ledger's, live 0 of 21699 cells mismatched · 0 dawn-inconsistent   (M90 gate: every margin cell's live package equals the threshold law at the year's composed forcing — the yearly pass ran and never went stale)
 [PASS] warm optima open the margin          28 of 32 plateaus expand · 0 wrong-signed   (M90 gate: at every warmed plateau the dawn-wildland margin farms at least as wide as on the age's eve, and at least one optimum genuinely expands it)
 [PASS] cold peaks shut the margin to zero   0 opened cells across 72 cold plateaus   (M90 gate: under a genuinely cold plateau sky no dawn-wildland cell farms — the opened margin contracts to zero, the builder's threshold invariant measured live)
 [PASS] the margin speaks when it moves      0 loud passes went unspoken of 149   (M90 gate: every pass that opened or shed at least the world threshold of cells left a dated Clearing/Abandon in the chronicle that same month)
-[PASS] the failed monsoon carries its cause 0 of 38 verdicts unproven   (M92 gate: every monsoon famine's recorded index is reproduced bit-for-bit by the pure law at that cell-year (cell sky for open paddies, the M81 catchment sky for riverine ones) and sits below the failure threshold — the cause is the number, not a die)
-[PASS] the verdict never leaves the paddies 0 of 38 verdicts off the paddies   (M92 gate: monsoon famine strikes only rice with a real seasonal lean — wheat and maize never read the monsoon verdict)
-[PASS] the fortune rides the mode and the belt dry-forced mean 0.852 vs wet-forced 1.132 over 4200 town-years   (M92 gate: across every monsoon-fed paddy town-year the index runs lower when the year's own teleconnection-plus-belt term forces dry than when it forces wet — the M74 mode and the M83 drift reach the paddies through the sky, measured live)
-[PASS] the failed monsoon keeps the record's cadence return 66 y per paddy (64 failed of 4200 town-years)   (M92 gate: the per-place return time of a below-threshold monsoon lands inside the M82 tropical drought envelope (12–200 y) — a failed monsoon is generational fortune, not annual weather)
-CHECKS: 106 pass · 6 warn · 0 fail
+[PASS] the fortune rides the mode and the belt dry-forced mean 0.853 vs wet-forced 1.130 over 4500 town-years   (M92 gate: across every monsoon-fed paddy town-year the index runs lower when the year's own teleconnection-plus-belt term forces dry than when it forces wet — the M74 mode and the M83 drift reach the paddies through the sky, measured live)
+[PASS] the failed monsoon keeps the record's cadence return 67 y per paddy (67 failed of 4500 town-years)   (M92 gate: the per-place return time of a below-threshold monsoon lands inside the M82 tropical drought envelope (12–200 y) — a failed monsoon is generational fortune, not annual weather)
+[PASS] steppe takes only sustained-dry ground 364 takings · 0 broke the run · 0 arid at dawn   (M94 gate: every cell the steppe took had rain-fed grass at the dawn (≥300 mm) and its realized rain under 300 mm in each of the last 5 years, re-derived from the pure sky law)
+[PASS] oasis fails only on remembered deficit 12 turns · 0 off the law · 0 single-year   (M94: a grove's failure re-derives bit-for-bit from the 8-year mean anomaly at its cell, sinks the table past 8.5 m, and a majority of the remembered years were themselves dry — a run, never one bad year)
+[PASS] dry edge hash-stable at fixed seed   twin ledger equal   (M94 gate: a rewound twin driven off the same seed's sky alone reaches the live ledger's law hash — closed over the seed, independent of the rest of the tick)
+[PASS] dry edge turns dated, anchored, unique 27 spoken · 27 ledger · 0 undated · 0 unsubjected · 0 duplicate   (M94 gate: every turn carries its month, a map anchor and a cast subject; one line per (ground, year, kind); the ledger and the chronicle agree to the count)
+[PASS] dry edge share of land               3.7% · 4378 cells   (M94: rain-fed land cells within reach of the 300 mm pastoral line (300–460 mm) as a share of land — a margin, not a continent)
+[PASS] steppe takings per edge-century      5.54 · 364 takings   (M94: cells taken per 100 edge cells per century — the Sahel lost ~10 % of its pasture in the 1968–85 run; a quiet century takes less than one in a hundred)
+[PASS] dry edge turns per century           18.0 · 27 turns   (M94: spoken reach onsets + widenings + returns and grove failures + returns per 100 y — the chronicle volume of the named droughts (M80: 3–40 sweet), dated turns a generation apart per place, never one a year per reach)
+[PASS] steppe hold years                    28.7 y · 240 releases   (M94: mean years a taken cell stays under steppe before the grass returns — longer than the recovery clock, shorter than the run)
+CHECKS: 141 pass · 5 warn · 0 fail

@@ -238,6 +238,131 @@ impl Society {
     pub fn knows(&self, id: TechId) -> bool {
         self.known.contains(id)
     }
+
+    /// M96 — the storage tier a people's arts allow: the highest of the
+    /// three crafts they know. Pure in the known set.
+    #[inline]
+    pub fn store_tier(&self) -> StoreTier {
+        StoreTier::of(self)
+    }
+}
+
+// ------------------------------------------------------------ M96 stores
+
+/// M96 — *Granaries Against Lean Years*: how a people keeps grain past
+/// the year it grew. Three crafts, three tiers, one ladder — each tier
+/// keeps a larger share of a fat year's surplus, loses less of it to
+/// damp, rot and vermin each year, and can hold more of it before the
+/// pile outgrows the roofs. The tier is a property of the people's arts;
+/// the store itself is per town (`Settlement::store`, person-years).
+///
+/// Anchors: sealed jars and pits keep grain a season or two (Neolithic
+/// Near East, Çatalhöyük — losses of a quarter and more to pests are
+/// the ethnographic norm for open household storage); raised masonry
+/// granaries with ventilated floors keep it years (Harappa, the Egyptian
+/// *shunet*, Hallstatt-era stilt granaries); and the storehouse proper is
+/// an institution, not a building — Joseph's seven years, the Han
+/// *ever-normal granary*, the Roman *horrea* — a law that levies the
+/// surplus and holds it against the lean years across a whole realm.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum StoreTier {
+    /// no craft of keeping: the harvest is eaten in the year it grew
+    None = 0,
+    /// pottery — sealed jars and lined pits: a season's grain, at a loss
+    Jars = 1,
+    /// masonry — raised, ventilated granaries: years of grain, kept dry
+    Granaries = 2,
+    /// law-codes — the administered storehouse: a levy on every fat year,
+    /// held against every lean one
+    Storehouses = 3,
+}
+
+impl StoreTier {
+    pub const ALL: [StoreTier; 4] = [StoreTier::None, StoreTier::Jars, StoreTier::Granaries, StoreTier::Storehouses];
+
+    /// The tier a society's arts allow — the highest craft it knows.
+    pub fn of(soc: &Society) -> StoreTier {
+        if soc.knows(TechId::Law) {
+            StoreTier::Storehouses
+        } else if soc.knows(TechId::Masonry) {
+            StoreTier::Granaries
+        } else if soc.knows(TechId::Pottery) {
+            StoreTier::Jars
+        } else {
+            StoreTier::None
+        }
+    }
+
+    pub fn from_code(c: u8) -> StoreTier {
+        match c {
+            1 => StoreTier::Jars,
+            2 => StoreTier::Granaries,
+            3 => StoreTier::Storehouses,
+            _ => StoreTier::None,
+        }
+    }
+
+    #[inline]
+    pub fn code(self) -> u8 {
+        self as u8
+    }
+
+    /// The word the chronicle uses for the store.
+    pub fn name(self) -> &'static str {
+        match self {
+            StoreTier::None => "no store",
+            StoreTier::Jars => "jars",
+            StoreTier::Granaries => "granaries",
+            StoreTier::Storehouses => "storehouses",
+        }
+    }
+
+    /// The share of a fat year's surplus that is laid by rather than
+    /// eaten, sold or sown: the levy the craft (or the law) can take.
+    ///
+    /// Sized against the harvest law as measured, not guessed: over the
+    /// storing towns' town-years the bare yield is symmetric about 1.0,
+    /// a fat year gives 7–9 % over the town's eating and the surplus
+    /// averages 0.04 person-years per year (civ 12345/777, 150 y). The
+    /// store's steady state is `share × 0.04 / spoil`; at the first
+    /// draft (0.10/0.20/0.30, spoil 0.25/0.12/0.08) storehouses settled
+    /// at 1.8 months and stood at 0.3 months when the verdict came —
+    /// days, not seasons. A storehouse worth the name keeps most of a
+    /// fat year: jars 0.6 mo, granaries 1.9 mo, storehouses 5 mo at the
+    /// steady state, less at the verdict because the lean run drains it
+    /// first — the "the store holds seasons" band (1–12 months at the
+    /// verdict) reads the result.
+    pub fn share(self) -> f64 {
+        match self {
+            StoreTier::None => 0.0,
+            StoreTier::Jars => 0.35,
+            StoreTier::Granaries => 0.60,
+            StoreTier::Storehouses => 0.85,
+        }
+    }
+
+    /// The share of the store lost each year to damp, rot and vermin.
+    pub fn spoil(self) -> f64 {
+        match self {
+            StoreTier::None => 1.0,
+            StoreTier::Jars => 0.30,
+            StoreTier::Granaries => 0.15,
+            StoreTier::Storehouses => 0.08,
+        }
+    }
+
+    /// The most the town can hold, in years of its own grain (× pop):
+    /// a season in jars, three in granaries, a year and a half under the
+    /// law's roof — reachable only through a long fat run, so the roof
+    /// is a thing that happens and not a number.
+    pub fn cap_years(self) -> f64 {
+        match self {
+            StoreTier::None => 0.0,
+            StoreTier::Jars => 0.25,
+            StoreTier::Granaries => 0.75,
+            StoreTier::Storehouses => 1.5,
+        }
+    }
 }
 
 // -------------------------------------------------------------- modifiers

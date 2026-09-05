@@ -130,6 +130,22 @@ pub struct Settlement {
     /// window's far edge, so no wound can outlive its arc.
     #[serde(skip)]
     pub harbor_until: i64,
+    /// M96 — the granary: grain laid by against the lean years, in
+    /// person-years (one soul fed for one year). Filled from fat years'
+    /// surplus and thinned by spoilage in the yearly turn, drawn down by
+    /// the harvest verdict; how much can be kept is the people's craft
+    /// (`society::StoreTier`). Engine-internal; folded into `hash_state`,
+    /// never on the wire — the explain layer reads it on request.
+    #[serde(skip)]
+    pub store: f64,
+    /// M98 — the roads' memory: the last ten harvests' decade readings
+    /// (the share of a fair year the land did not give, M90 abandonment
+    /// compounded in), and the year the last wave left. The law that
+    /// sends a generation down the road when its sky has failed
+    /// (`migration`). Engine-internal; folded into `hash_state`, never on
+    /// the wire — the explain layer reads it on request.
+    #[serde(skip)]
+    pub roads: crate::migration::Memory,
 }
 
 /// M24 — the rebuild window, months: a struck town regrows hot for at
@@ -523,6 +539,8 @@ pub fn found_settlements(
             rebuild_peak: 0,
             harbor_dmg: 0.0,
             harbor_until: 0,
+            store: 0.0,
+            roads: Default::default(),
         });
         for y in 0..size {
             for x in 0..size {
