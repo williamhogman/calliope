@@ -1,0 +1,95 @@
+========================================================================
+ CALLIOPE DIAGNOSTIC · STEPPE                       512x512 · 2 seeds · 300 y
+========================================================================
+steppe pressure · the herding range under the century, the herds under the decade, the plough between  (M99)
+law: window T ≥ -1 °C · 110 ≤ P < 300 mm · decade 10 y on a 4-cell lattice · line 0.02 · full 0.1 · rest 20 y · unrest 0.020/mo at full
+
+ seed     land    cells  blocks   range@dawn  share   F span            herds/range max   range↔drift  herds↔range   tellings   pressed-yr   flat tellings   flat range moved   gen+run
+ 12345    115629   65789    4903       22906  19.8%   -0.67..+0.48     6.66% @y49      101/101        0/0             14           16               0                  0   56453 ms
+   y1    F -0.02  decade -0.00°C -0.1%  want +0.00°C -0.1%  range  22898  herds  23537  over  1602  frontier     0  cap   499363  farmed    225  contested    0  pressed  0  max 0.000  spoke 0
+   y11   F -0.20  decade -0.11°C -0.2%  want -0.02°C -0.1%  range  22774  herds  23085  over  1302  frontier    75  cap   482631  farmed    254  contested    0  pressed  0  max 0.000  spoke 0
+   y21   F -0.09  decade -0.17°C -0.4%  want -0.00°C -0.3%  range  22858  herds  23575  over  1558  frontier   152  cap   497074  farmed    292  contested    0  pressed  0  max 0.000  spoke 0
+   y31   F -0.09  decade -0.18°C -0.1%  want +0.02°C +0.0%  range  22867  herds  23549  over  1718  frontier   189  cap   498159  farmed    307  contested    0  pressed  0  max 0.000  spoke 0
+   y41   F +0.14  decade +0.08°C -0.1%  want -0.00°C -0.1%  range  23008  herds  23884  over  1630  frontier   107  cap   500502  farmed    307  contested    0  pressed  0  max 0.000  spoke 0
+   y51   F +0.01  decade +0.15°C -0.4%  want +0.02°C -0.5%  range  22916  herds  24437  over  2124  frontier   204  cap   510676  farmed    372  contested    0  pressed  0  max 0.000  spoke 0
+   y61   F -0.01  decade +0.00°C +0.4%  want -0.00°C +0.4%  range  22901  herds  23585  over  1477  frontier     7  cap   501548  farmed    713  contested    0  pressed  0  max 0.000  spoke 0
+   y71   F -0.13  decade -0.11°C +0.0%  want +0.01°C +0.1%  range  22825  herds  23643  over  1828  frontier   104  cap   497960  farmed   1083  contested    0  pressed  0  max 0.000  spoke 0
+   y81   F -0.15  decade -0.09°C -0.5%  want +0.01°C -0.4%  range  22815  herds  23371  over  1462  frontier    83  cap   483107  farmed   1083  contested    0  pressed  0  max 0.000  spoke 0
+   y91   F -0.09  decade -0.25°C -0.2%  want +0.01°C -0.0%  range  22858  herds  23460  over  1612  frontier   225  cap   498291  farmed   1108  contested    0  pressed  0  max 0.000  spoke 0
+   y101  F -0.14  decade -0.18°C +0.3%  want +0.03°C +0.4%  range  22816  herds  23587  over  1568  frontier   148  cap   502986  farmed   1129  contested    0  pressed  0  max 0.000  spoke 0
+   y111  F +0.03  decade -0.06°C -0.1%  want -0.01°C -0.1%  range  22932  herds  23762  over  1936  frontier    46  cap   500797  farmed   1169  contested    0  pressed  0  max 0.000  spoke 0
+   y121  F +0.30  decade +0.18°C +0.4%  want -0.01°C +0.3%  range  23116  herds  23648  over  1564  frontier   329  cap   492659  farmed   1185  contested    0  pressed  0  max 0.000  spoke 0
+   y131  F +0.35  decade +0.34°C +0.1%  want +0.02°C -0.1%  range  23128  herds  24422  over  2013  frontier   492  cap   511365  farmed   1185  contested    0  pressed  0  max 0.000  spoke 0
+   y141  F -0.20  decade +0.16°C +0.3%  want -0.03°C +0.1%  range  22775  herds  23576  over  1674  frontier   313  cap   501232  farmed   1182  contested    0  pressed  0  max 0.000  spoke 0
+   y151  F -0.35  decade -0.30°C -0.1%  want -0.00°C +0.1%  range  22697  herds  23425  over  1548  frontier   292  cap   496141  farmed   1203  contested    0  pressed  0  max 0.000  spoke 0
+   y161  F -0.63  decade -0.51°C -0.2%  want +0.00°C +0.1%  range  22451  herds  23204  over  1479  frontier   494  cap   484227  farmed   1188  contested    1  pressed  1  max 0.077  spoke 1
+   y171  F -0.47  decade -0.50°C +0.1%  want +0.01°C +0.4%  range  22592  herds  23334  over  1921  frontier   452  cap   495148  farmed   1182  contested    0  pressed  0  max 0.000  spoke 0
+   y181  F -0.21  decade -0.29°C -0.4%  want +0.00°C -0.2%  range  22770  herds  23832  over  1693  frontier   230  cap   510267  farmed   1121  contested    0  pressed  0  max 0.000  spoke 0
+   y191  F -0.10  decade -0.07°C -0.1%  want -0.01°C -0.1%  range  22849  herds  23887  over  1940  frontier    50  cap   507260  farmed   1071  contested    0  pressed  0  max 0.000  spoke 0
+   y201  F -0.01  decade -0.17°C +0.2%  want -0.01°C +0.3%  range  22900  herds  23243  over  1270  frontier   150  cap   489441  farmed   1077  contested    0  pressed  0  max 0.000  spoke 0
+   y211  F +0.05  decade +0.07°C -0.5%  want -0.00°C -0.6%  range  22935  herds  24152  over  1742  frontier   100  cap   507405  farmed   1062  contested    0  pressed  0  max 0.000  spoke 0
+   y221  F -0.27  decade -0.05°C -0.1%  want +0.00°C -0.1%  range  22746  herds  23929  over  2044  frontier    58  cap   504349  farmed   1083  contested    0  pressed  0  max 0.000  spoke 0
+   y231  F -0.30  decade -0.36°C -0.1%  want -0.01°C +0.1%  range  22724  herds  23626  over  1616  frontier   303  cap   498777  farmed   1098  contested    0  pressed  0  max 0.000  spoke 0
+   y241  F -0.20  decade -0.22°C -0.0%  want +0.01°C +0.1%  range  22769  herds  23808  over  1784  frontier   192  cap   501136  farmed   1059  contested    0  pressed  0  max 0.000  spoke 0
+   y251  F -0.23  decade -0.17°C -0.0%  want -0.01°C +0.1%  range  22764  herds  23755  over  1743  frontier   121  cap   501668  farmed   1047  contested    0  pressed  0  max 0.000  spoke 0
+   y261  F -0.12  decade -0.21°C -0.3%  want +0.01°C -0.2%  range  22830  herds  23818  over  1926  frontier   172  cap   498863  farmed   1086  contested    0  pressed  0  max 0.000  spoke 0
+   y271  F -0.16  decade -0.15°C -0.2%  want +0.01°C -0.1%  range  22813  herds  23331  over  1306  frontier   146  cap   487386  farmed   1040  contested    1  pressed  0  max 0.003  spoke 0
+   y281  F +0.14  decade -0.08°C -0.0%  want -0.04°C +0.0%  range  23006  herds  24091  over  1735  frontier    46  cap   514268  farmed   1047  contested    0  pressed  0  max 0.000  spoke 0
+   y291  F +0.14  decade +0.11°C +0.1%  want +0.02°C +0.0%  range  23006  herds  24003  over  1780  frontier   131  cap   509474  farmed   1034  contested    0  pressed  0  max 0.000  spoke 0
+   y300  F -0.14  decade +0.03°C +0.2%  want -0.02°C +0.2%  range  22815  herds  23525  over  1786  frontier    73  cap   498016  farmed   1032  contested    0  pressed  0  max 0.000  spoke 0
+   · y84 The herds come to the furrows of Helyra: 2 of Pelpolis's 77 fields lie under their hooves this year — 3 in a hundred — where a colder century has walked the rain belts and drawn the grass down onto the sown ground; the herdsmen and the ploughmen stand in the same grass, and the crown must answer for whose it is.
+   · y97 The herds press harder on Helyra: 2 of Pelpolis's 98 fields lie under their hooves this year — 2 in a hundred — where a colder century has walked the rain belts and drawn the grass down onto the sown ground; the old quarrel is a feud now, and the crown's peace frays with it.
+   · y155 The herds press harder on Helyra: 3 of Pelpolis's 79 fields lie under their hooves this year — 4 in a hundred — where a colder century has walked the rain belts and drawn the grass down onto the sown ground; the old quarrel is a feud now, and the crown's peace frays with it.
+   · unrest: pressed realm-years 0.875 · the rest 0.610 · capacity 498016 souls vs 633169 settled · overreach 7.6% of herds
+   · the push: herds beyond the range on 5.3% of the cells over the hardest quarter of blocks · 0.6% over the kindest · twin at the close: range moved 0 · frontier 0 · contested 0
+ 777      118329   64786    4823       21681  18.3%   -1.06..+0.47     8.17% @y184     121/121        3/5              0            0               0                  0   57076 ms
+   y1    F -0.09  decade -0.01°C +0.0%  want -0.00°C +0.0%  range  21645  herds  22514  over  1374  frontier     7  cap   476619  farmed    228  contested    0  pressed  0  max 0.000  spoke 0
+   y11   F -0.07  decade -0.08°C +0.3%  want -0.02°C +0.4%  range  21658  herds  21855  over   852  frontier    53  cap   462140  farmed    228  contested    0  pressed  0  max 0.000  spoke 0
+   y21   F -0.19  decade -0.13°C +0.1%  want -0.01°C +0.2%  range  21630  herds  22253  over  1182  frontier   108  cap   474384  farmed    263  contested    0  pressed  0  max 0.000  spoke 0
+   y31   F -0.27  decade -0.30°C -0.4%  want -0.03°C -0.2%  range  21593  herds  22561  over  1544  frontier   210  cap   480833  farmed    290  contested    0  pressed  0  max 0.000  spoke 0
+   y41   F -0.22  decade -0.26°C -0.6%  want -0.03°C -0.4%  range  21605  herds  22075  over  1139  frontier   182  cap   468506  farmed    319  contested    0  pressed  0  max 0.000  spoke 0
+   y51   F -0.39  decade -0.40°C -0.2%  want +0.00°C +0.2%  range  21516  herds  22167  over  1422  frontier   307  cap   472064  farmed    419  contested    0  pressed  0  max 0.000  spoke 0
+   y61   F -0.30  decade -0.37°C -0.2%  want +0.01°C +0.1%  range  21579  herds  22296  over  1310  frontier   287  cap   474592  farmed    552  contested    0  pressed  0  max 0.000  spoke 0
+   y71   F -0.57  decade -0.46°C -0.5%  want +0.01°C -0.1%  range  21403  herds  22465  over  1596  frontier   368  cap   484921  farmed    831  contested    0  pressed  0  max 0.000  spoke 0
+   y81   F -0.63  decade -0.68°C -0.9%  want +0.02°C -0.3%  range  21377  herds  21691  over   961  frontier   529  cap   461369  farmed   1250  contested    0  pressed  0  max 0.000  spoke 0
+   y91   F -0.13  decade -0.47°C -0.5%  want -0.00°C -0.1%  range  21638  herds  21901  over  1282  frontier   374  cap   470949  farmed   1320  contested    0  pressed  0  max 0.000  spoke 0
+   y101  F -0.13  decade -0.06°C -0.5%  want -0.01°C -0.5%  range  21633  herds  23285  over  1989  frontier    46  cap   497208  farmed   1319  contested    0  pressed  0  max 0.000  spoke 0
+   y111  F -0.01  decade -0.19°C -0.6%  want +0.02°C -0.4%  range  21679  herds  22461  over  1402  frontier   166  cap   476953  farmed   1378  contested    0  pressed  0  max 0.000  spoke 0
+   y121  F -0.15  decade -0.12°C -0.1%  want +0.01°C +0.0%  range  21633  herds  22565  over  1619  frontier   102  cap   476198  farmed   1377  contested    1  pressed  0  max 0.012  spoke 0
+   y131  F -0.44  decade -0.31°C -0.1%  want -0.01°C +0.1%  range  21481  herds  21968  over  1162  frontier   237  cap   467299  farmed   1372  contested    0  pressed  0  max 0.000  spoke 0
+   y141  F -0.15  decade -0.27°C -0.1%  want -0.03°C +0.1%  range  21635  herds  22144  over  1195  frontier   190  cap   473028  farmed   1377  contested    0  pressed  0  max 0.000  spoke 0
+   y151  F +0.22  decade +0.00°C +0.4%  want -0.01°C +0.4%  range  21784  herds  22101  over  1071  frontier    11  cap   468964  farmed   1385  contested    0  pressed  0  max 0.000  spoke 0
+   y161  F +0.40  decade +0.39°C +0.3%  want +0.01°C -0.0%  range  21834  herds  22436  over  1231  frontier   477  cap   475138  farmed   1379  contested    0  pressed  0  max 0.000  spoke 0
+   y171  F +0.28  decade +0.41°C +0.3%  want +0.01°C -0.1%  range  21797  herds  22863  over  1595  frontier   498  cap   480488  farmed   1377  contested    0  pressed  0  max 0.000  spoke 0
+   y181  F -0.51  decade -0.00°C +0.3%  want +0.01°C +0.3%  range  21443  herds  22762  over  2047  frontier     2  cap   488155  farmed   1360  contested    0  pressed  0  max 0.000  spoke 0
+   y191  F -0.91  decade -0.81°C -0.7%  want +0.01°C -0.0%  range  21182  herds  22114  over  1497  frontier   731  cap   472788  farmed   1321  contested    0  pressed  0  max 0.000  spoke 0
+   y201  F -0.99  decade -1.01°C -0.9%  want +0.01°C -0.1%  range  21128  herds  21232  over   929  frontier   762  cap   457322  farmed   1284  contested    0  pressed  0  max 0.000  spoke 0
+   y211  F -0.65  decade -0.72°C -1.1%  want -0.01°C -0.5%  range  21361  herds  22347  over  1520  frontier   550  cap   480668  farmed   1211  contested    0  pressed  0  max 0.000  spoke 0
+   y221  F -0.38  decade -0.47°C -0.5%  want +0.01°C -0.1%  range  21522  herds  22401  over  1492  frontier   357  cap   478767  farmed   1176  contested    0  pressed  0  max 0.000  spoke 0
+   y231  F +0.15  decade -0.01°C +0.2%  want -0.02°C +0.2%  range  21732  herds  22375  over  1301  frontier    12  cap   480018  farmed   1168  contested    0  pressed  0  max 0.000  spoke 0
+   y241  F +0.07  decade +0.16°C +0.4%  want -0.01°C +0.2%  range  21712  herds  22434  over  1410  frontier   208  cap   472344  farmed   1179  contested    0  pressed  0  max 0.000  spoke 0
+   y251  F +0.30  decade +0.31°C +0.3%  want +0.02°C +0.0%  range  21799  herds  22879  over  1604  frontier   349  cap   487356  farmed   1169  contested    0  pressed  0  max 0.000  spoke 0
+   y261  F +0.13  decade +0.19°C +0.4%  want +0.00°C +0.3%  range  21724  herds  21681  over   929  frontier   222  cap   455521  farmed   1168  contested    0  pressed  0  max 0.000  spoke 0
+   y271  F +0.05  decade +0.06°C +0.2%  want -0.02°C +0.1%  range  21709  herds  22049  over  1158  frontier    96  cap   469974  farmed   1144  contested    0  pressed  0  max 0.000  spoke 0
+   y281  F -0.16  decade +0.03°C -0.2%  want +0.03°C -0.2%  range  21636  herds  23240  over  1989  frontier     0  cap   496478  farmed   1140  contested    0  pressed  0  max 0.000  spoke 0
+   y291  F -0.19  decade -0.14°C -0.0%  want +0.03°C +0.1%  range  21631  herds  22442  over  1409  frontier   124  cap   476267  farmed   1144  contested    0  pressed  0  max 0.000  spoke 0
+   y300  F -0.13  decade -0.11°C -0.6%  want +0.01°C -0.5%  range  21637  herds  22499  over  1415  frontier    94  cap   475460  farmed   1144  contested    0  pressed  0  max 0.000  spoke 0
+   · capacity 475460 souls vs 1094057 settled · overreach 6.3% of herds
+   · the push: herds beyond the range on 4.4% of the cells over the hardest quarter of blocks · 0.1% over the kindest · twin at the close: range moved 0 · frontier 0 · contested 0
+
+---- checks ----------------------------------------------------------
+[PASS] herding range share of land                   19.1%   (M99: the century range as a share of land — Earth's grasslands and dry shrublands run to a quarter of the ice-free land; a margin, not a continent, never absent)
+[PASS] herds within the century range            max +8.2%   (M99: realized herd area over the century range, every year — the decade breathes the footprint inside ±10 % of what the drift dictates)
+[PASS] herds inside ±10 % every seed-year        max 8.17%   (M99: the decade lane never strays a tenth from what the century's drift dictates)
+[PASS] range tracks the drift's sign               222/222   (M99: over every decisive decade (|ΔF| ≥ 0.2 °C) the century range moved with the drift's sign — warmer, wider; colder, narrower — 9 in 10)
+[WARN] herds follow the range                          3/5   (M99: over every decade the century range stepped ≥ 2 % the realized herds moved the same way, 3 in 4 — the decade's own weather takes the rest)
+[PASS] hard decades push the herds outward  4.8% vs 0.4% · 2/2 seeds   (M99: across the lattice at the close, the herds stand beyond the century's range on more of the cells over the hardest quarter of blocks (by decade want) than over the kindest — the pressure score's outward push, every seed)
+[PASS] flat sky: no frontier pressure           0 tellings   (M99: under a sky that never drifts the range is the dawn range and no field is newly contested)
+[PASS] flat sky: the range holds             0 years moved   (M99: the century lane is a function of the forcing alone)
+[PASS] flat twin at the close: nothing to contest moved 0 · frontier 0 · contested 0   (M99 metamorphic: the grown world's own field under a zero decade sky — the dawn range, no frontier ground, no contested field over any town's hinterland)
+[PASS] field re-derives from the law                 0 bad   (M99: blocks' decade sky and every cell's code recomputed from the public primitives at the last year, bit-equal)
+[PASS] tellings answer the ledger                    0 bad   (M99: one frontier-pressure event per ledger row, every row at or over the line)
+[PASS] frontier pressure events per century           2.33   (M99: dated frontier-pressure tellings per 100 y across the world — a quarrel a generation somewhere, never one a year per crown)
+[PASS] steppe capacity share of souls                0.611   (M99: souls the herds' ground could feed over the settled population — pastoral country is thin: a few percent to a few times the towns, never nothing)
+[PASS] pressure shows in the unrest gauge   0.875 vs 0.610   (M99: realms over the line carry at least the unrest of the rest, sampled yearly)
+CHECKS: 13 pass · 1 warn · 0 fail

@@ -3,44 +3,44 @@
 ========================================================================
 
  storm-felling decision audit (M79)
-   seed 12345: 3102 local marks · 2520 candidate landfalls · 0 eligible · 0 felled | rejected intensity 2474 age 30 sample 0 rate 16 | local n 1–342 · exceed 1–300
+   seed 12345: 2982 local marks · 2444 candidate landfalls · 0 eligible · 0 felled | rejected intensity 2400 age 23 sample 0 rate 21 | local n 1–343 · exceed 1–305
              eligible/felled by century: 0/0 · 0/0 · 0/0
              calibration bite>0.970, age≥100y: RI≥100/150/200y = 0/0/0
              calibration bite>0.980, age≥100y: RI≥100/150/200y = 0/0/0
              calibration bite>0.990, age≥100y: RI≥100/150/200y = 0/0/0
              calibration bite>0.995, age≥100y: RI≥100/150/200y = 0/0/0
-   seed 777: 1517 local marks · 1380 candidate landfalls · 1 eligible · 1 felled | rejected intensity 1334 age 27 sample 0 rate 18 | local n 1–218 · exceed 1–204
+   seed 777: 1586 local marks · 1446 candidate landfalls · 1 eligible · 1 felled | rejected intensity 1401 age 25 sample 0 rate 19 | local n 1–247 · exceed 1–237
              eligible/felled by century: 0/0 · 1/1 · 0/0
              calibration bite>0.970, age≥100y: RI≥100/150/200y = 1/1/0
              calibration bite>0.980, age≥100y: RI≥100/150/200y = 1/1/0
              calibration bite>0.990, age≥100y: RI≥100/150/200y = 0/0/0
              calibration bite>0.995, age≥100y: RI≥100/150/200y = 0/0/0
-   seed 90210: 3420 local marks · 2822 candidate landfalls · 2 eligible · 2 felled | rejected intensity 2750 age 44 sample 1 rate 25 | local n 1–308 · exceed 1–281
+   seed 90210: 3482 local marks · 2847 candidate landfalls · 2 eligible · 2 felled | rejected intensity 2773 age 45 sample 1 rate 26 | local n 1–308 · exceed 1–281
              eligible/felled by century: 0/0 · 1/1 · 1/1
              calibration bite>0.970, age≥100y: RI≥100/150/200y = 2/1/0
              calibration bite>0.980, age≥100y: RI≥100/150/200y = 0/0/0
              calibration bite>0.990, age≥100y: RI≥100/150/200y = 0/0/0
              calibration bite>0.995, age≥100y: RI≥100/150/200y = 0/0/0
    seed  ruins    late  veiled%  rename    worn  field  faded   wars  xfers  rivers  sundr  fused  gold  arcs
-  12345     43      43      2.9      13       7     55     11      1    144    held     20      8     4     4
-    777     50      48      3.0      34       5     46     14      0    134    held     20      2     4     4
-  90210     53      52      2.2      26       6     49      5      1    133    held     20      5     3     4
+  12345     52      52      2.7      15       7     58      4      0    136    held     20      8     3     6
+    777     36      34      2.7      23       5     36     10      0     94    held     20      8     4     2
+  90210     50      49      2.3      29       6     48      5      0    134    held     20      5     3     4
 
  late ruins by cause (all seeds, after y100)
-    134  war broke it and none returned
-      3  hunger emptied it
-      3  it dwindled year by year until the last hearth went cold
+    124  war broke it and none returned
+      6  it dwindled year by year until the last hearth went cold
       3  the sea came over the wall and never gave the ground back
+      2  hunger emptied it
 
 ---- checks ----------------------------------------------------------
-[WARN] ruins per century (after y100)                23.83   (M9.1 restated at M81: mature worlds carry ruins; the M77-M81 disaster stack may fell up to a quarter of the standing census per century before ruin outpaces renewal)
-[PASS] withheld share of the chronicle                2.7%   (M9.5 gate: 2-8% of entries veiled)
+[WARN] ruins per century (after y100)                22.50   (M9.1 restated at M81: mature worlds carry ruins; the M77-M81 disaster stack may fell up to a quarter of the standing census per century before ruin outpaces renewal)
+[PASS] withheld share of the chronicle                2.6%   (M9.5 gate: 2-8% of entries veiled)
 [PASS] hydronyms conserved                        all held   (M9.2 gate: river names survive every border change)
-[PASS] border changes occurred               411 transfers   (the conservation claim is tested, not vacuous)
+[PASS] border changes occurred               364 transfers   (the conservation claim is tested, not vacuous)
 [PASS] name strata bounded                          0 over   (M9.2: at most two former names per place)
 [PASS] every new name carries a gloss               0 bare   (M9.3 gate: renames and wearings are etymologized)
-[PASS] names worn or relaid somewhere                73+18   (M9.2/M9.3: the strata actually accrue)
-[PASS] battlefields mark the map            150 fields / 2 wars   (M9.4: decisive fields earn names)
+[PASS] names worn or relaid somewhere                67+18   (M9.2/M9.3: the strata actually accrue)
+[PASS] battlefields mark the map            142 fields / 0 wars   (M9.4: decisive fields earn names)
 [PASS] people count moves both ways (≥60% of seeds)            3/3   (M12.6: sunderings and fusions both fire on the patina clock)
-[PASS] civ arcs completed per 300 y         4.0 (gold 11 · arcs 12)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
+[PASS] civ arcs completed per 300 y         4.0 (gold 10 · arcs 12)   (M13.4 gate: ≥1 full rise-and-fall per 300 y on most seeds)
 CHECKS: 9 pass · 1 warn · 0 fail
