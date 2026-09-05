@@ -152,6 +152,9 @@ fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
     // M98 — the roads' memory: the last ten harvests as the migration
     // law reads them, and what it would do about them.
     let roads = roads_block(world, idx);
+    // M99 — the herds: the steppe field over the town's hinterland and
+    // the pressure the crown feels for it.
+    let herds = herds_block(world, idx);
 
     Some(json!({
         "title": "Growth this month",
@@ -170,7 +173,45 @@ fn explain_settlement(world: &World, id: SettlementId) -> Option<Value> {
         "sky": sky,
         "store": store,
         "roads": roads,
+        "herds": herds,
     }))
+}
+
+/// M99 — "The herds" for one settlement: the steppe field read over the
+/// town's hinterland (the same ring the pass counts) — the century's
+/// range, the herds this decade, the ground the drift made theirs, the
+/// fields, the contested fields — and the pressure the crown feels for
+/// it. Serialized with a prose line the inspector shows verbatim, and
+/// the sky the field stands at so the card can say why.
+pub fn herds_block(world: &World, idx: usize) -> Value {
+    use crate::steppe;
+    let s = &world.peoples.settlements[idx];
+    let st = &world.steppe;
+    let h = st.hinterland(s.y as usize, s.x as usize, &world.fields.crops);
+    let pressure = st.pressure.get(s.realm.0).copied().unwrap_or(0.0);
+    let mark = st.marks.get(s.realm.0).copied().unwrap_or_default();
+    let want = st.sky_decade;
+    let line = steppe::herds_line(&s.name, &h, pressure, st.sky, want.dt0, want.dp0);
+    json!({
+        "cells": h.cells,
+        "range": h.range,
+        "herds": h.herds,
+        "frontier": h.frontier,
+        "farmed": h.farmed,
+        "contested": h.contested,
+        "pressure": crate::util::round3(pressure),
+        "line": steppe::PRESSURE_LINE,
+        "full": steppe::PRESSURE_FULL,
+        "pressed": pressure >= steppe::PRESSURE_LINE,
+        "spoken": if mark.spoken == steppe::NEVER { Value::Null } else { json!(mark.spoken) },
+        "unrest": crate::util::round3(steppe::unrest_term(pressure)),
+        "sky": crate::util::round2(st.sky),
+        "want_t": crate::util::round2(want.dt0),
+        "want_p": crate::util::round3(want.dp0),
+        "push_mm": crate::util::round2(steppe::herds_line_mm(want.dt0, want.dp0) - steppe::RANGE_P_MAX),
+        "capacity_cell": crate::util::round2(steppe::cell_capacity(steppe::RANGE_P_MAX, 0.0)),
+        "text": line,
+    })
 }
 
 /// M98 — "The roads" for one settlement: the decade memory the

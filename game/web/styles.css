@@ -624,6 +624,26 @@ input { font: inherit; color: inherit; }
 .insp-roads .insp-kicker em { font-style: normal; opacity: 0.85; letter-spacing: 0.02em; }
 .insp-roads.fail .insp-kicker em { color: #d46a5a; }
 
+/* M99 — the herds: the steppe field over the hinterland and the crown's pressure */
+.insp-herds {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border-left: 2px solid #b8a67a;
+  background: rgba(184, 166, 122, 0.05);
+  border-radius: 0 6px 6px 0;
+}
+.insp-herds .insp-gauge i { background: linear-gradient(90deg, #8a7a52, #d3c298); }
+.insp-herds.frontier { border-left-color: #d9a05a; background: rgba(217, 160, 90, 0.05); }
+.insp-herds.contested { border-left-color: #d9a05a; background: rgba(217, 160, 90, 0.07); }
+.insp-herds.contested .insp-kicker em { color: #d9a05a; }
+.insp-herds.pressed { border-left-color: #d46a5a; background: rgba(212, 106, 90, 0.06); }
+.insp-herds.pressed .insp-note { color: #ecb9ad; }
+.insp-herds.pressed .insp-kicker em { color: #d46a5a; }
+.insp-herds.pressed .insp-gauge i { background: linear-gradient(90deg, #a04a3c, #e28a7a); }
+.insp-herds .insp-kicker em { font-style: normal; opacity: 0.85; letter-spacing: 0.02em; }
+
 /* M96 — the store: the granary law read at the town, beneath the sky */
 .insp-store {
   display: flex;

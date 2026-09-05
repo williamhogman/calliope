@@ -677,6 +677,10 @@ pub fn monthly(
     taken: &mut HashSet<String>,
     month: i64,
     rng: &mut Pcg64Mcg,
+    // M99 — per realm, the share of its fields the herds stand on this
+    // year (`World::steppe_pass`); shorter than `n` for realms founded
+    // since the last pass, which read as unpressed.
+    frontier: &[f64],
 ) -> (Vec<Event>, bool) {
     let Chronicle { state: chron, registry: reg, .. } = record;
     let Peoples { settlements, peoples: peoples_v, realms, societies: socs, coresidence, .. } = peoples;
@@ -740,9 +744,10 @@ pub fn monthly(
     }
 
     // --- unrest (M11.1): the gauge the ladder reads. A weak crown,
-    // guttered solidarity, hunger in the towns, long wars, and holdings
-    // beyond the seat's administrative reach all feed it; quiet months
-    // bleed it off. A throne in dispute burns solidarity instead.
+    // guttered solidarity, hunger in the towns, long wars, holdings
+    // beyond the seat's administrative reach, and (M99) the herds on
+    // the realm's ploughed ground all feed it; quiet months bleed it
+    // off. A throne in dispute burns solidarity instead.
     for c in (0..n).map(RealmId) {
         if !alive(settlements, c) {
             continue;
@@ -781,6 +786,7 @@ pub fn monthly(
             + 0.020 * hungry
             + 0.012 * weary
             + 0.022 * far
+            + crate::steppe::unrest_term(frontier.get(c.0).copied().unwrap_or(0.0))
             - UNREST_CALM;
         pol.unrest[c.0] = (pol.unrest[c.0] + du).clamp(0.0, 1.0);
     }

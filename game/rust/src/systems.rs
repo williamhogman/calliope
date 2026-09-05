@@ -119,6 +119,7 @@ pub trait System: Sync {
 pub static SYSTEMS: &[&dyn System] = &[
     &FieldsAtEdge,
     &IceAtEdge,
+    &SteppeSystem,
     &Towns,
     &Drought,
     &Flood,
@@ -170,6 +171,26 @@ impl System for FieldsAtEdge {
         let w = &mut *ctx.world;
         if w.month.rem_euclid(12) == 0 {
             let evs = w.fields_pass(w.month);
+            sink.emit(evs);
+        }
+    }
+}
+
+/// M99 — steppe pressure: in the year's first month, once the fields
+/// have answered the forcing, the herding range is re-read under the
+/// century's drift and the herds' footprint under the decade's sky;
+/// where the herds stand on a realm's new furrows the realm's pressure
+/// is written for the unrest gauge to read all year, and the frontier
+/// speaks. Solved thresholds off a pure sky — no die.
+struct SteppeSystem;
+impl System for SteppeSystem {
+    fn name(&self) -> &'static str {
+        "steppe"
+    }
+    fn run(&self, ctx: &mut SimCtx, sink: &mut EventSink) {
+        let w = &mut *ctx.world;
+        if w.month.rem_euclid(12) == 0 {
+            let evs = w.steppe_pass(w.month);
             sink.emit(evs);
         }
     }
@@ -611,6 +632,7 @@ impl System for Statecraft {
             &mut w.taken,
             w.month,
             &mut w.rng,
+            &w.steppe.pressure,
         );
         if borders {
             sink.borders_changed = true;

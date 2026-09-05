@@ -449,6 +449,18 @@ pub struct World {
     pub reading_ledger: Vec<crate::migration::ReadingRow>,
     pub exodus_ledger: Vec<crate::migration::ExodusRow>,
 
+    /// M99 — the steppe: the herding range under the century's drift,
+    /// the herds' footprint under the decade's sky, and the pressure a
+    /// realm's fields are under where the two meet the plough. Founded
+    /// post-widen off the dawn grids; the field and the realm marks are
+    /// hashed (`Steppe::hash`), the ledgers are observation.
+    pub steppe: crate::steppe::Steppe,
+    /// M99 — diagnostics-only counterfactual: when set, `year_forcing`
+    /// answers zero for every year — a flat century sky. The harness
+    /// twins a seed under it to prove the drift is the only thing that
+    /// can move the range onto the plough.
+    pub flat_sky: bool,
+
     /// pub since M55: diagnostics weigh dry ground against watered ground.
     pub site_score: Array2<f64>,
     food_grid: Array2<f64>,
@@ -1420,6 +1432,8 @@ impl GenBuilder {
             store_year: -1,
             reading_ledger: Vec::new(),
             exodus_ledger: Vec::new(),
+            steppe: crate::steppe::Steppe::default(),
+            flat_sky: false,
             site_score: founded.site_score,
             food_grid: founded.food_grid,
             near_fresh: founded.near_fresh,
@@ -1641,6 +1655,15 @@ impl GenBuilder {
             &world.fields.landform,
             &world.fields.aquifer,
         );
+        // M99 — the steppe is founded off the same dawn grids: every land
+        // cell the sky could carry across the herding window, on its
+        // decade lattice, with the century range written at forcing 0.
+        world.steppe = crate::steppe::Steppe::found(
+            &world.fields.height,
+            &world.fields.tmean,
+            &world.fields.precip,
+            &world.fields.flags,
+        );
         self.world = Some(world);
 
     }
@@ -1730,6 +1753,9 @@ impl World {
     /// age moves temperatures *and* walks the belts through one law,
     /// not two.
     pub fn year_forcing(&self, year: i64) -> f64 {
+        if self.flat_sky {
+            return 0.0;
+        }
         self.year_drift(year) + self.ages.offset(year)
     }
 
@@ -5747,6 +5773,167 @@ impl World {
                 ..Default::default()
             });
         }
+        events
+    }
+}
+
+// ==================================================================== M99 — steppe
+impl World {
+    /// M99 — the pointwise anomaly the steppe's decade lattice reads: the
+    /// same `climate::year_anomaly_at` every other reader of the sky
+    /// draws, under the same oscillation and the same composed forcing —
+    /// and beside it the unforced twin, the same year drawn with the
+    /// drift at zero, which is the herds' *want* and the flat-sky
+    /// counterfactual the frontier is defined against.
+    pub fn steppe_draw(&self, x: usize, y: usize, year: i64) -> crate::steppe::SkyYear {
+        let rows = self.fields.tmean.dim().0;
+        let osc = self.year_osc(year);
+        let (dt, dp) = climate::year_anomaly_at(&self.variability, rows, x, y, year, osc, self.year_forcing(year));
+        let (dt0, dp0) = climate::year_anomaly_at(&self.variability, rows, x, y, year, osc, 0.0);
+        crate::steppe::SkyYear { dt, dp, dt0, dp0 }
+    }
+
+    /// M99 — the decade sky at every block, re-derived without the ring:
+    /// the harness's twin of `Steppe::read_sky`, the same ten draws in
+    /// the same order, so the two must agree to the bit.
+    pub fn steppe_decade_sky(&self, year: i64) -> Vec<crate::steppe::SkyYear> {
+        self.steppe
+            .blocks
+            .iter()
+            .map(|b| crate::steppe::decade_mean(year, |yr| self.steppe_draw(b.x as usize, b.y as usize, yr)))
+            .collect()
+    }
+
+    /// M99 — steppe pressure, in the year's first month after the fields
+    /// have answered the forcing. Reads the decade sky at the lattice,
+    /// rewrites the field under the century's forcing and the decade's
+    /// weather, counts every living town's hinterland for fields and
+    /// contested fields, writes each realm's pressure for the unrest
+    /// gauge, and speaks the frontier where the law says it speaks. No
+    /// die; idempotent per year.
+    pub(crate) fn steppe_pass(&mut self, month_abs: i64) -> Vec<Event> {
+        use crate::steppe::{self, PressureRow, RangeRow};
+        let mut events = Vec::new();
+        if month_abs.rem_euclid(12) != 0 || self.steppe.cells.is_empty() {
+            return events;
+        }
+        let year = month_abs.div_euclid(12);
+        if self.steppe.year == year {
+            return events;
+        }
+        let rows = self.fields.tmean.dim().0;
+        let f = self.year_forcing(year);
+
+        // 1. The decade's sky at every block — ten pure draws each,
+        //    cached by year so the ring fills to the same numbers however
+        //    the tick is chunked.
+        {
+            let mut blocks = std::mem::take(&mut self.steppe.blocks);
+            let mut draw = |x: usize, y: usize, yr: i64| self.steppe_draw(x, y, yr);
+            for b in blocks.iter_mut() {
+                b.read(year, &mut draw);
+            }
+            self.steppe.blocks = blocks;
+        }
+
+        // 2. The field: the century lane under the forcing, the decade
+        //    lane under the blocks' means.
+        self.steppe.advance(year, f, rows);
+
+        // 3. The pressure, realm by realm, over every living town's
+        //    hinterland — the same ring the roads' law counts fields on.
+        let n_realms = self.peoples.realms.len();
+        self.steppe.grow(n_realms);
+        let mut farmed = vec![0usize; n_realms];
+        let mut overlap = vec![0usize; n_realms];
+        let mut worst: Vec<Option<(usize, usize)>> = vec![None; n_realms];
+        let (mut farmed_all, mut overlap_all) = (0usize, 0usize);
+        for (i, s) in self.peoples.settlements.iter().enumerate() {
+            if s.pop <= 0 {
+                continue;
+            }
+            let c = s.realm.0;
+            if c >= n_realms || !self.peoples.realms[c].alive {
+                continue;
+            }
+            let h = self.steppe.hinterland(s.y as usize, s.x as usize, &self.fields.crops);
+            farmed[c] += h.farmed;
+            overlap[c] += h.contested;
+            farmed_all += h.farmed;
+            overlap_all += h.contested;
+            if h.contested > 0 && worst[c].is_none_or(|(w, _)| h.contested > w) {
+                worst[c] = Some((h.contested, i));
+            }
+        }
+
+        // 4. The line, the marks, the telling.
+        let (mut pressed, mut spoken) = (0usize, 0usize);
+        let mut max_share = 0.0f64;
+        for c in 0..n_realms {
+            let share = steppe::pressure(overlap[c], farmed[c]);
+            self.steppe.pressure[c] = share;
+            max_share = max_share.max(share);
+            let mark = self.steppe.marks[c];
+            if share < steppe::PRESSURE_LINE {
+                self.steppe.marks[c].armed = true;
+                continue;
+            }
+            pressed += 1;
+            if !steppe::speaks(&mark, year, share) {
+                continue;
+            }
+            let Some((_, i)) = worst[c] else {
+                continue;
+            };
+            let again = mark.spoken != steppe::NEVER;
+            let (town, sx, sy) = {
+                let s = &self.peoples.settlements[i];
+                (s.name.clone(), s.x, s.y)
+            };
+            let realm_name = self.peoples.realms[c].name.clone();
+            let want = self.steppe.sky_decade;
+            let text = steppe::pressure_text(&realm_name, &town, share, overlap[c], farmed[c], f, want.dt0, want.dp0, again);
+            self.steppe.marks[c] = steppe::RealmMark { spoken: year, share, armed: false };
+            spoken += 1;
+            self.steppe.ledger.push(PressureRow {
+                m: month_abs,
+                year,
+                realm: c,
+                realm_name: realm_name.clone(),
+                town,
+                x: sx,
+                y: sy,
+                share,
+                overlap: overlap[c],
+                farmed: farmed[c],
+                f,
+            });
+            events.push(Event {
+                m: month_abs,
+                s: realm_name,
+                k: EventKind::FrontierPressure,
+                text,
+                x: sx,
+                y: sy,
+                ..Default::default()
+            });
+        }
+
+        self.steppe.log.push(RangeRow {
+            year,
+            f,
+            sky: self.steppe.sky_decade,
+            range: self.steppe.range,
+            herds: self.steppe.herds,
+            over: self.steppe.over,
+            frontier: self.steppe.frontier,
+            capacity: self.steppe.capacity,
+            farmed: farmed_all,
+            overlap: overlap_all,
+            pressed,
+            spoken,
+            max_share,
+        });
         events
     }
 }

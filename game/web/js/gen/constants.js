@@ -71,6 +71,7 @@ export const EVENT_KINDS = [
   { name: "regreen", family: "nature", weight: 2 },
   { name: "granary", family: "nature", weight: 2 },
   { name: "exodus", family: "nature", weight: 3 },
+  { name: "frontier-pressure", family: "nature", weight: 2 },
 ];
 
 export const ENTITY_KINDS = ["artifact", "culture", "feature", "good", "person", "ruin", "settlement", "war", "world", "realm", "civilization"];
